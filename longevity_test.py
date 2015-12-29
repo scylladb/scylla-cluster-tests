@@ -7,7 +7,7 @@ from cluster import RemoteCredentials
 
 def main():
     service = boto3.resource('ec2')
-    ami_id = 'ami-e08ccb8a'
+    ami_id = 'ami-972863fd'
     security_group_ids = ['sg-c5e1f7a0']
     subnet_id = 'subnet-ec4a72c4'
     key_name = 'keypair-{}-{}'.format('longevity_tests',
@@ -28,23 +28,32 @@ def main():
                             credentials=credentials,
                             n_nodes=1)
 
-    for node in scylla_cluster.nodes + loaders.nodes:
-        node.remoter.uptime()
+    try:
+        for node in scylla_cluster.nodes + loaders.nodes:
+            node.remoter.uptime()
 
-    time.sleep(180)
+        print('Sleeping 120 seconds before checking if scylla is installed...')
+        time.sleep(120)
 
-    for loader_node in loaders.nodes:
-        loader_node.remoter.run('systemctl stop scylla-server.service',
-                                ignore_status=True)
-        loader_node.remoter.run('systemctl stop scylla-jmx.service',
-                                ignore_status=True)
+        for node in scylla_cluster.nodes + loaders.nodes:
+            node.remoter.run('rpm -qa | grep scylla')
 
-    scylla_node_ips = ",".join(scylla_cluster.get_node_internal_ips())
-    stress_cmd = ('cassandra-stress write n=1000 -mode cql3 native -rate '
-                  'threads=4 -node {}'.format(scylla_node_ips))
+        for loader_node in loaders.nodes:
+            loader_node.remoter.run('systemctl stop scylla-server.service',
+                                    ignore_status=True)
+            loader_node.remoter.run('systemctl stop scylla-jmx.service',
+                                    ignore_status=True)
 
-    for loader_node in loaders.nodes:
-        loader_node.remoter.run(stress_cmd)
+        scylla_node_ips = ",".join(scylla_cluster.get_node_internal_ips())
+        stress_cmd = ('cassandra-stress write n=1000 -mode cql3 native -rate '
+                      'threads=4 -node {}'.format(scylla_node_ips))
+
+        for loader_node in loaders.nodes:
+            loader_node.remoter.run(stress_cmd)
+    except Exception:
+        for node in scylla_cluster.nodes + loaders.nodes:
+            node.instance.terminate()
+        credentials.destroy()
 
 
 if __name__ == '__main__':
