@@ -1,15 +1,17 @@
-import boto3
+import boto3.session
 import time
 from cluster import ScyllaCluster
 from cluster import LoaderCluster
 from cluster import RemoteCredentials
+from remote import CmdError
 
 
 def main():
-    service = boto3.resource('ec2')
-    ami_id = 'ami-972863fd'
-    security_group_ids = ['sg-c5e1f7a0']
-    subnet_id = 'subnet-ec4a72c4'
+    session = boto3.session.Session(region_name='us-west-2')
+    service = session.resource('ec2')
+    ami_id = 'ami-20776841'
+    security_group_ids = ['sg-81703ae4']
+    subnet_id = 'subnet-5207ee37'
     key_name = 'keypair-{}-{}'.format('longevity_tests',
                                       time.strftime('%Y-%m-%d-%H.%M.%S'))
     credentials = RemoteCredentials(service=service, name=key_name)
@@ -28,31 +30,34 @@ def main():
                             credentials=credentials,
                             n_nodes=1)
 
+    all_nodes = scylla_cluster.nodes + loaders.nodes
+    node_initialized_map = {node: False for node in scylla_cluster.nodes}
+    all_nodes_initialized = [True for _ in scylla_cluster.nodes]
+    verify_pause = 30
+
     try:
-        for node in scylla_cluster.nodes + loaders.nodes:
-            node.remoter.uptime()
-
-        print('Sleeping 120 seconds before checking if scylla is installed...')
-        time.sleep(120)
-
-        for node in scylla_cluster.nodes + loaders.nodes:
-            node.remoter.run('rpm -qa | grep scylla')
-
-        for loader_node in loaders.nodes:
-            loader_node.remoter.run('systemctl stop scylla-server.service',
-                                    ignore_status=True)
-            loader_node.remoter.run('systemctl stop scylla-jmx.service',
-                                    ignore_status=True)
+        print("Waiting until all DB nodes are functional")
+        while node_initialized_map.values() != all_nodes_initialized:
+            for node in node_initialized_map.keys():
+                try:
+                    node.remoter.run('netstat -a | grep :9042', timeout=120)
+                    node_initialized_map[node] = True
+                except CmdError:
+                    pass
+            print("Nodes functional map: {}".format(node_initialized_map))
+            print("Waiting {} s before checking again".format(verify_pause))
+            time.sleep(verify_pause)
 
         scylla_node_ips = ",".join(scylla_cluster.get_node_internal_ips())
-        stress_cmd = ('cassandra-stress write n=1000 -mode cql3 native -rate '
-                      'threads=4 -node {}'.format(scylla_node_ips))
+        stress_cmd = ('cassandra-stress write duration=60m n=1000 '
+                      '-mode cql3 native -rate threads=4 '
+                      '-node {}'.format(scylla_node_ips))
 
         for loader_node in loaders.nodes:
             loader_node.remoter.run(stress_cmd)
-    except Exception:
-        for node in scylla_cluster.nodes + loaders.nodes:
-            node.instance.terminate()
+    finally:
+        for node in all_nodes:
+            node.destroy()
         credentials.destroy()
 
 

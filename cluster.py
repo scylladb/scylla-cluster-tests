@@ -25,6 +25,8 @@ class RemoteCredentials(object):
         os.chmod(self.key_file, 0o400)
 
     def destroy(self):
+        print("Destroying Key Pair {} -> {}".format(self.key_pair,
+                                                    self.key_file))
         self.key_pair.delete()
         try:
             os.remove(self.key_file)
@@ -54,6 +56,9 @@ class Node(object):
                               key_filename=credentials.key_file,
                               timeout=120, attempts=10, quiet=False)
 
+    def __str__(self):
+        return '{} ({})'.format(self.name, self.instance.public_ip_address)
+
     def wait_public_ip(self):
         print('Waiting for public IP (Node {})'.format(self.name))
         while self.instance.public_ip_address is None:
@@ -63,7 +68,8 @@ class Node(object):
                                            self.instance.public_ip_address))
 
     def destroy(self):
-        pass
+        print('Destroying Node {}'.format(self))
+        self.instance.terminate()
 
 
 class Cluster(object):
