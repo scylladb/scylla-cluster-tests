@@ -4,6 +4,12 @@ import tempfile
 import time
 
 from remote import Remote
+from remote import CmdError
+
+
+class NodeInitError(Exception):
+    def __init__(self, *args, **kwargs):
+        super(NodeInitError, self).__init__(*args, **kwargs)
 
 
 class RemoteCredentials(object):
@@ -17,7 +23,7 @@ class RemoteCredentials(object):
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '{}.pem'.format(name))
         self.write_key_file()
-        print("Created Key Pair {} -> {}".format(name, self.key_file))
+        print("Key Pair {} -> {}: created".format(name, self.key_file))
 
     def write_key_file(self):
         with open(self.key_file, 'w') as key_file_obj:
@@ -25,13 +31,13 @@ class RemoteCredentials(object):
         os.chmod(self.key_file, 0o400)
 
     def destroy(self):
-        print("Destroying Key Pair {} -> {}".format(self.key_pair,
-                                                    self.key_file))
         self.key_pair.delete()
         try:
             os.remove(self.key_file)
         except OSError:
             pass
+        print("Key Pair {} -> {}: destroyed".format(self.key_pair,
+                                                    self.key_file))
 
 
 class Node(object):
@@ -45,7 +51,6 @@ class Node(object):
         self.instance = ec2_instance
         self.name = '{}-{}'.format(node_prefix,
                                    time.strftime('%Y-%m-%d-%H.%M.%S'))
-        print('Creating Node {}'.format(self.name))
         self.ec2 = ec2_service
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'Name', 'Value': self.name}])
@@ -60,16 +65,14 @@ class Node(object):
         return '{} ({})'.format(self.name, self.instance.public_ip_address)
 
     def wait_public_ip(self):
-        print('Waiting for public IP (Node {})'.format(self.name))
         while self.instance.public_ip_address is None:
             time.sleep(1)
             self.instance.reload()
-        print("Instance {} IP : {}".format(self.name,
-                                           self.instance.public_ip_address))
+        print('Node {}: started'.format(self))
 
     def destroy(self):
-        print('Destroying Node {}'.format(self))
         self.instance.terminate()
+        print('Node {}: destroyed'.format(self))
 
 
 class Cluster(object):
@@ -87,7 +90,8 @@ class Cluster(object):
         self.name = '{}-{}'.format(cluster_prefix,
                                    time.strftime('%Y-%m-%d-%H.%M.%S'))
         self.credentials = credentials
-        print('Using AMI ID: {}'.format(ec2_ami_id))
+        print('Cluster {} (AMI ID {}): '
+              'Init nodes '.format(self.name, ec2_ami_id))
         instances = self.ec2.create_instances(ImageId=ec2_ami_id,
                                               UserData=ec2_user_data,
                                               MinCount=n_nodes,
@@ -106,6 +110,19 @@ class Cluster(object):
 
     def get_node_internal_ips(self):
         return [node.instance.private_ip_address for node in self.nodes]
+
+    def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
+        """
+        Run cmd in all nodes (parallel execution)
+
+        :param cmd: Shell Command to run.
+        :param ignore_status: Whether to ignore errors on the execution
+        :param timeout: Time to wait for command to finish
+        :return: Iterator with parallel execution results
+        """
+        for node in self.nodes:
+            yield node.remoter.run_parallel(cmd, ignore_status=ignore_status,
+                                            timeout=timeout)
 
     def destroy(self):
         for node in self.nodes:
@@ -129,6 +146,37 @@ class ScyllaCluster(Cluster):
                                             cluster_prefix='scylla-cluster',
                                             node_prefix='scylla-node',
                                             n_nodes=n_nodes)
+
+    def wait_for_init(self):
+        node_initialized_map = {node: False for node in self.nodes}
+        all_nodes_initialized = [True for _ in self.nodes]
+        verify_pause = 60
+        print("Waiting until all DB nodes are functional. "
+              "Polling interval: {} s".format(verify_pause))
+        while node_initialized_map.values() != all_nodes_initialized:
+            for node in node_initialized_map.keys():
+                try:
+                    node.remoter.run_quiet('netstat -a | grep :9042',
+                                           timeout=120)
+                    node_initialized_map[node] = True
+                except CmdError:
+                    try:
+                        node.remoter.run_quiet("grep 'Aborting the "
+                                               "clustering of this "
+                                               "reservation' "
+                                               "/home/fedora/ami.log",
+                                               timeout=120)
+                        result = node.remoter.run_quiet("tail -5 "
+                                                        "/home/fedora/ami.log",
+                                                        timeout=120)
+                        raise NodeInitError("Failed to initialize "
+                                            "Node:\n{}".format(result.stdout))
+                    except CmdError:
+                        pass
+            pretty_print_map = {str(node): node_initialized_map[node] for
+                                node in node_initialized_map}
+            print("Nodes initialized map: {}".format(pretty_print_map))
+            time.sleep(verify_pause)
 
 
 class LoaderCluster(Cluster):

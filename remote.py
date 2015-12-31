@@ -123,6 +123,43 @@ class Remote(object):
                                            timeout, hosts=[self.hostname])
         return return_dict[self.hostname]
 
+    def run_quiet(self, command, ignore_status=False, timeout=60):
+        """
+        Run a remote command.
+
+        :param command: the command string to execute.
+        :param ignore_status: Whether to not raise exceptions in case the
+            command's return code is different than zero.
+        :param timeout: Maximum time allowed for the command to return.
+
+        :return: the result of the remote program's execution.
+        :rtype: :class:`avocado.utils.process.CmdResult`.
+        :raise fabric.exceptions.CommandTimeout: When timeout exhausted.
+        """
+        with fabric.api.quiet():
+            return_dict = fabric.tasks.execute(self._run, command,
+                                               ignore_status, timeout,
+                                               hosts=[self.hostname])
+            return return_dict[self.hostname]
+
+    @fabric.api.parallel
+    def run_parallel(self, command, ignore_status=False, timeout=60):
+        """
+        Run a remote command (parallel execution)
+
+        :param command: the command string to execute.
+        :param ignore_status: Whether to not raise exceptions in case the
+            command's return code is different than zero.
+        :param timeout: Maximum time allowed for the command to return.
+
+        :return: the result of the remote program's execution.
+        :rtype: :class:`avocado.utils.process.CmdResult`.
+        :raise fabric.exceptions.CommandTimeout: When timeout exhausted.
+        """
+        return_dict = fabric.tasks.execute(self._run, command, ignore_status,
+                                           timeout, hosts=[self.hostname])
+        return return_dict[self.hostname]
+
     def _run(self, command, ignore_status=False, timeout=60):
         result = CmdResult()
         start_time = time.time()

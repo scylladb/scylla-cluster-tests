@@ -3,7 +3,6 @@ import time
 from cluster import ScyllaCluster
 from cluster import LoaderCluster
 from cluster import RemoteCredentials
-from remote import CmdError
 
 
 def main():
@@ -21,7 +20,7 @@ def main():
                                    ec2_subnet_id=subnet_id,
                                    service=service,
                                    credentials=credentials,
-                                   n_nodes=2)
+                                   n_nodes=4)
 
     loaders = LoaderCluster(ec2_ami_id=ami_id,
                             ec2_security_group_ids=security_group_ids,
@@ -30,33 +29,16 @@ def main():
                             credentials=credentials,
                             n_nodes=1)
 
-    all_nodes = scylla_cluster.nodes + loaders.nodes
-    node_initialized_map = {node: False for node in scylla_cluster.nodes}
-    all_nodes_initialized = [True for _ in scylla_cluster.nodes]
-    verify_pause = 30
-
     try:
-        print("Waiting until all DB nodes are functional")
-        while node_initialized_map.values() != all_nodes_initialized:
-            for node in node_initialized_map.keys():
-                try:
-                    node.remoter.run('netstat -a | grep :9042', timeout=120)
-                    node_initialized_map[node] = True
-                except CmdError:
-                    pass
-            print("Nodes functional map: {}".format(node_initialized_map))
-            print("Waiting {} s before checking again".format(verify_pause))
-            time.sleep(verify_pause)
-
+        scylla_cluster.wait_for_init()
         scylla_node_ips = ",".join(scylla_cluster.get_node_internal_ips())
-        stress_cmd = ('cassandra-stress write duration=60m n=1000 '
+        stress_cmd = ('cassandra-stress write duration=30m '
                       '-mode cql3 native -rate threads=4 '
                       '-node {}'.format(scylla_node_ips))
-
-        for loader_node in loaders.nodes:
-            loader_node.remoter.run(stress_cmd)
+        results = [result for result in loaders.run_all_nodes(stress_cmd)]
+        print(results)
     finally:
-        for node in all_nodes:
+        for node in scylla_cluster.nodes + loaders.nodes:
             node.destroy()
         credentials.destroy()
 
