@@ -2,14 +2,21 @@ import base64
 import os
 import tempfile
 import time
+import uuid
 
 from remote import Remote
 from remote import CmdError
 
 
 class NodeInitError(Exception):
-    def __init__(self, *args, **kwargs):
-        super(NodeInitError, self).__init__(*args, **kwargs)
+
+    def __init__(self, node, result):
+        self.node = node
+        self.result = result
+
+    def __str__(self):
+        return "Node {} init fail:\n{}".format(str(self.node),
+                                               self.result.stdout)
 
 
 class RemoteCredentials(object):
@@ -18,12 +25,18 @@ class RemoteCredentials(object):
     Wraps EC2.KeyPair, so that we can save keypair info into .pem files.
     """
 
-    def __init__(self, service, name):
-        self.key_pair = service.create_key_pair(KeyName=name)
+    def __init__(self, service, key_prefix='keypair'):
+        self.uuid = uuid.uuid4()
+        self.shortid = str(self.uuid)[:8]
+        self.name = '{}-{}'.format(key_prefix, self.shortid)
+        self.key_pair = service.create_key_pair(KeyName=self.name)
         self.key_file = os.path.join(tempfile.gettempdir(),
-                                     '{}.pem'.format(name))
+                                     '{}.pem'.format(self.name))
         self.write_key_file()
-        print("Key Pair {} -> {}: created".format(name, self.key_file))
+        print("{}: Created".format(str(self)))
+
+    def __str__(self):
+        return "Key Pair {} -> {}".format(self.name, self.key_file)
 
     def write_key_file(self):
         with open(self.key_file, 'w') as key_file_obj:
@@ -36,8 +49,7 @@ class RemoteCredentials(object):
             os.remove(self.key_file)
         except OSError:
             pass
-        print("Key Pair {} -> {}: destroyed".format(self.key_pair,
-                                                    self.key_file))
+        print("{}: Destroyed".format(str(self)))
 
 
 class Node(object):
@@ -47,32 +59,34 @@ class Node(object):
     """
 
     def __init__(self, ec2_instance, ec2_service, credentials,
-                 node_prefix='node', ami_username='root'):
+                 node_prefix='node', node_index=1, ami_username='root'):
         self.instance = ec2_instance
-        self.name = '{}-{}'.format(node_prefix,
-                                   time.strftime('%Y-%m-%d-%H.%M.%S'))
+        self.name = '{}-{}'.format(node_prefix, node_index)
         self.ec2 = ec2_service
-        self.ec2.create_tags(Resources=[self.instance.id],
-                             Tags=[{'Key': 'Name', 'Value': self.name}])
         self.instance.wait_until_running()
         self.wait_public_ip()
+        self.ec2.create_tags(Resources=[self.instance.id],
+                             Tags=[{'Key': 'Name', 'Value': self.name}])
+        print('{}: Started'.format(self))
         self.remoter = Remote(hostname=self.instance.public_ip_address,
                               username=ami_username,
                               key_filename=credentials.key_file,
                               timeout=120, attempts=10, quiet=False)
 
     def __str__(self):
-        return '{} ({})'.format(self.name, self.instance.public_ip_address)
+        return 'Node {} [{} | {}]'.format(self.name,
+                                          self.instance.public_ip_address,
+                                          self.instance.private_ip_address)
 
     def wait_public_ip(self):
         while self.instance.public_ip_address is None:
             time.sleep(1)
             self.instance.reload()
-        print('Node {}: started'.format(self))
 
     def destroy(self):
+        terminate_msg = '{}: Destroyed'.format(self)
         self.instance.terminate()
-        print('Node {}: destroyed'.format(self))
+        print(terminate_msg)
 
 
 class Cluster(object):
@@ -87,11 +101,12 @@ class Cluster(object):
                  ec2_user_data='', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10):
         self.ec2 = service
-        self.name = '{}-{}'.format(cluster_prefix,
-                                   time.strftime('%Y-%m-%d-%H.%M.%S'))
+        self.ec2_ami_id = ec2_ami_id
+        self.uuid = uuid.uuid4()
+        self.shortid = str(self.uuid)[:8]
+        self.name = '{}-{}'.format(cluster_prefix, self.shortid)
         self.credentials = credentials
-        print('Cluster {} (AMI ID {}): '
-              'Init nodes '.format(self.name, ec2_ami_id))
+        print('{}: Init nodes '.format(str(self)))
         instances = self.ec2.create_instances(ImageId=ec2_ami_id,
                                               UserData=ec2_user_data,
                                               MinCount=n_nodes,
@@ -100,13 +115,19 @@ class Cluster(object):
                                               SecurityGroupIds=ec2_security_group_ids,
                                               SubnetId=ec2_subnet_id,
                                               InstanceType=ec2_instance_type)
-        self.nodes = [self.create_node(instance, ec2_ami_username, node_prefix)
-                      for instance in instances]
+        self.nodes = [self.create_node(instance, ec2_ami_username,
+                                       node_prefix, node_index)
+                      for node_index, instance in
+                      enumerate(instances, start=1)]
 
-    def create_node(self, instance, ami_username, node_prefix):
+    def __str__(self):
+        return 'Cluster {} (AMI ID {})'.format(self.name, self.ec2_ami_id)
+
+    def create_node(self, instance, ami_username, node_prefix, node_index):
+        node_prefix = '{}-{}'.format(node_prefix, self.shortid)
         return Node(ec2_instance=instance, ec2_service=self.ec2,
                     credentials=self.credentials, ami_username=ami_username,
-                    node_prefix=node_prefix)
+                    node_prefix=node_prefix, node_index=node_index)
 
     def get_node_internal_ips(self):
         return [node.instance.private_ip_address for node in self.nodes]
@@ -125,11 +146,13 @@ class Cluster(object):
                                             timeout=timeout)
 
     def destroy(self):
+        print('{}: Destroy nodes '.format(str(self)))
         for node in self.nodes:
             node.destroy()
 
 
 class ScyllaCluster(Cluster):
+
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='fedora', n_nodes=10):
@@ -143,8 +166,8 @@ class ScyllaCluster(Cluster):
                                             ec2_user_data=user_data,
                                             service=service,
                                             credentials=credentials,
-                                            cluster_prefix='scylla-cluster',
-                                            node_prefix='scylla-node',
+                                            cluster_prefix='scylla-db-cluster',
+                                            node_prefix='scylla-db-node',
                                             n_nodes=n_nodes)
 
     def wait_for_init(self):
@@ -153,6 +176,7 @@ class ScyllaCluster(Cluster):
         verify_pause = 60
         print("Waiting until all DB nodes are functional. "
               "Polling interval: {} s".format(verify_pause))
+        start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
                 try:
@@ -169,27 +193,32 @@ class ScyllaCluster(Cluster):
                         result = node.remoter.run_quiet("tail -5 "
                                                         "/home/fedora/ami.log",
                                                         timeout=120)
-                        raise NodeInitError("Failed to initialize "
-                                            "Node:\n{}".format(result.stdout))
+                        raise NodeInitError(node=node, result=result)
                     except CmdError:
                         pass
-            pretty_print_map = {str(node): node_initialized_map[node] for
-                                node in node_initialized_map}
-            print("Nodes initialized map: {}".format(pretty_print_map))
+            initialized_nodes = len([node for node in node_initialized_map if
+                                    node_initialized_map[node]])
+            total_nodes = len(node_initialized_map.keys())
+            time_elapsed = time.time() - start_time
+            print("({}/{}) DB nodes ready. "
+                  "Time elapsed: {:d} s".format(initialized_nodes,
+                                                total_nodes,
+                                                int(time_elapsed)))
             time.sleep(verify_pause)
 
 
-class LoaderCluster(Cluster):
+class LoaderSet(Cluster):
+
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='fedora', n_nodes=10):
-        super(LoaderCluster, self).__init__(ec2_ami_id=ec2_ami_id,
-                                            ec2_subnet_id=ec2_subnet_id,
-                                            ec2_security_group_ids=ec2_security_group_ids,
-                                            ec2_instance_type=ec2_instance_type,
-                                            ec2_ami_username=ec2_ami_username,
-                                            service=service,
-                                            credentials=credentials,
-                                            cluster_prefix='scylla-loader',
-                                            node_prefix='scylla-loader-node',
-                                            n_nodes=n_nodes)
+        super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
+                                        ec2_subnet_id=ec2_subnet_id,
+                                        ec2_security_group_ids=ec2_security_group_ids,
+                                        ec2_instance_type=ec2_instance_type,
+                                        ec2_ami_username=ec2_ami_username,
+                                        service=service,
+                                        credentials=credentials,
+                                        cluster_prefix='scylla-loader-set',
+                                        node_prefix='scylla-loader-node',
+                                        n_nodes=n_nodes)

@@ -1,33 +1,29 @@
 import boto3.session
-import time
 from cluster import ScyllaCluster
-from cluster import LoaderCluster
+from cluster import LoaderSet
 from cluster import RemoteCredentials
 
 
-def main():
-    session = boto3.session.Session(region_name='us-west-2')
+def main(args):
+    print('Starting test. Args: {}'.format(args))
+    session = boto3.session.Session(region_name=args['region_name'])
     service = session.resource('ec2')
-    ami_id = 'ami-20776841'
-    security_group_ids = ['sg-81703ae4']
-    subnet_id = 'subnet-5207ee37'
-    key_name = 'keypair-{}-{}'.format('longevity_tests',
-                                      time.strftime('%Y-%m-%d-%H.%M.%S'))
-    credentials = RemoteCredentials(service=service, name=key_name)
+    credentials = RemoteCredentials(service=service,
+                                    key_prefix='longevity-test')
 
-    scylla_cluster = ScyllaCluster(ec2_ami_id=ami_id,
-                                   ec2_security_group_ids=security_group_ids,
-                                   ec2_subnet_id=subnet_id,
+    scylla_cluster = ScyllaCluster(ec2_ami_id=args['ami_id'],
+                                   ec2_security_group_ids=args['security_group_ids'],
+                                   ec2_subnet_id=args['subnet_id'],
                                    service=service,
                                    credentials=credentials,
-                                   n_nodes=4)
+                                   n_nodes=3)
 
-    loaders = LoaderCluster(ec2_ami_id=ami_id,
-                            ec2_security_group_ids=security_group_ids,
-                            ec2_subnet_id=subnet_id,
-                            service=service,
-                            credentials=credentials,
-                            n_nodes=1)
+    loaders = LoaderSet(ec2_ami_id=args['ami_id'],
+                        ec2_security_group_ids=args['security_group_ids'],
+                        ec2_subnet_id=args['subnet_id'],
+                        service=service,
+                        credentials=credentials,
+                        n_nodes=1)
 
     try:
         scylla_cluster.wait_for_init()
@@ -35,13 +31,22 @@ def main():
         stress_cmd = ('cassandra-stress write duration=30m '
                       '-mode cql3 native -rate threads=4 '
                       '-node {}'.format(scylla_node_ips))
-        results = [result for result in loaders.run_all_nodes(stress_cmd)]
+        results = [result for result in
+                   loaders.run_all_nodes(stress_cmd, timeout=33*60)]
         print(results)
     finally:
-        for node in scylla_cluster.nodes + loaders.nodes:
-            node.destroy()
+        scylla_cluster.destroy()
+        loaders.destroy()
         credentials.destroy()
 
 
 if __name__ == '__main__':
-    main()
+    us_west_2 = {'region_name': 'us-west-2',
+                 'ami_id': 'ami-20776841',
+                 'security_group_ids': ['sg-81703ae4'],
+                 'subnet_id': 'subnet-5207ee37'}
+    us_east_1 = {'region_name': 'us-east-1',
+                 'ami_id': 'ami-972863fd',
+                 'security_group_ids': ['sg-c5e1f7a0'],
+                 'subnet_id': 'subnet-ec4a72c4'}
+    main(args=us_east_1)
