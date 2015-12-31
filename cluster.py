@@ -170,7 +170,7 @@ class ScyllaCluster(Cluster):
                                             node_prefix='scylla-db-node',
                                             n_nodes=n_nodes)
 
-    def wait_for_init(self):
+    def wait_for_init(self, verbose=False):
         node_initialized_map = {node: False for node in self.nodes}
         all_nodes_initialized = [True for _ in self.nodes]
         verify_pause = 60
@@ -179,20 +179,20 @@ class ScyllaCluster(Cluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
+                if verbose:
+                    run_cmd = node.remoter.run
+                else:
+                    run_cmd = node.remoter.run_quiet
                 try:
-                    node.remoter.run_quiet('netstat -a | grep :9042',
-                                           timeout=120)
+                    run_cmd('netstat -a | grep :9042', timeout=120)
                     node_initialized_map[node] = True
                 except CmdError:
                     try:
-                        node.remoter.run_quiet("grep 'Aborting the "
-                                               "clustering of this "
-                                               "reservation' "
-                                               "/home/fedora/ami.log",
-                                               timeout=120)
-                        result = node.remoter.run_quiet("tail -5 "
-                                                        "/home/fedora/ami.log",
-                                                        timeout=120)
+                        run_cmd("grep 'Aborting the clustering of this "
+                                "reservation' /home/fedora/ami.log",
+                                timeout=120)
+                        result = run_cmd("tail -5 /home/fedora/ami.log",
+                                         timeout=120)
                         raise NodeInitError(node=node, result=result)
                     except CmdError:
                         pass
@@ -222,3 +222,16 @@ class LoaderSet(Cluster):
                                         cluster_prefix='scylla-loader-set',
                                         node_prefix='scylla-loader-node',
                                         n_nodes=n_nodes)
+
+    def wait_for_init(self, verbose=False):
+        print("Setting all DB loader nodes")
+        for loader in self.nodes:
+            if verbose:
+                run_cmd = loader.remoter.run
+            else:
+                run_cmd = loader.remoter.run_quiet
+            loader.remoter.send_files('scylla.repo',
+                                      '/home/fedora/scylla.repo')
+            run_cmd('sudo mv /home/fedora/scylla.repo '
+                    '/etc/yum.repos.d/scylla.repo')
+            run_cmd('sudo dnf install -y scylla-tools', timeout=300)
