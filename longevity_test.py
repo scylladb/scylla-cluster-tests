@@ -14,6 +14,7 @@ def main(args):
     scylla_cluster = ScyllaCluster(ec2_ami_id=args['ami_id_db'],
                                    ec2_security_group_ids=args['security_group_ids'],
                                    ec2_subnet_id=args['subnet_id'],
+                                   ec2_instance_type=args['instance_type_db'],
                                    service=service,
                                    credentials=credentials,
                                    n_nodes=3)
@@ -21,6 +22,7 @@ def main(args):
     loaders = LoaderSet(ec2_ami_id=args['ami_id_loader'],
                         ec2_security_group_ids=args['security_group_ids'],
                         ec2_subnet_id=args['subnet_id'],
+                        ec2_instance_type=args['instance_type_loader'],
                         service=service,
                         credentials=credentials,
                         n_nodes=1)
@@ -44,12 +46,16 @@ def main(args):
 if __name__ == '__main__':
     us_west_2 = {'region_name': 'us-west-2',
                  'ami_id_db': 'ami-20776841',
+                 'instance_type_db': 'c4.xlarge',
                  'ami_id_loader': 'ami-05f4ed35',
+                 'instance_type_loader': 'c4.xlarge',
                  'security_group_ids': ['sg-81703ae4'],
                  'subnet_id': 'subnet-5207ee37'}
     us_east_1 = {'region_name': 'us-east-1',
                  'ami_id_db': 'ami-972863fd',
+                 'instance_type_db': 'c4.xlarge',
                  'ami_id_loader': 'ami-a51564c0',
+                 'instance_type_loader': 'c4.xlarge',
                  'security_group_ids': ['sg-c5e1f7a0'],
                  'subnet_id': 'subnet-ec4a72c4'}
     main(args=us_east_1)

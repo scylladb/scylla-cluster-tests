@@ -1,11 +1,19 @@
-import base64
 import os
 import tempfile
 import time
 import uuid
 
-from remote import Remote
 from remote import CmdError
+from remote import Remote
+
+SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
+                                   "Ebs": {"VolumeSize": 40,
+                                           "DeleteOnTermination": True,
+                                           "Encrypted": False}},
+                                  {"DeviceName": "/dev/xvdc",
+                                   "Ebs": {"VolumeSize": 40,
+                                           "DeleteOnTermination": True,
+                                           "Encrypted": False}}]
 
 
 class NodeInitError(Exception):
@@ -96,13 +104,19 @@ class Cluster(object):
     """
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, ec2_instance_type='c4.xlarge',
-                 ec2_ami_username='root',
-                 ec2_user_data='', cluster_prefix='cluster',
+                 service, credentials, cluster_uuid=None,
+                 ec2_instance_type='c4.xlarge', ec2_ami_username='root',
+                 ec2_user_data='', ec2_block_device_mappings=None,
+                 cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10):
+        if ec2_block_device_mappings is None:
+            ec2_block_device_mappings = []
         self.ec2 = service
         self.ec2_ami_id = ec2_ami_id
-        self.uuid = uuid.uuid4()
+        if cluster_uuid is None:
+            self.uuid = uuid.uuid4()
+        else:
+            self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '{}-{}'.format(cluster_prefix, self.shortid)
         self.credentials = credentials
@@ -113,6 +127,7 @@ class Cluster(object):
                                               MaxCount=n_nodes,
                                               KeyName=self.credentials.key_pair.name,
                                               SecurityGroupIds=ec2_security_group_ids,
+                                              BlockDeviceMappings=ec2_block_device_mappings,
                                               SubnetId=ec2_subnet_id,
                                               InstanceType=ec2_instance_type)
         self.nodes = [self.create_node(instance, ec2_ami_username,
@@ -155,15 +170,20 @@ class ScyllaCluster(Cluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
-                 ec2_ami_username='fedora', n_nodes=10):
-        user_data = '--clustername scylla --totalnodes {}'.format(n_nodes)
-        user_data = base64.b64encode(user_data)
+                 ec2_ami_username='fedora',
+                 ec2_block_device_mappings=SCYLLA_CLUSTER_DEVICE_MAPPINGS,
+                 n_nodes=10):
+        cluster_uuid = uuid.uuid4()
+        user_data = ('--clustername scylla-{} '
+                     '--totalnodes {}'.format(cluster_uuid, n_nodes))
         super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
                                             ec2_instance_type=ec2_instance_type,
                                             ec2_ami_username=ec2_ami_username,
                                             ec2_user_data=user_data,
+                                            ec2_block_device_mappings=ec2_block_device_mappings,
+                                            cluster_uuid=cluster_uuid,
                                             service=service,
                                             credentials=credentials,
                                             cluster_prefix='scylla-db-cluster',
