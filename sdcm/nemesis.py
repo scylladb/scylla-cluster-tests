@@ -39,4 +39,5 @@ class Nemesis(object):
 class ChaosMonkey(Nemesis):
     def break_it(self):
         self.node_to_operate.instance.stop()
+        time.sleep(60)
         self.node_to_operate.instance.start()

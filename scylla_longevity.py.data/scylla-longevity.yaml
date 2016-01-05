@@ -1,6 +1,6 @@
 duration: 10
 threads: 4
-n_db_nodes: 4
+n_db_nodes: 6
 # I have to solve a problem with SSH connection parallelism, until then
 # keep n_loaders: 1
 n_loaders: 1
@@ -15,11 +15,13 @@ regions: !mux
         security_group_ids: 'sg-81703ae4'
         subnet_id: 'subnet-5207ee37'
 
-    us_east_1:
-        region_name: 'us-east-1'
-        ami_id_db: 'ami-972863fd'
-        instance_type_db: 'c4.xlarge'
-        ami_id_loader: 'ami-a51564c0'
-        instance_type_loader: 'c4.xlarge'
-        security_group_ids: 'sg-c5e1f7a0'
-        subnet_id: 'subnet-ec4a72c4'
+# Avocado will always run all variants defined on the multiplex file.
+# Please leave commented out all variants that you're not going to run.
+#    us_east_1:
+#        region_name: 'us-east-1'
+#        ami_id_db: 'ami-972863fd'
+#        instance_type_db: 'c4.xlarge'
+#        ami_id_loader: 'ami-a51564c0'
+#        instance_type_loader: 'c4.xlarge'
+#        security_group_ids: 'sg-c5e1f7a0'
+#        subnet_id: 'subnet-ec4a72c4'
