@@ -14,20 +14,20 @@ between that and CCM, since with CCM the cluster nodes are usually
 local processes running on the local machine instead of actual
 machines on the network. It's probably not great, but I had to choose
 something. It contains:
-* sdcm.cluster: Cluster classes that use the boto3 API
-* sdcm.remote: SSH library
-* sdcm.nemesis: Nemesis classes (a nemesis is a class that does
+* `sdcm.cluster`: Cluster classes that use the boto3 API
+* `sdcm.remote`: SSH library
+* `sdcm.nemesis`: Nemesis classes (a nemesis is a class that does
 disruption in the node)
-* sdcm.tester: Contains the base test class, see below.
+* `sdcm.tester`: Contains the base test class, see below.
 
 2) A directory, named scylla_longevity.py.data. that contains:
- * scylla repo file (to prepare a loader node)
- * yaml file containing test data
-   - AWS machine image ids
-   - Security groups
-   - Number of loader nodes (gotta keep those at 1 due to one current
+* scylla repo file (to prepare a loader node)
+* yaml file containing test data
+- AWS machine image ids
+- Security groups
+- Number of loader nodes (gotta keep those at 1 due to one current
 limitation of my code [1])
-   - Number of cluster nodes (I'm choosing 6 right now, but I see
+- Number of cluster nodes (I'm choosing 6 right now, but I see
 cluster problems when the test tries to stop one node [2])
 3) A test, located at scylla_longevity.py.
 
@@ -59,14 +59,14 @@ scylla-longevity-tests $ export PYTHONPATH=.:$PYTHONPATH
 avocado run scylla_longevity.py --multiplex
 scylla_longevity.py.data/scylla-longevity.yaml
 
-You'll see something like:
+You'll see something like::
 
     JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
     JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
     TESTS      : 1
      (1/1) scylla_longevity.py:LongevityTest.test_twenty_minutes : /
 
-A throbber, that will spin until the test ends. This will hopefully evolve to:
+A throbber, that will spin until the test ends. This will hopefully evolve to::
 
     avocado run scylla_longevity.py --multiplex
     scylla_longevity.py.data/scylla-longevity.yaml
