@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 import time
 import uuid
 
@@ -246,6 +247,9 @@ class ScyllaCluster(Cluster):
                                             cluster_prefix='scylla-db-cluster',
                                             node_prefix='scylla-db-node',
                                             n_nodes=n_nodes)
+        self.nemesis = []
+        self.nemesis_threads = []
+        self.termination_event = threading.Event()
 
     def wait_for_init(self, verbose=False):
         node_initialized_map = {node: False for node in self.nodes}
@@ -283,12 +287,32 @@ class ScyllaCluster(Cluster):
                                                 int(time_elapsed)))
             time.sleep(verify_pause)
 
+    def add_nemesis(self, nemesis):
+        self.nemesis.append(nemesis(cluster=self,
+                                    termination_event=self.termination_event))
+
+    def start_nemesis(self, interval=30):
+        for nemesis in self.nemesis:
+            nemesis_thread = threading.Thread(target=nemesis.run,
+                                              args=(interval,), verbose=True)
+            nemesis_thread.start()
+            self.nemesis_threads.append(nemesis_thread)
+
+    def stop_nemesis(self):
+        self.termination_event.set()
+        for nemesis_thread in self.nemesis_threads:
+            nemesis_thread.join(10)
+
+    def destroy(self):
+        self.stop_nemesis()
+        super(ScyllaCluster, self).destroy()
+
 
 class LoaderSet(Cluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
-                 ec2_ami_username='fedora', n_nodes=10):
+                 ec2_ami_username='fedora', scylla_repo=None, n_nodes=10):
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
                                         ec2_subnet_id=ec2_subnet_id,
                                         ec2_security_group_ids=ec2_security_group_ids,
@@ -299,6 +323,7 @@ class LoaderSet(Cluster):
                                         cluster_prefix='scylla-loader-set',
                                         node_prefix='scylla-loader-node',
                                         n_nodes=n_nodes)
+        self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False):
         print("Setting all DB loader nodes")
@@ -307,7 +332,7 @@ class LoaderSet(Cluster):
                 run_cmd = loader.remoter.run
             else:
                 run_cmd = loader.remoter.run_quiet
-            loader.remoter.send_files('scylla.repo',
+            loader.remoter.send_files(self.scylla_repo,
                                       '/home/fedora/scylla.repo')
             run_cmd('sudo mv /home/fedora/scylla.repo '
                     '/etc/yum.repos.d/scylla.repo')

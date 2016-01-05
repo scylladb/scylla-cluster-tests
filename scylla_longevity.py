@@ -1,19 +1,22 @@
 #!/usr/bin/env python
 
-from avocado import main
-from avocado import Test
+import os
 
 import boto3.session
 
-from cluster import ScyllaCluster
-from cluster import LoaderSet
-from cluster import RemoteCredentials
+from avocado import Test
+from avocado import main
+
+from sdcm.cluster import LoaderSet
+from sdcm.cluster import RemoteCredentials
+from sdcm.cluster import ScyllaCluster
+from sdcm.nemesis import ChaosMonkey
 
 stress_params = {'duration': 10,
                  'threads': 4}
 
 node_amounts = {'n_db_nodes': 4,
-                'n_loaders': 2}
+                'n_loaders': 1}
 
 us_west_2 = {'region_name': 'us-west-2',
              'ami_id_db': 'ami-20776841',
@@ -37,11 +40,23 @@ us_west_2.update(stress_params)
 us_west_2.update(node_amounts)
 
 
-class DistributedClusterTester(Test):
+class ScyllaClusterTester(Test):
     def setUp(self):
+        self.credentials = None
+        self.db_cluster = None
+        self.loaders = None
         args = us_west_2
         self.args = args
         print('Starting test. Args: {}'.format(args))
+        try:
+            self.init_resources(args)
+        except:
+            self.clean_resources()
+
+        self.loaders.wait_for_init()
+        self.db_cluster.wait_for_init()
+
+    def init_resources(self, args):
         session = boto3.session.Session(region_name=args['region_name'])
         service = session.resource('ec2')
         self.credentials = RemoteCredentials(service=service,
@@ -55,16 +70,15 @@ class DistributedClusterTester(Test):
                                         credentials=self.credentials,
                                         n_nodes=args['n_db_nodes'])
 
+        scylla_repo = os.path.join('scylla_longevity.py.data', 'scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=args['ami_id_loader'],
                                  ec2_security_group_ids=args['security_group_ids'],
                                  ec2_subnet_id=args['subnet_id'],
                                  ec2_instance_type=args['instance_type_loader'],
                                  service=service,
                                  credentials=self.credentials,
+                                 scylla_repo=scylla_repo,
                                  n_nodes=args['n_loaders'])
-
-        self.loaders.wait_for_init()
-        self.db_cluster.wait_for_init()
 
     def run_stress(self, duration=None):
         try:
@@ -88,21 +102,34 @@ class DistributedClusterTester(Test):
 
     def clean_resources(self):
         print('Cleaning up resources used in the test')
-        self.db_cluster.destroy()
-        self.loaders.destroy()
-        self.credentials.destroy()
+        if self.db_cluster is not None:
+            self.db_cluster.destroy()
+            self.db_cluster = None
+        if self.loaders is not None:
+            self.loaders.destroy()
+            self.loaders = None
+        if self.credentials is not None:
+            self.credentials.destroy()
+            self.credentials = None
 
     def tearDown(self):
         self.clean_resources()
 
 
-class LongevityTest(DistributedClusterTester):
+class LongevityTest(ScyllaClusterTester):
 
-    def test_10min(self):
+    """
+    Test a Scylla cluster stability over a time period.
+
+    :avocado: enable
+    """
+    def test_twenty_minutes(self):
         """
-        avocado: enable
+        Run a very short test, as a config/code sanity check.
         """
-        self.run_stress(duration=10)
+        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.start_nemesis(interval=5)
+        self.run_stress(duration=20)
 
 
 if __name__ == '__main__':
