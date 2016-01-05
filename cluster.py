@@ -157,8 +157,8 @@ class Cluster(object):
         :return: Iterator with parallel execution results
         """
         for node in self.nodes:
-            yield node.remoter.run_parallel(cmd, ignore_status=ignore_status,
-                                            timeout=timeout)
+            yield node, node.remoter.run_parallel(cmd, ignore_status=ignore_status,
+                                                  timeout=timeout)
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
@@ -255,3 +255,14 @@ class LoaderSet(Cluster):
             run_cmd('sudo mv /home/fedora/scylla.repo '
                     '/etc/yum.repos.d/scylla.repo')
             run_cmd('sudo dnf install -y scylla-tools', timeout=300)
+
+    def run_stress(self, stress_cmd, timeout):
+        print("Running {} in all loaders, timeout {} s".format(stress_cmd,
+                                                               timeout))
+        if not os.path.isdir(self.name):
+            os.makedirs(self.name)
+        for node, result in self.run_all_nodes(stress_cmd, timeout=timeout):
+            log_file_name = os.path.join(self.name,
+                                         '.log'.format(node.name))
+            with open(os.path.abspath(log_file_name), 'w') as log_file:
+                log_file.write(result.stdout)

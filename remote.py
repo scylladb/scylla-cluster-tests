@@ -156,8 +156,9 @@ class Remote(object):
         :rtype: :class:`avocado.utils.process.CmdResult`.
         :raise fabric.exceptions.CommandTimeout: When timeout exhausted.
         """
-        return_dict = fabric.tasks.execute(self._run, command, ignore_status,
-                                           timeout, hosts=[self.hostname])
+        return_dict = fabric.tasks.execute(self._run, command=command,
+                                           ignore_status=ignore_status,
+                                           timeout=timeout, hosts=[self.hostname])
         return return_dict[self.hostname]
 
     def _run(self, command, ignore_status=False, timeout=60):
