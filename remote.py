@@ -1,9 +1,10 @@
+import getpass
+import time
+
 import fabric.api
 import fabric.network
 import fabric.operations
 import fabric.tasks
-import getpass
-import time
 
 
 class CmdError(Exception):
@@ -143,6 +144,14 @@ class Remote(object):
             return return_dict[self.hostname]
 
     @fabric.api.parallel
+    def run_quiet_parallel(self, command, ignore_status=False, timeout=60):
+        with fabric.api.quiet():
+            return_dict = fabric.tasks.execute(self._run, command=command,
+                                               ignore_status=ignore_status,
+                                               timeout=timeout, hosts=[self.hostname])
+            return return_dict[self.hostname]
+
+    @fabric.api.parallel
     def run_parallel(self, command, ignore_status=False, timeout=60):
         """
         Run a remote command (parallel execution)
@@ -222,6 +231,12 @@ class Remote(object):
         """
         self.run('mkdir -p %s' % remote_path)
 
+    @fabric.api.parallel
+    def send_files_parallel(self, local_path, remote_path):
+        result_dict = fabric.tasks.execute(self._send_files, local_path,
+                                           remote_path, hosts=[self.hostname])
+        return result_dict[self.hostname]
+
     def send_files(self, local_path, remote_path):
         result_dict = fabric.tasks.execute(self._send_files, local_path,
                                            remote_path, hosts=[self.hostname])
@@ -240,6 +255,12 @@ class Remote(object):
         except ValueError:
             return False
         return True
+
+    @fabric.api.parallel
+    def receive_files_parallel(self, local_path, remote_path):
+        result_dict = fabric.tasks.execute(self._receive_files, local_path,
+                                           remote_path, hosts=[self.hostname])
+        return result_dict[self.hostname]
 
     def receive_files(self, local_path, remote_path):
         result_dict = fabric.tasks.execute(self._receive_files, local_path,

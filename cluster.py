@@ -3,8 +3,14 @@ import tempfile
 import time
 import uuid
 
+import fabric.api
+import fabric.network
+import fabric.operations
+import fabric.tasks
+
 from remote import CmdError
 from remote import Remote
+from remote import CmdResult
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -144,10 +150,13 @@ class Cluster(object):
                     credentials=self.credentials, ami_username=ami_username,
                     node_prefix=node_prefix, node_index=node_index)
 
-    def get_node_internal_ips(self):
+    def get_node_private_ips(self):
         return [node.instance.private_ip_address for node in self.nodes]
 
-    def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
+    def get_node_public_ips(self):
+        return [node.instance.public_ip_address for node in self.nodes]
+
+    def run_all_nodes_old(self, cmd, ignore_status=False, timeout=60):
         """
         Run cmd in all nodes (parallel execution)
 
@@ -157,8 +166,56 @@ class Cluster(object):
         :return: Iterator with parallel execution results
         """
         for node in self.nodes:
-            yield node, node.remoter.run_parallel(cmd, ignore_status=ignore_status,
-                                                  timeout=timeout)
+            yield node, node.remoter.run_quiet(cmd,
+                                               ignore_status=ignore_status,
+                                               timeout=timeout)
+
+    @fabric.api.parallel
+    def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
+        def _run(command, ignore_status=False, timeout=60):
+            result = CmdResult()
+            start_time = time.time()
+            end_time = time.time() + (timeout or 0)   # Support timeout=None
+            # Fabric sometimes returns NetworkError even when timeout not
+            # reached
+            fabric_result = None
+            fabric_exception = None
+            while True:
+                try:
+                    fabric_result = fabric.operations.run(command=command,
+                                                          quiet=False,
+                                                          warn_only=True,
+                                                          timeout=timeout)
+                    break
+                except fabric.network.NetworkError, details:
+                    fabric_exception = details
+                    timeout = end_time - time.time()
+                if time.time() < end_time:
+                    break
+            if fabric_result is None:
+                if fabric_exception is not None:
+                    raise fabric_exception  # pylint: disable=E0702
+                else:
+                    f_msg = ("Remote execution of '{}' failed without any "
+                             "exception. This should not "
+                             "happen".format(command))
+                    raise fabric.network.NetworkError(f_msg)
+            end_time = time.time()
+            duration = end_time - start_time
+            result.command = command
+            result.stdout = str(fabric_result)
+            result.stderr = fabric_result.stderr
+            result.duration = duration
+            result.exit_status = fabric_result.return_code
+            result.failed = fabric_result.failed
+            result.succeeded = fabric_result.succeeded
+            if not ignore_status:
+                if result.failed:
+                    raise CmdError(command=command, result=result)
+            return result
+
+        return fabric.tasks.execute(_run, cmd, ignore_status, timeout,
+                                    hosts=self.get_node_public_ips())
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
@@ -259,10 +316,14 @@ class LoaderSet(Cluster):
     def run_stress(self, stress_cmd, timeout):
         print("Running {} in all loaders, timeout {} s".format(stress_cmd,
                                                                timeout))
-        if not os.path.isdir(self.name):
-            os.makedirs(self.name)
-        for node, result in self.run_all_nodes(stress_cmd, timeout=timeout):
-            log_file_name = os.path.join(self.name,
-                                         '.log'.format(node.name))
-            with open(os.path.abspath(log_file_name), 'w') as log_file:
+        logdir = os.path.abspath(self.name)
+        if not os.path.isdir(logdir):
+            os.makedirs(logdir)
+        result_dict = self.run_all_nodes(stress_cmd, timeout=timeout)
+        for node in self.nodes:
+            result = result_dict[node.instance.public_ip_address]
+            log_file_name = os.path.join(logdir,
+                                         '{}.log'.format(node.name))
+            print("Writing log file {}".format(log_file_name))
+            with open(log_file_name, 'w') as log_file:
                 log_file.write(result.stdout)
