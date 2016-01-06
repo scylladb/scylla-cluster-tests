@@ -345,7 +345,7 @@ class LoaderSet(Cluster):
             output = result_obj.stdout + result_obj.stderr
             lines = output.splitlines()
             for line in lines:
-                if 'Exception in thread' in line:
+                if 'java.io.IOException' in line:
                     return ['{}:{}'.format(node, line.strip())]
             return []
 
