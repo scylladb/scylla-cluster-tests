@@ -56,15 +56,21 @@ scylla-longevity-tests $ export PYTHONPATH=.:$PYTHONPATH
 
 * Run avocado:
 
-avocado run scylla_longevity.py --multiplex
-scylla_longevity.py.data/scylla-longevity.yaml
+avocado run scylla_longevity.py:LongevityTest.test_20_minutes --multiplex scylla_longevity.py.data/scylla-longevity.yaml --filter-only /run/regions/us_east_1
+
+This command line is just for the short version, using us_east_1. If you want
+to use the us_west_2 region, you can always change the string in the command
+above.
+
+Also, please note that this is a sample configuration. On your organization,
+you really have to update values with ones you actually have access to.
 
 You'll see something like::
 
     JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
     JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
     TESTS      : 1
-     (1/1) scylla_longevity.py:LongevityTest.test_twenty_minutes : /
+     (1/1) scylla_longevity.py:LongevityTest.test_20_minutes : /
 
 A throbber, that will spin until the test ends. This will hopefully evolve to::
 
@@ -73,7 +79,7 @@ A throbber, that will spin until the test ends. This will hopefully evolve to::
     JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
     JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
     TESTS      : 1
-     (1/1) scylla_longevity.py:LongevityTest.test_twenty_minutes: PASS
+     (1/1) scylla_longevity.py:LongevityTest.test_20_minutes: PASS
     (1083.19 s)
     RESULTS    : PASS 1 | ERROR 0 | FAIL 0 | SKIP 0 | WARN 0 | INTERRUPT 0
     JOB HTML   : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/html/results.html
