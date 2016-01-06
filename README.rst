@@ -9,24 +9,24 @@ What's inside?
 --------------
 
 1. A library, called sdcm (stands for scylla distributed cluster
-manager). The word 'distributed' was used here to differentiate
-between that and CCM, since with CCM the cluster nodes are usually
-local processes running on the local machine instead of actual
-machines on the network. It's probably not great, but I had to choose
-something. It contains:
-  * `sdcm.cluster`: Cluster classes that use the boto3 API
-  * `sdcm.remote`: SSH library
-  * `sdcm.nemesis`: Nemesis classes (a nemesis is a class that does disruption in the node)
-  * `sdcm.tester`: Contains the base test class, see below.
+   manager). The word 'distributed' was used here to differentiate
+   between that and CCM, since with CCM the cluster nodes are usually
+   local processes running on the local machine instead of actual
+   machines on the network. It's probably not great, but I had to choose
+   something. It contains:
+
+   * `sdcm.cluster`: Cluster classes that use the boto3 API
+   * `sdcm.remote`: SSH library
+   * `sdcm.nemesis`: Nemesis classes (a nemesis is a class that does disruption in the node)
+   * `sdcm.tester`: Contains the base test class, see below.
 
 2. A directory, named scylla_longevity.py.data. that contains:
-  * scylla repo file (to prepare a loader node)
-  * yaml file containing test data:
-    * AWS machine image ids
-    * Security groups
-    * Number of loader nodes (gotta keep those at 1 due to one current
-limitation of my code [1])
-    * Number of cluster nodes
+   * scylla repo file (to prepare a loader node)
+   * yaml file containing test data:
+     * AWS machine image ids
+     * Security groups
+     * Number of loader nodes (gotta keep those at 1 due to one current limitation of my code [1])
+     * Number of cluster nodes
 3. A test, located at scylla_longevity.py.
 
 Setup
