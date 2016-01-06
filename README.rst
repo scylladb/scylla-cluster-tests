@@ -21,6 +21,7 @@ What's inside?
    * `sdcm.tester`: Contains the base test class, see below.
 
 2. A directory, named scylla_longevity.py.data. that contains:
+
    * scylla repo file (to prepare a loader node)
    * yaml file containing test data:
 
@@ -39,9 +40,7 @@ Install boto3 and awscli (the last one is to help you configure aws)::
     sudo -H pip install boto3
     sudo -H pip install awscli
 
-Install avocado:
-
-    http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
+Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
 
 Configure aws::
 
