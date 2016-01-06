@@ -1,9 +1,11 @@
 Scylla Longevity Tests
 ======================
 
-Here you can find some avocado [1] tests for scylla longevity tests
-(we'll automatically create a scylla cluster, loader machines and then
-run it for a long(er) period of time).
+Here you can find some avocado [1] tests for scylla longevity.
+Those tests automatically create a scylla cluster, some loader machines
+and then run a database workload for a long(er) period of time. We are
+interested to see if the nodes survive this long operation according
+to a set of rules established.
 
 What's inside?
 --------------
