@@ -75,8 +75,6 @@ You'll see something like::
 
 A throbber, that will spin until the test ends. This will hopefully evolve to::
 
-    avocado run scylla_longevity.py --multiplex
-    scylla_longevity.py.data/scylla-longevity.yaml
     JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
     JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
     TESTS      : 1
