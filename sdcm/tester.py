@@ -14,9 +14,9 @@ class ScyllaClusterTester(Test):
         self.loaders = None
         try:
             self.init_resources()
-        except Exception, e:
-            self.log.error(e)
+        except Exception:
             self.clean_resources()
+            raise
 
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
