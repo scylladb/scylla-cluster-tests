@@ -58,8 +58,10 @@ class ScyllaClusterTester(Test):
             else:
                 timeout = int(int(self.params.get('duration')) * 60)
             timeout += 180
-
-            self.loaders.run_stress(stress_cmd, timeout)
+            errors = self.loaders.run_stress(stress_cmd, timeout,
+                                             self.outputdir)
+            if errors:
+                self.fail("cassandra-stress errors on nodes:\n{}".format("\n".join(errors)))
         except:
             self.clean_resources()
             raise

@@ -4,6 +4,8 @@ import threading
 import time
 import uuid
 
+from avocado.utils import path
+
 import fabric.api
 import fabric.network
 import fabric.operations
@@ -338,13 +340,20 @@ class LoaderSet(Cluster):
                     '/etc/yum.repos.d/scylla.repo')
             run_cmd('sudo dnf install -y scylla-tools', timeout=300)
 
-    def run_stress(self, stress_cmd, timeout):
+    def run_stress(self, stress_cmd, timeout, output_dir):
+        def check_output(result_obj, node):
+            output = result_obj.stdout + result_obj.stderr
+            lines = output.splitlines()
+            for line in lines:
+                if 'Exception in thread' in line:
+                    return ['{}:{}'.format(node, line.strip())]
+            return []
+
         print("Running {} in all loaders, timeout {} s".format(stress_cmd,
                                                                timeout))
-        logdir = os.path.abspath(self.name)
-        if not os.path.isdir(logdir):
-            os.makedirs(logdir)
+        logdir = path.init_dir(output_dir, self.name)
         result_dict = self.run_all_nodes(stress_cmd, timeout=timeout)
+        errors = []
         for node in self.nodes:
             result = result_dict[node.instance.public_ip_address]
             log_file_name = os.path.join(logdir,
@@ -352,3 +361,5 @@ class LoaderSet(Cluster):
             print("Writing log file {}".format(log_file_name))
             with open(log_file_name, 'w') as log_file:
                 log_file.write(result.stdout)
+            errors += check_output(result, node)
+        return errors
