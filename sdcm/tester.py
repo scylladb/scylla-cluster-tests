@@ -49,9 +49,10 @@ class ScyllaClusterTester(Test):
     def run_stress(self, duration=None):
         try:
             scylla_node_ips = ",".join(self.db_cluster.get_node_private_ips())
-            stress_cmd = ('cassandra-stress write duration={}m '
-                          '-mode cql3 native -rate threads={} '
-                          '-node {}'.format(self.params.get('duration'),
+            # Use replication factor = 3 (-schema 3)
+            stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' "
+                          "-mode cql3 native -rate threads={} "
+                          "-node {}".format(self.params.get('duration'),
                                             self.params.get('threads'),
                                             scylla_node_ips))
 
