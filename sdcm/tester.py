@@ -14,7 +14,8 @@ class ScyllaClusterTester(Test):
         self.loaders = None
         try:
             self.init_resources()
-        except:
+        except Exception, e:
+            self.log.error(e)
             self.clean_resources()
 
         self.loaders.wait_for_init()
