@@ -118,9 +118,18 @@ class Cluster(object):
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10):
+        self.ec2_ami_id = ec2_ami_id
+        self.ec2_subnet_id = ec2_subnet_id
+        self.ec2_security_group_ids = ec2_security_group_ids
+        self.ec2 = service
+        self.credentials = credentials
+        self.ec2_instance_type = ec2_instance_type
+        self.ec2_ami_username = ec2_ami_username
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
-        self.ec2 = service
+        self.ec2_block_device_mappings = ec2_block_device_mappings
+        self.ec2_user_data = ec2_user_data
+        self.node_prefix = node_prefix
         self.ec2_ami_id = ec2_ami_id
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
@@ -128,21 +137,24 @@ class Cluster(object):
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '{}-{}'.format(cluster_prefix, self.shortid)
-        self.credentials = credentials
         print('{}: Init nodes '.format(str(self)))
-        instances = self.ec2.create_instances(ImageId=ec2_ami_id,
-                                              UserData=ec2_user_data,
-                                              MinCount=n_nodes,
-                                              MaxCount=n_nodes,
+        self.nodes = []
+        self.add_nodes(n_nodes)
+
+    def add_nodes(self, count):
+        instances = self.ec2.create_instances(ImageId=self.ec2_ami_id,
+                                              UserData=self.ec2_user_data,
+                                              MinCount=count,
+                                              MaxCount=count,
                                               KeyName=self.credentials.key_pair.name,
-                                              SecurityGroupIds=ec2_security_group_ids,
-                                              BlockDeviceMappings=ec2_block_device_mappings,
-                                              SubnetId=ec2_subnet_id,
-                                              InstanceType=ec2_instance_type)
-        self.nodes = [self.create_node(instance, ec2_ami_username,
-                                       node_prefix, node_index)
-                      for node_index, instance in
-                      enumerate(instances, start=1)]
+                                              SecurityGroupIds=self.ec2_security_group_ids,
+                                              BlockDeviceMappings=self.ec2_block_device_mappings,
+                                              SubnetId=self.ec2_subnet_id,
+                                              InstanceType=self.ec2_instance_type)
+        self.nodes += [self.create_node(instance, self.ec2_ami_username,
+                                        self.node_prefix, node_index)
+                       for node_index, instance in
+                       enumerate(instances, start=1)]
 
     def __str__(self):
         return 'Cluster {} (AMI ID {})'.format(self.name, self.ec2_ami_id)
