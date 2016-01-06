@@ -51,7 +51,7 @@ Configure aws::
 That will ask you for your `region`, `aws_access_key_id`,
 `aws_secret_access_key`. Please complete that.
 
-Make sure you set PYTHONPATH to include the directory the class is in [3]::
+Make sure you set PYTHONPATH to include the directory the class is in [2]::
 
     scylla-longevity-tests $ export PYTHONPATH=.:$PYTHONPATH
 
@@ -105,3 +105,4 @@ Footnotes
 ---------
 
 [1] http://avocado-framework.github.io/
+[2] Avocado bug that was already fixed upstream, see https://github.com/avocado-framework/avocado/pull/936
