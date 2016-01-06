@@ -54,9 +54,9 @@ aws_secret_access_key. Please complete that.
 
 scylla-longevity-tests $ export PYTHONPATH=.:$PYTHONPATH
 
-* Run avocado:
+* Run avocado::
 
-avocado run scylla_longevity.py:LongevityTest.test_20_minutes --multiplex scylla_longevity.py.data/scylla-longevity.yaml --filter-only /run/regions/us_east_1
+    avocado run scylla_longevity.py:LongevityTest.test_20_minutes --multiplex scylla_longevity.py.data/scylla-longevity.yaml --filter-only /run/regions/us_east_1
 
 This command line is just for the short version, using us_east_1. If you want
 to use the us_west_2 region, you can always change the string in the command
