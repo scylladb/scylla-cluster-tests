@@ -7,6 +7,7 @@ import time
 
 
 class Nemesis(object):
+
     def __init__(self, cluster, termination_event):
         self.cluster = cluster
         self.node_to_operate = None
@@ -37,6 +38,7 @@ class Nemesis(object):
 
 
 class ChaosMonkey(Nemesis):
+
     def break_it(self):
         self.node_to_operate.instance.stop()
         time.sleep(60)

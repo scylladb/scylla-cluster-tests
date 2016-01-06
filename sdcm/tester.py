@@ -8,6 +8,7 @@ from .cluster import ScyllaCluster
 
 
 class ScyllaClusterTester(Test):
+
     def setUp(self):
         self.credentials = None
         self.db_cluster = None

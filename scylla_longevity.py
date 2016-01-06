@@ -13,6 +13,7 @@ class LongevityTest(ScyllaClusterTester):
 
     :avocado: enable
     """
+
     def test_20_minutes(self):
         """
         Run a very short test, as a config/code sanity check.
@@ -24,17 +25,17 @@ class LongevityTest(ScyllaClusterTester):
     def test_12_hours(self):
         self.db_cluster.add_nemesis(ChaosMonkey)
         self.db_cluster.start_nemesis(interval=30)
-        self.run_stress(duration=60*12)
+        self.run_stress(duration=60 * 12)
 
     def test_1_day(self):
         self.db_cluster.add_nemesis(ChaosMonkey)
         self.db_cluster.start_nemesis(interval=30)
-        self.run_stress(duration=60*24)
+        self.run_stress(duration=60 * 24)
 
     def test_1_week(self):
         self.db_cluster.add_nemesis(ChaosMonkey)
         self.db_cluster.start_nemesis(interval=30)
-        self.run_stress(duration=60*24*7)
+        self.run_stress(duration=60 * 24 * 7)
 
 if __name__ == '__main__':
     main()
