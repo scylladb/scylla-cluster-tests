@@ -74,13 +74,16 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def run_stress(self, duration=None):
-        scylla_node_ips = ",".join(self.db_cluster.get_node_private_ips())
+        # pickup the first node
+        # cassandra-stress driver is topology aware
+        # and will contact the others nodes
+        ip = self.db_cluster.get_node_private_ips()[0]
         # Use replication factor = 3 (-schema 3)
         stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' -port jmx=6868 "
                       "-mode cql3 native -rate threads={} "
                       "-node {}".format(self.params.get('duration'),
                                         self.params.get('threads'),
-                                        scylla_node_ips))
+                                        ip))
 
         if duration is not None:
             timeout = duration * 60
