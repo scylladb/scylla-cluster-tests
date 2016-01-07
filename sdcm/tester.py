@@ -6,6 +6,8 @@ from .cluster import LoaderSet
 from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
 
+import cluster
+
 
 def clean_aws_resources(method):
     """
@@ -87,6 +89,7 @@ class ScyllaClusterTester(Test):
             self.loaders.destroy()
             self.loaders = None
         if self.credentials is not None:
+            cluster.remove_cred_from_cleanup(self.credentials)
             self.credentials.destroy()
             self.credentials = None
 
