@@ -15,12 +15,11 @@ class ScyllaClusterTester(Test):
         self.loaders = None
         try:
             self.init_resources()
+            self.loaders.wait_for_init()
+            self.db_cluster.wait_for_init()
         except Exception:
             self.clean_resources()
             raise
-
-        self.loaders.wait_for_init()
-        self.db_cluster.wait_for_init()
 
     def init_resources(self):
         session = boto3.session.Session(region_name=self.params.get('region_name'))
