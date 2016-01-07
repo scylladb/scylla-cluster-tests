@@ -7,19 +7,32 @@ from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
 
 
+def clean_aws_resources(method):
+    """
+    Ensure that AWS resources are cleaned upon unhandled exceptions.
+
+    :param method: ScyllaClusterTester method to wrap.
+    :return: Wrapped method.
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            return method(*args, **kwargs)
+        except Exception:
+            args[0].clean_resources()
+            raise
+    return wrapper
+
+
 class ScyllaClusterTester(Test):
 
+    @clean_aws_resources
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
-        try:
-            self.init_resources()
-            self.loaders.wait_for_init()
-            self.db_cluster.wait_for_init()
-        except Exception:
-            self.clean_resources()
-            raise
+        self.init_resources()
+        self.loaders.wait_for_init()
+        self.db_cluster.wait_for_init()
 
     def init_resources(self):
         session = boto3.session.Session(region_name=self.params.get('region_name'))
@@ -45,28 +58,25 @@ class ScyllaClusterTester(Test):
                                  scylla_repo=scylla_repo,
                                  n_nodes=self.params.get('n_loaders'))
 
+    @clean_aws_resources
     def run_stress(self, duration=None):
-        try:
-            scylla_node_ips = ",".join(self.db_cluster.get_node_private_ips())
-            # Use replication factor = 3 (-schema 3)
-            stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' "
-                          "-mode cql3 native -rate threads={} "
-                          "-node {}".format(self.params.get('duration'),
-                                            self.params.get('threads'),
-                                            scylla_node_ips))
+        scylla_node_ips = ",".join(self.db_cluster.get_node_private_ips())
+        # Use replication factor = 3 (-schema 3)
+        stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' "
+                      "-mode cql3 native -rate threads={} "
+                      "-node {}".format(self.params.get('duration'),
+                                        self.params.get('threads'),
+                                        scylla_node_ips))
 
-            if duration is not None:
-                timeout = duration * 60
-            else:
-                timeout = int(int(self.params.get('duration')) * 60)
-            timeout += 180
-            errors = self.loaders.run_stress(stress_cmd, timeout,
-                                             self.outputdir)
-            if errors:
-                self.fail("cassandra-stress errors on nodes:\n{}".format("\n".join(errors)))
-        except:
-            self.clean_resources()
-            raise
+        if duration is not None:
+            timeout = duration * 60
+        else:
+            timeout = int(int(self.params.get('duration')) * 60)
+        timeout += 180
+        errors = self.loaders.run_stress(stress_cmd, timeout,
+                                         self.outputdir)
+        if errors:
+            self.fail("cassandra-stress errors on nodes:\n{}".format("\n".join(errors)))
 
     def clean_resources(self):
         print('Cleaning up resources used in the test')
