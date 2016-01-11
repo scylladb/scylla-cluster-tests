@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import uuid
+import yaml
 
 from avocado.utils import path
 
@@ -170,10 +171,14 @@ class Cluster(object):
         self.nodes = []
         self.add_nodes(n_nodes)
 
-    def add_nodes(self, count):
+    def add_nodes(self, count, ec2_user_data=''):
+        if not ec2_user_data:
+            ec2_user_data = self.ec2_user_data
         global EC2_INSTANCES
+        print("{}: Passing user_data '{}' to "
+              "create_instances".format(str(self), ec2_user_data))
         instances = self.ec2.create_instances(ImageId=self.ec2_ami_id,
-                                              UserData=self.ec2_user_data,
+                                              UserData=ec2_user_data,
                                               MinCount=count,
                                               MaxCount=count,
                                               KeyName=self.credentials.key_pair.name,
@@ -182,15 +187,17 @@ class Cluster(object):
                                               SubnetId=self.ec2_subnet_id,
                                               InstanceType=self.ec2_instance_type)
         EC2_INSTANCES += instances
-        self.nodes += [self.create_node(instance, self.ec2_ami_username,
-                                        self.node_prefix, node_index)
+        added_nodes = [self._create_node(instance, self.ec2_ami_username,
+                                         self.node_prefix, node_index)
                        for node_index, instance in
-                       enumerate(instances, start=1)]
+                       enumerate(instances, start=len(self.nodes) + 1)]
+        self.nodes += added_nodes
+        return added_nodes
 
     def __str__(self):
         return 'Cluster {} (AMI ID {})'.format(self.name, self.ec2_ami_id)
 
-    def create_node(self, instance, ami_username, node_prefix, node_index):
+    def _create_node(self, instance, ami_username, node_prefix, node_index):
         node_prefix = '{}-{}'.format(node_prefix, self.shortid)
         return Node(ec2_instance=instance, ec2_service=self.ec2,
                     credentials=self.credentials, ami_username=ami_username,
@@ -278,9 +285,13 @@ class ScyllaCluster(Cluster):
                  ec2_ami_username='fedora',
                  ec2_block_device_mappings=SCYLLA_CLUSTER_DEVICE_MAPPINGS,
                  n_nodes=10):
+        # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        user_data = ('--clustername scylla-{} '
-                     '--totalnodes {}'.format(cluster_uuid, n_nodes))
+        cluster_prefix = 'scylla-db-cluster'
+        shortid = str(cluster_uuid)[:8]
+        name = '{}-{}'.format(cluster_prefix, shortid)
+        user_data = ('--clustername {} '
+                     '--totalnodes {}'.format(name, n_nodes))
         super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
@@ -291,19 +302,45 @@ class ScyllaCluster(Cluster):
                                             cluster_uuid=cluster_uuid,
                                             service=service,
                                             credentials=credentials,
-                                            cluster_prefix='scylla-db-cluster',
+                                            cluster_prefix=cluster_prefix,
                                             node_prefix='scylla-db-node',
                                             n_nodes=n_nodes)
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
-    def wait_for_init(self, verbose=False):
-        node_initialized_map = {node: False for node in self.nodes}
-        all_nodes_initialized = [True for _ in self.nodes]
+    def get_seed_nodes(self):
+        node = self.nodes[0]
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+        node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
+        with open(yaml_dst_path, 'r') as yaml_stream:
+            conf_dict = yaml.load(yaml_stream)
+            try:
+                return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+            except:
+                raise ValueError('Unexpected scylla.yaml '
+                                 'contents:\n{}'.format(yaml_stream.read()))
+
+    def add_nodes(self, count, ec2_user_data=''):
+        if not ec2_user_data:
+            if self.nodes:
+                seeds = ",".join(self.get_seed_nodes())
+                ec2_user_data = ('--clustername {} --bootstrap true '
+                                 '--totalnodes {} --seeds {}'.format(self.name,
+                                                                     count,
+                                                                     seeds))
+        added_nodes = super(ScyllaCluster, self).add_nodes(count=count,
+                                                           ec2_user_data=ec2_user_data)
+        return added_nodes
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        if node_list is None:
+            node_list = self.nodes
+        node_initialized_map = {node: False for node in node_list}
+        all_nodes_initialized = [True for _ in node_list]
         verify_pause = 60
-        print("Waiting until all DB nodes are functional. "
-              "Polling interval: {} s".format(verify_pause))
+        print("{}: Waiting scylla-server.service to start. "
+              "Polling interval: {} s".format(str(self), verify_pause))
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
@@ -323,7 +360,8 @@ class ScyllaCluster(Cluster):
                                          timeout=120)
                         raise NodeInitError(node=node, result=result)
                     except CmdError:
-                        pass
+                        run_cmd("sudo systemctl start scylla-server.service",
+                                timeout=120)
             initialized_nodes = len([node for node in node_initialized_map if
                                     node_initialized_map[node]])
             total_nodes = len(node_initialized_map.keys())
