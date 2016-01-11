@@ -28,6 +28,7 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 CREDENTIALS = []
 EC2_INSTANCES = []
 
+
 def cleanup_instances():
     global EC2_INSTANCES
     global CREDENTIALS
@@ -38,14 +39,17 @@ def cleanup_instances():
     for cred in CREDENTIALS:
         cred.destroy()
 
+
 def remove_cred_from_cleanup(cred):
     global CREDENTIALS
     CREDENTIALS.remove(cred)
+
 
 def register_cleanup():
     atexit.register(cleanup_instances)
 
 register_cleanup()
+
 
 class NodeInitError(Exception):
 
