@@ -209,20 +209,6 @@ class Cluster(object):
     def get_node_public_ips(self):
         return [node.instance.public_ip_address for node in self.nodes]
 
-    def run_all_nodes_old(self, cmd, ignore_status=False, timeout=60):
-        """
-        Run cmd in all nodes (parallel execution)
-
-        :param cmd: Shell Command to run.
-        :param ignore_status: Whether to ignore errors on the execution
-        :param timeout: Time to wait for command to finish
-        :return: Iterator with parallel execution results
-        """
-        for node in self.nodes:
-            yield node, node.remoter.run_quiet(cmd,
-                                               ignore_status=ignore_status,
-                                               timeout=timeout)
-
     @fabric.api.parallel
     def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
         def _run(command, ignore_status=False, timeout=60):
