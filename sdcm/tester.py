@@ -26,7 +26,7 @@ def clean_aws_resources(method):
     return wrapper
 
 
-class ScyllaClusterTester(Test):
+class ClusterTester(Test):
 
     @clean_aws_resources
     def setUp(self):
