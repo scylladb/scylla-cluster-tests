@@ -2,12 +2,11 @@
 
 from avocado import main
 
-from sdcm.tester import clean_aws_resources
-from sdcm.tester import ScyllaClusterTester
+from sdcm.tester import ClusterTester
 from sdcm.nemesis import ChaosMonkey
 
 
-class LongevityTest(ScyllaClusterTester):
+class LongevityTest(ClusterTester):
 
     """
     Test a Scylla cluster stability over a time period.
