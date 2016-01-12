@@ -2,7 +2,6 @@
 
 from avocado import main
 
-from sdcm.tester import clean_aws_resources
 from sdcm.tester import ScyllaClusterTester
 from sdcm.nemesis import ChaosMonkey
 
