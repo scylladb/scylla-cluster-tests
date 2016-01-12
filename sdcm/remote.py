@@ -64,6 +64,23 @@ class CmdResult(object):
         return cmd_rep
 
 
+def update_fabric_env(method):
+    """
+    Update fabric env with the appropriate parameters.
+
+    :param method: Remote method to wrap.
+    :return: Wrapped method.
+    """
+    def wrapper(*args, **kwargs):
+        fabric.api.env.update(host_string=args[0].hostname,
+                              user=args[0].username,
+                              password=args[0].password,
+                              key_filename=args[0].key_filename,
+                              port=args[0].port)
+        return method(*args, **kwargs)
+    return wrapper
+
+
 class Remote(object):
 
     """
@@ -93,19 +110,15 @@ class Remote(object):
         self.password = password
         self.port = port
         self.quiet = quiet
-        self._setup_environment(host_string=hostname,
-                                user=username,
-                                password=password,
-                                key_filename=key_filename,
-                                port=port,
-                                timeout=timeout / attempts,
-                                connection_attempts=attempts,
-                                linewise=True)
-
-    @staticmethod
-    def _setup_environment(**kwargs):
-        """ Setup fabric environemnt """
-        fabric.api.env.update(kwargs)
+        self.key_filename = key_filename
+        fabric.api.env.update(host_string=hostname,
+                              user=username,
+                              password=password,
+                              key_filename=key_filename,
+                              port=port,
+                              timeout=timeout / attempts,
+                              connection_attempts=attempts,
+                              linewise=True)
 
     def run(self, command, ignore_status=False, timeout=60):
         """
@@ -170,6 +183,7 @@ class Remote(object):
                                            timeout=timeout, hosts=[self.hostname])
         return return_dict[self.hostname]
 
+    @update_fabric_env
     def _run(self, command, ignore_status=False, timeout=60):
         result = CmdResult()
         start_time = time.time()
@@ -242,6 +256,7 @@ class Remote(object):
                                            remote_path, hosts=[self.hostname])
         return result_dict[self.hostname]
 
+    @update_fabric_env
     def _send_files(self, local_path, remote_path):
         """
         Send files to remote.
@@ -267,6 +282,7 @@ class Remote(object):
                                            remote_path, hosts=[self.hostname])
         return result_dict[self.hostname]
 
+    @update_fabric_env
     def _receive_files(self, local_path, remote_path):
         """
         receive remote files.
