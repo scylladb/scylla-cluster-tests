@@ -414,6 +414,33 @@ class CassandraCluster(ScyllaCluster):
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
+    def get_seed_nodes(self):
+        node = self.nodes[0]
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='cassandra-longevity'), 'cassandra.yaml')
+        node.remoter.receive_files(yaml_dst_path,
+                                   '/etc/cassandra/cassandra.yaml')
+        with open(yaml_dst_path, 'r') as yaml_stream:
+            conf_dict = yaml.load(yaml_stream)
+            try:
+                return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+            except:
+                raise ValueError('Unexpected cassandra.yaml '
+                                 'contents:\n{}'.format(yaml_stream.read()))
+
+    def add_nodes(self, count, ec2_user_data=''):
+        if not ec2_user_data:
+            if self.nodes:
+                seeds = ",".join(self.get_seed_nodes())
+                ec2_user_data = ('--clustername {} --bootstrap true '
+                                 '--totalnodes {} --seeds {} '
+                                 '--version community '
+                                 '--release 2.1.8'.format(self.name,
+                                                          count,
+                                                          seeds))
+        added_nodes = super(ScyllaCluster, self).add_nodes(count=count,
+                                                           ec2_user_data=ec2_user_data)
+        return added_nodes
+
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
             node_list = self.nodes
