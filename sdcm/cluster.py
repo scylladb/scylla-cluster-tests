@@ -463,7 +463,7 @@ class LoaderSet(Cluster):
         self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False):
-        print("Setting all DB loader nodes")
+        print("{}: Setting all DB loader nodes".format(str(self)))
         for loader in self.nodes:
             if verbose:
                 run_cmd = loader.remoter.run
@@ -484,8 +484,9 @@ class LoaderSet(Cluster):
                     return ['{}:{}'.format(node, line.strip())]
             return []
 
-        print("Running {} in all loaders, timeout {} s".format(stress_cmd,
-                                                               timeout))
+        print("{}: Running {} in all loaders, timeout {} s".format(str(self),
+                                                                   stress_cmd,
+                                                                   timeout))
         logdir = path.init_dir(output_dir, self.name)
         result_dict = self.run_all_nodes(stress_cmd, timeout=timeout)
         errors = []
@@ -493,7 +494,7 @@ class LoaderSet(Cluster):
             result = result_dict[node.instance.public_ip_address]
             log_file_name = os.path.join(logdir,
                                          '{}.log'.format(node.name))
-            print("Writing log file {}".format(log_file_name))
+            print("{}: Writing log file {}".format(str(self), log_file_name))
             with open(log_file_name, 'w') as log_file:
                 log_file.write(result.stdout)
             errors += check_output(result, node)
