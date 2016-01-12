@@ -5,6 +5,7 @@ from avocado import Test
 from .cluster import LoaderSet
 from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
+from .cluster import CassandraCluster
 
 import cluster
 
@@ -42,13 +43,24 @@ class ScyllaClusterTester(Test):
         self.credentials = RemoteCredentials(service=service,
                                              key_prefix='longevity-test')
 
-        self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db'),
-                                        ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                        ec2_subnet_id=self.params.get('subnet_id'),
-                                        ec2_instance_type=self.params.get('instance_type_db'),
-                                        service=service,
-                                        credentials=self.credentials,
-                                        n_nodes=self.params.get('n_db_nodes'))
+        if self.params.get('db_type') == 'scylla':
+            self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
+                                            ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                            ec2_subnet_id=self.params.get('subnet_id'),
+                                            ec2_instance_type=self.params.get('instance_type_db'),
+                                            service=service,
+                                            credentials=self.credentials,
+                                            n_nodes=self.params.get('n_db_nodes'))
+        elif self.params.get('db_type') == 'cassandra':
+            self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
+                                               ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                               ec2_subnet_id=self.params.get('subnet_id'),
+                                               ec2_instance_type=self.params.get('instance_type_db'),
+                                               service=service,
+                                               credentials=self.credentials,
+                                               n_nodes=self.params.get('n_db_nodes'))
+        else:
+            self.error('Incorrect parameter db_type: {}'.format(self.params.get('db_type')))
 
         scylla_repo = self.get_data_path('scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),

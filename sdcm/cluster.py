@@ -267,8 +267,9 @@ class Cluster(object):
                     raise CmdError(command=command, result=result)
             return result
 
-        return fabric.tasks.execute(_run, cmd, ignore_status, timeout,
-                                    hosts=self.get_node_public_ips())
+        fabric.api.env.update(hosts=self.get_node_public_ips(),
+                              user=self.ec2_ami_username)
+        return fabric.tasks.execute(_run, cmd, ignore_status, timeout)
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
@@ -339,7 +340,7 @@ class ScyllaCluster(Cluster):
         node_initialized_map = {node: False for node in node_list}
         all_nodes_initialized = [True for _ in node_list]
         verify_pause = 60
-        print("{}: Waiting scylla-server.service to start. "
+        print("{}: Waiting scylla services to start. "
               "Polling interval: {} s".format(str(self), verify_pause))
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
@@ -391,6 +392,71 @@ class ScyllaCluster(Cluster):
     def destroy(self):
         self.stop_nemesis()
         super(ScyllaCluster, self).destroy()
+
+
+class CassandraCluster(ScyllaCluster):
+
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+                 service, credentials, ec2_instance_type='c4.xlarge',
+                 ec2_ami_username='ubuntu',
+                 ec2_block_device_mappings=None,
+                 n_nodes=10):
+        if ec2_block_device_mappings is None:
+            ec2_block_device_mappings = []
+        # We have to pass the cluster name in advance in user_data
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = 'cassandra-db-cluster'
+        shortid = str(cluster_uuid)[:8]
+        name = '{}-{}'.format(cluster_prefix, shortid)
+        user_data = ('--clustername {} '
+                     '--totalnodes {} --version community '
+                     '--release 2.1.8'.format(name, n_nodes))
+        super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
+                                            ec2_subnet_id=ec2_subnet_id,
+                                            ec2_security_group_ids=ec2_security_group_ids,
+                                            ec2_instance_type=ec2_instance_type,
+                                            ec2_ami_username=ec2_ami_username,
+                                            ec2_user_data=user_data,
+                                            ec2_block_device_mappings=ec2_block_device_mappings,
+                                            cluster_uuid=cluster_uuid,
+                                            service=service,
+                                            credentials=credentials,
+                                            cluster_prefix=cluster_prefix,
+                                            node_prefix='cassandra-db-node',
+                                            n_nodes=n_nodes)
+        self.nemesis = []
+        self.nemesis_threads = []
+        self.termination_event = threading.Event()
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        if node_list is None:
+            node_list = self.nodes
+        node_initialized_map = {node: False for node in node_list}
+        all_nodes_initialized = [True for _ in node_list]
+        verify_pause = 60
+        print("{}: Waiting cassandra services to start. "
+              "Polling interval: {} s".format(str(self), verify_pause))
+        start_time = time.time()
+        while node_initialized_map.values() != all_nodes_initialized:
+            for node in node_initialized_map.keys():
+                if verbose:
+                    run_cmd = node.remoter.run
+                else:
+                    run_cmd = node.remoter.run_quiet
+                try:
+                    run_cmd('netstat -a | grep :9042', timeout=60)
+                    node_initialized_map[node] = True
+                except Exception:
+                    pass
+            initialized_nodes = len([node for node in node_initialized_map if
+                                    node_initialized_map[node]])
+            total_nodes = len(node_initialized_map.keys())
+            time_elapsed = time.time() - start_time
+            print("({}/{}) DB nodes ready. "
+                  "Time elapsed: {:d} s".format(initialized_nodes,
+                                                total_nodes,
+                                                int(time_elapsed)))
+            time.sleep(verify_pause)
 
 
 class LoaderSet(Cluster):
