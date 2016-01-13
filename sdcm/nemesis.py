@@ -46,6 +46,11 @@ class ChaosMonkey(Nemesis):
 
 class DrainerMonkey(Nemesis):
 
+    def run(self, interval=30, termination_event=None):
+        interval *= 60
+        time.sleep(interval)
+        self.break_it()
+
     def break_it(self):
         self.node_to_operate.remoter.run('nodetool -h localhost drain')
         self.node_to_operate.instance.stop()
