@@ -1,0 +1,24 @@
+duration: 10
+threads: 4
+n_db_nodes: 10
+# I have to solve a problem with SSH connection parallelism, until then
+# keep n_loaders: 1
+n_loaders: 1
+
+regions: !mux
+    us_west_2:
+        region_name: 'us-west-2'
+        ami_id_db: 'ami-20776841'
+        instance_type_db: 'c4.xlarge'
+        ami_id_loader: 'ami-05f4ed35'
+        instance_type_loader: 'c4.xlarge'
+        security_group_ids: 'sg-81703ae4'
+        subnet_id: 'subnet-5207ee37'
+    us_east_1:
+        region_name: 'us-east-1'
+        ami_id_db: 'ami-972863fd'
+        instance_type_db: 'c4.xlarge'
+        ami_id_loader: 'ami-a51564c0'
+        instance_type_loader: 'c4.xlarge'
+        security_group_ids: 'sg-c5e1f7a0'
+        subnet_id: 'subnet-ec4a72c4'
