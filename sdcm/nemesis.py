@@ -56,6 +56,7 @@ class DrainerMonkey(Nemesis):
         self.node_to_operate.instance.stop()
         time.sleep(60)
         self.node_to_operate.instance.start()
+        self.node_to_operate.wait_for_init()
 
 class CorruptorMonkey(Nemesis):
 
