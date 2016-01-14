@@ -106,7 +106,7 @@ class Nemesis(object):
                                       timeout=NODETOOL_CMD_TIMEOUT)
 
 
-class ChaosMonkey(Nemesis):
+class StopStartMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_stop_start()
