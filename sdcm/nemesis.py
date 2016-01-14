@@ -34,29 +34,9 @@ class Nemesis(object):
             self.set_node_to_operate()
 
     def disrupt(self):
-        return NotImplementedError('Derived Nemesis classes must '
-                                   'implement the method disrupt')
+        raise NotImplementedError('Derived classes must implement disrupt()')
 
-    def kill_scylla_daemon(self):
-        self.node_to_operate.remoter.run('sudo killall -9 scylla')
-
-
-class ChaosMonkey(Nemesis):
-
-    def disrupt(self):
-        self.node_to_operate.instance.stop()
-        time.sleep(60)
-        self.node_to_operate.instance.start()
-
-
-class DrainerMonkey(Nemesis):
-
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
-    def disrupt(self):
+    def disrupt_nodetool_drain(self):
         self.node_to_operate.remoter.run('nodetool -h localhost drain',
                                          timeout=NODETOOL_CMD_TIMEOUT)
         self.node_to_operate.instance.stop()
@@ -64,55 +44,7 @@ class DrainerMonkey(Nemesis):
         self.node_to_operate.instance.start()
         self.node_to_operate.wait_for_init()
 
-
-class CorruptorMonkey(Nemesis):
-
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
-    def disrupt(self):
-        # Send the script used to corrupt the DB
-        break_scylla = get_data_path('break_scylla.sh')
-        self.node_to_operate.remoter.send_files(break_scylla,
-                                                "/tmp/break_scylla.sh")
-
-        # corrupt the DB
-        self.node_to_operate.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.node_to_operate.remoter.run('/tmp/break_scylla.sh')
-
-        # lennart's systemd will restart scylla let him a bit of time
-        self.kill_scylla_daemon()
-        time.sleep(60)
-
-        # try to save the node
-        self.repair()
-        time.sleep(60)
-
-    def repair(self):
-        return NotImplementedError('Derived CorruptorMonkey classes must '
-                                   'implement the method repair')
-
-
-class RepairMonkey(CorruptorMonkey):
-
-    def repair(self):
-        self.node_to_operate.remoter.run('nodetool -h localhost repair',
-                                         timeout=NODETOOL_CMD_TIMEOUT)
-
-
-class RebuildMonkey(CorruptorMonkey):
-
-    def repair(self):
-        for node in self.cluster.nodes:
-            node.remoter.run_parallel('nodetool -h localhost rebuild',
-                                      timeout=NODETOOL_CMD_TIMEOUT)
-
-
-class DecommissionMonkey(Nemesis):
-
-    def disrupt(self):
+    def disrupt_nodetool_decommission(self):
         node_to_operate_ip = self.node_to_operate.instance.private_ip_address
         self.node_to_operate.remoter.run('nodetool --host localhost '
                                          'decommission',
@@ -129,3 +61,91 @@ class DecommissionMonkey(Nemesis):
         assert node_to_operate_ip not in private_ips, error_msg
         self.cluster.nodes.remove(self.node_to_operate)
         self.node_to_operate.instance.terminate()
+
+    def disrupt_stop_start(self):
+        self.node_to_operate.instance.stop()
+        time.sleep(60)
+        self.node_to_operate.instance.start()
+
+    def disrupt_kill_scylla_daemon(self):
+        self.node_to_operate.remoter.run('sudo killall -9 scylla')
+
+    def _destroy_data(self):
+        # Send the script used to corrupt the DB
+        break_scylla = get_data_path('break_scylla.sh')
+        self.node_to_operate.remoter.send_files(break_scylla,
+                                                "/tmp/break_scylla.sh")
+
+        # corrupt the DB
+        self.node_to_operate.remoter.run('chmod +x /tmp/break_scylla.sh')
+        self.node_to_operate.remoter.run('/tmp/break_scylla.sh')
+
+        # lennart's systemd will restart scylla let him a bit of time
+        self.disrupt_kill_scylla_daemon()
+        time.sleep(60)
+
+    def disrupt_destroy_data_then_repair(self):
+        self._destroy_data()
+        # try to save the node
+        self.repair_nodetool_repair()
+        time.sleep(60)
+
+    def disrupt_destroy_data_then_rebuild(self):
+        self._destroy_data()
+        # try to save the node
+        self.repair_nodetool_rebuild()
+        time.sleep(60)
+
+    def repair_nodetool_repair(self):
+        self.node_to_operate.remoter.run('nodetool -h localhost repair',
+                                         timeout=NODETOOL_CMD_TIMEOUT)
+
+    def repair_nodetool_rebuild(self):
+        for node in self.cluster.nodes:
+            node.remoter.run_parallel('nodetool -h localhost rebuild',
+                                      timeout=NODETOOL_CMD_TIMEOUT)
+
+
+class ChaosMonkey(Nemesis):
+
+    def disrupt(self):
+        self.disrupt_stop_start()
+
+
+class DrainerMonkey(Nemesis):
+
+    def run(self, interval=30, termination_event=None):
+        interval *= 60
+        time.sleep(interval)
+        self.disrupt()
+
+    def disrupt(self):
+        self.disrupt_nodetool_drain()
+
+
+class CorruptThenRepairMonkey(Nemesis):
+
+    def run(self, interval=30, termination_event=None):
+        interval *= 60
+        time.sleep(interval)
+        self.disrupt()
+
+    def disrupt(self):
+        self.disrupt_destroy_data_then_repair()
+
+
+class CorruptThenRebuildMonkey(Nemesis):
+
+    def run(self, interval=30, termination_event=None):
+        interval *= 60
+        time.sleep(interval)
+        self.disrupt()
+
+    def disrupt(self):
+        self.disrupt_destroy_data_then_rebuild()
+
+
+class DecommissionMonkey(Nemesis):
+
+    def disrupt(self):
+        self.disrupt_nodetool_decommission()
