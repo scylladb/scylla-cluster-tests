@@ -2,6 +2,7 @@
 Classes that introduce disruption in clusters.
 """
 
+import inspect
 import random
 import time
 
@@ -96,6 +97,13 @@ class Nemesis(object):
         self.repair_nodetool_rebuild()
         time.sleep(60)
 
+    def call_random_disrupt_method(self):
+        disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                           attr[0].startswith('disrupt_') and
+                           callable(attr[1])]
+        disrupt_method = random.choice(disrupt_methods)
+        disrupt_method()
+
     def repair_nodetool_repair(self):
         self.node_to_operate.remoter.run('nodetool -h localhost repair',
                                          timeout=NODETOOL_CMD_TIMEOUT)
@@ -149,3 +157,9 @@ class DecommissionMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_decommission()
+
+
+class ChaosMonkey(Nemesis):
+
+    def disrupt(self):
+        self.call_random_disrupt_method()
