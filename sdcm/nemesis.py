@@ -7,6 +7,8 @@ import time
 
 from .data_path import get_data_path
 
+NODETOOL_CMD_TIMEOUT = 240
+
 
 class Nemesis(object):
 
@@ -55,7 +57,8 @@ class DrainerMonkey(Nemesis):
         self.break_it()
 
     def break_it(self):
-        self.node_to_operate.remoter.run('nodetool -h localhost drain')
+        self.node_to_operate.remoter.run('nodetool -h localhost drain',
+                                         timeout=NODETOOL_CMD_TIMEOUT)
         self.node_to_operate.instance.stop()
         time.sleep(60)
         self.node_to_operate.instance.start()
@@ -95,14 +98,16 @@ class CorruptorMonkey(Nemesis):
 class RepairMonkey(CorruptorMonkey):
 
     def repair(self):
-        self.node_to_operate.remoter.run('nodetool -h localhost repair')
+        self.node_to_operate.remoter.run('nodetool -h localhost repair',
+                                         timeout=NODETOOL_CMD_TIMEOUT)
 
 
 class RebuildMonkey(CorruptorMonkey):
 
     def repair(self):
         for node in self.cluster.nodes:
-            node.remoter.run_parallel('nodetool -h localhost rebuild')
+            node.remoter.run_parallel('nodetool -h localhost rebuild',
+                                      timeout=NODETOOL_CMD_TIMEOUT)
 
 
 class DecommissionMonkey(Nemesis):
@@ -110,7 +115,8 @@ class DecommissionMonkey(Nemesis):
     def break_it(self):
         node_to_operate_ip = self.node_to_operate.instance.private_ip_address
         self.node_to_operate.remoter.run('nodetool --host localhost '
-                                         'decommission', timeout=240)
+                                         'decommission',
+                                         timeout=NODETOOL_CMD_TIMEOUT)
         verification_node = random.choice(self.cluster.nodes)
         while verification_node == self.node_to_operate:
             verification_node = random.choice(self.cluster.nodes)
