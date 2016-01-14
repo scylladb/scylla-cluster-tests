@@ -5,6 +5,8 @@ Classes that introduce disruption in clusters.
 import random
 import time
 
+from .data_path import get_data_path
+
 
 class Nemesis(object):
 
@@ -69,7 +71,7 @@ class CorruptorMonkey(Nemesis):
 
     def break_it(self):
         # Send the script used to corrupt the DB
-        break_scylla = self.get_data_path('break_scylla.sh')
+        break_scylla = get_data_path('break_scylla.sh')
         self.node_to_operate.remoter.send_files(break_scylla,
                                                 "/tmp/break_scylla.sh")
 
