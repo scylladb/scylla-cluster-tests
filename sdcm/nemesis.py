@@ -26,16 +26,16 @@ class Nemesis(object):
         interval *= 60
         while True:
             time.sleep(interval)
-            self.break_it()
+            self.disrupt()
             if termination_event is not None:
                 if self.termination_event.isSet():
                     self.termination_event = None
                     break
             self.set_node_to_operate()
 
-    def break_it(self):
+    def disrupt(self):
         return NotImplementedError('Derived Nemesis classes must '
-                                   'implement the method break_it')
+                                   'implement the method disrupt')
 
     def kill_scylla_daemon(self):
         self.node_to_operate.remoter.run('sudo killall -9 scylla')
@@ -43,7 +43,7 @@ class Nemesis(object):
 
 class ChaosMonkey(Nemesis):
 
-    def break_it(self):
+    def disrupt(self):
         self.node_to_operate.instance.stop()
         time.sleep(60)
         self.node_to_operate.instance.start()
@@ -54,9 +54,9 @@ class DrainerMonkey(Nemesis):
     def run(self, interval=30, termination_event=None):
         interval *= 60
         time.sleep(interval)
-        self.break_it()
+        self.disrupt()
 
-    def break_it(self):
+    def disrupt(self):
         self.node_to_operate.remoter.run('nodetool -h localhost drain',
                                          timeout=NODETOOL_CMD_TIMEOUT)
         self.node_to_operate.instance.stop()
@@ -70,9 +70,9 @@ class CorruptorMonkey(Nemesis):
     def run(self, interval=30, termination_event=None):
         interval *= 60
         time.sleep(interval)
-        self.break_it()
+        self.disrupt()
 
-    def break_it(self):
+    def disrupt(self):
         # Send the script used to corrupt the DB
         break_scylla = get_data_path('break_scylla.sh')
         self.node_to_operate.remoter.send_files(break_scylla,
@@ -112,7 +112,7 @@ class RebuildMonkey(CorruptorMonkey):
 
 class DecommissionMonkey(Nemesis):
 
-    def break_it(self):
+    def disrupt(self):
         node_to_operate_ip = self.node_to_operate.instance.private_ip_address
         self.node_to_operate.remoter.run('nodetool --host localhost '
                                          'decommission',
