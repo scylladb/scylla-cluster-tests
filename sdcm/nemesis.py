@@ -44,6 +44,7 @@ class ChaosMonkey(Nemesis):
         time.sleep(60)
         self.node_to_operate.instance.start()
 
+
 class DrainerMonkey(Nemesis):
 
     def run(self, interval=30, termination_event=None):
@@ -57,6 +58,7 @@ class DrainerMonkey(Nemesis):
         time.sleep(60)
         self.node_to_operate.instance.start()
         self.node_to_operate.wait_for_init()
+
 
 class CorruptorMonkey(Nemesis):
 
@@ -93,9 +95,29 @@ class RepairMonkey(CorruptorMonkey):
     def repair(self):
         self.node_to_operate.remoter.run('nodetool -h localhost repair')
 
+
 class RebuildMonkey(CorruptorMonkey):
 
     def repair(self):
         for node in self.cluster.nodes:
             node.remoter.run_parallel('nodetool -h localhost rebuild')
 
+
+class DecommissionMonkey(Nemesis):
+
+    def break_it(self):
+        node_to_operate_ip = self.node_to_operate.instance.private_ip_address
+        self.node_to_operate.remoter.run('nodetool --host localhost '
+                                         'decommission', timeout=240)
+        verification_node = random.choice(self.cluster.nodes)
+        while verification_node == self.node_to_operate:
+            verification_node = random.choice(self.cluster.nodes)
+
+        node_info_list = self.cluster.get_node_info_list(verification_node)
+        private_ips = [node_info['ip'] for node_info in node_info_list]
+        error_msg = ('Node that was decommissioned {} still in the cluster. '
+                     'Cluster status info: {}'.format(self.node_to_operate,
+                                                      node_info_list))
+        assert node_to_operate_ip not in private_ips, error_msg
+        self.cluster.nodes.remove(self.node_to_operate)
+        self.node_to_operate.instance.terminate()

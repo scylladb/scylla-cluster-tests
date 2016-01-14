@@ -4,6 +4,7 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import ChaosMonkey
+from sdcm.nemesis import DecommissionMonkey
 
 
 class LongevityTest(ClusterTester):
@@ -19,6 +20,11 @@ class LongevityTest(ClusterTester):
         Run a very short test, as a config/code sanity check.
         """
         self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.start_nemesis(interval=5)
+        self.run_stress(duration=20)
+
+    def test_20_minutes_decommission(self):
+        self.db_cluster.add_nemesis(DecommissionMonkey)
         self.db_cluster.start_nemesis(interval=5)
         self.run_stress(duration=20)
 

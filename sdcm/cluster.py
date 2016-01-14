@@ -95,10 +95,12 @@ class RemoteCredentials(object):
             pass
         print("{}: Destroyed".format(str(self)))
 
+
 class Result(object):
 
     def __init__(self, stdout):
         self.stdout = stdout
+
 
 class Node(object):
 
@@ -348,6 +350,31 @@ class ScyllaCluster(Cluster):
                                                            ec2_user_data=ec2_user_data)
         return added_nodes
 
+    def get_node_info_list(self, verification_node):
+        assert verification_node in self.nodes
+        cmd_result = verification_node.remoter.run('nodetool status',
+                                                   timeout=120)
+        node_info_list = []
+        for line in cmd_result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith('UN'):
+                try:
+                    status, ip, load, _, tokens, owns, host_id, rack = line.split()
+                    node_info = {'status': status,
+                                 'ip': ip,
+                                 'load': load,
+                                 'tokens': tokens,
+                                 'owns': owns,
+                                 'host_id': host_id,
+                                 'rack': rack}
+                    node_info_list.append(node_info)
+                except ValueError:
+                    pass
+        # Cassandra banners have nodetool status output as well.
+        # Need to guarantee unique set of results.
+        node_info_list = list(set(node_info_list))
+        return node_info_list
+
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
             node_list = self.nodes
@@ -375,8 +402,7 @@ class ScyllaCluster(Cluster):
                                          timeout=120)
                         raise NodeInitError(node=node, result=result)
                     except CmdError:
-                        run_cmd("sudo systemctl start scylla-server.service",
-                                timeout=120)
+                        pass
             initialized_nodes = len([node for node in node_initialized_map if
                                     node_initialized_map[node]])
             total_nodes = len(node_initialized_map.keys())
