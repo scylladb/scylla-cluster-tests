@@ -95,10 +95,12 @@ class RemoteCredentials(object):
             pass
         print("{}: Destroyed".format(str(self)))
 
+
 class Result(object):
 
     def __init__(self, stdout):
         self.stdout = stdout
+
 
 class Node(object):
 

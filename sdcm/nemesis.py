@@ -44,6 +44,7 @@ class ChaosMonkey(Nemesis):
         time.sleep(60)
         self.node_to_operate.instance.start()
 
+
 class DrainerMonkey(Nemesis):
 
     def run(self, interval=30, termination_event=None):
@@ -57,6 +58,7 @@ class DrainerMonkey(Nemesis):
         time.sleep(60)
         self.node_to_operate.instance.start()
         self.node_to_operate.wait_for_init()
+
 
 class CorruptorMonkey(Nemesis):
 
@@ -92,6 +94,7 @@ class RepairMonkey(CorruptorMonkey):
 
     def repair(self):
         self.node_to_operate.remoter.run('nodetool -h localhost repair')
+
 
 class RebuildMonkey(CorruptorMonkey):
 
