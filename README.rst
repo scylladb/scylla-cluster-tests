@@ -57,7 +57,7 @@ Make sure you set PYTHONPATH to include the directory the class is in [2]::
 
 Run avocado::
 
-    avocado run scylla_longevity.py:LongevityTest.test_20_minutes --multiplex scylla_longevity.py.data/scylla-longevity.yaml --filter-only /run/regions/us_east_1 /run/databases/scylla
+    avocado run scylla_longevity.py:LongevityTest.test_20_minutes --multiplex data_dir/scylla.yaml --filter-only /run/regions/us_east_1 /run/databases/scylla
 
 This command line is just for the short version, using us_east_1. If you want
 to use the us_west_2 region, you can always change the string in the command

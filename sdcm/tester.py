@@ -1,4 +1,5 @@
 import boto3.session
+import os
 
 from avocado import Test
 
@@ -71,6 +72,9 @@ class ClusterTester(Test):
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
                                  n_nodes=self.params.get('n_loaders'))
+
+    def get_data_path(self, filename):
+        return os.path.join("data_dir", filename)
 
     @clean_aws_resources
     def run_stress(self, duration=None):

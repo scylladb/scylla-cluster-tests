@@ -56,3 +56,46 @@ class DrainerMonkey(Nemesis):
         self.node_to_operate.instance.stop()
         time.sleep(60)
         self.node_to_operate.instance.start()
+        self.node_to_operate.wait_for_init()
+
+class CorruptorMonkey(Nemesis):
+
+    def run(self, interval=30, termination_event=None):
+        interval *= 60
+        time.sleep(interval)
+        self.break_it()
+
+    def break_it(self):
+        # Send the script used to corrupt the DB
+        break_scylla = self.get_data_path('break_scylla.sh')
+        self.node_to_operate.remoter.send_files(break_scylla,
+                                                "/tmp/break_scylla.sh")
+
+        # corrupt the DB
+        self.node_to_operate.remoter.run('chmod +x /tmp/break_scylla.sh')
+        self.node_to_operate.remoter.run('/tmp/break_scylla.sh')
+
+        # lennart's systemd will restart scylla let him a bit of time
+        self.kill_scylla_daemon()
+        time.sleep(60)
+
+        # try to save the node
+        self.repair()
+        time.sleep(60)
+
+    def repair(self):
+        return NotImplementedError('Derived CorruptorMonkey classes must '
+                                   'implement the method repair')
+
+
+class RepairMonkey(CorruptorMonkey):
+
+    def repair(self):
+        self.node_to_operate.remoter.run('nodetool -h localhost repair')
+
+class RebuildMonkey(CorruptorMonkey):
+
+    def repair(self):
+        for node in self.cluster.nodes:
+            node.remoter.run_parallel('nodetool -h localhost rebuild')
+

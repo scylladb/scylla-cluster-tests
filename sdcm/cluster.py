@@ -95,6 +95,10 @@ class RemoteCredentials(object):
             pass
         print("{}: Destroyed".format(str(self)))
 
+class Result(object):
+
+    def __init__(self, stdout):
+        self.stdout = stdout
 
 class Node(object):
 
@@ -131,6 +135,30 @@ class Node(object):
         terminate_msg = '{}: Destroyed'.format(self)
         self.instance.terminate()
         print(terminate_msg)
+
+    def wait_for_init(self, timeout=60, verbose=False):
+        print("{}: Waiting for node to start. "
+              "Polling interval: {} s".format(str(self), verify_pause))
+
+        elapsed = 0
+        started = False
+        verify_pause = 60
+
+        while not started:
+            if elapsed > timeout:
+                result = Result("Timeout")
+                raise NodeInitError(node=self, result=result)
+            if verbose:
+                run_cmd = node.remoter.run
+            else:
+                run_cmd = node.remoter.run_quiet
+            try:
+                run_cmd('netstat -a | grep :9042', timeout=120)
+                started = True
+            except CmdError:
+                pass
+            time.sleep(verify_pause)
+            elapsed += verify_pause
 
 
 class Cluster(object):
