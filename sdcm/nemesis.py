@@ -34,10 +34,14 @@ class Nemesis(object):
                     break
             self.set_node_to_operate()
 
+    def __str__(self):
+        return str(self.__class__)
+
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
     def disrupt_nodetool_drain(self):
+        print('{}: Drain {} then restart it'.format(self, self.node_to_operate))
         self.node_to_operate.remoter.run('nodetool -h localhost drain',
                                          timeout=NODETOOL_CMD_TIMEOUT)
         self.node_to_operate.instance.stop()
@@ -46,6 +50,7 @@ class Nemesis(object):
         self.node_to_operate.wait_for_init()
 
     def disrupt_nodetool_decommission(self):
+        print('{}: Decomission {}'.format(self, self.node_to_operate))
         node_to_operate_ip = self.node_to_operate.instance.private_ip_address
         self.node_to_operate.remoter.run('nodetool --host localhost '
                                          'decommission',
@@ -64,11 +69,13 @@ class Nemesis(object):
         self.node_to_operate.instance.terminate()
 
     def disrupt_stop_start(self):
+        print('{}: Stop {} then restart it'.format(self, self.node_to_operate))
         self.node_to_operate.instance.stop()
         time.sleep(60)
         self.node_to_operate.instance.start()
 
     def disrupt_kill_scylla_daemon(self):
+        print('{}: Kill all scylla processes in {}'.format(self, self.node_to_operate))
         self.node_to_operate.remoter.run('sudo killall -9 scylla')
 
     def _destroy_data(self):
@@ -86,12 +93,16 @@ class Nemesis(object):
         time.sleep(60)
 
     def disrupt_destroy_data_then_repair(self):
+        print('{}: Destroy user data in {}, then run nodetool '
+              'repair'.format(self, self.node_to_operate))
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_repair()
         time.sleep(60)
 
     def disrupt_destroy_data_then_rebuild(self):
+        print('{}: Destroy user data in {}, then run nodetool '
+              'rebuild'.format(self, self.node_to_operate))
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_rebuild()
