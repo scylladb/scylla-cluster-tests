@@ -1,5 +1,4 @@
 import boto3.session
-import os
 
 from avocado import Test
 
@@ -7,6 +6,7 @@ from .cluster import LoaderSet
 from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
 from .cluster import CassandraCluster
+from .data_path import get_data_path
 
 import cluster
 
@@ -63,7 +63,7 @@ class ClusterTester(Test):
         else:
             self.error('Incorrect parameter db_type: {}'.format(self.params.get('db_type')))
 
-        scylla_repo = self.get_data_path('scylla.repo')
+        scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
                                  ec2_subnet_id=self.params.get('subnet_id'),
@@ -72,9 +72,6 @@ class ClusterTester(Test):
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
                                  n_nodes=self.params.get('n_loaders'))
-
-    def get_data_path(self, filename):
-        return os.path.join("data_dir", filename)
 
     @clean_aws_resources
     def run_stress(self, duration=None):

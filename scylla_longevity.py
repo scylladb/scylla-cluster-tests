@@ -3,7 +3,7 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.nemesis import ChaosMonkey
+from sdcm.nemesis import StopStartMonkey
 from sdcm.nemesis import DecommissionMonkey
 
 
@@ -19,7 +19,7 @@ class LongevityTest(ClusterTester):
         """
         Run a very short test, as a config/code sanity check.
         """
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(StopStartMonkey)
         self.db_cluster.start_nemesis(interval=5)
         self.run_stress(duration=20)
 
@@ -33,17 +33,17 @@ class LongevityTest(ClusterTester):
         self.db_cluster.wait_for_init(new_nodes)
 
     def test_12_hours(self):
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(StopStartMonkey)
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 12)
 
     def test_1_day(self):
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(StopStartMonkey)
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 24)
 
     def test_1_week(self):
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(StopStartMonkey)
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 24 * 7)
 

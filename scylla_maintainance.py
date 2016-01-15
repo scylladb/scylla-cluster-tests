@@ -4,8 +4,8 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import DrainerMonkey
-from sdcm.nemesis import RepairMonkey
-from sdcm.nemesis import RebuildMonkey
+from sdcm.nemesis import CorruptThenRepairMonkey
+from sdcm.nemesis import CorruptThenRebuildMonkey
 
 
 class MaintainanceTest(ClusterTester):
@@ -30,7 +30,7 @@ class MaintainanceTest(ClusterTester):
         """
         Repair a node
         """
-        self.db_cluster.add_nemesis(RepairMonkey)
+        self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
         self.db_cluster.start_nemesis(interval=10)
@@ -40,7 +40,7 @@ class MaintainanceTest(ClusterTester):
         """
         Rebuild all nodes
         """
-        self.db_cluster.add_nemesis(RebuildMonkey)
+        self.db_cluster.add_nemesis(CorruptThenRebuildMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
         self.db_cluster.start_nemesis(interval=10)
