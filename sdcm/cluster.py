@@ -225,7 +225,9 @@ class Cluster(object):
         return added_nodes
 
     def __str__(self):
-        return 'Cluster {} (AMI ID {})'.format(self.name, self.ec2_ami_id)
+        return 'Cluster {} (AMI: {} Type: {})'.format(self.name,
+                                                      self.ec2_ami_id,
+                                                      self.ec2_instance_type)
 
     def _create_node(self, instance, ami_username, node_prefix, node_index):
         node_prefix = '{}-{}'.format(node_prefix, self.shortid)
