@@ -128,6 +128,12 @@ class Node(object):
                                           self.instance.public_ip_address,
                                           self.instance.private_ip_address)
 
+    def pub_ip(self):
+        return self.instance.public_ip_address
+
+    def priv_ip(self):
+        return self.instance.private_ip_address
+
     def wait_public_ip(self):
         while self.instance.public_ip_address is None:
             time.sleep(1)
