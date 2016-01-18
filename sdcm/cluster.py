@@ -140,7 +140,7 @@ class Node(object):
 
     def wait_for_init(self, timeout=60, verbose=False):
         print("{}: Waiting for node to start. "
-              "Polling interval: {} s".format(str(self), verify_pause))
+              "Polling interval: {} s".format(str(self), timeout))
 
         elapsed = 0
         started = False
@@ -151,9 +151,9 @@ class Node(object):
                 result = Result("Timeout")
                 raise NodeInitError(node=self, result=result)
             if verbose:
-                run_cmd = node.remoter.run
+                run_cmd = self.remoter.run
             else:
-                run_cmd = node.remoter.run_quiet
+                run_cmd = self.remoter.run_quiet
             try:
                 run_cmd('netstat -a | grep :9042', timeout=120)
                 started = True
