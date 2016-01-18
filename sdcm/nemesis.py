@@ -20,7 +20,8 @@ class Nemesis(object):
         self.termination_event = termination_event
 
     def set_node_to_operate(self):
-        self.node_to_operate = random.choice(self.cluster.nodes)
+        non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
+        self.node_to_operate = random.choice(non_seed_nodes)
         print('Node to operate: {}'.format(self.node_to_operate))
 
     def run(self, interval=30, termination_event=None):
@@ -76,7 +77,7 @@ class Nemesis(object):
 
     def disrupt_kill_scylla_daemon(self):
         print('{}: Kill all scylla processes in {}'.format(self, self.node_to_operate))
-        self.node_to_operate.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done")
+        self.node_to_operate.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
@@ -116,10 +117,12 @@ class Nemesis(object):
         disrupt_method()
 
     def repair_nodetool_repair(self):
+        time.sleep(120)
         self.node_to_operate.remoter.run('nodetool -h localhost repair',
                                          timeout=NODETOOL_CMD_TIMEOUT)
 
     def repair_nodetool_rebuild(self):
+        time.sleep(120)
         for node in self.cluster.nodes:
             node.remoter.run_parallel('nodetool -h localhost rebuild',
                                       timeout=NODETOOL_CMD_TIMEOUT)

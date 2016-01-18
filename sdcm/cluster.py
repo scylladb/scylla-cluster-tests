@@ -115,6 +115,7 @@ class Node(object):
         self.ec2 = ec2_service
         self.instance.wait_until_running()
         self.wait_public_ip()
+        self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'Name', 'Value': self.name}])
         print('{}: Started'.format(self))
@@ -124,9 +125,10 @@ class Node(object):
                               timeout=120, attempts=10, quiet=False)
 
     def __str__(self):
-        return 'Node {} [{} | {}]'.format(self.name,
-                                          self.instance.public_ip_address,
-                                          self.instance.private_ip_address)
+        return 'Node {} [{} | {}] (seed: {})'.format(self.name,
+                                                     self.instance.public_ip_address,
+                                                     self.instance.private_ip_address,
+                                                     self.is_seed)
 
     def wait_public_ip(self):
         while self.instance.public_ip_address is None:
@@ -140,7 +142,7 @@ class Node(object):
 
     def wait_for_init(self, timeout=60, verbose=False):
         print("{}: Waiting for node to start. "
-              "Polling interval: {} s".format(str(self), verify_pause))
+              "Polling interval: {} s".format(str(self), timeout))
 
         elapsed = 0
         started = False
@@ -151,9 +153,9 @@ class Node(object):
                 result = Result("Timeout")
                 raise NodeInitError(node=self, result=result)
             if verbose:
-                run_cmd = node.remoter.run
+                run_cmd = self.remoter.run
             else:
-                run_cmd = node.remoter.run_quiet
+                run_cmd = self.remoter.run_quiet
             try:
                 run_cmd('netstat -a | grep :9042', timeout=120)
                 started = True
@@ -225,7 +227,9 @@ class Cluster(object):
         return added_nodes
 
     def __str__(self):
-        return 'Cluster {} (AMI ID {})'.format(self.name, self.ec2_ami_id)
+        return 'Cluster {} (AMI: {} Type: {})'.format(self.name,
+                                                      self.ec2_ami_id,
+                                                      self.ec2_instance_type)
 
     def _create_node(self, instance, ami_username, node_prefix, node_index):
         node_prefix = '{}-{}'.format(node_prefix, self.shortid)
@@ -326,7 +330,7 @@ class ScyllaCluster(Cluster):
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
-    def get_seed_nodes(self):
+    def get_seed_nodes_private_ips(self):
         node = self.nodes[0]
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
@@ -338,10 +342,23 @@ class ScyllaCluster(Cluster):
                 raise ValueError('Unexpected scylla.yaml '
                                  'contents:\n{}'.format(yaml_stream.read()))
 
+    def get_seed_nodes(self):
+        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
+        seed_nodes = []
+        for node in self.nodes:
+            if node.instance.private_ip_address in seed_nodes_private_ips:
+                node.is_seed = True
+                seed_nodes.append(node)
+            else:
+                node.is_seed = False
+        return seed_nodes
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
-                seeds = ",".join(self.get_seed_nodes())
+                node_private_ips = [node.instance.private_ip_address for node
+                                    in self.nodes if node.is_seed]
+                seeds = ",".join(node_private_ips)
                 ec2_user_data = ('--clustername {} --bootstrap true '
                                  '--totalnodes {} --seeds {}'.format(self.name,
                                                                      count,
@@ -412,6 +429,8 @@ class ScyllaCluster(Cluster):
                                                 total_nodes,
                                                 int(time_elapsed)))
             time.sleep(verify_pause)
+        # Mark all seed nodes
+        self.get_seed_nodes()
 
     def add_nemesis(self, nemesis):
         self.nemesis.append(nemesis(cluster=self,
