@@ -353,7 +353,9 @@ class ScyllaCluster(Cluster):
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
-                seeds = ",".join(self.get_seed_nodes_private_ips())
+                node_private_ips = [node.instance.private_ip_address for node
+                                    in self.nodes if node.is_seed]
+                seeds = ",".join(node_private_ips)
                 ec2_user_data = ('--clustername {} --bootstrap true '
                                  '--totalnodes {} --seeds {}'.format(self.name,
                                                                      count,
