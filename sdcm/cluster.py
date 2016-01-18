@@ -115,7 +115,7 @@ class Node(object):
         self.ec2 = ec2_service
         self.instance.wait_until_running()
         self.wait_public_ip()
-        self.is_seed = False
+        self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'Name', 'Value': self.name}])
         print('{}: Started'.format(self))
@@ -125,9 +125,10 @@ class Node(object):
                               timeout=120, attempts=10, quiet=False)
 
     def __str__(self):
-        return 'Node {} [{} | {}]'.format(self.name,
-                                          self.instance.public_ip_address,
-                                          self.instance.private_ip_address)
+        return 'Node {} [{} | {}] (seed: {})'.format(self.name,
+                                                     self.instance.public_ip_address,
+                                                     self.instance.private_ip_address,
+                                                     self.is_seed)
 
     def wait_public_ip(self):
         while self.instance.public_ip_address is None:
@@ -348,6 +349,8 @@ class ScyllaCluster(Cluster):
             if node.instance.private_ip_address in seed_nodes_private_ips:
                 node.is_seed = True
                 seed_nodes.append(node)
+            else:
+                node.is_seed = False
         return seed_nodes
 
     def add_nodes(self, count, ec2_user_data=''):
