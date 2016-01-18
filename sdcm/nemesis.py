@@ -76,7 +76,7 @@ class Nemesis(object):
 
     def disrupt_kill_scylla_daemon(self):
         print('{}: Kill all scylla processes in {}'.format(self, self.node_to_operate))
-        self.node_to_operate.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done")
+        self.node_to_operate.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
