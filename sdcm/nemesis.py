@@ -116,10 +116,12 @@ class Nemesis(object):
         disrupt_method()
 
     def repair_nodetool_repair(self):
+        time.sleep(120)
         self.node_to_operate.remoter.run('nodetool -h localhost repair',
                                          timeout=NODETOOL_CMD_TIMEOUT)
 
     def repair_nodetool_rebuild(self):
+        time.sleep(120)
         for node in self.cluster.nodes:
             node.remoter.run_parallel('nodetool -h localhost rebuild',
                                       timeout=NODETOOL_CMD_TIMEOUT)
