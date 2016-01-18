@@ -115,6 +115,7 @@ class Node(object):
         self.ec2 = ec2_service
         self.instance.wait_until_running()
         self.wait_public_ip()
+        self.is_seed = False
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'Name', 'Value': self.name}])
         print('{}: Started'.format(self))
@@ -340,6 +341,15 @@ class ScyllaCluster(Cluster):
                 raise ValueError('Unexpected scylla.yaml '
                                  'contents:\n{}'.format(yaml_stream.read()))
 
+    def get_seed_nodes(self):
+        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
+        seed_nodes = []
+        for node in self.nodes:
+            if node.instance.private_ip_address in seed_nodes_private_ips:
+                node.is_seed = True
+                seed_nodes.append(node)
+        return seed_nodes
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
@@ -414,6 +424,8 @@ class ScyllaCluster(Cluster):
                                                 total_nodes,
                                                 int(time_elapsed)))
             time.sleep(verify_pause)
+        # Mark all seed nodes
+        self.get_seed_nodes()
 
     def add_nemesis(self, nemesis):
         self.nemesis.append(nemesis(cluster=self,
