@@ -20,7 +20,13 @@ class Nemesis(object):
         self.termination_event = termination_event
 
     def set_node_to_operate(self):
-        self.node_to_operate = random.choice(self.cluster.nodes)
+        nodes = self.cluster.nodes
+
+        # take care of excluding seed nodes
+        ips = self.cluster.get_seed_nodes_private_ips()
+        choices = [node for node in nodes if node.priv_ip() not in ips]
+
+        self.node_to_operate = random.choice(choices)
         print('Node to operate: {}'.format(self.node_to_operate))
 
     def run(self, interval=30, termination_event=None):
