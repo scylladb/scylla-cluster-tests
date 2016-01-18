@@ -20,7 +20,8 @@ class Nemesis(object):
         self.termination_event = termination_event
 
     def set_node_to_operate(self):
-        self.node_to_operate = random.choice(self.cluster.nodes)
+        non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
+        self.node_to_operate = random.choice(non_seed_nodes)
         print('Node to operate: {}'.format(self.node_to_operate))
 
     def run(self, interval=30, termination_event=None):
