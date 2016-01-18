@@ -326,7 +326,7 @@ class ScyllaCluster(Cluster):
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
-    def get_seed_nodes(self):
+    def get_seed_nodes_private_ips(self):
         node = self.nodes[0]
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
@@ -341,7 +341,7 @@ class ScyllaCluster(Cluster):
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
-                seeds = ",".join(self.get_seed_nodes())
+                seeds = ",".join(self.get_seed_nodes_private_ips())
                 ec2_user_data = ('--clustername {} --bootstrap true '
                                  '--totalnodes {} --seeds {}'.format(self.name,
                                                                      count,
@@ -468,7 +468,7 @@ class CassandraCluster(ScyllaCluster):
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
-    def get_seed_nodes(self):
+    def get_seed_nodes_private_ips(self):
         node = self.nodes[0]
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='cassandra-longevity'), 'cassandra.yaml')
         node.remoter.receive_files(yaml_dst_path,
@@ -484,7 +484,7 @@ class CassandraCluster(ScyllaCluster):
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
-                seeds = ",".join(self.get_seed_nodes())
+                seeds = ",".join(self.get_seed_nodes_private_ips())
                 ec2_user_data = ('--clustername {} --bootstrap true '
                                  '--totalnodes {} --seeds {} '
                                  '--version community '
