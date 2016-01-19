@@ -23,15 +23,6 @@ class LongevityTest(ClusterTester):
         self.db_cluster.start_nemesis(interval=5)
         self.run_stress(duration=20)
 
-    def test_20_minutes_decommission(self):
-        self.db_cluster.add_nemesis(DecommissionMonkey)
-        self.db_cluster.start_nemesis(interval=5)
-        self.run_stress(duration=20)
-
-    def test_add_node(self):
-        new_nodes = self.db_cluster.add_nodes(count=1)
-        self.db_cluster.wait_for_init(new_nodes)
-
     def test_12_hours(self):
         self.db_cluster.add_nemesis(StopStartMonkey)
         self.db_cluster.start_nemesis(interval=30)
