@@ -306,7 +306,7 @@ class ScyllaCluster(Cluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
-                 ec2_ami_username='fedora',
+                 ec2_ami_username='centos',
                  ec2_block_device_mappings=SCYLLA_CLUSTER_DEVICE_MAPPINGS,
                  n_nodes=10):
         # We have to pass the cluster name in advance in user_data
@@ -416,9 +416,9 @@ class ScyllaCluster(Cluster):
                 except CmdError:
                     try:
                         run_cmd("grep 'Aborting the clustering of this "
-                                "reservation' /home/fedora/ami.log",
+                                "reservation' /home/centos/ami.log",
                                 timeout=120)
-                        result = run_cmd("tail -5 /home/fedora/ami.log",
+                        result = run_cmd("tail -5 /home/centos/ami.log",
                                          timeout=120)
                         raise NodeInitError(node=node, result=result)
                     except CmdError:
