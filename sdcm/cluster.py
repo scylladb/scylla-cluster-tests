@@ -118,6 +118,9 @@ class Node(object):
         self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'Name', 'Value': self.name}])
+        # Make the instance created to be immune to Tzach's killer script
+        self.ec2.create_tags(Resources=[self.instance.id],
+                             Tags=[{'Key': 'keep', 'Value': 'alive'}])
         print('{}: Started'.format(self))
         self.remoter = Remote(hostname=self.instance.public_ip_address,
                               username=ami_username,
