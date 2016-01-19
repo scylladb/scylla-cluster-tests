@@ -80,9 +80,11 @@ class ClusterTester(Test):
         # and will contact the others nodes
         ip = self.db_cluster.get_node_private_ips()[0]
         # Use replication factor = 3 (-schema 3)
+        if duration is None:
+            duration = self.params.get('duration')
         stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' -port jmx=6868 "
                       "-mode cql3 native -rate threads={} "
-                      "-node {}".format(self.params.get('duration'),
+                      "-node {}".format(duration,
                                         self.params.get('threads'),
                                         ip))
 

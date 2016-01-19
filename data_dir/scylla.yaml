@@ -1,3 +1,4 @@
+# default cassandra stress duration (min) if none specified
 duration: 10
 threads: 4
 n_db_nodes: 6
