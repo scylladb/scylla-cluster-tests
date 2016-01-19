@@ -74,16 +74,20 @@ class ClusterTester(Test):
                                  n_nodes=self.params.get('n_loaders'))
 
     @clean_aws_resources
-    def run_stress(self, duration=None):
+    def run_stress(self, duration=None, threads=None):
         # pickup the first node
         # cassandra-stress driver is topology aware
         # and will contact the others nodes
         ip = self.db_cluster.get_node_private_ips()[0]
         # Use replication factor = 3 (-schema 3)
+        if duration is None:
+            duration = self.params.get('duration')
+        if threads is None:
+            threads = self.params.get('threads')
         stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' -port jmx=6868 "
                       "-mode cql3 native -rate threads={} "
-                      "-node {}".format(self.params.get('duration'),
-                                        self.params.get('threads'),
+                      "-node {}".format(duration,
+                                        threads,
                                         ip))
 
         if duration is not None:
