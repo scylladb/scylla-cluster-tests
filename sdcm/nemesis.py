@@ -68,6 +68,8 @@ class Nemesis(object):
         assert node_to_operate_ip not in private_ips, error_msg
         self.cluster.nodes.remove(self.node_to_operate)
         self.node_to_operate.instance.terminate()
+        # Replace the node that was terminated.
+        self.cluster.add_nodes(count=1)
 
     def disrupt_stop_start(self):
         print('{}: Stop {} then restart it'.format(self, self.node_to_operate))
