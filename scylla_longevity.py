@@ -4,7 +4,6 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import StopStartMonkey
-from sdcm.nemesis import DecommissionMonkey
 
 
 class LongevityTest(ClusterTester):
