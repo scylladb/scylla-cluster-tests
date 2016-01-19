@@ -116,7 +116,11 @@ class Nemesis(object):
                            attr[0].startswith('disrupt_') and
                            callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
-        disrupt_method()
+        try:
+            disrupt_method()
+        except Exception, details:
+            print('Disrupt method {} failed: {}'.format(disrupt_method,
+                                                        details))
 
     def repair_nodetool_repair(self):
         time.sleep(120)
