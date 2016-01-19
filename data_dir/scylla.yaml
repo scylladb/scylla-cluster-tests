@@ -1,5 +1,6 @@
 # default cassandra stress duration (min) if none specified
 duration: 10
+# default cassandra stress thread number if none specified
 threads: 4
 n_db_nodes: 6
 # I have to solve a problem with SSH connection parallelism, until then
