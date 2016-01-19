@@ -141,6 +141,8 @@ class Node(object):
     def destroy(self):
         terminate_msg = '{}: Destroyed'.format(self)
         self.instance.terminate()
+        global EC2_INSTANCES
+        EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
     def wait_for_init(self, timeout=60, verbose=False):
@@ -296,9 +298,7 @@ class Cluster(object):
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
-        global EC2_INSTANCES
         for node in self.nodes:
-            EC2_INSTANCES.remove(node.instance)
             node.destroy()
 
 
