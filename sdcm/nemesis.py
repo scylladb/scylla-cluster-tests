@@ -15,14 +15,14 @@ class Nemesis(object):
 
     def __init__(self, cluster, termination_event):
         self.cluster = cluster
-        self.node_to_operate = None
-        self.set_node_to_operate()
+        self.target_node = None
+        self.set_target_node()
         self.termination_event = termination_event
 
-    def set_node_to_operate(self):
+    def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
-        self.node_to_operate = random.choice(non_seed_nodes)
-        print('Node to operate: {}'.format(self.node_to_operate))
+        self.target_node = random.choice(non_seed_nodes)
+        print('Current Target: {}'.format(self.target_node))
 
     def run(self, interval=30, termination_event=None):
         interval *= 60
@@ -33,7 +33,7 @@ class Nemesis(object):
                 if self.termination_event.isSet():
                     self.termination_event = None
                     break
-            self.set_node_to_operate()
+            self.set_target_node()
 
     def __str__(self):
         return str(self.__class__)
@@ -42,54 +42,54 @@ class Nemesis(object):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
     def disrupt_nodetool_drain(self):
-        print('{}: Drain {} then restart it'.format(self, self.node_to_operate))
-        self.node_to_operate.remoter.run('nodetool -h localhost drain',
-                                         timeout=NODETOOL_CMD_TIMEOUT)
-        self.node_to_operate.instance.stop()
+        print('{}: Drain {} then restart it'.format(self, self.target_node))
+        self.target_node.remoter.run('nodetool -h localhost drain',
+                                     timeout=NODETOOL_CMD_TIMEOUT)
+        self.target_node.instance.stop()
         time.sleep(60)
-        self.node_to_operate.instance.start()
-        self.node_to_operate.wait_for_init()
+        self.target_node.instance.start()
+        self.target_node.wait_for_init()
 
     def disrupt_nodetool_decommission(self):
-        print('{}: Decomission {}'.format(self, self.node_to_operate))
-        node_to_operate_ip = self.node_to_operate.instance.private_ip_address
-        self.node_to_operate.remoter.run('nodetool --host localhost '
-                                         'decommission',
-                                         timeout=NODETOOL_CMD_TIMEOUT)
+        print('{}: Decomission {}'.format(self, self.target_node))
+        target_node_ip = self.target_node.instance.private_ip_address
+        self.target_node.remoter.run('nodetool --host localhost '
+                                     'decommission',
+                                     timeout=NODETOOL_CMD_TIMEOUT)
         verification_node = random.choice(self.cluster.nodes)
-        while verification_node == self.node_to_operate:
+        while verification_node == self.target_node:
             verification_node = random.choice(self.cluster.nodes)
 
         node_info_list = self.cluster.get_node_info_list(verification_node)
         private_ips = [node_info['ip'] for node_info in node_info_list]
         error_msg = ('Node that was decommissioned {} still in the cluster. '
-                     'Cluster status info: {}'.format(self.node_to_operate,
+                     'Cluster status info: {}'.format(self.target_node,
                                                       node_info_list))
-        assert node_to_operate_ip not in private_ips, error_msg
-        self.cluster.nodes.remove(self.node_to_operate)
-        self.node_to_operate.destroy()
+        assert target_node_ip not in private_ips, error_msg
+        self.cluster.nodes.remove(self.target_node)
+        self.target_node.destroy()
         # Replace the node that was terminated.
         self.cluster.add_nodes(count=1)
 
     def disrupt_stop_start(self):
-        print('{}: Stop {} then restart it'.format(self, self.node_to_operate))
-        self.node_to_operate.instance.stop()
+        print('{}: Stop {} then restart it'.format(self, self.target_node))
+        self.target_node.instance.stop()
         time.sleep(60)
-        self.node_to_operate.instance.start()
+        self.target_node.instance.start()
 
     def disrupt_kill_scylla_daemon(self):
-        print('{}: Kill all scylla processes in {}'.format(self, self.node_to_operate))
-        self.node_to_operate.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
+        print('{}: Kill all scylla processes in {}'.format(self, self.target_node))
+        self.target_node.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
         break_scylla = get_data_path('break_scylla.sh')
-        self.node_to_operate.remoter.send_files(break_scylla,
-                                                "/tmp/break_scylla.sh")
+        self.target_node.remoter.send_files(break_scylla,
+                                            "/tmp/break_scylla.sh")
 
         # corrupt the DB
-        self.node_to_operate.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.node_to_operate.remoter.run('/tmp/break_scylla.sh')
+        self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
+        self.target_node.remoter.run('/tmp/break_scylla.sh')
 
         # lennart's systemd will restart scylla let him a bit of time
         self.disrupt_kill_scylla_daemon()
@@ -97,7 +97,7 @@ class Nemesis(object):
 
     def disrupt_destroy_data_then_repair(self):
         print('{}: Destroy user data in {}, then run nodetool '
-              'repair'.format(self, self.node_to_operate))
+              'repair'.format(self, self.target_node))
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_repair()
@@ -105,7 +105,7 @@ class Nemesis(object):
 
     def disrupt_destroy_data_then_rebuild(self):
         print('{}: Destroy user data in {}, then run nodetool '
-              'rebuild'.format(self, self.node_to_operate))
+              'rebuild'.format(self, self.target_node))
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_rebuild()
@@ -120,8 +120,8 @@ class Nemesis(object):
 
     def repair_nodetool_repair(self):
         time.sleep(120)
-        self.node_to_operate.remoter.run('nodetool -h localhost repair',
-                                         timeout=NODETOOL_CMD_TIMEOUT)
+        self.target_node.remoter.run('nodetool -h localhost repair',
+                                     timeout=NODETOOL_CMD_TIMEOUT)
 
     def repair_nodetool_rebuild(self):
         time.sleep(120)
