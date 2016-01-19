@@ -387,12 +387,13 @@ class ScyllaCluster(Cluster):
                                  'owns': owns,
                                  'host_id': host_id,
                                  'rack': rack}
-                    node_info_list.append(node_info)
+                    # Cassandra banners have nodetool status output as well.
+                    # Need to guarantee unique set of results.
+                    node_ips = [node_info['ip'] for node_info in node_info_list]
+                    if node_info['ip'] not in node_ips:
+                        node_info_list.append(node_info)
                 except ValueError:
                     pass
-        # Cassandra banners have nodetool status output as well.
-        # Need to guarantee unique set of results.
-        node_info_list = list(set(node_info_list))
         return node_info_list
 
     def wait_for_init(self, node_list=None, verbose=False):
