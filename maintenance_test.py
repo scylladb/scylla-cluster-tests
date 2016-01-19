@@ -11,7 +11,7 @@ from sdcm.nemesis import CorruptThenRebuildMonkey
 class MaintainanceTest(ClusterTester):
 
     """
-    Test a Scylla cluster maintainance operations.
+    Test a Scylla cluster maintenance operations.
 
     :avocado: enable
     """
