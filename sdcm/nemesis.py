@@ -67,7 +67,7 @@ class Nemesis(object):
                                                       node_info_list))
         assert node_to_operate_ip not in private_ips, error_msg
         self.cluster.nodes.remove(self.node_to_operate)
-        self.node_to_operate.instance.terminate()
+        self.node_to_operate.destroy()
         # Replace the node that was terminated.
         self.cluster.add_nodes(count=1)
 
