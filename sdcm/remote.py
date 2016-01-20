@@ -72,9 +72,13 @@ def update_fabric_env(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
+        print('Updating fabric env: ssh -i {} -p {} '
+              '{}@{}'.format(args[0].key_filename,
+                             args[0].port,
+                             args[0].username,
+                             args[0].hostname))
         fabric.api.env.update(host_string=args[0].hostname,
                               user=args[0].username,
-                              password=args[0].password,
                               key_filename=args[0].key_filename,
                               port=args[0].port)
         return method(*args, **kwargs)
