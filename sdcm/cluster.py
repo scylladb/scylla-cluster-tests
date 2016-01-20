@@ -122,7 +122,6 @@ class Node(object):
         # Make the instance created to be immune to Tzach's killer script
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
-        print('{}: Started'.format(self))
         self.remoter = Remote(hostname=self.instance.public_ip_address,
                               username=ami_username,
                               key_filename=credentials.key_file,
@@ -147,6 +146,7 @@ class Node(object):
         self.instance.stop()
         wait.wait_for(lambda: self.instance.state['name'] == 'stopped',
                       timeout=120,
+                      step=10,
                       text='{}: Waiting instance to stop'.format(self))
         self.instance.start()
         self.wait_for_init(timeout=120)
