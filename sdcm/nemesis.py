@@ -45,10 +45,7 @@ class Nemesis(object):
         print('{}: Drain {} then restart it'.format(self, self.target_node))
         self.target_node.remoter.run('nodetool -h localhost drain',
                                      timeout=NODETOOL_CMD_TIMEOUT)
-        self.target_node.instance.stop()
-        time.sleep(60)
-        self.target_node.instance.start()
-        self.target_node.wait_for_init()
+        self.target_node.restart()
 
     def disrupt_nodetool_decommission(self):
         print('{}: Decomission {}'.format(self, self.target_node))
@@ -73,9 +70,7 @@ class Nemesis(object):
 
     def disrupt_stop_start(self):
         print('{}: Stop {} then restart it'.format(self, self.target_node))
-        self.target_node.instance.stop()
-        time.sleep(60)
-        self.target_node.instance.start()
+        self.target_node.restart()
 
     def disrupt_kill_scylla_daemon(self):
         print('{}: Kill all scylla processes in {}'.format(self, self.target_node))
