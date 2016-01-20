@@ -8,7 +8,7 @@ import time
 
 from .data_path import get_data_path
 
-NODETOOL_CMD_TIMEOUT = 240
+NODETOOL_CMD_TIMEOUT = 3600
 
 
 class Nemesis(object):
