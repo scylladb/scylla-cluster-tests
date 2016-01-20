@@ -126,6 +126,10 @@ class Node(object):
                               username=ami_username,
                               key_filename=credentials.key_file,
                               timeout=120, attempts=10, quiet=False)
+        print("{}: SSH access -> 'ssh -i {} {}@{}'".format(self,
+                                                           credentials.key_file,
+                                                           ami_username,
+                                                           self.instance.public_ip_address))
 
     def __str__(self):
         return 'Node {} [{} | {}] (seed: {})'.format(self.name,
