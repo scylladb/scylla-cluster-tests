@@ -155,13 +155,15 @@ class Node(object):
         EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
-    def wait_for_init(self, timeout=60, verbose=False):
+    def wait_for_init(self, timeout=120, verbose=False):
+        verify_pause = 30
         print("{}: Waiting for DB services to start. "
-              "Polling interval: {} s, timeout=".format(str(self), timeout))
+              "Polling interval: {} s, timeout: {} s".format(str(self),
+                                                             verify_pause,
+                                                             timeout))
 
         elapsed = 0
         started = False
-        verify_pause = 60
 
         while not started:
             if elapsed > timeout:
