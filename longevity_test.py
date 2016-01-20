@@ -13,13 +13,13 @@ class LongevityTest(ClusterTester):
     :avocado: enable
     """
 
-    def test_20_minutes(self):
+    def test_custom_time(self):
         """
-        Run cassandra-stress on a cluster for 20 min (smoke check).
+        Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
-        self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+        self.run_stress(duration=self.params.get('cassandra_stress_duration'))
 
     def test_12_hours(self):
         """
