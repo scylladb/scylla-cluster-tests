@@ -138,32 +138,17 @@ class StopStartMonkey(Nemesis):
 
 class DrainerMonkey(Nemesis):
 
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
     def disrupt(self):
         self.disrupt_nodetool_drain()
 
 
 class CorruptThenRepairMonkey(Nemesis):
 
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
     def disrupt(self):
         self.disrupt_destroy_data_then_repair()
 
 
 class CorruptThenRebuildMonkey(Nemesis):
-
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
 
     def disrupt(self):
         self.disrupt_destroy_data_then_rebuild()
