@@ -68,7 +68,8 @@ class Nemesis(object):
         self.cluster.nodes.remove(self.target_node)
         self.target_node.destroy()
         # Replace the node that was terminated.
-        self.cluster.add_nodes(count=1)
+        new_nodes = self.cluster.add_nodes(count=1)
+        self.cluster.wait_for_init(node_list=new_nodes)
 
     def disrupt_stop_start(self):
         print('{}: Stop {} then restart it'.format(self, self.target_node))
