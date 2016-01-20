@@ -136,37 +136,62 @@ class Nemesis(object):
                                                       result.duration))
 
 
+def log_time_elapsed(method):
+    """
+    Log time elapsed for method to run
+
+    :param method: Remote method to wrap.
+    :return: Wrapped method.
+    """
+    def wrapper(*args, **kwargs):
+        print('{}: Starting method {}'.format(args[0], method))
+        start_time = time.time()
+        result = method(*args, **kwargs)
+        elapsed_time = int(time.time() - start_time)
+        print('{}: Method {} took {} s to run'.format(args[0],
+                                                      method,
+                                                      elapsed_time))
+        return result
+    return wrapper
+
+
 class StopStartMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_stop_start()
 
 
 class DrainerMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_drain()
 
 
 class CorruptThenRepairMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_destroy_data_then_repair()
 
 
 class CorruptThenRebuildMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_destroy_data_then_rebuild()
 
 
 class DecommissionMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_decommission()
 
 
 class ChaosMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.call_random_disrupt_method()
