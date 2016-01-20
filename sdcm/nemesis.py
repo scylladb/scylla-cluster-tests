@@ -6,6 +6,8 @@ import inspect
 import random
 import time
 
+from avocado.utils import wait
+
 from .data_path import get_data_path
 
 NODETOOL_CMD_TIMEOUT = 3600
@@ -76,8 +78,21 @@ class Nemesis(object):
         self.target_node.restart()
 
     def disrupt_kill_scylla_daemon(self):
-        print('{}: Kill all scylla processes in {}'.format(self, self.target_node))
-        self.target_node.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
+        print('{}: Kill all scylla processes in {}'.format(self,
+                                                           self.target_node))
+        kill_cmd = ("for pid in $(ps -ef | awk '/scylla/ {print $2}'); "
+                    "do sudo kill -9 $pid; done")
+        self.target_node.remoter.run(kill_cmd, ignore_status=True)
+
+        def scylla_service_down():
+            result = self.target_node.remoter.run('netstat -a | grep :9042',
+                                                  ignore_status=True)
+            return result.exit_status != 0
+
+        wait.wait_for(func=scylla_service_down, timeout=10,
+                      text='Waiting for scylla services down')
+        # Let's wait for the target Node to have their services re-started
+        self.target_node.wait_for_init(timeout=120)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
@@ -91,8 +106,6 @@ class Nemesis(object):
 
         # lennart's systemd will restart scylla let him a bit of time
         self.disrupt_kill_scylla_daemon()
-        # Let's wait for the target Node to have their services re-started
-        self.target_node.wait_for_init(timeout=120)
 
     def disrupt_destroy_data_then_repair(self):
         print('{}: Destroy user data in {}, then run nodetool '
