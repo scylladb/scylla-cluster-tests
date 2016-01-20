@@ -124,16 +124,16 @@ class Nemesis(object):
         time.sleep(120)
         result = self.target_node.remoter.run('nodetool -h localhost repair',
                                               timeout=NODETOOL_CMD_TIMEOUT)
-        print('{}: {} took {} s to finish'.format(self, result.command,
-                                                  result.duration))
+        print('{}: {} duration -> {} s'.format(self, result.command,
+                                               result.duration))
 
     def repair_nodetool_rebuild(self):
         time.sleep(120)
         for node in self.cluster.nodes:
             result = node.remoter.run('nodetool -h localhost rebuild',
                                       timeout=NODETOOL_CMD_TIMEOUT)
-            print('{}: {} took {} s to finish'.format(self, result.command,
-                                                      result.duration))
+            print('{}: {} duration -> {} s'.format(self, result.command,
+                                                   result.duration))
 
 
 def log_time_elapsed(method):
@@ -144,13 +144,14 @@ def log_time_elapsed(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
-        print('{}: Starting method {}'.format(args[0], method))
+        print('{}: {} start'.format(args[0], method))
         start_time = time.time()
-        result = method(*args, **kwargs)
-        elapsed_time = int(time.time() - start_time)
-        print('{}: Method {} took {} s to run'.format(args[0],
-                                                      method,
-                                                      elapsed_time))
+        try:
+            result = method(*args, **kwargs)
+        finally:
+            elapsed_time = int(time.time() - start_time)
+            print('{}: {} duration -> {} s'.format(args[0], method,
+                                                   elapsed_time))
         return result
     return wrapper
 

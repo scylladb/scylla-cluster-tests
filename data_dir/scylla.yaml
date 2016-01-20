@@ -9,7 +9,7 @@ n_loaders: 1
 instance_type_db: 'm3.large'
 instance_type_loader: 'm3.large'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'StopStartMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 15
 # cassandra-stress duration to use if None provided specifically
@@ -27,7 +27,7 @@ regions: !mux
         region_name: 'us-east-1'
         security_group_ids: 'sg-c5e1f7a0'
         subnet_id: 'subnet-ec4a72c4'
-        ami_id_db_scylla: 'ami-45c69e2f'
+        ami_id_db_scylla: 'ami-ac4f69c6'
         ami_id_db_cassandra: 'ami-ada2b6c4'
         ami_id_loader: 'ami-a51564c0'
 
