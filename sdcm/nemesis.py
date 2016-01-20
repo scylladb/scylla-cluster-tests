@@ -22,7 +22,7 @@ class Nemesis(object):
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
         self.target_node = random.choice(non_seed_nodes)
-        print('Current Target: {}'.format(self.target_node))
+        print('{}: Current Target: {}'.format(self, self.target_node))
 
     def run(self, interval=30, termination_event=None):
         interval *= 60
