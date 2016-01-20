@@ -319,7 +319,7 @@ class ScyllaCluster(Cluster):
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='centos',
-                 ec2_block_device_mappings=SCYLLA_CLUSTER_DEVICE_MAPPINGS,
+                 ec2_block_device_mappings=None,
                  n_nodes=10):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
