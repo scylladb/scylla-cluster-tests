@@ -7,7 +7,6 @@ import uuid
 import yaml
 
 from avocado.utils import path
-from avocado.utils import wait
 
 import fabric.api
 import fabric.network
@@ -144,11 +143,9 @@ class Node(object):
 
     def restart(self):
         self.instance.stop()
-        wait.wait_for(lambda: self.instance.state['name'] == 'stopped',
-                      timeout=120,
-                      step=10,
-                      text='{}: Waiting instance to stop'.format(self))
+        self.instance.wait_until_stopped()
         self.instance.start()
+        self.instance.wait_until_running()
         self.wait_for_init(timeout=120)
 
     def destroy(self):
