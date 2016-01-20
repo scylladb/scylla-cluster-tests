@@ -3,7 +3,6 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.nemesis import ChaosMonkey
 
 
 class LongevityTest(ClusterTester):
@@ -18,7 +17,7 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress on a cluster for 20 min (smoke check).
         """
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(self.get_nemesis_class())
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 
@@ -26,7 +25,7 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress on a cluster for 12 hours.
         """
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(self.get_nemesis_class())
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 12)
 
@@ -34,7 +33,7 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress on a cluster for 24 hours.
         """
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(self.get_nemesis_class())
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 24)
 
@@ -42,7 +41,7 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress on a cluster for 1 week.
         """
-        self.db_cluster.add_nemesis(ChaosMonkey)
+        self.db_cluster.add_nemesis(self.get_nemesis_class())
         self.db_cluster.start_nemesis(interval=30)
         self.run_stress(duration=60 * 24 * 7)
 
