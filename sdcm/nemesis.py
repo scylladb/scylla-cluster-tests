@@ -93,7 +93,8 @@ class Nemesis(object):
 
         # lennart's systemd will restart scylla let him a bit of time
         self.disrupt_kill_scylla_daemon()
-        time.sleep(60)
+        # Let's wait for the target Node to have their services re-started
+        self.target_node.wait_for_init(timeout=120)
 
     def disrupt_destroy_data_then_repair(self):
         print('{}: Destroy user data in {}, then run nodetool '
@@ -116,7 +117,11 @@ class Nemesis(object):
                            attr[0].startswith('disrupt_') and
                            callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
-        disrupt_method()
+        try:
+            disrupt_method()
+        except Exception, details:
+            print('Disrupt method {} failed: {}'.format(disrupt_method,
+                                                        details))
 
     def repair_nodetool_repair(self):
         time.sleep(120)

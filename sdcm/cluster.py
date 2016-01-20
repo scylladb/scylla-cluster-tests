@@ -146,8 +146,8 @@ class Node(object):
         print(terminate_msg)
 
     def wait_for_init(self, timeout=60, verbose=False):
-        print("{}: Waiting for node to start. "
-              "Polling interval: {} s".format(str(self), timeout))
+        print("{}: Waiting for DB services to start. "
+              "Polling interval: {} s, timeout=".format(str(self), timeout))
 
         elapsed = 0
         started = False
