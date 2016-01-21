@@ -6,8 +6,8 @@ n_db_nodes: 6
 # I have to solve a problem with SSH connection parallelism, until then
 # keep n_loaders: 1
 n_loaders: 1
-instance_type_db: 'm3.large'
-instance_type_loader: 'm3.large'
+instance_type_db: 't2.micro'
+instance_type_loader: 't2.micro'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'StopStartMonkey'
 # Nemesis sleep interval to use if None provided specifically
