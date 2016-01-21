@@ -6,6 +6,8 @@ import inspect
 import random
 import time
 
+from avocado.utils import wait
+
 from .data_path import get_data_path
 
 NODETOOL_CMD_TIMEOUT = 3600
@@ -68,15 +70,29 @@ class Nemesis(object):
         self.cluster.nodes.remove(self.target_node)
         self.target_node.destroy()
         # Replace the node that was terminated.
-        self.cluster.add_nodes(count=1)
+        new_nodes = self.cluster.add_nodes(count=1)
+        self.cluster.wait_for_init(node_list=new_nodes)
 
     def disrupt_stop_start(self):
         print('{}: Stop {} then restart it'.format(self, self.target_node))
         self.target_node.restart()
 
     def disrupt_kill_scylla_daemon(self):
-        print('{}: Kill all scylla processes in {}'.format(self, self.target_node))
-        self.target_node.remoter.run("for pid in $(ps -ef | awk '/scylla/ {print $2}'); do sudo kill -9 $pid; done", ignore_status=True)
+        print('{}: Kill all scylla processes in {}'.format(self,
+                                                           self.target_node))
+        kill_cmd = ("for pid in $(ps -ef | awk '/scylla/ {print $2}'); "
+                    "do sudo kill -9 $pid; done")
+        self.target_node.remoter.run(kill_cmd, ignore_status=True)
+
+        def scylla_service_down():
+            result = self.target_node.remoter.run('netstat -a | grep :9042',
+                                                  ignore_status=True)
+            return result.exit_status != 0
+
+        wait.wait_for(func=scylla_service_down, timeout=10,
+                      text='Waiting for scylla services down')
+        # Let's wait for the target Node to have their services re-started
+        self.target_node.wait_for_init(timeout=120)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
@@ -90,8 +106,6 @@ class Nemesis(object):
 
         # lennart's systemd will restart scylla let him a bit of time
         self.disrupt_kill_scylla_daemon()
-        # Let's wait for the target Node to have their services re-started
-        self.target_node.wait_for_init(timeout=120)
 
     def disrupt_destroy_data_then_repair(self):
         print('{}: Destroy user data in {}, then run nodetool '
@@ -124,16 +138,16 @@ class Nemesis(object):
         time.sleep(120)
         result = self.target_node.remoter.run('nodetool -h localhost repair',
                                               timeout=NODETOOL_CMD_TIMEOUT)
-        print('{}: {} took {} s to finish'.format(self, result.command,
-                                                  result.duration))
+        print('{}: {} duration -> {} s'.format(self, result.command,
+                                               result.duration))
 
     def repair_nodetool_rebuild(self):
         time.sleep(120)
         for node in self.cluster.nodes:
             result = node.remoter.run('nodetool -h localhost rebuild',
                                       timeout=NODETOOL_CMD_TIMEOUT)
-            print('{}: {} took {} s to finish'.format(self, result.command,
-                                                      result.duration))
+            print('{}: {} duration -> {} s'.format(self, result.command,
+                                                   result.duration))
 
 
 def log_time_elapsed(method):
@@ -144,13 +158,14 @@ def log_time_elapsed(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
-        print('{}: Starting method {}'.format(args[0], method))
+        print('{}: {} start'.format(args[0], method))
         start_time = time.time()
-        result = method(*args, **kwargs)
-        elapsed_time = int(time.time() - start_time)
-        print('{}: Method {} took {} s to run'.format(args[0],
-                                                      method,
-                                                      elapsed_time))
+        try:
+            result = method(*args, **kwargs)
+        finally:
+            elapsed_time = int(time.time() - start_time)
+            print('{}: {} duration -> {} s'.format(args[0], method,
+                                                   elapsed_time))
         return result
     return wrapper
 
