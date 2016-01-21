@@ -20,7 +20,7 @@ regions: !mux
         region_name: 'us-west-2'
         security_group_ids: 'sg-81703ae4'
         subnet_id: 'subnet-5207ee37'
-        ami_id_db_scylla: 'ami-4ebaa12f'
+        ami_id_db_scylla: 'ami-5e60853e'
         ami_id_db_cassandra: 'ami-1cff962c'
         ami_id_loader: 'ami-05f4ed35'
     us_east_1:
