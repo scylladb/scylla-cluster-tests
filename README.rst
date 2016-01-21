@@ -103,5 +103,5 @@ Known issues
 Footnotes
 ---------
 
-[1] http://avocado-framework.github.io/
-[2] Avocado bug that was already fixed upstream, see https://github.com/avocado-framework/avocado/pull/936
+* [1] http://avocado-framework.github.io/
+* [2] Avocado bug that was already fixed upstream, see https://github.com/avocado-framework/avocado/pull/936
