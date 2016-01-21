@@ -48,7 +48,12 @@ class ClusterTester(Test):
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
 
-    def init_resources(self):
+    @clean_aws_resources
+    def init_resources(self, n_db_nodes=None, n_loader_nodes=None):
+        if n_db_nodes is None:
+            n_db_nodes = self.params.get('n_db_nodes')
+        if n_loader_nodes is None:
+            n_loader_nodes = self.params.get('n_loaders')
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
         self.credentials = RemoteCredentials(service=service,
@@ -61,7 +66,7 @@ class ClusterTester(Test):
                                             ec2_instance_type=self.params.get('instance_type_db'),
                                             service=service,
                                             credentials=self.credentials,
-                                            n_nodes=self.params.get('n_db_nodes'))
+                                            n_nodes=n_db_nodes)
         elif self.params.get('db_type') == 'cassandra':
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
                                                ec2_security_group_ids=[self.params.get('security_group_ids')],
@@ -69,7 +74,7 @@ class ClusterTester(Test):
                                                ec2_instance_type=self.params.get('instance_type_db'),
                                                service=service,
                                                credentials=self.credentials,
-                                               n_nodes=self.params.get('n_db_nodes'))
+                                               n_nodes=n_db_nodes)
         else:
             self.error('Incorrect parameter db_type: {}'.format(self.params.get('db_type')))
 
@@ -81,7 +86,7 @@ class ClusterTester(Test):
                                  service=service,
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
-                                 n_nodes=self.params.get('n_loaders'))
+                                 n_nodes=n_loader_nodes)
 
     @clean_aws_resources
     def run_stress(self, duration=None, threads=None):
