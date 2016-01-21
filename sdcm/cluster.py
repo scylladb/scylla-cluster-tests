@@ -348,18 +348,21 @@ class ScyllaCluster(Cluster):
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
+        self.seed_nodes_private_ips = None
 
     def get_seed_nodes_private_ips(self):
-        node = self.nodes[0]
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-        node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
-        with open(yaml_dst_path, 'r') as yaml_stream:
-            conf_dict = yaml.load(yaml_stream)
-            try:
-                return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-            except:
-                raise ValueError('Unexpected scylla.yaml '
-                                 'contents:\n{}'.format(yaml_stream.read()))
+        if self.seed_nodes_private_ips is None:
+            node = self.nodes[0]
+            yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+            node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
+            with open(yaml_dst_path, 'r') as yaml_stream:
+                conf_dict = yaml.load(yaml_stream)
+                try:
+                    self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+                except:
+                    raise ValueError('Unexpected scylla.yaml '
+                                     'contents:\n{}'.format(yaml_stream.read()))
+        return self.seed_nodes_private_ips
 
     def get_seed_nodes(self):
         seed_nodes_private_ips = self.get_seed_nodes_private_ips()
