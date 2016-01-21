@@ -8,6 +8,12 @@ n_db_nodes: 6
 n_loaders: 1
 instance_type_db: 'm3.large'
 instance_type_loader: 'm3.large'
+# Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
+nemesis_class_name: 'ChaosMonkey'
+# Nemesis sleep interval to use if None provided specifically
+nemesis_interval: 15
+# cassandra-stress duration to use if None provided specifically
+cassandra_stress_duration: 60
 
 regions: !mux
     us_west_2:

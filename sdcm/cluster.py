@@ -146,6 +146,10 @@ class Node(object):
         self.instance.wait_until_stopped()
         self.instance.start()
         self.instance.wait_until_running()
+        self.wait_public_ip()
+        print('{}: Got new public IP {}'.format(self,
+                                                self.instance.public_ip_address))
+        self.remoter.hostname = self.instance.public_ip_address
         self.wait_for_init(timeout=120)
 
     def destroy(self):
@@ -319,7 +323,7 @@ class ScyllaCluster(Cluster):
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='centos',
-                 ec2_block_device_mappings=SCYLLA_CLUSTER_DEVICE_MAPPINGS,
+                 ec2_block_device_mappings=None,
                  n_nodes=10):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()

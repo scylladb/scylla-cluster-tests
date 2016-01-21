@@ -8,7 +8,7 @@ import time
 
 from .data_path import get_data_path
 
-NODETOOL_CMD_TIMEOUT = 240
+NODETOOL_CMD_TIMEOUT = 3600
 
 
 class Nemesis(object):
@@ -22,7 +22,7 @@ class Nemesis(object):
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
         self.target_node = random.choice(non_seed_nodes)
-        print('Current Target: {}'.format(self.target_node))
+        print('{}: Current Target: {}'.format(self, self.target_node))
 
     def run(self, interval=30, termination_event=None):
         interval *= 60
@@ -50,9 +50,11 @@ class Nemesis(object):
     def disrupt_nodetool_decommission(self):
         print('{}: Decomission {}'.format(self, self.target_node))
         target_node_ip = self.target_node.instance.private_ip_address
-        self.target_node.remoter.run('nodetool --host localhost '
-                                     'decommission',
-                                     timeout=NODETOOL_CMD_TIMEOUT)
+        result = self.target_node.remoter.run('nodetool --host localhost '
+                                              'decommission',
+                                              timeout=NODETOOL_CMD_TIMEOUT)
+        print('{}: {} took {} s to finish'.format(self, result.command,
+                                                  result.duration))
         verification_node = random.choice(self.cluster.nodes)
         while verification_node == self.target_node:
             verification_node = random.choice(self.cluster.nodes)
@@ -120,62 +122,76 @@ class Nemesis(object):
 
     def repair_nodetool_repair(self):
         time.sleep(120)
-        self.target_node.remoter.run('nodetool -h localhost repair',
-                                     timeout=NODETOOL_CMD_TIMEOUT)
+        result = self.target_node.remoter.run('nodetool -h localhost repair',
+                                              timeout=NODETOOL_CMD_TIMEOUT)
+        print('{}: {} took {} s to finish'.format(self, result.command,
+                                                  result.duration))
 
     def repair_nodetool_rebuild(self):
         time.sleep(120)
         for node in self.cluster.nodes:
-            node.remoter.run_parallel('nodetool -h localhost rebuild',
+            result = node.remoter.run('nodetool -h localhost rebuild',
                                       timeout=NODETOOL_CMD_TIMEOUT)
+            print('{}: {} took {} s to finish'.format(self, result.command,
+                                                      result.duration))
+
+
+def log_time_elapsed(method):
+    """
+    Log time elapsed for method to run
+
+    :param method: Remote method to wrap.
+    :return: Wrapped method.
+    """
+    def wrapper(*args, **kwargs):
+        print('{}: Starting method {}'.format(args[0], method))
+        start_time = time.time()
+        result = method(*args, **kwargs)
+        elapsed_time = int(time.time() - start_time)
+        print('{}: Method {} took {} s to run'.format(args[0],
+                                                      method,
+                                                      elapsed_time))
+        return result
+    return wrapper
 
 
 class StopStartMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_stop_start()
 
 
 class DrainerMonkey(Nemesis):
 
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_drain()
 
 
 class CorruptThenRepairMonkey(Nemesis):
 
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_destroy_data_then_repair()
 
 
 class CorruptThenRebuildMonkey(Nemesis):
 
-    def run(self, interval=30, termination_event=None):
-        interval *= 60
-        time.sleep(interval)
-        self.disrupt()
-
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_destroy_data_then_rebuild()
 
 
 class DecommissionMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_decommission()
 
 
 class ChaosMonkey(Nemesis):
 
+    @log_time_elapsed
     def disrupt(self):
         self.call_random_disrupt_method()

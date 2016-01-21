@@ -2,13 +2,13 @@ import boto3.session
 
 from avocado import Test
 
+from . import cluster
+from . import nemesis
+from .cluster import CassandraCluster
 from .cluster import LoaderSet
 from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
-from .cluster import CassandraCluster
 from .data_path import get_data_path
-
-import cluster
 
 
 def clean_aws_resources(method):
@@ -37,6 +37,16 @@ class ClusterTester(Test):
         self.init_resources()
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+
+    def get_nemesis_class(self):
+        """
+        Get a Nemesis class from parameters.
+
+        :return: Nemesis class.
+        :rtype: nemesis.Nemesis derived class
+        """
+        class_name = self.params.get('nemesis_class_name')
+        return getattr(nemesis, class_name)
 
     def init_resources(self):
         session = boto3.session.Session(region_name=self.params.get('region_name'))
