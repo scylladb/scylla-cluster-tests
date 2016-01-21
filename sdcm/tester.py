@@ -88,32 +88,41 @@ class ClusterTester(Test):
                                  scylla_repo=scylla_repo,
                                  n_nodes=n_loader_nodes)
 
-    @clean_aws_resources
-    def run_stress(self, duration=None, threads=None):
-        # pickup the first node
-        # cassandra-stress driver is topology aware
-        # and will contact the others nodes
-        ip = self.db_cluster.get_node_private_ips()[0]
-        # Use replication factor = 3 (-schema 3)
-        if duration is None:
-            duration = self.params.get('duration')
-        if threads is None:
-            threads = self.params.get('threads')
-        stress_cmd = ("cassandra-stress write cl=QUORUM duration={}m -schema 'replication(factor=3)' -port jmx=6868 "
-                      "-mode cql3 native -rate threads={} "
-                      "-node {}".format(duration,
-                                        threads,
-                                        ip))
+    def get_stress_cmd(self, duration=None, threads=None):
+        """
+        Get a cassandra stress cmd string.
 
-        if duration is not None:
-            timeout = duration * 60
-        else:
-            timeout = int(int(self.params.get('duration')) * 60)
-        timeout += 180
+        The default for this class is RF=3 and CL=QUORUM.
+        Other tests might want to override this method to use something
+        that suits them better.
+
+        :param duration: Duration of stress (minutes).
+        :param threads: Number of threads used by cassandra stress.
+        :return: Cassandra stress string
+        :rtype: basestring
+        """
+        ip = self.db_cluster.get_node_private_ips()[0]
+        if duration is None:
+            duration = self.params.get('cassandra_stress_duration')
+        if threads is None:
+            threads = self.params.get('cassandra_stress_threads')
+        return ("cassandra-stress write cl=QUORUM duration={}m "
+                "-schema 'replication(factor=3)' -port jmx=6868 "
+                "-mode cql3 native -rate threads={} "
+                "-node {}".format(duration, threads, ip))
+
+    @clean_aws_resources
+    def run_stress(self, stress_cmd=None, duration=None):
+        if stress_cmd is None:
+            stress_cmd = self.get_stress_cmd()
+        if duration is None:
+            duration = self.params.get('cassandra_stress_duration')
+        timeout = duration * 60 + 180
         errors = self.loaders.run_stress(stress_cmd, timeout,
                                          self.outputdir)
         if errors:
-            self.fail("cassandra-stress errors on nodes:\n{}".format("\n".join(errors)))
+            self.fail("cassandra-stress errors on "
+                      "nodes:\n{}".format("\n".join(errors)))
 
     def clean_resources(self):
         print('Cleaning up resources used in the test')
