@@ -33,9 +33,9 @@ class GrowClusterTest(ClusterTester):
         3) Add a new node
         4) Keep repeating 3) until we get to the target number of 30 nodes
         """
-        # Let's estimate 15 minutes of c-s for each new node
+        # Let's estimate 10 minutes of c-s for each new node
         # They initialize in ~ 5 minutes average
-        duration = 15 * 27
+        duration = 10 * 27
         self.stress_thread = threading.Thread(target=self.run_stress,
                                               kwargs={'duration': duration})
         self.stress_thread.start()
