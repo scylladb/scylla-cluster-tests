@@ -1,26 +1,24 @@
 # default cassandra stress duration (min) if none specified
-duration: 10
+cassandra_stress_duration: 60
 # default cassandra stress thread number if none specified
-threads: 4
+cassandra_stress_threads: 4
 n_db_nodes: 6
 # I have to solve a problem with SSH connection parallelism, until then
 # keep n_loaders: 1
 n_loaders: 1
-instance_type_db: 'm3.large'
-instance_type_loader: 'm3.large'
+instance_type_db: 't2.micro'
+instance_type_loader: 't2.micro'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'StopStartMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 15
-# cassandra-stress duration to use if None provided specifically
-cassandra_stress_duration: 60
 
 regions: !mux
     us_west_2:
         region_name: 'us-west-2'
         security_group_ids: 'sg-81703ae4'
         subnet_id: 'subnet-5207ee37'
-        ami_id_db_scylla: 'ami-4ebaa12f'
+        ami_id_db_scylla: 'ami-5e60853e'
         ami_id_db_cassandra: 'ami-1cff962c'
         ami_id_loader: 'ami-05f4ed35'
     us_east_1:
