@@ -15,7 +15,7 @@ import fabric.tasks
 
 from remote import CmdError
 from remote import Remote
-from remote import CmdResult
+from remote import run as remote_run
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -266,51 +266,9 @@ class Cluster(object):
 
     @fabric.api.parallel
     def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
-        def _run(command, ignore_status=False, timeout=60):
-            result = CmdResult()
-            start_time = time.time()
-            end_time = time.time() + (timeout or 0)   # Support timeout=None
-            # Fabric sometimes returns NetworkError even when timeout not
-            # reached
-            fabric_result = None
-            fabric_exception = None
-            while True:
-                try:
-                    fabric_result = fabric.operations.run(command=command,
-                                                          quiet=False,
-                                                          warn_only=True,
-                                                          timeout=timeout)
-                    break
-                except fabric.network.NetworkError, details:
-                    fabric_exception = details
-                    timeout = end_time - time.time()
-                if time.time() < end_time:
-                    break
-            if fabric_result is None:
-                if fabric_exception is not None:
-                    raise fabric_exception  # pylint: disable=E0702
-                else:
-                    f_msg = ("Remote execution of '{}' failed without any "
-                             "exception. This should not "
-                             "happen".format(command))
-                    raise fabric.network.NetworkError(f_msg)
-            end_time = time.time()
-            duration = end_time - start_time
-            result.command = command
-            result.stdout = str(fabric_result)
-            result.stderr = fabric_result.stderr
-            result.duration = duration
-            result.exit_status = fabric_result.return_code
-            result.failed = fabric_result.failed
-            result.succeeded = fabric_result.succeeded
-            if not ignore_status:
-                if result.failed:
-                    raise CmdError(command=command, result=result)
-            return result
-
         fabric.api.env.update(hosts=self.get_node_public_ips(),
                               user=self.ec2_ami_username)
-        return fabric.tasks.execute(_run, cmd, ignore_status, timeout)
+        return fabric.tasks.execute(remote_run, cmd, ignore_status, timeout)
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))

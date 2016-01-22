@@ -5,6 +5,7 @@ import threading
 from avocado import main
 
 from sdcm.tester import ClusterTester
+from sdcm.tester import clean_aws_resources
 
 
 class GrowClusterTest(ClusterTester):
@@ -15,6 +16,7 @@ class GrowClusterTest(ClusterTester):
     :avocado: enable
     """
 
+    @clean_aws_resources
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
@@ -31,8 +33,11 @@ class GrowClusterTest(ClusterTester):
         3) Add a new node
         4) Keep repeating 3) until we get to the target number of 30 nodes
         """
+        # Let's estimate 15 minutes of c-s for each new node
+        # They initialize in ~ 5 minutes average
+        duration = 15 * 27
         self.stress_thread = threading.Thread(target=self.run_stress,
-                                              kwargs={'duration': 120})
+                                              kwargs={'duration': duration})
         self.stress_thread.start()
         target_size = 30
         while len(self.db_cluster.nodes) < target_size:
