@@ -114,7 +114,7 @@ class ClusterTester(Test):
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None):
         if stress_cmd is None:
-            stress_cmd = self.get_stress_cmd()
+            stress_cmd = self.get_stress_cmd(duration=duration)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         timeout = duration * 60 + 180
