@@ -31,6 +31,16 @@ class CmdError(Exception):
             return "CmdError"
 
 
+class AuthenticationError(Exception):
+
+    def __init__(self, msg):
+        self.fabric_msg = msg
+
+    def __str__(self):
+        return ('Auth error (wrong credentials, '
+                'or paramiko bug): {}'.format(self.fabric_msg))
+
+
 class CmdResult(object):
 
     """
@@ -122,7 +132,9 @@ class Remote(object):
                               port=port,
                               timeout=timeout / attempts,
                               connection_attempts=attempts,
-                              linewise=True)
+                              linewise=True,
+                              abort_on_prompts=True,
+                              abort_exception=AuthenticationError)
 
     def run(self, command, ignore_status=False, timeout=60):
         """
@@ -175,28 +187,29 @@ class Remote(object):
                                                       warn_only=True,
                                                       timeout=timeout)
                 break
-            except fabric.network.NetworkError, details:
+            except (fabric.network.NetworkError, AuthenticationError), details:
+                print('_run: {}'.format(details))
                 fabric_exception = details
                 timeout = end_time - time.time()
             if time.time() < end_time:
                 break
-        if fabric_result is None:
-            if fabric_exception is not None:
-                raise fabric_exception  # it's not None pylint: disable=E0702
-            else:
-                raise fabric.network.NetworkError("Remote execution of '%s'"
-                                                  "failed without any "
-                                                  "exception. This should not "
-                                                  "happen." % command)
+
         end_time = time.time()
         duration = end_time - start_time
         result.command = command
-        result.stdout = str(fabric_result)
-        result.stderr = fabric_result.stderr
         result.duration = duration
-        result.exit_status = fabric_result.return_code
-        result.failed = fabric_result.failed
-        result.succeeded = fabric_result.succeeded
+        if fabric_result is None:
+            result.stdout = 'Unable to get stdout ({})'.format(fabric_exception)
+            result.stderr = 'Unable to get stderr ({})'.format(fabric_exception)
+            result.exit_status = -300
+            result.failed = True
+            result.succeeded = False
+        else:
+            result.stdout = str(fabric_result)
+            result.stderr = fabric_result.stderr
+            result.exit_status = fabric_result.return_code
+            result.failed = fabric_result.failed
+            result.succeeded = fabric_result.succeeded
         if not ignore_status:
             if result.failed:
                 raise CmdError(command=command, result=result)
@@ -238,7 +251,8 @@ class Remote(object):
         try:
             fabric.operations.put(local_path, remote_path,
                                   mirror_local_mode=True)
-        except ValueError:
+        except (ValueError, AuthenticationError), details:
+            print('_send_files: {}'.format(details))
             return False
         return True
 
@@ -258,6 +272,7 @@ class Remote(object):
         try:
             fabric.operations.get(remote_path,
                                   local_path)
-        except ValueError:
+        except (ValueError, AuthenticationError), details:
+            print('_receive_files: {}'.format(details))
             return False
         return True
