@@ -5,6 +5,7 @@ import threading
 from avocado import main
 
 from sdcm.tester import ClusterTester
+from sdcm.tester import clean_aws_resources
 
 
 class GrowClusterTest(ClusterTester):
@@ -15,6 +16,7 @@ class GrowClusterTest(ClusterTester):
     :avocado: enable
     """
 
+    @clean_aws_resources
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
