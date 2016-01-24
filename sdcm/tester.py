@@ -117,7 +117,7 @@ class ClusterTester(Test):
             stress_cmd = self.get_stress_cmd(duration=duration)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
-        timeout = duration * 60 + 180
+        timeout = duration * 60 + 600
         errors = self.loaders.run_stress(stress_cmd, timeout,
                                          self.outputdir)
         if errors:
