@@ -123,8 +123,7 @@ class Node(object):
                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
         self.remoter = Remote(hostname=self.instance.public_ip_address,
                               username=ami_username,
-                              key_filename=credentials.key_file,
-                              timeout=120, attempts=10, quiet=False)
+                              key_filename=credentials.key_file, quiet=False)
         print("{}: SSH access -> 'ssh -i {} {}@{}'".format(self,
                                                            credentials.key_file,
                                                            ami_username,
@@ -150,7 +149,7 @@ class Node(object):
         print('{}: Got new public IP {}'.format(self,
                                                 self.instance.public_ip_address))
         self.remoter.hostname = self.instance.public_ip_address
-        self.wait_for_init(timeout=120)
+        self.wait_for_init()
 
     def destroy(self):
         terminate_msg = '{}: Destroyed'.format(self)
@@ -159,31 +158,24 @@ class Node(object):
         EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
-    def wait_for_init(self, timeout=120, verbose=False):
+    def wait_for_init(self, verbose=False):
         verify_pause = 30
         print("{}: Waiting for DB services to start. "
-              "Polling interval: {} s, timeout: {} s".format(str(self),
-                                                             verify_pause,
-                                                             timeout))
+              "Polling interval: {} s, {} s".format(str(self), verify_pause))
 
-        elapsed = 0
         started = False
 
         while not started:
-            if elapsed > timeout:
-                result = Result("Timeout")
-                raise NodeInitError(node=self, result=result)
             if verbose:
                 run_cmd = self.remoter.run
             else:
                 run_cmd = self.remoter.run_quiet
             try:
-                run_cmd('netstat -a | grep :9042', timeout=120)
+                run_cmd('netstat -a | grep :9042')
                 started = True
             except CmdError:
                 pass
             time.sleep(verify_pause)
-            elapsed += verify_pause
 
 
 class Cluster(object):
@@ -349,8 +341,7 @@ class ScyllaCluster(Cluster):
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status',
-                                                   timeout=120)
+        cmd_result = verification_node.remoter.run('nodetool status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
             line = line.strip()
@@ -389,15 +380,13 @@ class ScyllaCluster(Cluster):
                 else:
                     run_cmd = node.remoter.run_quiet
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=120)
+                    run_cmd('netstat -a | grep :9042')
                     node_initialized_map[node] = True
                 except CmdError:
                     try:
                         run_cmd("grep 'Aborting the clustering of this "
-                                "reservation' /home/centos/ami.log",
-                                timeout=120)
-                        result = run_cmd("tail -5 /home/centos/ami.log",
-                                         timeout=120)
+                                "reservation' /home/centos/ami.log")
+                        result = run_cmd("tail -5 /home/centos/ami.log")
                         raise NodeInitError(node=node, result=result)
                     except CmdError:
                         pass
@@ -511,7 +500,7 @@ class CassandraCluster(ScyllaCluster):
                 else:
                     run_cmd = node.remoter.run_quiet
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=60)
+                    run_cmd('netstat -a | grep :9042')
                     node_initialized_map[node] = True
                 except Exception:
                     pass
@@ -554,7 +543,7 @@ class LoaderSet(Cluster):
                                       '/home/fedora/scylla.repo')
             run_cmd('sudo mv /home/fedora/scylla.repo '
                     '/etc/yum.repos.d/scylla.repo')
-            run_cmd('sudo dnf install -y scylla-tools', timeout=300)
+            run_cmd('sudo dnf install -y scylla-tools')
 
     def run_stress(self, stress_cmd, timeout, output_dir):
         def check_output(result_obj, node):
