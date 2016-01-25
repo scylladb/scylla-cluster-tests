@@ -217,6 +217,20 @@ class Cluster(object):
         self.nodes = []
         self.add_nodes(n_nodes)
 
+    def send_file(self, src, dst, verbose=False):
+        print("{}: Sending file {} to all nodes".format(str(self), src))
+        for loader in self.nodes:
+            loader.remoter.send_files(src, dst)
+
+    def run(self, command, verbose=False):
+        print("{}: Running command {} to all nodes".format(str(self), command))
+        for loader in self.nodes:
+            if verbose:
+                run_cmd = loader.remoter.run
+            else:
+                run_cmd = loader.remoter.run_quiet
+            loader.remoter.run(run_cmd)
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             ec2_user_data = self.ec2_user_data
