@@ -49,11 +49,15 @@ class ClusterTester(Test):
         return getattr(nemesis, class_name)
 
     @clean_aws_resources
-    def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None):
+    def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None, loaders_type=None, dbs_type=None):
         if n_db_nodes is None:
             n_db_nodes = self.params.get('n_db_nodes')
         if n_loader_nodes is None:
             n_loader_nodes = self.params.get('n_loaders')
+        if loaders_type is None:
+            loaders_type = self.params.get('instance_type_loader')
+        if dbs_type is None:
+            dbs_type = self.params.get('instance_type_db')
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
         self.credentials = RemoteCredentials(service=service,
@@ -63,7 +67,7 @@ class ClusterTester(Test):
             self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
                                             ec2_security_group_ids=[self.params.get('security_group_ids')],
                                             ec2_subnet_id=self.params.get('subnet_id'),
-                                            ec2_instance_type=self.params.get('instance_type_db'),
+                                            ec2_instance_type=dbs_type,
                                             service=service,
                                             credentials=self.credentials,
                                             ec2_block_device_mappings=dbs_block_device_mappings,
@@ -72,7 +76,7 @@ class ClusterTester(Test):
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
                                                ec2_security_group_ids=[self.params.get('security_group_ids')],
                                                ec2_subnet_id=self.params.get('subnet_id'),
-                                               ec2_instance_type=self.params.get('instance_type_db'),
+                                               ec2_instance_type=dbs_type,
                                                service=service,
                                                ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
@@ -84,7 +88,7 @@ class ClusterTester(Test):
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
                                  ec2_subnet_id=self.params.get('subnet_id'),
-                                 ec2_instance_type=self.params.get('instance_type_loader'),
+                                 ec2_instance_type=loaders_type,
                                  service=service,
                                  ec2_block_device_mappings=loaders_block_device_mappings,
                                  credentials=self.credentials,
