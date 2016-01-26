@@ -43,7 +43,8 @@ def cleanup_instances():
 
 def remove_cred_from_cleanup(cred):
     global CREDENTIALS
-    CREDENTIALS.remove(cred)
+    if cred in CREDENTIALS:
+        CREDENTIALS.remove(cred)
 
 
 def register_cleanup():
