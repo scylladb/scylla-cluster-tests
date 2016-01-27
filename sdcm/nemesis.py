@@ -11,7 +11,6 @@ from avocado.utils import wait
 from .data_path import get_data_path
 
 
-
 class Nemesis(object):
 
     def __init__(self, cluster, termination_event):
