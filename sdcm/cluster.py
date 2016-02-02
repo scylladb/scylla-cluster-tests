@@ -7,15 +7,9 @@ import uuid
 import yaml
 
 from avocado.utils import path
+from avocado.utils import process
 
-import fabric.api
-import fabric.network
-import fabric.operations
-import fabric.tasks
-
-from remote import CmdError
 from remote import Remote
-from remote import run as remote_run
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -122,9 +116,9 @@ class Node(object):
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
         self.remoter = Remote(hostname=self.instance.public_ip_address,
-                              username=ami_username,
-                              key_filename=credentials.key_file,
-                              timeout=120, attempts=10, quiet=False)
+                              user=ami_username,
+                              key_file=credentials.key_file)
+
         print("{}: SSH access -> 'ssh -i {} {}@{}'".format(self,
                                                            credentials.key_file,
                                                            ami_username,
@@ -173,14 +167,12 @@ class Node(object):
             if elapsed > timeout:
                 result = Result("Timeout")
                 raise NodeInitError(node=self, result=result)
-            if verbose:
-                run_cmd = self.remoter.run
-            else:
-                run_cmd = self.remoter.run_quiet
+            run_cmd = self.remoter.run
             try:
-                run_cmd('netstat -a | grep :9042', timeout=120)
+                run_cmd('netstat -a | grep :9042', timeout=120,
+                        verbose=verbose)
                 started = True
-            except CmdError:
+            except process.CmdError:
                 pass
             time.sleep(verify_pause)
             elapsed += verify_pause
@@ -264,11 +256,13 @@ class Cluster(object):
     def get_node_public_ips(self):
         return [node.instance.public_ip_address for node in self.nodes]
 
-    @fabric.api.parallel
     def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
-        fabric.api.env.update(hosts=self.get_node_public_ips(),
-                              user=self.ec2_ami_username)
-        return fabric.tasks.execute(remote_run, cmd, ignore_status, timeout)
+        result_dict = {}
+        for node in self.nodes:
+            result = node.remoter.run(cmd=cmd, ignore_status=ignore_status,
+                                      timeout=timeout)
+            result_dict[node.instance.public_ip_address] = result
+        return result_dict
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
@@ -312,7 +306,8 @@ class ScyllaCluster(Cluster):
         if self.seed_nodes_private_ips is None:
             node = self.nodes[0]
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-            node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
+            node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                       dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
                 conf_dict = yaml.load(yaml_stream)
                 try:
@@ -384,22 +379,20 @@ class ScyllaCluster(Cluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                if verbose:
-                    run_cmd = node.remoter.run
-                else:
-                    run_cmd = node.remoter.run_quiet
+                run_cmd = node.remoter.run
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=120)
+                    run_cmd('netstat -a | grep :9042', timeout=120,
+                            verbose=verbose)
                     node_initialized_map[node] = True
-                except CmdError:
+                except process.CmdError:
                     try:
                         run_cmd("grep 'Aborting the clustering of this "
                                 "reservation' /home/centos/ami.log",
-                                timeout=120)
+                                timeout=120, verbose=verbose)
                         result = run_cmd("tail -5 /home/centos/ami.log",
-                                         timeout=120)
+                                         timeout=120, verbose=verbose)
                         raise NodeInitError(node=node, result=result)
-                    except CmdError:
+                    except process.CmdError:
                         pass
             initialized_nodes = len([node for node in node_initialized_map if
                                     node_initialized_map[node]])
@@ -471,8 +464,8 @@ class CassandraCluster(ScyllaCluster):
     def get_seed_nodes(self):
         node = self.nodes[0]
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='cassandra-longevity'), 'cassandra.yaml')
-        node.remoter.receive_files(yaml_dst_path,
-                                   '/etc/cassandra/cassandra.yaml')
+        node.remoter.receive_files(src='/etc/cassandra/cassandra.yaml',
+                                   dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
             conf_dict = yaml.load(yaml_stream)
             try:
@@ -506,12 +499,10 @@ class CassandraCluster(ScyllaCluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                if verbose:
-                    run_cmd = node.remoter.run
-                else:
-                    run_cmd = node.remoter.run_quiet
+                run_cmd = node.remoter.run
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=60)
+                    run_cmd('netstat -a | grep :9042', timeout=60,
+                            verbose=verbose)
                     node_initialized_map[node] = True
                 except Exception:
                     pass
@@ -546,15 +537,13 @@ class LoaderSet(Cluster):
     def wait_for_init(self, verbose=False):
         print("{}: Setting all DB loader nodes".format(str(self)))
         for loader in self.nodes:
-            if verbose:
-                run_cmd = loader.remoter.run
-            else:
-                run_cmd = loader.remoter.run_quiet
-            loader.remoter.send_files(self.scylla_repo,
-                                      '/home/fedora/scylla.repo')
+            run_cmd = loader.remoter.run
+            loader.remoter.send_files(src='/home/fedora/scylla.repo',
+                                      dst=self.scylla_repo)
             run_cmd('sudo mv /home/fedora/scylla.repo '
-                    '/etc/yum.repos.d/scylla.repo')
-            run_cmd('sudo dnf install -y scylla-tools', timeout=300)
+                    '/etc/yum.repos.d/scylla.repo', verbose=verbose)
+            run_cmd('sudo dnf install -y scylla-tools', timeout=300,
+                    verbose=verbose)
 
     def run_stress(self, stress_cmd, timeout, output_dir):
         def check_output(result_obj, node):
