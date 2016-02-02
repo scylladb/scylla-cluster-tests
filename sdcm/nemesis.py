@@ -80,7 +80,7 @@ class Nemesis(object):
     def disrupt_kill_scylla_daemon(self):
         print('{}: Kill all scylla processes in {}'.format(self,
                                                            self.target_node))
-        kill_cmd = ("sudo pkill -9 scylla)")
+        kill_cmd = "sudo pkill -9 scylla"
         self.target_node.remoter.run(kill_cmd, ignore_status=True)
 
         def scylla_service_down():
