@@ -177,10 +177,9 @@ class Node(object):
             if elapsed > timeout:
                 result = Result("Timeout")
                 raise NodeInitError(node=self, result=result)
-            run_cmd = self.remoter.run
             try:
-                run_cmd('netstat -a | grep :9042', timeout=120,
-                        verbose=verbose)
+                self.remoter.run('netstat -a | grep :9042', timeout=120,
+                                 verbose=verbose)
                 started = True
             except process.CmdError:
                 pass
@@ -389,19 +388,20 @@ class ScyllaCluster(Cluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                run_cmd = node.remoter.run
                 node.wait_ssh_up(verbose=verbose)
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=120,
-                            verbose=verbose)
+                    node.remoter.run('netstat -a | grep :9042',
+                                     timeout=300, verbose=verbose)
                     node_initialized_map[node] = True
                 except process.CmdError:
                     try:
-                        run_cmd("grep 'Aborting the clustering of this "
-                                "reservation' /home/centos/ami.log",
-                                timeout=120, verbose=verbose)
-                        result = run_cmd("tail -5 /home/centos/ami.log",
+                        node.remoter.run("grep 'Aborting the clustering of "
+                                         "this reservation' "
+                                         "/home/centos/ami.log",
                                          timeout=120, verbose=verbose)
+                        result = node.remoter.run("tail -5 "
+                                                  "/home/centos/ami.log",
+                                                  timeout=120)
                         raise NodeInitError(node=node, result=result)
                     except process.CmdError:
                         pass
@@ -510,11 +510,10 @@ class CassandraCluster(ScyllaCluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                run_cmd = node.remoter.run
                 node.wait_ssh_up(verbose=verbose)
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=60,
-                            verbose=verbose)
+                    node.remoter.run('netstat -a | grep :9042', timeout=60,
+                                     verbose=verbose)
                     node_initialized_map[node] = True
                 except Exception:
                     pass
@@ -549,14 +548,13 @@ class LoaderSet(Cluster):
     def wait_for_init(self, verbose=False):
         print("{}: Setting all DB loader nodes".format(str(self)))
         for loader in self.nodes:
-            run_cmd = loader.remoter.run
             loader.wait_ssh_up(verbose=verbose)
             loader.remoter.send_files(src='/home/fedora/scylla.repo',
                                       dst=self.scylla_repo)
-            run_cmd('sudo mv /home/fedora/scylla.repo '
-                    '/etc/yum.repos.d/scylla.repo', verbose=verbose)
-            run_cmd('sudo dnf install -y scylla-tools', timeout=300,
-                    verbose=verbose)
+            loader.remoter.run('sudo mv /home/fedora/scylla.repo '
+                               '/etc/yum.repos.d/scylla.repo', verbose=verbose)
+            loader.remoter.run('sudo dnf install -y scylla-tools', timeout=300,
+                               verbose=verbose)
 
     def run_stress(self, stress_cmd, timeout, output_dir):
         def check_output(result_obj, node):
