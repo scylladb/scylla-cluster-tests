@@ -8,6 +8,7 @@ import yaml
 
 from avocado.utils import path
 from avocado.utils import process
+from avocado.utils import wait
 
 from remote import Remote
 
@@ -153,6 +154,14 @@ class Node(object):
         EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
+    def wait_ssh_up(self, timeout=400, verbose=True):
+        if verbose:
+            text = '{}: Waiting for SSH to be up'.format(str(self))
+        else:
+            text = None
+        wait.wait_for(self.remoter.is_up, timeout=timeout,
+                      text=text)
+
     def wait_for_init(self, timeout=120, verbose=False):
         verify_pause = 30
         print("{}: Waiting for DB services to start. "
@@ -162,6 +171,7 @@ class Node(object):
 
         elapsed = 0
         started = False
+        self.wait_ssh_up(verbose=verbose)
 
         while not started:
             if elapsed > timeout:
@@ -380,6 +390,7 @@ class ScyllaCluster(Cluster):
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
                 run_cmd = node.remoter.run
+                node.wait_ssh_up(verbose=verbose)
                 try:
                     run_cmd('netstat -a | grep :9042', timeout=120,
                             verbose=verbose)
@@ -500,6 +511,7 @@ class CassandraCluster(ScyllaCluster):
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
                 run_cmd = node.remoter.run
+                node.wait_ssh_up(verbose=verbose)
                 try:
                     run_cmd('netstat -a | grep :9042', timeout=60,
                             verbose=verbose)
@@ -538,6 +550,7 @@ class LoaderSet(Cluster):
         print("{}: Setting all DB loader nodes".format(str(self)))
         for loader in self.nodes:
             run_cmd = loader.remoter.run
+            loader.wait_ssh_up(verbose=verbose)
             loader.remoter.send_files(src='/home/fedora/scylla.repo',
                                       dst=self.scylla_repo)
             run_cmd('sudo mv /home/fedora/scylla.repo '
