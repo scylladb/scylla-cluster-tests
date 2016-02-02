@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import threading
-
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -36,14 +34,12 @@ class GrowClusterTest(ClusterTester):
         # Let's estimate 10 minutes of c-s for each new node
         # They initialize in ~ 5 minutes average
         duration = 10 * 27
-        self.stress_thread = threading.Thread(target=self.run_stress,
-                                              kwargs={'duration': duration})
-        self.stress_thread.start()
+        stress_queue = self.run_stress_thread(duration=duration)
         target_size = 30
         while len(self.db_cluster.nodes) < target_size:
             new_nodes = self.db_cluster.add_nodes(count=1)
             self.db_cluster.wait_for_init(node_list=new_nodes)
-        self.stress_thread.join()
+        self.verify_stress_thread(queue=stress_queue)
 
 
 if __name__ == '__main__':

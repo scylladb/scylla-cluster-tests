@@ -113,13 +113,23 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None):
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
+                                              duration=duration)
+        self.verify_stress_thread(stress_queue)
+
+    @clean_aws_resources
+    def run_stress_thread(self, stress_cmd=None, duration=None):
         if stress_cmd is None:
             stress_cmd = self.get_stress_cmd(duration=duration)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         timeout = duration * 60 + 180
-        errors = self.loaders.run_stress(stress_cmd, timeout,
-                                         self.outputdir)
+        return self.loaders.run_stress_thread(stress_cmd, timeout,
+                                              self.outputdir)
+
+    @clean_aws_resources
+    def verify_stress_thread(self, queue):
+        errors = self.loaders.verify_stress_thread(queue)
         if errors:
             self.fail("cassandra-stress errors on "
                       "nodes:\n{}".format("\n".join(errors)))

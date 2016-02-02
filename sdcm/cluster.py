@@ -266,14 +266,6 @@ class Cluster(object):
     def get_node_public_ips(self):
         return [node.instance.public_ip_address for node in self.nodes]
 
-    def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
-        result_dict = {}
-        for node in self.nodes:
-            result = node.remoter.run(cmd=cmd, ignore_status=ignore_status,
-                                      timeout=timeout)
-            result_dict[node.instance.public_ip_address] = result
-        return result_dict
-
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
         for node in self.nodes:
@@ -574,27 +566,46 @@ class LoaderSet(Cluster):
             except Queue.Empty:
                 pass
 
-    def run_stress(self, stress_cmd, timeout, output_dir):
-        def check_output(result_obj, node):
-            output = result_obj.stdout + result_obj.stderr
-            lines = output.splitlines()
-            for line in lines:
-                if 'java.io.IOException' in line:
-                    return ['{}:{}'.format(node, line.strip())]
-            return []
+    def run_stress_thread(self, stress_cmd, timeout, output_dir):
+        queue = Queue.Queue()
 
-        print("{}: Running {} in all loaders, timeout {} s".format(str(self),
-                                                                   stress_cmd,
-                                                                   timeout))
-        logdir = path.init_dir(output_dir, self.name)
-        result_dict = self.run_all_nodes(stress_cmd, timeout=timeout)
-        errors = []
-        for node in self.nodes:
-            result = result_dict[node.instance.public_ip_address]
+        def node_run_stress(node):
+            try:
+                logdir = path.init_dir(output_dir, self.name)
+            except OSError:
+                logdir = os.path.join(output_dir, self.name)
+            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
+                                      ignore_status=True)
             log_file_name = os.path.join(logdir,
                                          '{}.log'.format(node.name))
             print("{}: Writing log file {}".format(str(self), log_file_name))
             with open(log_file_name, 'w') as log_file:
-                log_file.write(result.stdout)
-            errors += check_output(result, node)
+                log_file.write(str(result))
+            queue.put((node, result))
+            queue.task_done()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_run_stress,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        return queue
+
+    def verify_stress_thread(self, queue):
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        errors = []
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            for line in lines:
+                if 'java.io.IOException' in line:
+                    errors += ['{}: {}'.format(node, line.strip())]
+
         return errors
