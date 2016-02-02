@@ -1,3 +1,4 @@
+import Queue
 import atexit
 import os
 import tempfile
@@ -546,15 +547,32 @@ class LoaderSet(Cluster):
         self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False):
-        print("{}: Setting all DB loader nodes".format(str(self)))
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            print("Setting up DB loader node {}".format(str(node)))
+            node.wait_ssh_up()
+            node.remoter.send_files(src=self.scylla_repo,
+                                    dst='/home/fedora/scylla.repo')
+            node.remoter.run('sudo mv /home/fedora/scylla.repo '
+                             '/etc/yum.repos.d/scylla.repo', verbose=verbose)
+            node.remoter.run('sudo dnf install -y scylla-tools', timeout=300,
+                             verbose=verbose, ignore_status=False)
+            queue.put(node)
+            queue.task_done()
+
         for loader in self.nodes:
-            loader.wait_ssh_up(verbose=verbose)
-            loader.remoter.send_files(src='/home/fedora/scylla.repo',
-                                      dst=self.scylla_repo)
-            loader.remoter.run('sudo mv /home/fedora/scylla.repo '
-                               '/etc/yum.repos.d/scylla.repo', verbose=verbose)
-            loader.remoter.run('sudo dnf install -y scylla-tools', timeout=300,
-                               verbose=verbose)
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
 
     def run_stress(self, stress_cmd, timeout, output_dir):
         def check_output(result_obj, node):
