@@ -49,7 +49,7 @@ class ClusterTester(Test):
         return getattr(nemesis, class_name)
 
     @clean_aws_resources
-    def init_resources(self, n_db_nodes=None, n_loader_nodes=None):
+    def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None):
         if n_db_nodes is None:
             n_db_nodes = self.params.get('n_db_nodes')
         if n_loader_nodes is None:
@@ -66,6 +66,7 @@ class ClusterTester(Test):
                                             ec2_instance_type=self.params.get('instance_type_db'),
                                             service=service,
                                             credentials=self.credentials,
+                                            ec2_block_device_mappings=dbs_block_device_mappings,
                                             n_nodes=n_db_nodes)
         elif self.params.get('db_type') == 'cassandra':
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
@@ -73,6 +74,7 @@ class ClusterTester(Test):
                                                ec2_subnet_id=self.params.get('subnet_id'),
                                                ec2_instance_type=self.params.get('instance_type_db'),
                                                service=service,
+                                               ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
                                                n_nodes=n_db_nodes)
         else:
@@ -84,6 +86,7 @@ class ClusterTester(Test):
                                  ec2_subnet_id=self.params.get('subnet_id'),
                                  ec2_instance_type=self.params.get('instance_type_loader'),
                                  service=service,
+                                 ec2_block_device_mappings=loaders_block_device_mappings,
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
                                  n_nodes=n_loader_nodes)

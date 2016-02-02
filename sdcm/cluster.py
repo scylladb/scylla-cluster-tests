@@ -534,6 +534,7 @@ class LoaderSet(Cluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
+                 ec2_block_device_mappings=None,
                  ec2_ami_username='fedora', scylla_repo=None, n_nodes=10):
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
                                         ec2_subnet_id=ec2_subnet_id,
@@ -541,6 +542,7 @@ class LoaderSet(Cluster):
                                         ec2_instance_type=ec2_instance_type,
                                         ec2_ami_username=ec2_ami_username,
                                         service=service,
+                                        ec2_block_device_mappings=ec2_block_device_mappings,
                                         credentials=credentials,
                                         cluster_prefix='scylla-loader-set',
                                         node_prefix='scylla-loader-node',
