@@ -60,6 +60,10 @@ class NodeInitError(Exception):
                                                self.result.stdout)
 
 
+class LoaderSetInitError(Exception):
+    pass
+
+
 class RemoteCredentials(object):
 
     """
@@ -162,13 +166,33 @@ class Node(object):
                                   verbose=False, ignore_status=True)
         return result.exit_status == 0
 
-    def wait_db_up(self):
-        wait.wait_for(func=self.db_up, step=60,
-                      text='{}: Waiting for DB to be up'.format(str(self)))
+    def cs_installed(self, cassandra_stress_bin=None):
+        if cassandra_stress_bin is None:
+            cassandra_stress_bin = '/usr/bin/cassandra-stress'
+        result = self.remoter.run('test -x {}'.format(cassandra_stress_bin),
+                                  verbose=False, ignore_status=True)
+        return result.exit_status == 0
 
-    def wait_db_down(self):
+    def wait_db_up(self, verbose=True):
+        text = None
+        if verbose:
+            text = '{}: Waiting for DB services to be up'.format(str(self))
+        wait.wait_for(func=self.db_up, step=60,
+                      text=text)
+
+    def wait_db_down(self, verbose=True):
+        text = None
+        if verbose:
+            text = '{}: Waiting for DB services to be up'.format(str(self))
         wait.wait_for(func=lambda: not self.db_up, step=60,
-                      text='{}: Waiting for DB to be down'.format(str(self)))
+                      text=text)
+
+    def wait_cs_installed(self, verbose=True):
+        text = None
+        if verbose:
+            text = '{}: Waiting for cassandra-stress'.format(str(self))
+        wait.wait_for(func=self.cs_installed, step=60,
+                      text=text)
 
 
 class Cluster(object):
@@ -515,7 +539,7 @@ class LoaderSet(Cluster):
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
-                 ec2_ami_username='fedora', scylla_repo=None, n_nodes=10):
+                 ec2_ami_username='centos', scylla_repo=None, n_nodes=10):
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
                                         ec2_subnet_id=ec2_subnet_id,
                                         ec2_security_group_ids=ec2_security_group_ids,
@@ -533,14 +557,12 @@ class LoaderSet(Cluster):
         queue = Queue.Queue()
 
         def node_setup(node):
-            print("{}: Installing scylla-tools".format(str(node)))
+            print("{}: Setup".format(str(node)))
             node.wait_ssh_up(verbose=verbose)
-            node.remoter.send_files(src=self.scylla_repo,
-                                    dst='/home/fedora/scylla.repo')
-            node.remoter.run('sudo mv /home/fedora/scylla.repo '
-                             '/etc/yum.repos.d/scylla.repo', verbose=verbose)
-            node.remoter.run('sudo dnf install -y scylla-tools',
-                             verbose=verbose, ignore_status=False)
+            # The init scripts should install/update c-s, so
+            # let's try to guarantee it will be there before
+            # proceeding
+            node.wait_cs_installed(verbose=verbose)
             queue.put(node)
             queue.task_done()
 
