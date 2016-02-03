@@ -277,7 +277,7 @@ class BaseRemote(object):
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=1800 --rsh='%s' -az %s %s"
+        command = "rsync %s %s --timeout=100000 --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
 
@@ -409,7 +409,7 @@ class BaseRemote(object):
                                      alive_interval=alive_interval)
         return "%s %s" % (base_cmd, self.hostname)
 
-    def run(self, command, timeout=3600, ignore_status=False,
+    def run(self, command, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True, args=None):
         raise NotImplementedError("Subclasses must implement "
                                   "the method 'run' ")
@@ -717,7 +717,7 @@ class Remote(BaseRemote):
             raise process.CmdError(command=full_cmd, result=result)
         return result
 
-    def run(self, cmd, timeout=3600, ignore_status=False,
+    def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
             args=None):
         if args is None:
@@ -734,7 +734,7 @@ class Remote(BaseRemote):
                          connect_timeout=connect_timeout,
                          env=env, options=options, args=args)
 
-    def run_output_check(self, cmd, timeout=30, ignore_status=False,
+    def run_output_check(self, cmd, timeout=None, ignore_status=False,
                          stdout_ok_regexp=None, stdout_err_regexp=None,
                          stderr_ok_regexp=None, stderr_err_regexp=None,
                          connect_timeout=300):
@@ -766,7 +766,7 @@ class Remote(BaseRemote):
         """
 
         # We ignore the status, because we will handle it at the end.
-        result = self.run(cmd, timeout, ignore_status=True,
+        result = self.run(cmd=cmd, timeout=timeout, ignore_status=True,
                           connect_timeout=connect_timeout)
 
         # Look for the patterns, in order

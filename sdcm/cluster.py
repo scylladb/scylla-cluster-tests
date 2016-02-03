@@ -9,9 +9,9 @@ import yaml
 
 from avocado.utils import path
 from avocado.utils import process
-from avocado.utils import wait
 
-from remote import Remote
+from .remote import Remote
+from . import wait
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -147,7 +147,7 @@ class Node(object):
         print('{}: Got new public IP {}'.format(self,
                                                 self.instance.public_ip_address))
         self.remoter.hostname = self.instance.public_ip_address
-        self.wait_for_init(timeout=120)
+        self.wait_db_up()
 
     def destroy(self):
         terminate_msg = '{}: Destroyed'.format(self)
@@ -156,37 +156,25 @@ class Node(object):
         EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
-    def wait_ssh_up(self, timeout=400, verbose=True):
+    def wait_ssh_up(self, verbose=True):
+        text = None
         if verbose:
             text = '{}: Waiting for SSH to be up'.format(str(self))
-        else:
-            text = None
-        wait.wait_for(self.remoter.is_up, timeout=timeout,
+        wait.wait_for(func=self.remoter.is_up, step=10,
                       text=text)
 
-    def wait_for_init(self, timeout=120, verbose=False):
-        verify_pause = 30
-        print("{}: Waiting for DB services to start. "
-              "Polling interval: {} s, timeout: {} s".format(str(self),
-                                                             verify_pause,
-                                                             timeout))
+    def db_up(self):
+        result = self.remoter.run('netstat -a | grep :9042',
+                                  verbose=False, ignore_status=True)
+        return result.exit_status == 0
 
-        elapsed = 0
-        started = False
-        self.wait_ssh_up(verbose=verbose)
+    def wait_db_up(self):
+        wait.wait_for(func=self.db_up, step=60,
+                      text='{}: Waiting for DB to be up'.format(str(self)))
 
-        while not started:
-            if elapsed > timeout:
-                result = Result("Timeout")
-                raise NodeInitError(node=self, result=result)
-            try:
-                self.remoter.run('netstat -a | grep :9042', timeout=120,
-                                 verbose=verbose)
-                started = True
-            except process.CmdError:
-                pass
-            time.sleep(verify_pause)
-            elapsed += verify_pause
+    def wait_db_down(self):
+        wait.wait_for(func=lambda: not self.db_up, step=60,
+                      text='{}: Waiting for DB to be down'.format(str(self)))
 
 
 class Cluster(object):
@@ -355,8 +343,7 @@ class ScyllaCluster(Cluster):
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status',
-                                                   timeout=120)
+        cmd_result = verification_node.remoter.run('nodetool status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
             line = line.strip()
@@ -393,17 +380,16 @@ class ScyllaCluster(Cluster):
                 node.wait_ssh_up(verbose=verbose)
                 try:
                     node.remoter.run('netstat -a | grep :9042',
-                                     timeout=300, verbose=verbose)
+                                     verbose=verbose)
                     node_initialized_map[node] = True
                 except process.CmdError:
                     try:
                         node.remoter.run("grep 'Aborting the clustering of "
                                          "this reservation' "
                                          "/home/centos/ami.log",
-                                         timeout=120, verbose=verbose)
+                                         verbose=verbose)
                         result = node.remoter.run("tail -5 "
-                                                  "/home/centos/ami.log",
-                                                  timeout=120)
+                                                  "/home/centos/ami.log")
                         raise NodeInitError(node=node, result=result)
                     except process.CmdError:
                         pass
@@ -514,7 +500,7 @@ class CassandraCluster(ScyllaCluster):
             for node in node_initialized_map.keys():
                 node.wait_ssh_up(verbose=verbose)
                 try:
-                    node.remoter.run('netstat -a | grep :9042', timeout=60,
+                    node.remoter.run('netstat -a | grep :9042',
                                      verbose=verbose)
                     node_initialized_map[node] = True
                 except Exception:
@@ -554,12 +540,12 @@ class LoaderSet(Cluster):
 
         def node_setup(node):
             print("{}: Installing scylla-tools".format(str(node)))
-            node.wait_ssh_up()
+            node.wait_ssh_up(verbose=verbose)
             node.remoter.send_files(src=self.scylla_repo,
                                     dst='/home/fedora/scylla.repo')
             node.remoter.run('sudo mv /home/fedora/scylla.repo '
                              '/etc/yum.repos.d/scylla.repo', verbose=verbose)
-            node.remoter.run('sudo dnf install -y scylla-tools', timeout=300,
+            node.remoter.run('sudo dnf install -y scylla-tools',
                              verbose=verbose, ignore_status=False)
             queue.put(node)
             queue.task_done()
