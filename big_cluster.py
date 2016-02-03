@@ -3,7 +3,6 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_aws_resources
 
 
 class HugeClusterTest(ClusterTester):
@@ -13,16 +12,6 @@ class HugeClusterTest(ClusterTester):
 
     :avocado: enable
     """
-
-    @clean_aws_resources
-    def setUp(self):
-        self.credentials = None
-        self.db_cluster = None
-        self.loaders = None
-        self.init_resources(n_db_nodes=40, n_loader_nodes=1)
-        self.loaders.wait_for_init()
-        self.db_cluster.wait_for_init()
-        self.stress_thread = None
 
     def test_huge(self):
         """
