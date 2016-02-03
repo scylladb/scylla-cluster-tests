@@ -7,7 +7,6 @@ n_db_nodes: 6
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
-instance_type_db: 't2.micro'
 instance_type_loader: 't2.micro'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'StopStartMonkey'
@@ -33,5 +32,9 @@ regions: !mux
 databases: !mux
     cassandra:
         db_type: cassandra
+        # The Cassandra AMI can't run with the default t2.micro instance
+        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
+        # Scylla AMIs can use smaller instances for testing purposes
+        instance_type_db: 't2.micro'
