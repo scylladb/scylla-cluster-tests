@@ -95,26 +95,23 @@ def update_fabric_env(method):
     return wrapper
 
 
-def run(command, ignore_status=False, timeout=60, quiet=False):
+def run(command, ignore_status=False, quiet=False):
     result = CmdResult()
     start_time = time.time()
-    end_time = time.time() + (timeout or 0)   # Support timeout=None
     # Fabric sometimes returns NetworkError even when timeout not reached
     fabric_result = None
     fabric_exception = None
+
     while True:
         try:
             fabric_result = fabric.operations.run(command=command,
                                                   quiet=quiet,
                                                   warn_only=True,
-                                                  timeout=timeout)
+                                                  timeout=1000000)
             break
         except (fabric.network.NetworkError, AuthenticationError), details:
             print('_run: {}'.format(details))
             fabric_exception = details
-            timeout = end_time - time.time()
-        if time.time() < end_time:
-            break
 
     end_time = time.time()
     duration = end_time - start_time
@@ -140,13 +137,14 @@ def run(command, ignore_status=False, timeout=60, quiet=False):
 
 class Remote(object):
 
+    INFINITY = 1000000
+
     """
     Performs remote operations.
     """
 
     def __init__(self, hostname, username=None, password=None,
-                 key_filename=None, port=22, timeout=60, attempts=10,
-                 quiet=False):
+                 key_filename=None, port=22, quiet=False):
         """
         Creates an instance of :class:`Remote`.
 
@@ -155,8 +153,6 @@ class Remote(object):
         :param password: the password. Default: try to use public key.
         :param key_filename: path to an identity file (Example: .pem files
             from Amazon EC2).
-        :param timeout: remote command timeout, in seconds. Default: 60.
-        :param attempts: number of attempts to connect. Default: 10.
         :param quiet: performs quiet operations. Default: True.
         """
         self.hostname = hostname
@@ -173,52 +169,48 @@ class Remote(object):
                               password=password,
                               key_filename=key_filename,
                               port=port,
-                              timeout=timeout / attempts,
-                              connection_attempts=attempts,
+                              timeout=10,
+                              connection_attempts=self.INFINITY,
                               linewise=True,
                               abort_on_prompts=True,
                               abort_exception=AuthenticationError)
 
-    def run(self, command, ignore_status=False, timeout=60):
+    def run(self, command, ignore_status=False):
         """
         Run a remote command.
 
         :param command: the command string to execute.
         :param ignore_status: Whether to not raise exceptions in case the
             command's return code is different than zero.
-        :param timeout: Maximum time allowed for the command to return.
 
         :return: the result of the remote program's execution.
         :rtype: :class:`avocado.utils.process.CmdResult`.
-        :raise fabric.exceptions.CommandTimeout: When timeout exhausted.
         """
         return_dict = fabric.tasks.execute(self._run, command, ignore_status,
-                                           timeout, hosts=[self.hostname])
+                                           hosts=[self.hostname])
         return return_dict[self.hostname]
 
-    def run_quiet(self, command, ignore_status=False, timeout=60):
+    def run_quiet(self, command, ignore_status=False):
         """
         Run a remote command.
 
         :param command: the command string to execute.
         :param ignore_status: Whether to not raise exceptions in case the
             command's return code is different than zero.
-        :param timeout: Maximum time allowed for the command to return.
 
         :return: the result of the remote program's execution.
         :rtype: :class:`avocado.utils.process.CmdResult`.
-        :raise fabric.exceptions.CommandTimeout: When timeout exhausted.
         """
         with fabric.api.quiet():
             return_dict = fabric.tasks.execute(self._run, command,
-                                               ignore_status, timeout,
+                                               ignore_status,
                                                hosts=[self.hostname])
             return return_dict[self.hostname]
 
     @update_fabric_env
-    def _run(self, command, ignore_status=False, timeout=60):
+    def _run(self, command, ignore_status=False):
         return run(command=command, ignore_status=ignore_status,
-                   timeout=timeout, quiet=self.quiet)
+                   quiet=self.quiet)
 
     def uptime(self):
         """

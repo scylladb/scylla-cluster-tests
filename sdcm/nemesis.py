@@ -10,8 +10,6 @@ from avocado.utils import wait
 
 from .data_path import get_data_path
 
-NODETOOL_CMD_TIMEOUT = 3600
-
 
 class Nemesis(object):
 
@@ -45,16 +43,14 @@ class Nemesis(object):
 
     def disrupt_nodetool_drain(self):
         print('{}: Drain {} then restart it'.format(self, self.target_node))
-        self.target_node.remoter.run('nodetool -h localhost drain',
-                                     timeout=NODETOOL_CMD_TIMEOUT)
+        self.target_node.remoter.run('nodetool -h localhost drain')
         self.target_node.restart()
 
     def disrupt_nodetool_decommission(self):
         print('{}: Decomission {}'.format(self, self.target_node))
         target_node_ip = self.target_node.instance.private_ip_address
         result = self.target_node.remoter.run('nodetool --host localhost '
-                                              'decommission',
-                                              timeout=NODETOOL_CMD_TIMEOUT)
+                                              'decommission')
         print('{}: {} took {} s to finish'.format(self, result.command,
                                                   result.duration))
         verification_node = random.choice(self.cluster.nodes)
@@ -88,10 +84,10 @@ class Nemesis(object):
                                                   ignore_status=True)
             return result.exit_status != 0
 
-        wait.wait_for(func=scylla_service_down, timeout=10,
+        wait.wait_for(func=scylla_service_down, timeout=1000000,
                       text='Waiting for scylla services down')
         # Let's wait for the target Node to have their services re-started
-        self.target_node.wait_for_init(timeout=120)
+        self.target_node.wait_for_init()
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
@@ -112,7 +108,6 @@ class Nemesis(object):
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_repair()
-        time.sleep(60)
 
     def disrupt_destroy_data_then_rebuild(self):
         print('{}: Destroy user data in {}, then run nodetool '
@@ -120,7 +115,6 @@ class Nemesis(object):
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_rebuild()
-        time.sleep(60)
 
     def call_random_disrupt_method(self):
         disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
@@ -134,17 +128,13 @@ class Nemesis(object):
                                                         details))
 
     def repair_nodetool_repair(self):
-        time.sleep(120)
-        result = self.target_node.remoter.run('nodetool -h localhost repair',
-                                              timeout=NODETOOL_CMD_TIMEOUT)
+        result = self.target_node.remoter.run('nodetool -h localhost repair')
         print('{}: {} duration -> {} s'.format(self, result.command,
                                                result.duration))
 
     def repair_nodetool_rebuild(self):
-        time.sleep(120)
         for node in self.cluster.nodes:
-            result = node.remoter.run('nodetool -h localhost rebuild',
-                                      timeout=NODETOOL_CMD_TIMEOUT)
+            result = node.remoter.run('nodetool -h localhost rebuild')
             print('{}: {} duration -> {} s'.format(self, result.command,
                                                    result.duration))
 
