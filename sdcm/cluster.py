@@ -553,7 +553,7 @@ class LoaderSet(Cluster):
         queue = Queue.Queue()
 
         def node_setup(node):
-            print("Setting up DB loader node {}".format(str(node)))
+            print("{}: Installing scylla-tools".format(str(node)))
             node.wait_ssh_up()
             node.remoter.send_files(src=self.scylla_repo,
                                     dst='/home/fedora/scylla.repo')
@@ -563,6 +563,8 @@ class LoaderSet(Cluster):
                              verbose=verbose, ignore_status=False)
             queue.put(node)
             queue.task_done()
+
+        start_time = time.time()
 
         for loader in self.nodes:
             setup_thread = threading.Thread(target=node_setup,
@@ -576,6 +578,10 @@ class LoaderSet(Cluster):
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
                 pass
+
+        time_elapsed = time.time() - start_time
+        print("{}: setup duration -> {} s".format(str(self),
+                                                  int(time_elapsed)))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
         queue = Queue.Queue()
