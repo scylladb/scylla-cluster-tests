@@ -6,7 +6,7 @@ from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
 
 
-class QueriesLimitsTest(ClusterTester):
+class QueryLimitsTest(ClusterTester):
 
     """
     Test scylla cluster growth (adding nodes after an initial cluster size).
