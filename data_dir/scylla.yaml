@@ -21,14 +21,14 @@ regions: !mux
         subnet_id: 'subnet-5207ee37'
         ami_id_db_scylla: 'ami-5e60853e'
         ami_id_db_cassandra: 'ami-1cff962c'
-        ami_id_loader: 'ami-05f4ed35'
+        ami_id_loader: 'ami-5e60853e'
     us_east_1:
         region_name: 'us-east-1'
         security_group_ids: 'sg-c5e1f7a0'
         subnet_id: 'subnet-ec4a72c4'
         ami_id_db_scylla: 'ami-ac4f69c6'
         ami_id_db_cassandra: 'ami-ada2b6c4'
-        ami_id_loader: 'ami-a51564c0'
+        ami_id_loader: 'ami-ac4f69c6'
 
 databases: !mux
     cassandra:
