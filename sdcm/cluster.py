@@ -1,3 +1,4 @@
+import Queue
 import atexit
 import os
 import tempfile
@@ -7,15 +8,10 @@ import uuid
 import yaml
 
 from avocado.utils import path
+from avocado.utils import process
 
-import fabric.api
-import fabric.network
-import fabric.operations
-import fabric.tasks
-
-from remote import CmdError
-from remote import Remote
-from remote import run as remote_run
+from .remote import Remote
+from . import wait
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -43,7 +39,8 @@ def cleanup_instances():
 
 def remove_cred_from_cleanup(cred):
     global CREDENTIALS
-    CREDENTIALS.remove(cred)
+    if cred in CREDENTIALS:
+        CREDENTIALS.remove(cred)
 
 
 def register_cleanup():
@@ -96,12 +93,6 @@ class RemoteCredentials(object):
         print("{}: Destroyed".format(str(self)))
 
 
-class Result(object):
-
-    def __init__(self, stdout):
-        self.stdout = stdout
-
-
 class Node(object):
 
     """
@@ -122,9 +113,9 @@ class Node(object):
         self.ec2.create_tags(Resources=[self.instance.id],
                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
         self.remoter = Remote(hostname=self.instance.public_ip_address,
-                              username=ami_username,
-                              key_filename=credentials.key_file,
-                              timeout=120, attempts=10, quiet=False)
+                              user=ami_username,
+                              key_file=credentials.key_file)
+
         print("{}: SSH access -> 'ssh -i {} {}@{}'".format(self,
                                                            credentials.key_file,
                                                            ami_username,
@@ -150,7 +141,7 @@ class Node(object):
         print('{}: Got new public IP {}'.format(self,
                                                 self.instance.public_ip_address))
         self.remoter.hostname = self.instance.public_ip_address
-        self.wait_for_init(timeout=120)
+        self.wait_db_up()
 
     def destroy(self):
         terminate_msg = '{}: Destroyed'.format(self)
@@ -159,31 +150,25 @@ class Node(object):
         EC2_INSTANCES.remove(self.instance)
         print(terminate_msg)
 
-    def wait_for_init(self, timeout=120, verbose=False):
-        verify_pause = 30
-        print("{}: Waiting for DB services to start. "
-              "Polling interval: {} s, timeout: {} s".format(str(self),
-                                                             verify_pause,
-                                                             timeout))
+    def wait_ssh_up(self, verbose=True):
+        text = None
+        if verbose:
+            text = '{}: Waiting for SSH to be up'.format(str(self))
+        wait.wait_for(func=self.remoter.is_up, step=10,
+                      text=text)
 
-        elapsed = 0
-        started = False
+    def db_up(self):
+        result = self.remoter.run('netstat -a | grep :9042',
+                                  verbose=False, ignore_status=True)
+        return result.exit_status == 0
 
-        while not started:
-            if elapsed > timeout:
-                result = Result("Timeout")
-                raise NodeInitError(node=self, result=result)
-            if verbose:
-                run_cmd = self.remoter.run
-            else:
-                run_cmd = self.remoter.run_quiet
-            try:
-                run_cmd('netstat -a | grep :9042', timeout=120)
-                started = True
-            except CmdError:
-                pass
-            time.sleep(verify_pause)
-            elapsed += verify_pause
+    def wait_db_up(self):
+        wait.wait_for(func=self.db_up, step=60,
+                      text='{}: Waiting for DB to be up'.format(str(self)))
+
+    def wait_db_down(self):
+        wait.wait_for(func=lambda: not self.db_up, step=60,
+                      text='{}: Waiting for DB to be down'.format(str(self)))
 
 
 class Cluster(object):
@@ -224,6 +209,14 @@ class Cluster(object):
         self.nodes = []
         self.add_nodes(n_nodes)
 
+    def send_file(self, src, dst, verbose=False):
+        for loader in self.nodes:
+            loader.remoter.send_files(src=src, dst=dst, verbose=verbose)
+
+    def run(self, cmd, verbose=False):
+        for loader in self.nodes:
+            loader.remoter.run(cmd=cmd, verbose=verbose)
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             ec2_user_data = self.ec2_user_data
@@ -263,12 +256,6 @@ class Cluster(object):
 
     def get_node_public_ips(self):
         return [node.instance.public_ip_address for node in self.nodes]
-
-    @fabric.api.parallel
-    def run_all_nodes(self, cmd, ignore_status=False, timeout=60):
-        fabric.api.env.update(hosts=self.get_node_public_ips(),
-                              user=self.ec2_ami_username)
-        return fabric.tasks.execute(remote_run, cmd, ignore_status, timeout)
 
     def destroy(self):
         print('{}: Destroy nodes '.format(str(self)))
@@ -312,7 +299,8 @@ class ScyllaCluster(Cluster):
         if self.seed_nodes_private_ips is None:
             node = self.nodes[0]
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-            node.remoter.receive_files(yaml_dst_path, '/etc/scylla/scylla.yaml')
+            node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                       dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
                 conf_dict = yaml.load(yaml_stream)
                 try:
@@ -349,8 +337,7 @@ class ScyllaCluster(Cluster):
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status',
-                                                   timeout=120)
+        cmd_result = verification_node.remoter.run('nodetool status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
             line = line.strip()
@@ -384,22 +371,21 @@ class ScyllaCluster(Cluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                if verbose:
-                    run_cmd = node.remoter.run
-                else:
-                    run_cmd = node.remoter.run_quiet
+                node.wait_ssh_up(verbose=verbose)
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=120)
+                    node.remoter.run('netstat -a | grep :9042',
+                                     verbose=verbose)
                     node_initialized_map[node] = True
-                except CmdError:
+                except process.CmdError:
                     try:
-                        run_cmd("grep 'Aborting the clustering of this "
-                                "reservation' /home/centos/ami.log",
-                                timeout=120)
-                        result = run_cmd("tail -5 /home/centos/ami.log",
-                                         timeout=120)
+                        node.remoter.run("grep 'Aborting the clustering of "
+                                         "this reservation' "
+                                         "/home/centos/ami.log",
+                                         verbose=verbose)
+                        result = node.remoter.run("tail -5 "
+                                                  "/home/centos/ami.log")
                         raise NodeInitError(node=node, result=result)
-                    except CmdError:
+                    except process.CmdError:
                         pass
             initialized_nodes = len([node for node in node_initialized_map if
                                     node_initialized_map[node]])
@@ -471,8 +457,8 @@ class CassandraCluster(ScyllaCluster):
     def get_seed_nodes(self):
         node = self.nodes[0]
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='cassandra-longevity'), 'cassandra.yaml')
-        node.remoter.receive_files(yaml_dst_path,
-                                   '/etc/cassandra/cassandra.yaml')
+        node.remoter.receive_files(src='/etc/cassandra/cassandra.yaml',
+                                   dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
             conf_dict = yaml.load(yaml_stream)
             try:
@@ -506,12 +492,10 @@ class CassandraCluster(ScyllaCluster):
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
-                if verbose:
-                    run_cmd = node.remoter.run
-                else:
-                    run_cmd = node.remoter.run_quiet
+                node.wait_ssh_up(verbose=verbose)
                 try:
-                    run_cmd('netstat -a | grep :9042', timeout=60)
+                    node.remoter.run('netstat -a | grep :9042',
+                                     verbose=verbose)
                     node_initialized_map[node] = True
                 except Exception:
                     pass
@@ -530,6 +514,7 @@ class LoaderSet(Cluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
+                 ec2_block_device_mappings=None,
                  ec2_ami_username='fedora', scylla_repo=None, n_nodes=10):
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
                                         ec2_subnet_id=ec2_subnet_id,
@@ -537,6 +522,7 @@ class LoaderSet(Cluster):
                                         ec2_instance_type=ec2_instance_type,
                                         ec2_ami_username=ec2_ami_username,
                                         service=service,
+                                        ec2_block_device_mappings=ec2_block_device_mappings,
                                         credentials=credentials,
                                         cluster_prefix='scylla-loader-set',
                                         node_prefix='scylla-loader-node',
@@ -544,39 +530,79 @@ class LoaderSet(Cluster):
         self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False):
-        print("{}: Setting all DB loader nodes".format(str(self)))
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            print("{}: Installing scylla-tools".format(str(node)))
+            node.wait_ssh_up(verbose=verbose)
+            node.remoter.send_files(src=self.scylla_repo,
+                                    dst='/home/fedora/scylla.repo')
+            node.remoter.run('sudo mv /home/fedora/scylla.repo '
+                             '/etc/yum.repos.d/scylla.repo', verbose=verbose)
+            node.remoter.run('sudo dnf install -y scylla-tools',
+                             verbose=verbose, ignore_status=False)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
         for loader in self.nodes:
-            if verbose:
-                run_cmd = loader.remoter.run
-            else:
-                run_cmd = loader.remoter.run_quiet
-            loader.remoter.send_files(self.scylla_repo,
-                                      '/home/fedora/scylla.repo')
-            run_cmd('sudo mv /home/fedora/scylla.repo '
-                    '/etc/yum.repos.d/scylla.repo')
-            run_cmd('sudo dnf install -y scylla-tools', timeout=300)
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
 
-    def run_stress(self, stress_cmd, timeout, output_dir):
-        def check_output(result_obj, node):
-            output = result_obj.stdout + result_obj.stderr
-            lines = output.splitlines()
-            for line in lines:
-                if 'java.io.IOException' in line:
-                    return ['{}:{}'.format(node, line.strip())]
-            return []
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
 
-        print("{}: Running {} in all loaders, timeout {} s".format(str(self),
-                                                                   stress_cmd,
-                                                                   timeout))
-        logdir = path.init_dir(output_dir, self.name)
-        result_dict = self.run_all_nodes(stress_cmd, timeout=timeout)
-        errors = []
-        for node in self.nodes:
-            result = result_dict[node.instance.public_ip_address]
+        time_elapsed = time.time() - start_time
+        print("{}: setup duration -> {} s".format(str(self),
+                                                  int(time_elapsed)))
+
+    def run_stress_thread(self, stress_cmd, timeout, output_dir):
+        queue = Queue.Queue()
+
+        def node_run_stress(node):
+            try:
+                logdir = path.init_dir(output_dir, self.name)
+            except OSError:
+                logdir = os.path.join(output_dir, self.name)
+            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
+                                      ignore_status=True)
             log_file_name = os.path.join(logdir,
                                          '{}.log'.format(node.name))
             print("{}: Writing log file {}".format(str(self), log_file_name))
             with open(log_file_name, 'w') as log_file:
-                log_file.write(result.stdout)
-            errors += check_output(result, node)
+                log_file.write(str(result))
+            queue.put((node, result))
+            queue.task_done()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_run_stress,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        return queue
+
+    def verify_stress_thread(self, queue):
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        errors = []
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            for line in lines:
+                if 'java.io.IOException' in line:
+                    errors += ['{}: {}'.format(node, line.strip())]
+
         return errors
