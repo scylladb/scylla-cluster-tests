@@ -51,7 +51,10 @@ class Nemesis(object):
             self.set_target_node()
 
     def __str__(self):
-        return str(self.__class__)
+        try:
+            return str(self.__class__).split("'")[1]
+        except:
+            return str(self.__class__)
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
