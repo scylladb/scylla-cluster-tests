@@ -1,3 +1,5 @@
+import logging
+
 import boto3.session
 
 from avocado import Test
@@ -34,6 +36,8 @@ class ClusterTester(Test):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
