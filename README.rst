@@ -113,7 +113,7 @@ What you can do while the test is running to see what's happening::
 
 or::
 
-    tail -f ~/avocado/job-results/latest/test-results/longevity_test.py\:LongevityTest.test_custom_time/stdout
+    tail -f ~/avocado/job-results/latest/test-results/longevity_test.py\:LongevityTest.test_custom_time/debug.log
 
 At the end of the test, there's a path to an HTML file with the job report.
 The flag ``--open-browser`` actually opens that at the end of the test.
@@ -128,7 +128,6 @@ TODO
 Known issues
 ------------
 
-* The avocado log is verbose - it captures all debug output of the ``boto3`` API. I still need to see if I can fix that.
 * No test API guide. Bear with us while we set up hosted test API documentation, and take a look at the current tests and the `sdcm` library for more information.
 
 Footnotes
