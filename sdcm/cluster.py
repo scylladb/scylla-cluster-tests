@@ -58,8 +58,7 @@ class NodeInitError(Exception):
         self.result = result
 
     def __str__(self):
-        return "Node {} init fail:\n{}".format(str(self.node),
-                                               self.result.stdout)
+        return "Node %s init fail:\n%s" % (str(self.node), self.result.stdout)
 
 
 class LoaderSetInitError(Exception):
@@ -75,17 +74,17 @@ class RemoteCredentials(object):
     def __init__(self, service, key_prefix='keypair'):
         self.uuid = uuid.uuid4()
         self.shortid = str(self.uuid)[:8]
-        self.name = '{}-{}'.format(key_prefix, self.shortid)
+        self.name = '%s-%s' % (key_prefix, self.shortid)
         self.key_pair = service.create_key_pair(KeyName=self.name)
         self.key_file = os.path.join(tempfile.gettempdir(),
-                                     '{}.pem'.format(self.name))
+                                     '%s.pem' % self.name)
         self.write_key_file()
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Created')
 
     def __str__(self):
-        return "Key Pair {} -> {}".format(self.name, self.key_file)
+        return "Key Pair %s -> %s" % (self.name, self.key_file)
 
     def write_key_file(self):
         with open(self.key_file, 'w') as key_file_obj:
@@ -110,7 +109,7 @@ class Node(object):
     def __init__(self, ec2_instance, ec2_service, credentials,
                  node_prefix='node', node_index=1, ami_username='root'):
         self.instance = ec2_instance
-        self.name = '{}-{}'.format(node_prefix, node_index)
+        self.name = '%s-%s' % (node_prefix, node_index)
         self.ec2 = ec2_service
         self.instance.wait_until_running()
         self.wait_public_ip()
@@ -130,10 +129,10 @@ class Node(object):
                        self.instance.public_ip_address)
 
     def __str__(self):
-        return 'Node {} [{} | {}] (seed: {})'.format(self.name,
-                                                     self.instance.public_ip_address,
-                                                     self.instance.private_ip_address,
-                                                     self.is_seed)
+        return 'Node %s [%s | %s] (seed: %s)' % (self.name,
+                                                 self.instance.public_ip_address,
+                                                 self.instance.private_ip_address,
+                                                 self.is_seed)
 
     def wait_public_ip(self):
         while self.instance.public_ip_address is None:
@@ -160,7 +159,7 @@ class Node(object):
     def wait_ssh_up(self, verbose=True):
         text = None
         if verbose:
-            text = '{}: Waiting for SSH to be up'.format(str(self))
+            text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10,
                       text=text)
 
@@ -172,28 +171,28 @@ class Node(object):
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
             cassandra_stress_bin = '/usr/bin/cassandra-stress'
-        result = self.remoter.run('test -x {}'.format(cassandra_stress_bin),
+        result = self.remoter.run('test -x %s' % cassandra_stress_bin,
                                   verbose=False, ignore_status=True)
         return result.exit_status == 0
 
     def wait_db_up(self, verbose=True):
         text = None
         if verbose:
-            text = '{}: Waiting for DB services to be up'.format(str(self))
+            text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=self.db_up, step=60,
                       text=text)
 
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
-            text = '{}: Waiting for DB services to be up'.format(str(self))
+            text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=lambda: not self.db_up, step=60,
                       text=text)
 
     def wait_cs_installed(self, verbose=True):
         text = None
         if verbose:
-            text = '{}: Waiting for cassandra-stress'.format(str(self))
+            text = '%s: Waiting for cassandra-stress' % self
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
 
@@ -231,7 +230,7 @@ class Cluster(object):
         else:
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
-        self.name = '{}-{}'.format(cluster_prefix, self.shortid)
+        self.name = '%s-%s' % (cluster_prefix, self.shortid)
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
@@ -270,12 +269,12 @@ class Cluster(object):
         return added_nodes
 
     def __str__(self):
-        return 'Cluster {} (AMI: {} Type: {})'.format(self.name,
-                                                      self.ec2_ami_id,
-                                                      self.ec2_instance_type)
+        return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
+                                                  self.ec2_ami_id,
+                                                  self.ec2_instance_type)
 
     def _create_node(self, instance, ami_username, node_prefix, node_index):
-        node_prefix = '{}-{}'.format(node_prefix, self.shortid)
+        node_prefix = '%s-%s' % (node_prefix, self.shortid)
         return Node(ec2_instance=instance, ec2_service=self.ec2,
                     credentials=self.credentials, ami_username=ami_username,
                     node_prefix=node_prefix, node_index=node_index)
@@ -303,9 +302,9 @@ class ScyllaCluster(Cluster):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = 'scylla-db-cluster'
         shortid = str(cluster_uuid)[:8]
-        name = '{}-{}'.format(cluster_prefix, shortid)
-        user_data = ('--clustername {} '
-                     '--totalnodes {}'.format(name, n_nodes))
+        name = '%s-%s' % (cluster_prefix, shortid)
+        user_data = ('--clustername %s '
+                     '--totalnodes %s' % (name, n_nodes))
         super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
@@ -336,7 +335,7 @@ class ScyllaCluster(Cluster):
                     self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
                 except:
                     raise ValueError('Unexpected scylla.yaml '
-                                     'contents:\n{}'.format(yaml_stream.read()))
+                                     'contents:\n%s' % yaml_stream.read())
         return self.seed_nodes_private_ips
 
     def get_seed_nodes(self):
@@ -356,10 +355,10 @@ class ScyllaCluster(Cluster):
                 node_private_ips = [node.instance.private_ip_address for node
                                     in self.nodes if node.is_seed]
                 seeds = ",".join(node_private_ips)
-                ec2_user_data = ('--clustername {} --bootstrap true '
-                                 '--totalnodes {} --seeds {}'.format(self.name,
-                                                                     count,
-                                                                     seeds))
+                ec2_user_data = ('--clustername %s --bootstrap true '
+                                 '--totalnodes %s --seeds %s' % (self.name,
+                                                                 count,
+                                                                 seeds))
         added_nodes = super(ScyllaCluster, self).add_nodes(count=count,
                                                            ec2_user_data=ec2_user_data)
         return added_nodes
@@ -460,10 +459,10 @@ class CassandraCluster(ScyllaCluster):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = 'cassandra-db-cluster'
         shortid = str(cluster_uuid)[:8]
-        name = '{}-{}'.format(cluster_prefix, shortid)
-        user_data = ('--clustername {} '
-                     '--totalnodes {} --version community '
-                     '--release 2.1.8'.format(name, n_nodes))
+        name = '%s-%s' % (cluster_prefix, shortid)
+        user_data = ('--clustername %s '
+                     '--totalnodes %s --version community '
+                     '--release 2.1.8' % (name, n_nodes))
         super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
@@ -492,18 +491,18 @@ class CassandraCluster(ScyllaCluster):
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
             except:
                 raise ValueError('Unexpected cassandra.yaml '
-                                 'contents:\n{}'.format(yaml_stream.read()))
+                                 'contents:\n%s' % yaml_stream.read())
 
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = ('--clustername {} --bootstrap true '
-                                 '--totalnodes {} --seeds {} '
+                ec2_user_data = ('--clustername %s --bootstrap true '
+                                 '--totalnodes %s --seeds %s '
                                  '--version community '
-                                 '--release 2.1.8'.format(self.name,
-                                                          count,
-                                                          seeds))
+                                 '--release 2.1.8' % (self.name,
+                                                      count,
+                                                      seeds))
         added_nodes = super(ScyllaCluster, self).add_nodes(count=count,
                                                            ec2_user_data=ec2_user_data)
         return added_nodes
@@ -595,8 +594,7 @@ class LoaderSet(Cluster):
                 logdir = os.path.join(output_dir, self.name)
             result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
                                       ignore_status=True)
-            log_file_name = os.path.join(logdir,
-                                         '{}.log'.format(node.name))
+            log_file_name = os.path.join(logdir, '%s.log' % node.name)
             self.log.debug('Writing log file %s', log_file_name)
             with open(log_file_name, 'w') as log_file:
                 log_file.write(str(result))
@@ -625,6 +623,6 @@ class LoaderSet(Cluster):
             lines = output.splitlines()
             for line in lines:
                 if 'java.io.IOException' in line:
-                    errors += ['{}: {}'.format(node, line.strip())]
+                    errors += ['%s: %s' % (node, line.strip())]
 
         return errors

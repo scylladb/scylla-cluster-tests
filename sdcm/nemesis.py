@@ -60,9 +60,9 @@ class Nemesis(object):
 
         node_info_list = self.cluster.get_node_info_list(verification_node)
         private_ips = [node_info['ip'] for node_info in node_info_list]
-        error_msg = ('Node that was decommissioned {} still in the cluster. '
-                     'Cluster status info: {}'.format(self.target_node,
-                                                      node_info_list))
+        error_msg = ('Node that was decommissioned %s still in the cluster. '
+                     'Cluster status info: %s' % (self.target_node,
+                                                  node_info_list))
         assert target_node_ip not in private_ips, error_msg
         self.cluster.nodes.remove(self.target_node)
         self.target_node.destroy()

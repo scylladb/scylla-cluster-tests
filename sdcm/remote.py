@@ -230,7 +230,7 @@ class BaseRemote(object):
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
 
     def __str__(self):
-        return 'Remote [{}@{}]'.format(self.user, self.hostname)
+        return 'Remote [%s@%s]' % (self.user, self.hostname)
 
     def use_rsync(self):
         if self._use_rsync is not None:

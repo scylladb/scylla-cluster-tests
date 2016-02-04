@@ -86,7 +86,8 @@ class ClusterTester(Test):
                                                credentials=self.credentials,
                                                n_nodes=n_db_nodes)
         else:
-            self.error('Incorrect parameter db_type: {}'.format(self.params.get('db_type')))
+            self.error('Incorrect parameter db_type: %s' %
+                       self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
@@ -117,10 +118,10 @@ class ClusterTester(Test):
             duration = self.params.get('cassandra_stress_duration')
         if threads is None:
             threads = self.params.get('cassandra_stress_threads')
-        return ("cassandra-stress write cl=QUORUM duration={}m "
+        return ("cassandra-stress write cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
-                "-mode cql3 native -rate threads={} "
-                "-node {}".format(duration, threads, ip))
+                "-mode cql3 native -rate threads=%s "
+                "-node %s" % (duration, threads, ip))
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None):
@@ -143,7 +144,7 @@ class ClusterTester(Test):
         errors = self.loaders.verify_stress_thread(queue)
         if errors:
             self.fail("cassandra-stress errors on "
-                      "nodes:\n{}".format("\n".join(errors)))
+                      "nodes:\n%s" % "\n".join(errors))
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
