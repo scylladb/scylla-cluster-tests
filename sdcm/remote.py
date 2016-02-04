@@ -724,10 +724,10 @@ class Remote(BaseRemote):
         if result.exit_status == 255:
             if re.search(r'^ssh: connect to host .* port .*: '
                          r'Connection timed out\r$', result.stderr):
-                raise SSHTimeout("ssh timed out", result)
+                raise SSHTimeout("SSH timed out:\n%s" % result)
             if "Permission denied." in result.stderr:
-                msg = "SSH permission denied"
-                raise SSHPermissionDeniedError(msg, result)
+                raise SSHPermissionDeniedError("SSH permission denied:\n%s" %
+                                               result)
         if not ignore_status and result.exit_status > 0:
             raise process.CmdError(command=full_cmd, result=result)
         return result
