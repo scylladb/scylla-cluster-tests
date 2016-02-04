@@ -240,7 +240,7 @@ class BaseRemote(object):
         # don't try to use it for any future file transfers.
         self._use_rsync = self._check_rsync()
         if not self._use_rsync:
-            self.log.warning("rsync not available -- disabled")
+            self.log.warning("Command rsync not available -- disabled")
         return self._use_rsync
 
     def _check_rsync(self):
@@ -467,7 +467,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, e:
-                self.log.warn("trying scp, rsync failed: %s", e)
+                self.log.warn("Trying scp, rsync failed: %s", e)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -539,7 +539,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, details:
-                self.log.warn("trying scp, rsync failed: %s", details)
+                self.log.warn("Trying scp, rsync failed: %s", details)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir

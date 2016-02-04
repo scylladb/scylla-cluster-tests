@@ -53,7 +53,7 @@ class Nemesis(object):
         target_node_ip = self.target_node.instance.private_ip_address
         result = self.target_node.remoter.run('nodetool --host localhost '
                                               'decommission')
-        self.log.debug("%s duration -> %s s", result.command, result.duration)
+        self.log.debug("Command '%s' duration -> %s s", result.command, result.duration)
         verification_node = random.choice(self.cluster.nodes)
         while verification_node == self.target_node:
             verification_node = random.choice(self.cluster.nodes)
@@ -123,12 +123,12 @@ class Nemesis(object):
 
     def repair_nodetool_repair(self):
         result = self.target_node.remoter.run('nodetool -h localhost repair')
-        self.log.debug('%s duration -> %s s', result.command, result.duration)
+        self.log.debug("Command '%s' duration -> %s s", result.command, result.duration)
 
     def repair_nodetool_rebuild(self):
         for node in self.cluster.nodes:
             result = node.remoter.run('nodetool -h localhost rebuild')
-            self.log.debug('%s duration -> %s s', result.command,
+            self.log.debug("Command '%s' duration -> %s s", result.command,
                            result.duration)
 
 

@@ -582,7 +582,7 @@ class LoaderSet(Cluster):
                 pass
 
         time_elapsed = time.time() - start_time
-        self.log.debug('setup duration -> % s', int(time_elapsed))
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
         queue = Queue.Queue()
