@@ -177,16 +177,24 @@ class Node(object):
                       text=text)
 
     def db_up(self):
-        result = self.remoter.run('netstat -a | grep :9042',
-                                  verbose=False, ignore_status=True)
-        return result.exit_status == 0
+        try:
+            result = self.remoter.run('netstat -a | grep :9042',
+                                      verbose=False, ignore_status=True)
+            return result.exit_status == 0
+        except Exception, details:
+            self.log.error('Error checking for DB up: %s', details)
+            return False
 
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
             cassandra_stress_bin = '/usr/bin/cassandra-stress'
-        result = self.remoter.run('test -x %s' % cassandra_stress_bin,
-                                  verbose=False, ignore_status=True)
-        return result.exit_status == 0
+        try:
+            result = self.remoter.run('test -x %s' % cassandra_stress_bin,
+                                      verbose=False, ignore_status=True)
+            return result.exit_status == 0
+        except Exception, details:
+            self.log.error('Error checking for cassandra-stress: %s', details)
+            return False
 
     def wait_db_up(self, verbose=True):
         text = None

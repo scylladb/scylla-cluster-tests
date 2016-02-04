@@ -614,6 +614,9 @@ class BaseRemote(object):
             self._ssh_ping()
         except process.CmdError:
             return False
+        except Exception, details:
+            self.log.error('Error checking if SSH is up: %s', details)
+            return False
         else:
             return True
 
