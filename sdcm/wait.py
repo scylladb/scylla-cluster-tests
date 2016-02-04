@@ -2,6 +2,9 @@
 Wait functions appropriate for tests that have high timing variance.
 """
 import time
+import logging
+
+LOGGER = logging.getLogger('avocado.test')
 
 
 def wait_for(func, step=1, text=None, *args, **kwargs):
@@ -25,5 +28,5 @@ def wait_for(func, step=1, text=None, *args, **kwargs):
         time.sleep(step)
         time_elapsed = time.time() - start_time
         if text is not None:
-            print('{} ({} s)'.format(text, time_elapsed))
+            LOGGER.debug('%s (%s s)', text, time_elapsed)
     return ok

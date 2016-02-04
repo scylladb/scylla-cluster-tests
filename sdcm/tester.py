@@ -142,7 +142,7 @@ class ClusterTester(Test):
                       "nodes:\n{}".format("\n".join(errors)))
 
     def clean_resources(self):
-        print('Cleaning up resources used in the test')
+        self.log.debug('Cleaning up resources used in the test')
         if self.db_cluster is not None:
             self.db_cluster.destroy()
             self.db_cluster = None

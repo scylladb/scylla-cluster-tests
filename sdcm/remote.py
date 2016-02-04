@@ -16,6 +16,8 @@ from avocado.utils import astring
 from avocado.utils import path
 from avocado.utils import process
 
+from .log import SDCMAdapter
+
 ENABLE_MASTER_SSH = True
 LOG = process.log
 STDOUT_LOG = process.stdout_log
@@ -224,6 +226,8 @@ class BaseRemote(object):
         self.master_ssh_job = None
         self.master_ssh_tempdir = None
         self.master_ssh_option = ''
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
 
     def __str__(self):
         return 'Remote [{}@{}]'.format(self.user, self.hostname)
@@ -236,8 +240,7 @@ class BaseRemote(object):
         # don't try to use it for any future file transfers.
         self._use_rsync = self._check_rsync()
         if not self._use_rsync:
-            logging.warn("rsync not available on remote host %s -- disabled",
-                         self.hostname)
+            self.log.warning("rsync not available -- disabled")
         return self._use_rsync
 
     def _check_rsync(self):
@@ -444,9 +447,7 @@ class BaseRemote(object):
 
         :raises: process.CmdError if the remote copy command failed.
         """
-        print("{}: Receive files (src) {} -> (dst) {}".format(str(self),
-                                                              src,
-                                                              dst))
+        self.log.debug('Receive files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         self.start_master_ssh()
 
@@ -466,7 +467,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, e:
-                logging.warn("trying scp, rsync failed: %s" % e)
+                self.log.warn("trying scp, rsync failed: %s", e)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -518,9 +519,7 @@ class BaseRemote(object):
 
         :raises: process.CmdError if the remote copy command failed
         """
-        print("{}: Send files (src) {} -> (dst) {}".format(str(self),
-                                                           src,
-                                                           dst))
+        self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         self.start_master_ssh()
 
@@ -540,7 +539,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, details:
-                logging.warn("trying scp, rsync failed: %s" % details)
+                self.log.warn("trying scp, rsync failed: %s", details)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -723,7 +722,7 @@ class Remote(BaseRemote):
         if args is None:
             args = ()
         if verbose:
-            logging.debug("[%s] Running (ssh) '%s'", self.hostname, cmd)
+            self.log.debug("Running '%s'", cmd)
 
         # Start a master SSH connection if necessary.
         self.start_master_ssh()

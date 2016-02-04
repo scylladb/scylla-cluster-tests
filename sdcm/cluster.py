@@ -1,5 +1,6 @@
 import Queue
 import atexit
+import logging
 import os
 import tempfile
 import threading
@@ -10,6 +11,7 @@ import yaml
 from avocado.utils import path
 from avocado.utils import process
 
+from .log import SDCMAdapter
 from .remote import Remote
 from . import wait
 
@@ -78,7 +80,9 @@ class RemoteCredentials(object):
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '{}.pem'.format(self.name))
         self.write_key_file()
-        print("{}: Created".format(str(self)))
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log.info('Created')
 
     def __str__(self):
         return "Key Pair {} -> {}".format(self.name, self.key_file)
@@ -94,7 +98,7 @@ class RemoteCredentials(object):
             os.remove(self.key_file)
         except OSError:
             pass
-        print("{}: Destroyed".format(str(self)))
+        self.log.info('Destroyed')
 
 
 class Node(object):
@@ -119,11 +123,11 @@ class Node(object):
         self.remoter = Remote(hostname=self.instance.public_ip_address,
                               user=ami_username,
                               key_file=credentials.key_file)
-
-        print("{}: SSH access -> 'ssh -i {} {}@{}'".format(self,
-                                                           credentials.key_file,
-                                                           ami_username,
-                                                           self.instance.public_ip_address))
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log.debug("SSH access -> 'ssh -i %s %s@%s'",
+                       credentials.key_file, ami_username,
+                       self.instance.public_ip_address)
 
     def __str__(self):
         return 'Node {} [{} | {}] (seed: {})'.format(self.name,
@@ -142,17 +146,16 @@ class Node(object):
         self.instance.start()
         self.instance.wait_until_running()
         self.wait_public_ip()
-        print('{}: Got new public IP {}'.format(self,
-                                                self.instance.public_ip_address))
+        self.log.debug('Got new public IP {}',
+                       self.instance.public_ip_address)
         self.remoter.hostname = self.instance.public_ip_address
         self.wait_db_up()
 
     def destroy(self):
-        terminate_msg = '{}: Destroyed'.format(self)
         self.instance.terminate()
         global EC2_INSTANCES
         EC2_INSTANCES.remove(self.instance)
-        print(terminate_msg)
+        self.log.info('Destroyed')
 
     def wait_ssh_up(self, verbose=True):
         text = None
@@ -229,7 +232,9 @@ class Cluster(object):
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '{}-{}'.format(cluster_prefix, self.shortid)
-        print('{}: Init nodes '.format(str(self)))
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log.info('Init nodes')
         self.nodes = []
         self.add_nodes(n_nodes)
 
@@ -245,8 +250,8 @@ class Cluster(object):
         if not ec2_user_data:
             ec2_user_data = self.ec2_user_data
         global EC2_INSTANCES
-        print("{}: Passing user_data '{}' to "
-              "create_instances".format(str(self), ec2_user_data))
+        self.log.debug("Passing user_data '%s' to create_instances",
+                       ec2_user_data)
         instances = self.ec2.create_instances(ImageId=self.ec2_ami_id,
                                               UserData=ec2_user_data,
                                               MinCount=count,
@@ -282,7 +287,7 @@ class Cluster(object):
         return [node.instance.public_ip_address for node in self.nodes]
 
     def destroy(self):
-        print('{}: Destroy nodes '.format(str(self)))
+        self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
 
@@ -390,8 +395,8 @@ class ScyllaCluster(Cluster):
         node_initialized_map = {node: False for node in node_list}
         all_nodes_initialized = [True for _ in node_list]
         verify_pause = 60
-        print("{}: Waiting scylla services to start. "
-              "Polling interval: {} s".format(str(self), verify_pause))
+        self.log.info('Waiting scylla services to start. '
+                      'Polling interval: %s s', verify_pause)
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
@@ -415,10 +420,8 @@ class ScyllaCluster(Cluster):
                                     node_initialized_map[node]])
             total_nodes = len(node_initialized_map.keys())
             time_elapsed = time.time() - start_time
-            print("({}/{}) DB nodes ready. "
-                  "Time elapsed: {:d} s".format(initialized_nodes,
-                                                total_nodes,
-                                                int(time_elapsed)))
+            self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                          initialized_nodes, total_nodes, int(time_elapsed))
             time.sleep(verify_pause)
         # Mark all seed nodes
         self.get_seed_nodes()
@@ -511,8 +514,8 @@ class CassandraCluster(ScyllaCluster):
         node_initialized_map = {node: False for node in node_list}
         all_nodes_initialized = [True for _ in node_list]
         verify_pause = 60
-        print("{}: Waiting cassandra services to start. "
-              "Polling interval: {} s".format(str(self), verify_pause))
+        self.log.info('Waiting cassandra services to start. '
+                      'Polling interval: %s s', verify_pause)
         start_time = time.time()
         while node_initialized_map.values() != all_nodes_initialized:
             for node in node_initialized_map.keys():
@@ -527,10 +530,8 @@ class CassandraCluster(ScyllaCluster):
                                     node_initialized_map[node]])
             total_nodes = len(node_initialized_map.keys())
             time_elapsed = time.time() - start_time
-            print("({}/{}) DB nodes ready. "
-                  "Time elapsed: {:d} s".format(initialized_nodes,
-                                                total_nodes,
-                                                int(time_elapsed)))
+            self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                          initialized_nodes, total_nodes, int(time_elapsed))
             time.sleep(verify_pause)
 
 
@@ -557,7 +558,7 @@ class LoaderSet(Cluster):
         queue = Queue.Queue()
 
         def node_setup(node):
-            print("{}: Setup".format(str(node)))
+            self.log.info('Setup')
             node.wait_ssh_up(verbose=verbose)
             # The init scripts should install/update c-s, so
             # let's try to guarantee it will be there before
@@ -582,8 +583,7 @@ class LoaderSet(Cluster):
                 pass
 
         time_elapsed = time.time() - start_time
-        print("{}: setup duration -> {} s".format(str(self),
-                                                  int(time_elapsed)))
+        self.log.debug('setup duration -> % s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
         queue = Queue.Queue()
@@ -597,7 +597,7 @@ class LoaderSet(Cluster):
                                       ignore_status=True)
             log_file_name = os.path.join(logdir,
                                          '{}.log'.format(node.name))
-            print("{}: Writing log file {}".format(str(self), log_file_name))
+            self.log.debug('Writing log file %s', log_file_name)
             with open(log_file_name, 'w') as log_file:
                 log_file.write(str(result))
             queue.put((node, result))
