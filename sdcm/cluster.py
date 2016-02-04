@@ -9,6 +9,7 @@ import yaml
 
 from avocado.utils import path
 from avocado.utils import process
+from botocore.exceptions import BotoCoreError
 
 from .remote import Remote
 from . import wait
@@ -108,7 +109,17 @@ class Node(object):
         self.instance = ec2_instance
         self.name = '{}-{}'.format(node_prefix, node_index)
         self.ec2 = ec2_service
-        self.instance.wait_until_running()
+        running = False
+        while not running:
+            try:
+                self.instance.wait_until_running()
+                running = True
+            # Sometimes we trigger a racing condition where the information
+            # about the new instance did not get to EC2
+            except BotoCoreError, details:
+                print('Node {}: wait_until_running got a recoverable '
+                      'error from EC2: {}'.format(str(self.name), str(details)))
+
         self.wait_public_ip()
         self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
