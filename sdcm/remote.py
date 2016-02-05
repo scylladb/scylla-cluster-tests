@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2016 ScyllaDB
+
 import StringIO
 import glob
 import logging
@@ -15,6 +28,8 @@ import time
 from avocado.utils import astring
 from avocado.utils import path
 from avocado.utils import process
+
+from .log import SDCMAdapter
 
 ENABLE_MASTER_SSH = True
 LOG = process.log
@@ -224,9 +239,11 @@ class BaseRemote(object):
         self.master_ssh_job = None
         self.master_ssh_tempdir = None
         self.master_ssh_option = ''
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
 
     def __str__(self):
-        return 'Remote [{}@{}]'.format(self.user, self.hostname)
+        return 'Remote [%s@%s]' % (self.user, self.hostname)
 
     def use_rsync(self):
         if self._use_rsync is not None:
@@ -236,8 +253,7 @@ class BaseRemote(object):
         # don't try to use it for any future file transfers.
         self._use_rsync = self._check_rsync()
         if not self._use_rsync:
-            logging.warn("rsync not available on remote host %s -- disabled",
-                         self.hostname)
+            self.log.warning("Command rsync not available -- disabled")
         return self._use_rsync
 
     def _check_rsync(self):
@@ -444,9 +460,7 @@ class BaseRemote(object):
 
         :raises: process.CmdError if the remote copy command failed.
         """
-        print("{}: Receive files (src) {} -> (dst) {}".format(str(self),
-                                                              src,
-                                                              dst))
+        self.log.debug('Receive files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         self.start_master_ssh()
 
@@ -466,7 +480,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, e:
-                logging.warn("trying scp, rsync failed: %s" % e)
+                self.log.warn("Trying scp, rsync failed: %s", e)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -518,9 +532,7 @@ class BaseRemote(object):
 
         :raises: process.CmdError if the remote copy command failed
         """
-        print("{}: Send files (src) {} -> (dst) {}".format(str(self),
-                                                           src,
-                                                           dst))
+        self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         self.start_master_ssh()
 
@@ -540,7 +552,7 @@ class BaseRemote(object):
                         verbose=verbose)
                 try_scp = False
             except process.CmdError, details:
-                logging.warn("trying scp, rsync failed: %s" % details)
+                self.log.warn("Trying scp, rsync failed: %s", details)
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -601,6 +613,9 @@ class BaseRemote(object):
         try:
             self._ssh_ping()
         except process.CmdError:
+            return False
+        except Exception, details:
+            self.log.error('Error checking if SSH is up: %s', details)
             return False
         else:
             return True
@@ -709,10 +724,10 @@ class Remote(BaseRemote):
         if result.exit_status == 255:
             if re.search(r'^ssh: connect to host .* port .*: '
                          r'Connection timed out\r$', result.stderr):
-                raise SSHTimeout("ssh timed out", result)
+                raise SSHTimeout("SSH timed out:\n%s" % result)
             if "Permission denied." in result.stderr:
-                msg = "SSH permission denied"
-                raise SSHPermissionDeniedError(msg, result)
+                raise SSHPermissionDeniedError("SSH permission denied:\n%s" %
+                                               result)
         if not ignore_status and result.exit_status > 0:
             raise process.CmdError(command=full_cmd, result=result)
         return result
@@ -723,7 +738,7 @@ class Remote(BaseRemote):
         if args is None:
             args = ()
         if verbose:
-            logging.debug("[%s] Running (ssh) '%s'", self.hostname, cmd)
+            self.log.debug("Running '%s'", cmd)
 
         # Start a master SSH connection if necessary.
         self.start_master_ssh()

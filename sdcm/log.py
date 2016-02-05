@@ -11,12 +11,14 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import os
-import sys
-
-_BASE_DIR = os.path.join(sys.modules[__name__].__file__, "..", "..")
-_BASE_DIR = os.path.abspath(_BASE_DIR)
+import logging
 
 
-def get_data_path(*args):
-    return os.path.join(_BASE_DIR, "data_dir", *args)
+class SDCMAdapter(logging.LoggerAdapter):
+
+    """
+    Logging adapter to prepend class string identifier to message.
+    """
+
+    def process(self, msg, kwargs):
+        return '%s: %s' % (self.extra['prefix'], msg), kwargs

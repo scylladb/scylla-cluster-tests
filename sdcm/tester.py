@@ -1,3 +1,18 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2016 ScyllaDB
+
+import logging
+
 import boto3.session
 
 from avocado import Test
@@ -34,6 +49,8 @@ class ClusterTester(Test):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
@@ -82,7 +99,8 @@ class ClusterTester(Test):
                                                credentials=self.credentials,
                                                n_nodes=n_db_nodes)
         else:
-            self.error('Incorrect parameter db_type: {}'.format(self.params.get('db_type')))
+            self.error('Incorrect parameter db_type: %s' %
+                       self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
@@ -113,10 +131,10 @@ class ClusterTester(Test):
             duration = self.params.get('cassandra_stress_duration')
         if threads is None:
             threads = self.params.get('cassandra_stress_threads')
-        return ("cassandra-stress write cl=QUORUM duration={}m "
+        return ("cassandra-stress write cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
-                "-mode cql3 native -rate threads={} "
-                "-node {}".format(duration, threads, ip))
+                "-mode cql3 native -rate threads=%s "
+                "-node %s" % (duration, threads, ip))
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None):
@@ -139,10 +157,10 @@ class ClusterTester(Test):
         errors = self.loaders.verify_stress_thread(queue)
         if errors:
             self.fail("cassandra-stress errors on "
-                      "nodes:\n{}".format("\n".join(errors)))
+                      "nodes:\n%s" % "\n".join(errors))
 
     def clean_resources(self):
-        print('Cleaning up resources used in the test')
+        self.log.debug('Cleaning up resources used in the test')
         if self.db_cluster is not None:
             self.db_cluster.destroy()
             self.db_cluster = None
