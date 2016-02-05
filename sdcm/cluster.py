@@ -158,7 +158,7 @@ class Node(object):
         self.instance.start()
         self.instance.wait_until_running()
         self.wait_public_ip()
-        self.log.debug('Got new public IP {}',
+        self.log.debug('Got new public IP %s',
                        self.instance.public_ip_address)
         self.remoter.hostname = self.instance.public_ip_address
         self.wait_db_up()
