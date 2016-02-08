@@ -162,9 +162,11 @@ class ClusterTester(Test):
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
         if self.db_cluster is not None:
+            self.db_cluster.get_backtraces()
             self.db_cluster.destroy()
             self.db_cluster = None
         if self.loaders is not None:
+            self.loader.get_backtraces()
             self.loaders.destroy()
             self.loaders = None
         if self.credentials is not None:
