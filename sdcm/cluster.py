@@ -140,6 +140,26 @@ class Node(object):
         self.log.debug("SSH access -> 'ssh -i %s %s@%s'",
                        credentials.key_file, ami_username,
                        self.instance.public_ip_address)
+        self._journal_thread = None
+        self.start_journal_thread()
+
+    def retrieve_journal(self):
+        try:
+            result = self.remoter.run('sudo journalctl -f',
+                                      verbose=True, ignore_status=True)
+        except Exception, details:
+            self.log.error('Error retrieving remote node journal: %s', details)
+
+    def journal_thread(self):
+        self.log.debug("Journal thread started")
+        while True:
+            self.wait_ssh_up()
+            self.retrieve_journal()
+
+    def start_journal_thread(self):
+        self.log.debug("Starting journal thread")
+        self._journal_thread = threading.Thread(target=self.journal_thread)
+        self._journal_thread.start()
 
     def __str__(self):
         return 'Node %s [%s | %s] (seed: %s)' % (self.name,
