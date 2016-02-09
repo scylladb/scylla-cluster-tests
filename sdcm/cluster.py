@@ -164,6 +164,8 @@ class Node(object):
     def get_backtraces(self):
         try:
             # get all the backtraces
+            self.remoter.run('sudo dnf install -y scylla-gdb',
+                             verbose=True, ignore_status=True)
             self.remoter.run('sudo coredumpctl info',
                              verbose=True, ignore_status=True)
         except Exception, details:
