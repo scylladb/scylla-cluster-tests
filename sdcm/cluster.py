@@ -189,8 +189,9 @@ class Node(object):
 
     def retrieve_journal(self):
         try:
-            result = self.remoter.run('sudo journalctl -f',
-                                      verbose=True, ignore_status=True)
+            self.remoter.run('sudo journalctl -f -u scylla-server.service '
+                             '-u scylla-jmx.service',
+                             verbose=True, ignore_status=True)
         except Exception, details:
             self.log.error('Error retrieving remote node journal: %s', details)
 
