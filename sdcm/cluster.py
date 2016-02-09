@@ -197,7 +197,7 @@ class Node(object):
 
     def journal_thread(self):
         while True:
-            self.wait_ssh_up()
+            self.wait_ssh_up(verbose=False)
             self.retrieve_journal()
 
     def start_journal_thread(self):
