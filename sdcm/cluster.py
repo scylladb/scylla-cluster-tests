@@ -196,13 +196,11 @@ class Node(object):
             self.log.error('Error retrieving remote node journal: %s', details)
 
     def journal_thread(self):
-        self.log.debug("Journal thread started")
         while True:
             self.wait_ssh_up()
             self.retrieve_journal()
 
     def start_journal_thread(self):
-        self.log.debug("Starting journal thread")
         self._journal_thread = threading.Thread(target=self.journal_thread)
         self._journal_thread.start()
 
