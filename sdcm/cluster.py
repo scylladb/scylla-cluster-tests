@@ -24,6 +24,7 @@ import yaml
 
 from avocado.utils import path
 from avocado.utils import process
+from botocore.exceptions import WaiterError
 
 from .log import SDCMAdapter
 from .remote import Remote
@@ -68,12 +69,17 @@ register_cleanup()
 
 class NodeInitError(Exception):
 
-    def __init__(self, node, result):
+    def __init__(self, node=None, result=None, msg=None):
         self.node = node
         self.result = result
+        self.msg = msg
 
     def __str__(self):
-        return "Node %s init fail:\n%s" % (str(self.node), self.result.stdout)
+        if self.msg is not None:
+            return self.msg
+        else:
+            return "Node %s init fail:\n%s" % (str(self.node),
+                                               self.result.stdout)
 
 
 class LoaderSetInitError(Exception):
@@ -133,7 +139,7 @@ class Node(object):
         self.instance = ec2_instance
         self.name = '%s-%s' % (node_prefix, node_index)
         self.ec2 = ec2_service
-        self.instance.wait_until_running()
+        self._wait_instance_up()
         self.wait_public_ip()
         self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
@@ -151,6 +157,35 @@ class Node(object):
                        self.instance.public_ip_address)
         self._journal_thread = None
         self.start_journal_thread()
+
+    def _wait_instance_up(self):
+        """
+        Wait until the AWS instance is up.
+
+        Since AWS adopts an eventual consistency model, sometimes the method
+        wait_until_running will raise a botocore.exceptions.WaiterError saying
+        the instance does not exist. AWS API guide [1] recommends that the
+        procedure is retried using an exponencial backoff algorithm [2].
+
+        :see: [1] http://docs.aws.amazon.com/AWSEC2/latest/APIReference/query-api-troubleshooting.html#eventual-consistency
+        :see: [2] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
+        """
+        treshold = 300
+        running = False
+        retries = 0
+        max_retries = 9
+        while not running and retries <= max_retries:
+            try:
+                self.instance.wait_until_running()
+                running = True
+            except WaiterError:
+                time.sleep(max((2 ** retries) * 2, treshold))
+                retries += 1
+
+        if not running:
+            raise NodeInitError(msg='AWS instance %s reported not found after '
+                                    'exponencial backoff wait' %
+                                    self.instance.id)
 
     def retrieve_journal(self):
         try:
