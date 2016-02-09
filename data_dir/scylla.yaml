@@ -12,6 +12,9 @@ instance_type_loader: 't2.micro'
 nemesis_class_name: 'StopStartMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 15
+# Prefix for your AWS VMs (handy for telling instances from different
+# users apart). If you leave this empty, the prefix will be your unix username.
+user_prefix:
 
 regions: !mux
     us_west_2:

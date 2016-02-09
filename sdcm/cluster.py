@@ -13,6 +13,7 @@
 
 import Queue
 import atexit
+import getpass
 import logging
 import os
 import tempfile
@@ -39,6 +40,7 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 
 CREDENTIALS = []
 EC2_INSTANCES = []
+DEFAULT_USER_PREFIX = getpass.getuser()
 
 
 def cleanup_instances():
@@ -78,15 +80,22 @@ class LoaderSetInitError(Exception):
     pass
 
 
+def _prepend_user_prefix(user_prefix, base_name):
+    if user_prefix is None:
+        user_prefix = DEFAULT_USER_PREFIX
+    return '%s-%s' % (user_prefix, base_name)
+
+
 class RemoteCredentials(object):
 
     """
     Wraps EC2.KeyPair, so that we can save keypair info into .pem files.
     """
 
-    def __init__(self, service, key_prefix='keypair'):
+    def __init__(self, service, key_prefix='keypair', user_prefix=None):
         self.uuid = uuid.uuid4()
         self.shortid = str(self.uuid)[:8]
+        key_prefix = _prepend_user_prefix(user_prefix, key_prefix)
         self.name = '%s-%s' % (key_prefix, self.shortid)
         self.key_pair = service.create_key_pair(KeyName=self.name)
         self.key_file = os.path.join(tempfile.gettempdir(),
@@ -352,10 +361,12 @@ class ScyllaCluster(Cluster):
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
+                 user_prefix=None,
                  n_nodes=10):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = 'scylla-db-cluster'
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -371,7 +382,7 @@ class ScyllaCluster(Cluster):
                                             service=service,
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
-                                            node_prefix='scylla-db-node',
+                                            node_prefix=node_prefix,
                                             n_nodes=n_nodes)
         self.nemesis = []
         self.nemesis_threads = []
@@ -507,17 +518,21 @@ class CassandraCluster(ScyllaCluster):
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
+                 user_prefix=None,
                  n_nodes=10):
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = 'cassandra-db-cluster'
+        cluster_prefix = _prepend_user_prefix(user_prefix,
+                                              'cassandra-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'cassandra-db-node')
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
                      '--release 2.1.8' % (name, n_nodes))
+
         super(ScyllaCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
@@ -529,7 +544,7 @@ class CassandraCluster(ScyllaCluster):
                                             service=service,
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
-                                            node_prefix='cassandra-db-node',
+                                            node_prefix=node_prefix,
                                             n_nodes=n_nodes)
         self.nemesis = []
         self.nemesis_threads = []
@@ -594,7 +609,10 @@ class LoaderSet(Cluster):
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
-                 ec2_ami_username='centos', scylla_repo=None, n_nodes=10):
+                 ec2_ami_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
                                         ec2_subnet_id=ec2_subnet_id,
                                         ec2_security_group_ids=ec2_security_group_ids,
@@ -603,8 +621,8 @@ class LoaderSet(Cluster):
                                         service=service,
                                         ec2_block_device_mappings=ec2_block_device_mappings,
                                         credentials=credentials,
-                                        cluster_prefix='scylla-loader-set',
-                                        node_prefix='scylla-loader-node',
+                                        cluster_prefix=cluster_prefix,
+                                        node_prefix=node_prefix,
                                         n_nodes=n_nodes)
         self.scylla_repo = scylla_repo
 

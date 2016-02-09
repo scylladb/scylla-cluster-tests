@@ -75,10 +75,12 @@ class ClusterTester(Test):
             loaders_type = self.params.get('instance_type_loader')
         if dbs_type is None:
             dbs_type = self.params.get('instance_type_db')
+        user_prefix = self.params.get('user_prefix', None)
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
         self.credentials = RemoteCredentials(service=service,
-                                             key_prefix='longevity-test')
+                                             key_prefix='longevity-test',
+                                             user_prefix=user_prefix)
 
         if self.params.get('db_type') == 'scylla':
             self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
@@ -88,6 +90,7 @@ class ClusterTester(Test):
                                             service=service,
                                             credentials=self.credentials,
                                             ec2_block_device_mappings=dbs_block_device_mappings,
+                                            user_prefix=user_prefix,
                                             n_nodes=n_db_nodes)
         elif self.params.get('db_type') == 'cassandra':
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
@@ -97,6 +100,7 @@ class ClusterTester(Test):
                                                service=service,
                                                ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
+                                               user_prefix=user_prefix,
                                                n_nodes=n_db_nodes)
         else:
             self.error('Incorrect parameter db_type: %s' %
@@ -111,6 +115,7 @@ class ClusterTester(Test):
                                  ec2_block_device_mappings=loaders_block_device_mappings,
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
+                                 user_prefix=user_prefix,
                                  n_nodes=n_loader_nodes)
 
     def get_stress_cmd(self, duration=None, threads=None):
