@@ -14,6 +14,13 @@ nemesis_class_name: 'StopStartMonkey'
 nemesis_interval: 15
 
 regions: !mux
+    us_west_1:
+        region_name: 'us-west-1'
+        security_group_ids: 'sg-dcd785b9'
+        subnet_id: 'subnet-10a04c75'
+        ami_id_db_scylla: 'ami-1da7d17d'
+        ami_id_db_cassandra: 'ami-3cf7c979'
+        ami_id_loader: 'ami-1da7d17d'
     us_west_2:
         region_name: 'us-west-2'
         security_group_ids: 'sg-81703ae4'
