@@ -134,9 +134,14 @@ class Node(object):
     """
 
     def __init__(self, ec2_instance, ec2_service, credentials,
-                 node_prefix='node', node_index=1, ami_username='root'):
+                 node_prefix='node', node_index=1, ami_username='root',
+                 base_logdir=None):
         self.instance = ec2_instance
         self.name = '%s-%s' % (node_prefix, node_index)
+        try:
+            self.logdir = path.init_dir(base_logdir, self.name)
+        except OSError:
+            self.logdir = os.path.join(base_logdir, self.name)
         self.ec2 = ec2_service
         self._wait_instance_up()
         self.wait_public_ip()
@@ -338,6 +343,15 @@ class Cluster(object):
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
+        # I wanted to avoid some parameter passing
+        # from the tester class to the cluster test.
+        assert 'AVOCADO_TEST_LOGDIR' in os.environ
+        try:
+            self.logdir = path.init_dir(os.environ['AVOCADO_TEST_LOGDIR'],
+                                        self.name)
+        except OSError:
+            self.logdir = os.path.join(os.environ['AVOCADO_TEST_LOGDIR'],
+                                       self.name)
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
@@ -373,7 +387,8 @@ class Cluster(object):
                                               InstanceType=self.ec2_instance_type)
         EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self.ec2_ami_username,
-                                         self.node_prefix, node_index)
+                                         self.node_prefix, node_index,
+                                         self.logdir)
                        for node_index, instance in
                        enumerate(instances, start=len(self.nodes) + 1)]
         self.nodes += added_nodes
@@ -384,11 +399,13 @@ class Cluster(object):
                                                   self.ec2_ami_id,
                                                   self.ec2_instance_type)
 
-    def _create_node(self, instance, ami_username, node_prefix, node_index):
+    def _create_node(self, instance, ami_username, node_prefix, node_index,
+                     base_logdir):
         node_prefix = '%s-%s' % (node_prefix, self.shortid)
         return Node(ec2_instance=instance, ec2_service=self.ec2,
                     credentials=self.credentials, ami_username=ami_username,
-                    node_prefix=node_prefix, node_index=node_index)
+                    node_prefix=node_prefix, node_index=node_index,
+                    base_logdir=base_logdir)
 
     def get_node_private_ips(self):
         return [node.instance.private_ip_address for node in self.nodes]
