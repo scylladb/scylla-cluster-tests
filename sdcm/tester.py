@@ -25,6 +25,16 @@ from .cluster import RemoteCredentials
 from .cluster import ScyllaCluster
 from .data_path import get_data_path
 
+try:
+    from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
+
+    # Don't use pyOpenSSL in urllib3 - it causes an ``OpenSSL.SSL.Error``
+    # exception when we try an API call on an idled persistent connection.
+    # See https://github.com/boto/boto3/issues/220
+    extract_from_urllib3()
+except ImportError:
+    pass
+
 
 def clean_aws_resources(method):
     """
