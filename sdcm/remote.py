@@ -24,6 +24,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 
 from avocado.utils import astring
 from avocado.utils import path
@@ -64,11 +65,20 @@ class OutputCheckError(Exception):
 class SSHSubProcess(process.SubProcess):
 
     def __init__(self, cmd, verbose=True, allow_output_check='all',
-                 shell=False, env=None, extra_text=None):
+                 shell=False, env=None, extra_text=None,
+                 log_file=None):
         super(SSHSubProcess, self).__init__(cmd=cmd, verbose=verbose,
                                             allow_output_check=allow_output_check,
                                             shell=shell, env=env)
         self.extra_text = extra_text
+        self._file_logger = None
+        self._file_handler = None
+        if log_file is not None:
+            logger_name = 'ssh-subprocess-%s' % uuid.uuid4()
+            self._file_logger = logging.getLogger(logger_name)
+            self._file_logger.propagate = False
+            self._file_handler = logging.FileHandler(filename=log_file)
+            self._file_logger.addHandler(self._file_handler)
 
     def _init_subprocess(self):
         if self._popen is None:
@@ -157,6 +167,8 @@ class SSHSubProcess(process.SubProcess):
                         LOG.debug(prefix, line)
                         if stream_logger is not None:
                             stream_logger.debug(stream_prefix, line)
+                        if self._file_logger is not None:
+                            self._file_logger.debug(prefix, line)
                 break
             if lock is not None:
                 lock.acquire()
@@ -170,6 +182,8 @@ class SSHSubProcess(process.SubProcess):
                             LOG.debug(prefix, line)
                             if stream_logger is not None:
                                 stream_logger.debug(stream_prefix, line)
+                            if self._file_logger is not None:
+                                self._file_logger.debug(prefix, line)
                         bfr = ''
             finally:
                 if lock is not None:
@@ -178,10 +192,10 @@ class SSHSubProcess(process.SubProcess):
 
 def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
             allow_output_check='all', shell=False, env=None,
-            extra_text=None):
+            extra_text=None, log_file=None):
     sp = SSHSubProcess(cmd=cmd, verbose=verbose,
                        allow_output_check=allow_output_check, shell=shell,
-                       env=env, extra_text=extra_text)
+                       env=env, extra_text=extra_text, log_file=log_file)
     cmd_result = sp.run(timeout=timeout)
     fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
     if fail_condition and not ignore_status:
@@ -706,7 +720,7 @@ class Remote(BaseRemote):
         return "%s %s" % (base_cmd, self.hostname)
 
     def _run(self, cmd, timeout, verbose, ignore_status, connect_timeout,
-             env, options, args):
+             env, options, args, log_file):
         ssh_cmd = self.ssh_command(connect_timeout, options)
         if not env.strip():
             env = ""
@@ -720,7 +734,8 @@ class Remote(BaseRemote):
             full_cmd = '%s "%s"' % (ssh_cmd, astring.shell_escape(cmd))
         result = ssh_run(full_cmd, verbose=verbose,
                          ignore_status=ignore_status, timeout=timeout,
-                         extra_text=self.hostname, shell=True)
+                         extra_text=self.hostname, shell=True,
+                         log_file=log_file)
 
         # The error messages will show up in band (indistinguishable
         # from stuff sent through the SSH connection), so we have the
@@ -740,7 +755,7 @@ class Remote(BaseRemote):
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
-            args=None):
+            args=None, log_file=None):
         if args is None:
             args = ()
         if verbose:
@@ -753,7 +768,8 @@ class Remote(BaseRemote):
         return self._run(cmd=cmd, timeout=timeout, verbose=verbose,
                          ignore_status=ignore_status,
                          connect_timeout=connect_timeout,
-                         env=env, options=options, args=args)
+                         env=env, options=options, args=args,
+                         log_file=log_file)
 
     def run_output_check(self, cmd, timeout=None, ignore_status=False,
                          stdout_ok_regexp=None, stdout_err_regexp=None,
