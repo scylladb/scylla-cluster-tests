@@ -195,9 +195,11 @@ class Node(object):
 
     def retrieve_journal(self):
         try:
+            log_file = os.path.join(self.logdir, 'db_services.log')
             self.remoter.run('sudo journalctl -f -u scylla-server.service '
                              '-u scylla-jmx.service',
-                             verbose=True, ignore_status=True)
+                             verbose=True, ignore_status=True,
+                             log_file=log_file)
         except Exception, details:
             self.log.error('Error retrieving remote node journal: %s', details)
 
@@ -213,10 +215,13 @@ class Node(object):
     def get_backtraces(self):
         try:
             # get all the backtraces
+            log_file = os.path.join(self.logdir, 'coredump.log')
             result = self.remoter.run('sudo coredumpctl info',
                                       verbose=False, ignore_status=True)
             if 'No coredumps found' not in result.stderr:
                 output = result.stdout + result.stderr
+                with open(log_file, 'a') as log_file_obj:
+                    log_file_obj.write(output)
                 for line in output.splitlines():
                     self.log.error(line)
         except Exception, details:
