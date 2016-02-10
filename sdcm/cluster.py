@@ -156,6 +156,8 @@ class Node(object):
                        self.instance.public_ip_address)
         self._journal_thread = None
         self.start_journal_thread()
+        self._backtrace_thread = None
+        self.start_backtrace_thread()
 
     def _wait_instance_up(self):
         """
@@ -206,10 +208,24 @@ class Node(object):
     def get_backtraces(self):
         try:
             # get all the backtraces
-            self.remoter.run('sudo coredumpctl info',
-                             verbose=True, ignore_status=True)
+            result = self.remoter.run('sudo coredumpctl info',
+                                      verbose=False, ignore_status=True)
+            if 'No coredumps found' not in result.stderr:
+                output = result.stdout + result.stderr
+                for line in output.splitlines():
+                    self.log.error(line)
         except Exception, details:
             self.log.error('Error retrieving backtraces : %s', details)
+
+    def backtrace_thread(self):
+        while True:
+            self.wait_ssh_up(verbose=False)
+            self.get_backtraces()
+            time.sleep(30)
+
+    def start_backtrace_thread(self):
+        self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
+        self._backtrace_thread.start()
 
     def __str__(self):
         return 'Node %s [%s | %s] (seed: %s)' % (self.name,
