@@ -23,7 +23,6 @@ import uuid
 import yaml
 
 from avocado.utils import path
-from avocado.utils import process
 from botocore.exceptions import WaiterError
 
 from .log import SDCMAdapter
@@ -157,6 +156,8 @@ class Node(object):
                        self.instance.public_ip_address)
         self._journal_thread = None
         self.start_journal_thread()
+        self._backtrace_thread = None
+        self.start_backtrace_thread()
 
     def _wait_instance_up(self):
         """
@@ -189,31 +190,42 @@ class Node(object):
 
     def retrieve_journal(self):
         try:
-            result = self.remoter.run('sudo journalctl -f',
-                                      verbose=True, ignore_status=True)
+            self.remoter.run('sudo journalctl -f -u scylla-server.service '
+                             '-u scylla-jmx.service',
+                             verbose=True, ignore_status=True)
         except Exception, details:
             self.log.error('Error retrieving remote node journal: %s', details)
 
     def journal_thread(self):
-        self.log.debug("Journal thread started")
         while True:
-            self.wait_ssh_up()
+            self.wait_ssh_up(verbose=False)
             self.retrieve_journal()
 
     def start_journal_thread(self):
-        self.log.debug("Starting journal thread")
         self._journal_thread = threading.Thread(target=self.journal_thread)
         self._journal_thread.start()
 
     def get_backtraces(self):
         try:
             # get all the backtraces
-            self.remoter.run('sudo dnf install -y scylla-gdb',
-                             verbose=True, ignore_status=True)
-            self.remoter.run('sudo coredumpctl info',
-                             verbose=True, ignore_status=True)
+            result = self.remoter.run('sudo coredumpctl info',
+                                      verbose=False, ignore_status=True)
+            if 'No coredumps found' not in result.stderr:
+                output = result.stdout + result.stderr
+                for line in output.splitlines():
+                    self.log.error(line)
         except Exception, details:
             self.log.error('Error retrieving backtraces : %s', details)
+
+    def backtrace_thread(self):
+        while True:
+            self.wait_ssh_up(verbose=False)
+            self.get_backtraces()
+            time.sleep(30)
+
+    def start_backtrace_thread(self):
+        self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
+        self._backtrace_thread.start()
 
     def __str__(self):
         return 'Node %s [%s | %s] (seed: %s)' % (self.name,
@@ -492,39 +504,39 @@ class ScyllaCluster(Cluster):
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
             node_list = self.nodes
-        node_initialized_map = {node: False for node in node_list}
-        all_nodes_initialized = [True for _ in node_list]
-        verify_pause = 60
-        self.log.info('Waiting scylla services to start. '
-                      'Polling interval: %s s', verify_pause)
+
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            node.wait_ssh_up(verbose=verbose)
+            node.wait_db_up(verbose=verbose)
+            node.remoter.run('sudo yum install -y scylla-gdb',
+                             verbose=verbose, ignore_status=True)
+            queue.put(node)
+            queue.task_done()
+
         start_time = time.time()
-        while node_initialized_map.values() != all_nodes_initialized:
-            for node in node_initialized_map.keys():
-                node.wait_ssh_up(verbose=verbose)
-                try:
-                    node.remoter.run('netstat -a | grep :9042',
-                                     verbose=verbose)
-                    node_initialized_map[node] = True
-                except process.CmdError:
-                    try:
-                        node.remoter.run("grep 'Aborting the clustering of "
-                                         "this reservation' "
-                                         "/home/centos/ami.log",
-                                         verbose=verbose)
-                        result = node.remoter.run("tail -5 "
-                                                  "/home/centos/ami.log")
-                        raise NodeInitError(node=node, result=result)
-                    except process.CmdError:
-                        pass
-            initialized_nodes = len([node for node in node_initialized_map if
-                                    node_initialized_map[node]])
-            total_nodes = len(node_initialized_map.keys())
-            time_elapsed = time.time() - start_time
-            self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                          initialized_nodes, total_nodes, int(time_elapsed))
-            time.sleep(verify_pause)
-        # Mark all seed nodes
+
+        for loader in node_list:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
         self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def add_nemesis(self, nemesis):
         self.nemesis.append(nemesis(cluster=self,
@@ -615,28 +627,37 @@ class CassandraCluster(ScyllaCluster):
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
             node_list = self.nodes
-        node_initialized_map = {node: False for node in node_list}
-        all_nodes_initialized = [True for _ in node_list]
-        verify_pause = 60
-        self.log.info('Waiting cassandra services to start. '
-                      'Polling interval: %s s', verify_pause)
+
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            node.wait_ssh_up(verbose=verbose)
+            node.wait_db_up(verbose=verbose)
+            queue.put(node)
+            queue.task_done()
+
         start_time = time.time()
-        while node_initialized_map.values() != all_nodes_initialized:
-            for node in node_initialized_map.keys():
-                node.wait_ssh_up(verbose=verbose)
-                try:
-                    node.remoter.run('netstat -a | grep :9042',
-                                     verbose=verbose)
-                    node_initialized_map[node] = True
-                except Exception:
-                    pass
-            initialized_nodes = len([node for node in node_initialized_map if
-                                    node_initialized_map[node]])
-            total_nodes = len(node_initialized_map.keys())
-            time_elapsed = time.time() - start_time
-            self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                          initialized_nodes, total_nodes, int(time_elapsed))
-            time.sleep(verify_pause)
+
+        for loader in node_list:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
+        self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
 class LoaderSet(Cluster):

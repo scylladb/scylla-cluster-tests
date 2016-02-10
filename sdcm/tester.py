@@ -181,7 +181,7 @@ class ClusterTester(Test):
             self.db_cluster.destroy()
             self.db_cluster = None
         if self.loaders is not None:
-            self.loader.get_backtraces()
+            self.loaders.get_backtraces()
             self.loaders.destroy()
             self.loaders = None
         if self.credentials is not None:

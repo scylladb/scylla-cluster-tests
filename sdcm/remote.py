@@ -124,6 +124,9 @@ class SSHSubProcess(process.SubProcess):
     def _fd_drainer(self, input_pipe):
         stream_prefix = "%s"
         prefix = ''
+        stream_logger = None
+        output_file = None
+        lock = None
         if self.extra_text:
             prefix = '[%s] ' % self.extra_text
         if input_pipe == self._popen.stdout:
@@ -155,9 +158,11 @@ class SSHSubProcess(process.SubProcess):
                         if stream_logger is not None:
                             stream_logger.debug(stream_prefix, line)
                 break
-            lock.acquire()
+            if lock is not None:
+                lock.acquire()
             try:
-                output_file.write(tmp)
+                if output_file is not None:
+                    output_file.write(tmp)
                 if self.verbose:
                     bfr += tmp
                     if tmp.endswith('\n'):
@@ -167,7 +172,8 @@ class SSHSubProcess(process.SubProcess):
                                 stream_logger.debug(stream_prefix, line)
                         bfr = ''
             finally:
-                lock.release()
+                if lock is not None:
+                    lock.release()
 
 
 def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
