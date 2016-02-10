@@ -457,6 +457,7 @@ class ScyllaCluster(Cluster):
         self.nemesis_threads = []
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
+        self.version = '2.1'
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
