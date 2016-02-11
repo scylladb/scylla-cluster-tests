@@ -12,10 +12,19 @@
 # Copyright (c) 2016 ScyllaDB
 
 import logging
+import time
+import types
 
 import boto3.session
 
 from avocado import Test
+
+from cassandra import ConsistencyLevel
+from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster as ClusterDriver
+from cassandra.cluster import NoHostAvailable
+from cassandra.policies import RetryPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy
 
 from . import cluster
 from . import nemesis
@@ -34,6 +43,55 @@ try:
     extract_from_urllib3()
 except ImportError:
     pass
+
+TEST_LOG = logging.getLogger('avocado.test')
+
+
+class FlakyRetryPolicy(RetryPolicy):
+
+    """
+    A retry policy that retries 5 times
+    """
+
+    def on_read_timeout(self, *args, **kwargs):
+        if kwargs['retry_num'] < 5:
+            TEST_LOG.debug("Retrying read after timeout. Attempt #%s",
+                           str(kwargs['retry_num']))
+            return self.RETRY, None
+        else:
+            return self.RETHROW, None
+
+    def on_write_timeout(self, *args, **kwargs):
+        if kwargs['retry_num'] < 5:
+            TEST_LOG.debug("Retrying write after timeout. Attempt #%s",
+                           str(kwargs['retry_num']))
+            return self.RETRY, None
+        else:
+            return self.RETHROW, None
+
+    def on_unavailable(self, *args, **kwargs):
+        if kwargs['retry_num'] < 5:
+            TEST_LOG.debug("Retrying request after UE. Attempt #%s",
+                           str(kwargs['retry_num']))
+            return self.RETRY, None
+        else:
+            return self.RETHROW, None
+
+
+def retry_till_success(fun, *args, **kwargs):
+    timeout = kwargs.pop('timeout', 60)
+    bypassed_exception = kwargs.pop('bypassed_exception', Exception)
+
+    deadline = time.time() + timeout
+    while True:
+        try:
+            return fun(*args, **kwargs)
+        except bypassed_exception:
+            if time.time() > deadline:
+                raise
+            else:
+                # brief pause before next attempt
+                time.sleep(0.25)
 
 
 def clean_aws_resources(method):
@@ -59,6 +117,7 @@ class ClusterTester(Test):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        self.connections = []
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
@@ -173,6 +232,167 @@ class ClusterTester(Test):
         if errors:
             self.fail("cassandra-stress errors on "
                       "nodes:\n%s" % "\n".join(errors))
+
+    def get_auth_provider(self, user, password):
+        return PlainTextAuthProvider(username=user, password=password)
+
+    def _create_session(self, node, keyspace, user, password, compression,
+                        protocol_version, load_balancing_policy=None,
+                        port=None, ssl_opts=None):
+        node_ips = [node.instance.public_ip_address]
+        if not port:
+            port = 9042
+
+        if protocol_version is None:
+            protocol_version = 3
+
+        if user is not None:
+            auth_provider = self.get_auth_provider(user=user,
+                                                   password=password)
+        else:
+            auth_provider = None
+
+        cluster = ClusterDriver(node_ips, auth_provider=auth_provider,
+                                compression=compression,
+                                protocol_version=protocol_version,
+                                load_balancing_policy=load_balancing_policy,
+                                default_retry_policy=FlakyRetryPolicy(),
+                                port=port, ssl_options=ssl_opts,
+                                connect_timeout=100)
+        session = cluster.connect()
+
+        # temporarily increase client-side timeout to 1m to determine
+        # if the cluster is simply responding slowly to requests
+        session.default_timeout = 60.0
+
+        if keyspace is not None:
+            session.set_keyspace(keyspace)
+
+        # override driver default consistency level of LOCAL_QUORUM
+        session.default_consistency_level = ConsistencyLevel.ONE
+
+        self.connections.append(session)
+        return session
+
+    def cql_connection(self, node, keyspace=None, user=None,
+                       password=None, compression=True, protocol_version=None,
+                       port=None, ssl_opts=None):
+
+        wlrr = WhiteListRoundRobinPolicy(self.db_cluster.get_node_public_ips())
+        return self._create_session(node, keyspace, user, password,
+                                    compression, protocol_version, wlrr,
+                                    port=port, ssl_opts=ssl_opts)
+
+    def cql_connection_exclusive(self, node, keyspace=None, user=None,
+                                 password=None, compression=True,
+                                 protocol_version=None, port=None,
+                                 ssl_opts=None):
+
+        wlrr = WhiteListRoundRobinPolicy([node.instance.public_ip_address])
+        return self._create_session(node, keyspace, user, password,
+                                    compression, protocol_version, wlrr,
+                                    port=port, ssl_opts=ssl_opts)
+
+    def cql_connection_patient(self, node, keyspace=None,
+                               user=None, password=None, timeout=30,
+                               compression=True, protocol_version=None,
+                               port=None, ssl_opts=None):
+        """
+        Returns a connection after it stops throwing NoHostAvailables.
+
+        If the timeout is exceeded, the exception is raised.
+        """
+        return retry_till_success(self.cql_connection,
+                                  node,
+                                  keyspace=keyspace,
+                                  user=user,
+                                  password=password,
+                                  timeout=timeout,
+                                  compression=compression,
+                                  protocol_version=protocol_version,
+                                  port=port,
+                                  ssl_opts=ssl_opts,
+                                  bypassed_exception=NoHostAvailable)
+
+    def cql_connection_patient_exclusive(self, node, keyspace=None,
+                                         user=None, password=None, timeout=30,
+                                         compression=True,
+                                         protocol_version=None,
+                                         port=None, ssl_opts=None):
+        """
+        Returns a connection after it stops throwing NoHostAvailables.
+
+        If the timeout is exceeded, the exception is raised.
+        """
+        return retry_till_success(self.cql_connection_exclusive,
+                                  node,
+                                  keyspace=keyspace,
+                                  user=user,
+                                  password=password,
+                                  timeout=timeout,
+                                  compression=compression,
+                                  protocol_version=protocol_version,
+                                  port=port,
+                                  ssl_opts=ssl_opts,
+                                  bypassed_exception=NoHostAvailable)
+
+    def create_ks(self, session, name, rf):
+        query = 'CREATE KEYSPACE %s WITH replication={%s}'
+        if isinstance(rf, types.IntType):
+            # we assume simpleStrategy
+            session.execute(query % (name,
+                                     "'class':'SimpleStrategy', "
+                                     "'replication_factor':%d" % rf))
+        else:
+            assert len(rf) != 0, "At least one datacenter/rf pair is needed"
+            # we assume networkTopologyStrategy
+            options = ', '.join(['\'%s\':%d' % (d, r) for
+                                 d, r in rf.iteritems()])
+            session.execute(query % (name,
+                                     "'class':'NetworkTopologyStrategy', %s" %
+                                     options))
+        session.execute('USE %s' % name)
+
+    def create_cf(self, session, name, key_type="varchar",
+                  speculative_retry=None, read_repair=None, compression=None,
+                  gc_grace=None, columns=None,
+                  compact_storage=False):
+
+        additional_columns = ""
+        if columns is not None:
+            for k, v in columns.items():
+                additional_columns = "%s, %s %s" % (additional_columns, k, v)
+
+        if additional_columns == "":
+            query = ('CREATE COLUMNFAMILY %s (key %s, c varchar, v varchar, '
+                     'PRIMARY KEY(key, c)) WITH comment=\'test cf\'' %
+                     (name, key_type))
+        else:
+            query = ('CREATE COLUMNFAMILY %s (key %s PRIMARY KEY%s) '
+                     'WITH comment=\'test cf\'' %
+                     (name, key_type, additional_columns))
+
+        if compression is not None:
+            query = ('%s AND compression = { \'sstable_compression\': '
+                     '\'%sCompressor\' }' % (query, compression))
+        else:
+            # if a compression option is omitted, C*
+            # will default to lz4 compression
+            query += ' AND compression = {}'
+
+        if read_repair is not None:
+            query = '%s AND read_repair_chance=%f' % (query, read_repair)
+        if gc_grace is not None:
+            query = '%s AND gc_grace_seconds=%d' % (query, gc_grace)
+        if speculative_retry is not None:
+            query = ('%s AND speculative_retry=\'%s\'' %
+                     (query, speculative_retry))
+
+        if compact_storage:
+            query += ' AND COMPACT STORAGE'
+
+        session.execute(query)
+        time.sleep(0.2)
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
