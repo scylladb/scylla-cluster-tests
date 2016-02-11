@@ -55,6 +55,16 @@ Configure aws::
 That will ask you for your ``region``, ``aws_access_key_id``,
 ``aws_secret_access_key``. Please complete that.
 
+You'll also need to install cassandra-driver (needed to support issuing CQL
+queries to nodes):
+
+    sudo -H pip install cassandra-driver
+
+That install command requires gcc and python-devel, so if you still don't have
+either, please install them:
+
+    sudo dnf install gcc python-devel -y
+
 Take a look at the ``data_dir/scylla.yaml`` file. It contains a number of
 configurable test parameters, such as DB cluster instance types and AMI IDs.
 In this example, we're assuming that you have copied ``data_dir/scylla.yaml``
