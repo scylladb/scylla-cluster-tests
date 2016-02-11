@@ -676,6 +676,9 @@ class BaseRemote(object):
         active already, start a new one in the background. Also, cleanup any
         zombie master SSH connections (e.g., dead due to reboot).
         """
+        def reset_sigpipe():
+            signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
         if not ENABLE_MASTER_SSH:
             return
 
@@ -694,10 +697,18 @@ class BaseRemote(object):
 
             # Start the master SSH connection in the background.
             master_cmd = self.ssh_command(options="-N -o ControlMaster=yes")
-            self.master_ssh_job = SSHSubProcess(cmd=master_cmd,
-                                                verbose=False,
-                                                extra_text=self.hostname)
-            self.master_ssh_job.start()
+
+            shell = '/bin/bash'
+            if not os.path.isfile(shell):
+                shell = '/bin/sh'
+            self.master_ssh_job = subprocess.Popen(master_cmd,
+                                                   stdout=subprocess.PIPE,
+                                                   stderr=subprocess.PIPE,
+                                                   preexec_fn=reset_sigpipe,
+                                                   close_fds=False,
+                                                   shell=True,
+                                                   executable=shell,
+                                                   stdin=None)
 
 
 class Remote(BaseRemote):
