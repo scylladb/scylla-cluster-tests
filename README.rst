@@ -56,12 +56,12 @@ That will ask you for your ``region``, ``aws_access_key_id``,
 ``aws_secret_access_key``. Please complete that.
 
 You'll also need to install cassandra-driver (needed to support issuing CQL
-queries to nodes):
+queries to nodes)::
 
     sudo -H pip install cassandra-driver
 
 That install command requires gcc and python-devel, so if you still don't have
-either, please install them:
+either, please install them::
 
     sudo dnf install gcc python-devel -y
 
