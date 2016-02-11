@@ -252,7 +252,7 @@ class Node(object):
         self.instance.stop()
         self.instance.wait_until_stopped()
         self.instance.start()
-        self.instance.wait_until_running()
+        self._wait_instance_up()
         self.wait_public_ip()
         self.log.debug('Got new public IP %s',
                        self.instance.public_ip_address)
