@@ -118,6 +118,129 @@ or::
 At the end of the test, there's a path to an HTML file with the job report.
 The flag ``--open-browser`` actually opens that at the end of the test.
 
+Test operations
+---------------
+
+On a high level overview, the test operations are:
+
+Setup
+-----
+
+1) Instantiate a Cluster DB, with the specified number of nodes (the number
+   of nodes can be specified through the config file, or the test writer can
+   set a specific number depending on the test needs).
+
+2) Instantiate a set of loader nodes. They will be the ones to initiate
+   cassandra stress, and possibly other database stress inducing activities.
+
+3) Wait until the loaders are ready (SSH up and cassandra-stress is present)
+
+4) Wait until the DB nodes are ready (SSH up and DB services are up, port 9042
+   occupied)
+
+Actual test
+-----------
+
+1) Loader nodes execute cassandra stress on the DB cluster (optional)
+
+2) If configured, a Nemesis class, will execute periodically, introducing some
+   disruption activity to the cluster (stop/start a node, destroy data, kill
+   scylla processes on a node). the nemesis starts after an interval, to give
+   cassandra-stress on step 1 to stabilize
+
+Keep in mind that the suite libraries are flexible, and will allow you to
+set scenarios that differ from this base one.
+
+Making sense of logs
+--------------------
+
+In order to try to establish a timeline of what is going on, we opted for
+dumping a lot of information in the test main log. That includes:
+
+1) Labels for each Node and cluster, including SSH access info in case
+   you want to debug what's going on. Example::
+
+    15:43:23 DEBUG| Node lmr-scylla-db-node-88c994d5-1 [54.183.240.195 | 172.31.18.109] (seed: None): SSH access -> 'ssh -i /var/tmp/lmr-longevity-test-8b95682d.pem centos@54.183.240.195'
+    ...
+    15:47:52 INFO | Cluster lmr-scylla-db-cluster-88c994d5 (AMI: ami-1da7d17d Type: c4.xlarge): (6/6) DB nodes ready. Time elapsed: 79 s
+2) Scylla logs for all the DB nodes, logged as they happen. Example line::
+
+    15:44:35 DEBUG| [54.183.193.208] [stdout] Feb 10 17:44:17 ip-172-30-0-123.ec2.internal systemd[1]: Starting Scylla Server...
+3) Coredump watching thread, that runs every 30 seconds and will tell you if
+   scylla dumped core
+
+4) Cassandra-stress output. As cassandra-stress runs only after all the nodes
+   are properly set up, you'll see it clearly separated from the initial flurry
+   of Node init information::
+
+    15:47:55 INFO | [54.193.84.90] Running '/usr/bin/ssh -a -x  -o ControlPath=/var/tmp/ssh-masterTQ3hZu/socket -o StrictHostKeyChecking=no -o UserKnownHostsFile=/var/tmp/tmpOjFA9Q -o BatchMode=yes -o ConnectTimeout=300 -o ServerAliveInterval=300 -l centos -p 22 -i /var/tmp/lmr-longevity-test-8b95682d.pem 54.193.84.90 "cassandra-stress write cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=4 -node 172.31.18.109"'
+    15:48:02 DEBUG| [54.193.84.90] [stdout] INFO  17:48:01 Found Netty's native epoll transport in the classpath, using it
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 Using data-center name 'datacenter1' for DCAwareRoundRobinPolicy (if this is incorrect, please provide the correct datacenter name with DCAwareRoundRobinPolicy constructor)
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.109:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.114:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.113:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.112:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.111:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.110:9042 added
+    15:48:03 DEBUG| [54.193.84.90] [stdout] Connected to cluster: lmr-scylla-db-cluster-88c994d5
+    ...
+
+5) As the DB logs thread will still be active, you'll see messages from nodes
+   (normally compaction) mingled with cassandra-stress output. Example::
+
+    16:01:43 DEBUG| [54.193.84.90] [stdout] total,       2265875,    4887,    4887,    4887,     0.8,     0.6,     2.5,     3.6,     9.8,    13.8,  493.7,  0.00632,      0,      0,       0,       0,       0,       0
+    16:01:44 DEBUG| [54.193.84.90] [stdout] total,       2270561,    4679,    4679,    4679,     0.8,     0.6,     2.5,     3.6,     8.1,    10.1,  494.7,  0.00630,      0,      0,       0,       0,       0,       0
+    16:01:45 DEBUG| [54.183.240.195] [stdout] Feb 10 18:01:45 ip-172-31-18-109 scylla[2103]: INFO  [shard 1] compaction - Compacting [/var/lib/scylla/data/keyspace1/standard1-71035bf0d01e11e58c82000000000001/keyspace1-standard1-ka-5-Data.db:level=0, /var/lib/scylla/data/keyspace1/standard1-71035bf0d01e11e58c82000000000001/keyspace1-standard1-ka-9-Data.db:level=0, /var/lib/scylla/data/keyspace1/standard1-71035bf0d01e11e58c82000000000001/keyspace1-standard1-ka-13-Data.db:level=0, /var/lib/scylla/data/keyspace1/standard1-71035bf0d01e11e58c82000000000001/keyspace1-standard1-ka-17-Data.db:level=0, ]
+    16:01:45 DEBUG| [54.193.84.90] [stdout] total,       2275544,    4963,    4963,    4963,     0.8,     0.6,     2.4,     3.4,     9.7,    18.9,  495.7,  0.00629,      0,      0,       0,       0,       0,       0
+    16:01:46 DEBUG| [54.193.84.90] [stdout] total,       2280432,    4883,    4883,    4883,     0.8,     0.6,     2.5,     3.6,    15.4,    20.2,  496.7,  0.00628,      0,      0,       0,       0,       0,       0
+    16:01:47 DEBUG| [54.193.84.90] [stdout] total,       2285011,    4562,    4562,    4562,     0.9,     0.6,     2.5,     3.8,    18.2,    30.9,  497.7,  0.00627,      0,      0,       0,       0,       0,       0
+
+
+6) You'll also see Nemesis messages. The cool thing about this is that you can see
+   the cluster reaction to the disruption event. Here's an example of a nemesis
+   that stops and then starts the AWS instance of one of our DB nodes. Ellipsis
+   were added for brevity purposes. You can see the gossiping for the node down,
+   then for the Node up, all of that happening while the loader nodes churning
+   cassandra-stress output::
+
+    15:57:55 DEBUG| sdcm.nemesis.StopStartMonkey: <function disrupt at 0x7fd5aec38c80> Start
+    15:57:55 INFO | sdcm.nemesis.StopStartMonkey: Stop Node lmr-scylla-db-node-88c994d5-3 [54.193.37.181 | 172.31.18.111] (seed: False) then restart it
+    15:57:55 DEBUG| [54.193.84.90] [stdout] total,       1257018,    4989,    4989,    4989,     0.8,     0.6,     2.4,     2.9,     9.9,    23.1,  265.3,  0.00651,      0,      0,       0,       0,       0,       0
+    15:57:56 DEBUG| [54.193.84.90] [stdout] total,       1262289,    5248,    5248,    5248,     0.7,     0.6,     2.4,     2.8,     5.9,     7.0,  266.4,  0.00650,      0,      0,       0,       0,       0,       0
+    15:57:57 DEBUG| [54.193.37.181] [stdout] Feb 10 17:57:56 ip-172-31-18-111 systemd[1]: Stopping Scylla JMX...
+    15:57:57 DEBUG| [54.183.195.134] [stdout] Feb 10 17:57:57 ip-172-31-18-112 scylla[2108]: INFO  [shard 0] gossip - InetAddress 172.31.18.111 is now DOWN
+    15:57:57 DEBUG| [54.183.193.208] [stdout] Feb 10 17:57:57 ip-172-31-18-113 scylla[2114]: INFO  [shard 0] gossip - InetAddress 172.31.18.111 is now DOWN
+    15:57:57 DEBUG| [54.193.37.222] [stdout] Feb 10 17:57:57 ip-172-31-18-114 scylla[2098]: INFO  [shard 0] gossip - InetAddress 172.31.18.111 is now DOWN
+    15:57:57 DEBUG| [54.193.61.5] [stdout] Feb 10 17:57:57 ip-172-31-18-110 scylla[2107]: INFO  [shard 0] gossip - InetAddress 172.31.18.111 is now DOWN
+    15:57:57 DEBUG| [54.183.240.195] [stdout] Feb 10 17:57:57 ip-172-31-18-109 scylla[2103]: INFO  [shard 0] gossip - InetAddress 172.31.18.111 is now DOWN
+    15:57:57 DEBUG| [54.193.84.90] [stdout] total,       1267035,    4739,    4739,    4739,     0.8,     0.6,     2.4,     4.8,    17.7,    30.2,  267.4,  0.00647,      0,      0,       0,       0,       0,       0
+    ...
+    15:58:01 DEBUG| [54.193.84.90] [stdout] total,       1283680,    4219,    4219,    4219,     0.9,     0.6,     2.6,     4.4,     8.1,    11.9,  271.4,  0.00651,      0,      0,       0,       0,       0,       0
+    15:58:02 DEBUG| [54.193.84.90] [stdout] total,       1285139,    1452,    1452,    1452,     2.7,     1.7,     9.2,    22.3,    54.8,    55.2,  272.4,  0.00699,      0,      0,       0,       0,       0,       0
+    15:58:02 DEBUG| [54.183.240.195] [stdout] Feb 10 17:58:02 ip-172-31-18-109 scylla[2103]: INFO  [shard 0] rpc - client 172.31.18.111: client connection dropped: read: Connection reset by peer
+    15:58:02 DEBUG| [54.193.37.222] [stdout] Feb 10 17:58:02 ip-172-31-18-114 scylla[2098]: INFO  [shard 0] rpc - client 172.31.18.111: client connection dropped: read: Connection reset by peer
+    15:58:02 DEBUG| [54.193.61.5] [stdout] Feb 10 17:58:02 ip-172-31-18-110 scylla[2107]: INFO  [shard 0] rpc - client 172.31.18.111: client connection dropped: read: Connection reset by peer
+    15:58:02 DEBUG| [54.183.193.208] [stdout] Feb 10 17:58:02 ip-172-31-18-113 scylla[2114]: INFO  [shard 0] rpc - client 172.31.18.111: client connection dropped: read: Connection reset by peer
+    15:58:03 DEBUG| [54.193.84.90] [stdout] total,       1288782,    3515,    3515,    3515,     1.1,     0.6,     2.6,     7.7,    56.3,   143.6,  273.4,  0.00701,      0,      0,       0,       0,       0,       0
+    ...
+    15:58:59 DEBUG| [54.193.84.90] [stdout] total,       1532519,    4846,    4846,    4846,     0.8,     0.6,     2.5,     3.8,     9.5,    10.9,  328.8,  0.00715,      0,      0,       0,       0,       0,       0
+    15:58:59 DEBUG| Node lmr-scylla-db-node-88c994d5-3 [54.193.37.181 | 172.31.18.111] (seed: None): Got new public IP 54.67.92.86
+    15:59:00 DEBUG| [54.193.84.90] [stdout] total,       1537219,    4681,    4681,    4681,     0.8,     0.6,     2.5,     3.9,    18.8,    28.3,  329.8,  0.00713,      0,      0,       0,       0,       0,       0
+    ...
+    15:59:51 DEBUG| [54.193.37.222] [stdout] Feb 10 17:59:51 ip-172-31-18-114 scylla[2098]: INFO  [shard 0] gossip - Node 172.31.18.111 has restarted, now UP
+    15:59:52 DEBUG| [54.193.84.90] [stdout] total,       1767965,    4869,    4869,    4869,     0.8,     0.6,     2.5,     3.0,    12.3,    15.0,  382.1,  0.00677,      0,      0,       0,       0,       0,       0
+    15:59:52 DEBUG| [54.183.240.195] [stdout] Feb 10 17:59:52 ip-172-31-18-109 scylla[2103]: INFO  [shard 0] gossip - Node 172.31.18.111 has restarted, now UP
+    15:59:53 DEBUG| [54.193.84.90] [stdout] total,       1771279,    3291,    3291,    3291,     1.2,     0.6,     3.4,    13.2,    32.3,    39.8,  383.1,  0.00680,      0,      0,       0,       0,       0,       0
+    15:59:53 DEBUG| [54.193.61.5] [stdout] Feb 10 17:59:53 ip-172-31-18-110 scylla[2107]: INFO  [shard 0] gossip - Node 172.31.18.111 has restarted, now UP
+    15:59:54 DEBUG| [54.193.84.90] [stdout] total,       1775909,    4622,    4622,    4622,     0.9,     0.6,     2.5,     3.7,     9.9,    16.3,  384.1,  0.00678,      0,      0,       0,       0,       0,       0
+    15:59:54 DEBUG| [54.183.195.134] [stdout] Feb 10 17:59:54 ip-172-31-18-112 scylla[2108]: INFO  [shard 0] gossip - Node 172.31.18.111 has restarted, now UP
+
+With all that information going, the main log is hard to read, but at least
+you now have an outline of what is going on. We store the scylla logs
+on per node files, you can find them all in the test log directory (the
+avocado HTML report will help you locate and visualize all those files, just
+click on the test name link and you'll see the dir structure.
+
 TODO
 ----
 
