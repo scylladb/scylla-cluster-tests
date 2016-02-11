@@ -156,6 +156,10 @@ class Node(object):
                        self.instance.public_ip_address)
         self._journal_thread = None
         self.start_journal_thread()
+        # We'll assume 0 coredump for starters, if by a chance there
+        # are already coredumps in there the coredump backtrace
+        # code will report all of them.
+        self._n_coredumps = 0
         self._backtrace_thread = None
         self.start_backtrace_thread()
 
@@ -206,24 +210,72 @@ class Node(object):
         self._journal_thread = threading.Thread(target=self.journal_thread)
         self._journal_thread.start()
 
-    def get_backtraces(self):
+    def _get_coredump_backtraces(self, last=True):
+        """
+        Get coredump backtraces.
+
+        :param last: Whether to only show the last backtrace.
+        :return: process.CmdResult output
+        """
         try:
-            # get all the backtraces
-            log_file = os.path.join(self.logdir, 'coredump.log')
-            result = self.remoter.run('sudo coredumpctl info',
-                                      verbose=False, ignore_status=True)
-            if 'No coredumps found' not in result.stderr:
-                output = result.stdout + result.stderr
-                with open(log_file, 'a') as log_file_obj:
-                    log_file_obj.write(output)
-                for line in output.splitlines():
-                    self.log.error(line)
+            backtrace_cmd = 'sudo coredumpctl info'
+            if last:
+                backtrace_cmd += ' -1'
+            return self.remoter.run(backtrace_cmd,
+                                    verbose=False, ignore_status=True)
         except Exception, details:
-            self.log.error('Error retrieving backtraces : %s', details)
+            self.log.error('Error retrieving core dump backtraces : %s',
+                           details)
+
+    def _notify_backtrace(self, last):
+        """
+        Notify coredump backtraces to test log and coredump.log file.
+
+        :param last: Whether to show only the last backtrace.
+        """
+        result = self._get_coredump_backtraces(last=last)
+        log_file = os.path.join(self.logdir, 'coredump.log')
+        output = result.stdout + result.stderr
+        with open(log_file, 'a') as log_file_obj:
+            log_file_obj.write(output)
+        for line in output.splitlines():
+            self.log.error(line)
+
+    def _get_n_coredumps(self):
+        """
+        Get the number of coredumps stored on this Node.
+
+        :return: Number of coredumps
+        :rtype: int
+        """
+        try:
+            n_backtraces_cmd = 'sudo coredumpctl --no-legend 2>/dev/null'
+            result = self.remoter.run(n_backtraces_cmd,
+                                      verbose=False, ignore_status=True)
+            return len(result.stdout.splitlines())
+        except Exception, details:
+            self.log.error('Error retrieving number of core dumps : %s',
+                           details)
+            return None
+
+    def get_backtraces(self):
+        """
+        Verify the number of backtraces stored, report if new ones were found.
+        """
+        self.wait_ssh_up(verbose=False)
+        new_n_coredumps = self._get_n_coredumps()
+        if new_n_coredumps is not None:
+            if (new_n_coredumps - self._n_coredumps) == 1:
+                self._notify_backtrace(last=True)
+            elif (new_n_coredumps - self._n_coredumps) > 1:
+                self._notify_backtrace(last=False)
+            self._n_coredumps = new_n_coredumps
 
     def backtrace_thread(self):
+        """
+        Keep reporting new coredumps found, every 30 seconds.
+        """
         while True:
-            self.wait_ssh_up(verbose=False)
             self.get_backtraces()
             time.sleep(30)
 
