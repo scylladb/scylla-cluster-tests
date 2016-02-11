@@ -66,19 +66,14 @@ def register_cleanup():
 register_cleanup()
 
 
-class NodeInitError(Exception):
+class NodeError(Exception):
 
-    def __init__(self, node=None, result=None, msg=None):
-        self.node = node
-        self.result = result
+    def __init__(self, msg=None):
         self.msg = msg
 
     def __str__(self):
         if self.msg is not None:
             return self.msg
-        else:
-            return "Node %s init fail:\n%s" % (str(self.node),
-                                               self.result.stdout)
 
 
 class LoaderSetInitError(Exception):
@@ -143,7 +138,7 @@ class Node(object):
         except OSError:
             self.logdir = os.path.join(base_logdir, self.name)
         self.ec2 = ec2_service
-        self._wait_instance_up()
+        self._instance_wait_safe(self.instance.wait_until_running)
         self.wait_public_ip()
         self.is_seed = None
         self.ec2.create_tags(Resources=[self.instance.id],
@@ -164,9 +159,9 @@ class Node(object):
         self._backtrace_thread = None
         self.start_backtrace_thread()
 
-    def _wait_instance_up(self):
+    def _instance_wait_safe(self, instance_method):
         """
-        Wait until the AWS instance is up.
+        Wrapper around AWS instance waiters that is safer to use.
 
         Since AWS adopts an eventual consistency model, sometimes the method
         wait_until_running will raise a botocore.exceptions.WaiterError saying
@@ -177,21 +172,20 @@ class Node(object):
         :see: [2] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
         """
         treshold = 300
-        running = False
+        ok = False
         retries = 0
         max_retries = 9
-        while not running and retries <= max_retries:
+        while not ok and retries <= max_retries:
             try:
-                self.instance.wait_until_running()
-                running = True
+                instance_method()
+                ok = True
             except WaiterError:
                 time.sleep(max((2 ** retries) * 2, treshold))
                 retries += 1
 
-        if not running:
-            raise NodeInitError(msg='AWS instance %s reported not found after '
-                                    'exponencial backoff wait' %
-                                    self.instance.id)
+        if not ok:
+            raise NodeError('AWS instance %s waiter error after '
+                            'exponencial backoff wait' % self.instance.id)
 
     def retrieve_journal(self):
         try:
@@ -250,9 +244,9 @@ class Node(object):
 
     def restart(self):
         self.instance.stop()
-        self.instance.wait_until_stopped()
+        self._instance_wait_safe(self.instance.wait_until_stopped)
         self.instance.start()
-        self._wait_instance_up()
+        self._instance_wait_safe(self.instance.wait_until_running)
         self.wait_public_ip()
         self.log.debug('Got new public IP %s',
                        self.instance.public_ip_address)
