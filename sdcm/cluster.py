@@ -348,7 +348,7 @@ class Node(object):
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
-            text = '%s: Waiting for DB services to be up' % self
+            text = '%s: Waiting for DB services to be down' % self
         wait.wait_for(func=lambda: not self.db_up, step=60,
                       text=text)
 
