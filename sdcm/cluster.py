@@ -324,7 +324,7 @@ class Node(object):
                                       verbose=False, ignore_status=True)
             return result.exit_status == 0
         except Exception, details:
-            self.log.error('Error checking for DB up: %s', details)
+            self.log.error('Error checking for DB status: %s', details)
             return False
 
     def cs_installed(self, cassandra_stress_bin=None):
