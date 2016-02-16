@@ -324,7 +324,7 @@ class Node(object):
                                       verbose=False, ignore_status=True)
             return result.exit_status == 0
         except Exception, details:
-            self.log.error('Error checking for DB up: %s', details)
+            self.log.error('Error checking for DB status: %s', details)
             return False
 
     def cs_installed(self, cassandra_stress_bin=None):
@@ -348,8 +348,8 @@ class Node(object):
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
-            text = '%s: Waiting for DB services to be up' % self
-        wait.wait_for(func=lambda: not self.db_up, step=60,
+            text = '%s: Waiting for DB services to be down' % self
+        wait.wait_for(func=lambda: not self.db_up(), step=60,
                       text=text)
 
     def wait_cs_installed(self, verbose=True):
