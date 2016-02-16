@@ -96,6 +96,12 @@ class Nemesis(object):
         self.target_node.remoter.run(kill_cmd, ignore_status=True)
 
         self.target_node.wait_db_down()
+
+        # TODO: Remove scylla-server restart upon systemd service is fixed
+        # https://github.com/scylladb/scylla/issues/904
+        restart_cmd = 'sudo systemctl restart scylla-server.service'
+        self.target_node.remoter.run(restart_cmd)
+
         # Let's wait for the target Node to have their services re-started
         self.target_node.wait_db_up()
 
@@ -109,7 +115,6 @@ class Nemesis(object):
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
         self.target_node.remoter.run('/tmp/break_scylla.sh')
 
-        # lennart's systemd will restart scylla let him a bit of time
         self.disrupt_kill_scylla_daemon()
 
     def disrupt_destroy_data_then_repair(self):
