@@ -349,7 +349,7 @@ class Node(object):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
-        wait.wait_for(func=lambda: not self.db_up, step=60,
+        wait.wait_for(func=lambda: not self.db_up(), step=60,
                       text=text)
 
     def wait_cs_installed(self, verbose=True):
