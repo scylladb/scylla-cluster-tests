@@ -20,6 +20,8 @@ import logging
 import random
 import time
 
+from avocado.utils import process
+
 from .data_path import get_data_path
 from .log import SDCMAdapter
 
@@ -143,14 +145,31 @@ class Nemesis(object):
                            exc_info=True)
 
     def repair_nodetool_repair(self):
-        result = self.target_node.remoter.run('nodetool -h localhost repair')
-        self.log.debug("Command '%s' duration -> %s s", result.command, result.duration)
-
-    def repair_nodetool_rebuild(self):
-        for node in self.cluster.nodes:
-            result = node.remoter.run('nodetool -h localhost rebuild')
+        repair_cmd = 'nodetool -h localhost repair'
+        try:
+            result = self.target_node.remoter.run(repair_cmd)
             self.log.debug("Command '%s' duration -> %s s", result.command,
                            result.duration)
+        except process.CmdError, details:
+            self.log.error("Repair command '%s' failed on node %s: %s",
+                           repair_cmd, self.target_node, details.result)
+        except Exception:
+            self.log.error('Method repair_nodetool_repair unexpected exception',
+                           exc_info=True)
+
+    def repair_nodetool_rebuild(self):
+        rebuild_cmd = 'nodetool -h localhost rebuild'
+        for node in self.cluster.nodes:
+            try:
+                result = node.remoter.run(rebuild_cmd)
+                self.log.debug("Command '%s' duration -> %s s", result.command,
+                               result.duration)
+            except process.CmdError, details:
+                self.log.error("Rebuild command '%s' failed on node %s: %s",
+                               rebuild_cmd, node, details.result)
+            except Exception:
+                self.log.error('Method repair_nodetool_rebuild unexpected exception',
+                               exc_info=True)
 
 
 def log_time_elapsed(method):
