@@ -58,35 +58,54 @@ class Nemesis(object):
         except:
             return str(self.__class__)
 
+    def _run_nodetool(self, cmd, node):
+        try:
+            result = node.remoter.run(cmd)
+            self.log.debug("Command '%s' duration -> %s s", result.command,
+                           result.duration)
+            return result
+        except process.CmdError, details:
+            self.log.error("nodetool command '%s' failed on node %s: %s",
+                           cmd, self.target_node, details.result)
+            return None
+        except Exception:
+            self.log.error('Unexpected exception running nodetool',
+                           exc_info=True)
+            return None
+
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
     def disrupt_nodetool_drain(self):
         self.log.info('Drain %s and restart it', self.target_node)
-        self.target_node.remoter.run('nodetool -h localhost drain')
-        self.target_node.restart()
+        drain_cmd = 'nodetool -h localhost drain'
+        result = self._run_nodetool(drain_cmd, self.target_node)
+        if result is not None:
+            self.target_node.restart()
 
     def disrupt_nodetool_decommission(self):
         self.log.info('Decommission %s', self.target_node)
         target_node_ip = self.target_node.instance.private_ip_address
-        result = self.target_node.remoter.run('nodetool --host localhost '
-                                              'decommission')
-        self.log.debug("Command '%s' duration -> %s s", result.command, result.duration)
-        verification_node = random.choice(self.cluster.nodes)
-        while verification_node == self.target_node:
+        decommission_cmd = 'nodetool --host localhost decommission'
+        result = self._run_nodetool(decommission_cmd, self.target_node)
+        if result is not None:
             verification_node = random.choice(self.cluster.nodes)
+            while verification_node == self.target_node:
+                verification_node = random.choice(self.cluster.nodes)
 
-        node_info_list = self.cluster.get_node_info_list(verification_node)
-        private_ips = [node_info['ip'] for node_info in node_info_list]
-        error_msg = ('Node that was decommissioned %s still in the cluster. '
-                     'Cluster status info: %s' % (self.target_node,
-                                                  node_info_list))
-        assert target_node_ip not in private_ips, error_msg
-        self.cluster.nodes.remove(self.target_node)
-        self.target_node.destroy()
-        # Replace the node that was terminated.
-        new_nodes = self.cluster.add_nodes(count=1)
-        self.cluster.wait_for_init(node_list=new_nodes)
+            node_info_list = self.cluster.get_node_info_list(verification_node)
+            private_ips = [node_info['ip'] for node_info in node_info_list]
+            error_msg = ('Node that was decommissioned %s still in the cluster. '
+                         'Cluster status info: %s' % (self.target_node,
+                                                      node_info_list))
+            if target_node_ip in private_ips:
+                self.log.error(error_msg)
+            else:
+                self.cluster.nodes.remove(self.target_node)
+                self.target_node.destroy()
+                # Replace the node that was terminated.
+                new_nodes = self.cluster.add_nodes(count=1)
+                self.cluster.wait_for_init(node_list=new_nodes)
 
     def disrupt_stop_start(self):
         self.log.info('Stop %s then restart it', self.target_node)
@@ -146,30 +165,12 @@ class Nemesis(object):
 
     def repair_nodetool_repair(self):
         repair_cmd = 'nodetool -h localhost repair'
-        try:
-            result = self.target_node.remoter.run(repair_cmd)
-            self.log.debug("Command '%s' duration -> %s s", result.command,
-                           result.duration)
-        except process.CmdError, details:
-            self.log.error("Repair command '%s' failed on node %s: %s",
-                           repair_cmd, self.target_node, details.result)
-        except Exception:
-            self.log.error('Method repair_nodetool_repair unexpected exception',
-                           exc_info=True)
+        self._run_nodetool(repair_cmd, self.target_node)
 
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
         for node in self.cluster.nodes:
-            try:
-                result = node.remoter.run(rebuild_cmd)
-                self.log.debug("Command '%s' duration -> %s s", result.command,
-                               result.duration)
-            except process.CmdError, details:
-                self.log.error("Rebuild command '%s' failed on node %s: %s",
-                               rebuild_cmd, node, details.result)
-            except Exception:
-                self.log.error('Method repair_nodetool_rebuild unexpected exception',
-                               exc_info=True)
+            self._run_nodetool(rebuild_cmd, node)
 
 
 def log_time_elapsed(method):
