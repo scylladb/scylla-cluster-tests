@@ -153,6 +153,7 @@ class ClusterTester(Test):
 
         if self.params.get('db_type') == 'scylla':
             self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
+                                            ec2_ami_username=self.params.get('ami_db_scylla_user'),
                                             ec2_security_group_ids=[self.params.get('security_group_ids')],
                                             ec2_subnet_id=self.params.get('subnet_id'),
                                             ec2_instance_type=dbs_type,
@@ -163,6 +164,7 @@ class ClusterTester(Test):
                                             n_nodes=n_db_nodes)
         elif self.params.get('db_type') == 'cassandra':
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
+                                               ec2_ami_username=self.params.get('ami_db_cassandra_user'),
                                                ec2_security_group_ids=[self.params.get('security_group_ids')],
                                                ec2_subnet_id=self.params.get('subnet_id'),
                                                ec2_instance_type=dbs_type,
@@ -177,6 +179,7 @@ class ClusterTester(Test):
 
         scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
+                                 ec2_ami_username=self.params.get('ami_loader_user'),
                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
                                  ec2_subnet_id=self.params.get('subnet_id'),
                                  ec2_instance_type=loaders_type,

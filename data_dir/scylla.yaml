@@ -22,22 +22,31 @@ regions: !mux
         security_group_ids: 'sg-dcd785b9'
         subnet_id: 'subnet-10a04c75'
         ami_id_db_scylla: 'ami-be84f5de'
+        ami_db_scylla_user: 'centos'
         ami_id_loader: 'ami-be84f5de'
+        ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-3cf7c979'
+        ami_db_cassandra_user: 'ubuntu'
     us_west_2:
         region_name: 'us-west-2'
         security_group_ids: 'sg-81703ae4'
         subnet_id: 'subnet-5207ee37'
         ami_id_db_scylla: 'ami-d56d8eb5'
+        ami_db_scylla_user: 'centos'
         ami_id_loader: 'ami-d56d8eb5'
+        ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-1cff962c'
+        ami_db_cassandra_user: 'ubuntu'
     us_east_1:
         region_name: 'us-east-1'
         security_group_ids: 'sg-c5e1f7a0'
         subnet_id: 'subnet-ec4a72c4'
         ami_id_db_scylla: 'ami-e7e4d28d'
+        ami_db_scylla_user: 'centos'
         ami_id_loader: 'ami-e7e4d28d'
+        ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-ada2b6c4'
+        ami_db_cassandra_user: 'ubuntu'
 
 databases: !mux
     cassandra:
