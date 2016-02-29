@@ -581,6 +581,8 @@ class ScyllaCluster(Cluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
+            node.remoter.run('rpm -qa | grep scylla | sort', verbose=True,
+                             ignore_status=True)
             queue.put(node)
             queue.task_done()
 

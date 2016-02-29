@@ -40,7 +40,7 @@ class LongevityTest(ClusterTester):
         Run cassandra-stress on a cluster for 12 hours.
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
-        self.db_cluster.start_nemesis(interval=30)
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.run_stress(duration=60 * 12)
 
     def test_1_day(self):
@@ -48,7 +48,7 @@ class LongevityTest(ClusterTester):
         Run cassandra-stress on a cluster for 24 hours.
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
-        self.db_cluster.start_nemesis(interval=30)
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.run_stress(duration=60 * 24)
 
     def test_1_week(self):
@@ -56,7 +56,7 @@ class LongevityTest(ClusterTester):
         Run cassandra-stress on a cluster for 1 week.
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
-        self.db_cluster.start_nemesis(interval=30)
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.run_stress(duration=60 * 24 * 7)
 
 if __name__ == '__main__':
