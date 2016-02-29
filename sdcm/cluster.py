@@ -236,6 +236,16 @@ class Node(object):
         result = self._get_coredump_backtraces(last=last)
         log_file = os.path.join(self.logdir, 'coredump.log')
         output = result.stdout + result.stderr
+        base_upload_url = 'scylladb-users-upload.s3.amazonaws.com/%s/%s'
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith('Coredump:'):
+                coredump = line.split()[-1]
+                coredump_id = os.path.basename(coredump)[:-3]
+                upload_url = base_upload_url % (coredump_id, coredump)
+                self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
+                self.remoter.run("curl --request PUT --upload-file '%s' '%s'" %
+                                 (coredump, upload_url))
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
         for line in output.splitlines():
