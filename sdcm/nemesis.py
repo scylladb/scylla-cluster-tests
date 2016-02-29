@@ -42,8 +42,8 @@ class Nemesis(object):
         self.log.info('Current Target: %s', self.target_node)
 
     def run(self, interval=30, termination_event=None):
-        self.log.info('Interval -> %s s', interval)
         interval *= 60
+        self.log.info('Interval -> %s s', interval)
         while True:
             time.sleep(interval)
             self.disrupt()
