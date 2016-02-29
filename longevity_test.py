@@ -27,6 +27,8 @@ class LongevityTest(ClusterTester):
     :avocado: enable
     """
 
+    default_params = {'timeout': 650000}
+
     def test_custom_time(self):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
