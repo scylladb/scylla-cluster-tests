@@ -591,8 +591,6 @@ class ScyllaCluster(Cluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
-            node.remoter.run('rpm -qa | grep scylla | sort', verbose=True,
-                             ignore_status=True)
             queue.put(node)
             queue.task_done()
 
@@ -636,6 +634,8 @@ class ScyllaCluster(Cluster):
             nemesis_thread.join(10)
 
     def destroy(self):
+        for nemesis in self.nemesis:
+            nemesis.report()
         self.stop_nemesis()
         super(ScyllaCluster, self).destroy()
 

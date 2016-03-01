@@ -34,7 +34,16 @@ class Nemesis(object):
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.set_target_node()
+        result = self.target_node.remoter.run('rpm -qa | grep scylla | sort', verbose=False,
+                                              ignore_status=True)
+        self.db_software_version = 'not available'
+        if result.stdout:
+            self.db_software_version = result.stdout.splitlines()
         self.termination_event = termination_event
+        self.duration_list = []
+        self.error_list = []
+        self.interval = 0
+        self.start_time = time.time()
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
@@ -43,7 +52,8 @@ class Nemesis(object):
 
     def run(self, interval=30, termination_event=None):
         interval *= 60
-        self.log.info('Interval -> %s s', interval)
+        self.log.info('Interval: %s s', interval)
+        self.interval = interval
         while True:
             time.sleep(interval)
             self.disrupt()
@@ -52,6 +62,22 @@ class Nemesis(object):
                     self.termination_event = None
                     break
             self.set_target_node()
+
+    def report(self):
+        if len(self.duration_list) > 0:
+            avg_duration = sum(self.duration_list) / len(self.duration_list)
+        else:
+            avg_duration = 0
+
+        self.log.info('Report')
+        self.log.info('DB Version:')
+        for line in self.db_software_version:
+            self.log.info(line)
+        self.log.info('Interval: %s s', self.interval)
+        self.log.info('Average duration: %s s', avg_duration)
+        self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
+        self.log.info('Times executed: %s', len(self.duration_list))
+        self.log.info('Unhandled exceptions: %s', len(self.error_list))
 
     def __str__(self):
         try:
@@ -158,11 +184,7 @@ class Nemesis(object):
                            attr[0].startswith('disrupt_') and
                            callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
-        try:
-            disrupt_method()
-        except Exception:
-            self.log.error('Disrupt method %s failed', disrupt_method,
-                           exc_info=True)
+        disrupt_method()
 
     def repair_nodetool_repair(self):
         repair_cmd = 'nodetool -h localhost repair'
@@ -184,12 +206,17 @@ def log_time_elapsed(method):
     def wrapper(*args, **kwargs):
         args[0].log.debug('%s Start', method)
         start_time = time.time()
+        result = None
         try:
             result = method(*args, **kwargs)
+        except Exception, details:
+            args[0].error_list.append(details)
+            args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
         finally:
             elapsed_time = int(time.time() - start_time)
+            args[0].duration_list.append(elapsed_time)
             args[0].log.debug('%s duration -> %s s', method, elapsed_time)
-        return result
+            return result
     return wrapper
 
 
