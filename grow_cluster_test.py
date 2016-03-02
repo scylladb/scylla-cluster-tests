@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 
 from avocado import main
 
@@ -33,6 +34,8 @@ class GrowClusterTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
         # We're starting the cluster with 3 nodes due to
         # replication factor settings we're using with cassandra-stress
         self._cluster_starting_size = 3

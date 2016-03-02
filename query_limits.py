@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 
 from avocado import main
 
@@ -33,6 +34,9 @@ class QueryLimitsTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
 
         # we will give a very slow disk to the db node
         # so the loader node will easilly saturate it

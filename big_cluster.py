@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 
 from avocado import main
 
@@ -33,6 +34,10 @@ class HugeClusterTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
+
         self.init_resources(n_db_nodes=40, n_loader_nodes=1)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
