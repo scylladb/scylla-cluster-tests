@@ -63,8 +63,8 @@ class QueryLimitsTest(ClusterTester):
         self.db_cluster.run("sudo systemctl stop scylla-server.service")
         self.db_cluster.run("sudo systemctl start scylla-server.service")
 
-        self.loaders.run("sudo dnf install -y boost-program-options")
-        self.loaders.run("sudo dnf install -y libuv")
+        self.loaders.run("sudo yum install -y boost-program-options")
+        self.loaders.run("sudo yum install -y libuv")
         self.loaders.send_file("queries-limits", self.payload)
         self.loaders.run("chmod +x " + self.payload)
 
