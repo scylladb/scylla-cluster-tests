@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 
 from avocado import main
 
@@ -33,6 +34,9 @@ class QueryLimitsTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+
+        logging.getLogger('botocore').setLevel(logging.CRITICAL)
+        logging.getLogger('boto3').setLevel(logging.CRITICAL)
 
         # we will give a very slow disk to the db node
         # so the loader node will easilly saturate it
@@ -59,8 +63,8 @@ class QueryLimitsTest(ClusterTester):
         self.db_cluster.run("sudo systemctl stop scylla-server.service")
         self.db_cluster.run("sudo systemctl start scylla-server.service")
 
-        self.loaders.run("sudo dnf install -y boost-program-options")
-        self.loaders.run("sudo dnf install -y libuv")
+        self.loaders.run("sudo yum install -y boost-program-options")
+        self.loaders.run("sudo yum install -y libuv")
         self.loaders.send_file("queries-limits", self.payload)
         self.loaders.run("chmod +x " + self.payload)
 
