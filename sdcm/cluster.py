@@ -804,8 +804,8 @@ class LoaderSet(Cluster):
                 logdir = os.path.join(output_dir, self.name)
             result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
                                       ignore_status=True)
-            log_file_name = os.path.join(logdir, '%s.log' % node.name)
-            self.log.debug('Writing log file %s', log_file_name)
+            log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' % uuid.uuid4())
+            self.log.debug('Writing cassandra-stress log %s', log_file_name)
             with open(log_file_name, 'w') as log_file:
                 log_file.write(str(result))
             queue.put((node, result))
