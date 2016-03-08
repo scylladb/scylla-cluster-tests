@@ -257,7 +257,7 @@ class Node(object):
                 coredump_id = os.path.basename(coredump)[:-3]
                 upload_url = base_upload_url % (coredump_id, coredump)
                 self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
-                self.remoter.run("curl --request PUT --upload-file '%s' '%s'" %
+                self.remoter.run("sudo curl --request PUT --upload-file '%s' '%s'" %
                                  (coredump, upload_url))
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
