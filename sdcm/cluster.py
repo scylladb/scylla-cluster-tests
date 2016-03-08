@@ -255,7 +255,7 @@ class Node(object):
             if line.startswith('Coredump:'):
                 coredump = line.split()[-1]
                 coredump_id = os.path.basename(coredump)[:-3]
-                upload_url = base_upload_url % (coredump_id, coredump)
+                upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
                 self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
                 self.remoter.run("sudo curl --request PUT --upload-file '%s' '%s'" %
                                  (coredump, upload_url))
