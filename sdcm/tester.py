@@ -112,6 +112,15 @@ def clean_aws_resources(method):
 
 class ClusterTester(Test):
 
+    def __init__(self, methodName='test', name=None, params=None,
+                 base_logdir=None, tag=None, job=None, runner_queue=None):
+        super(ClusterTester, self).__init__(methodName=methodName, name=name, params=params,
+                                            base_logdir=base_logdir, tag=tag, job=job,
+                                            runner_queue=runner_queue)
+        self._failure_post_behavior = self.params.get(key='failure_post_behavior', default='destroy')
+        self.log.debug("Behavior on failure/post test is '%s'", self._failure_post_behavior)
+        cluster.register_cleanup(cleanup=self._failure_post_behavior)
+
     @clean_aws_resources
     def setUp(self):
         self.credentials = None
@@ -401,16 +410,27 @@ class ClusterTester(Test):
         self.log.debug('Cleaning up resources used in the test')
         if self.db_cluster is not None:
             self.db_cluster.get_backtraces()
-            self.db_cluster.destroy()
-            self.db_cluster = None
+            if self._failure_post_behavior == 'destroy':
+                self.db_cluster.destroy()
+                self.db_cluster = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.db_cluster:
+                    node.instance.stop()
+                self.db_cluster = None
         if self.loaders is not None:
             self.loaders.get_backtraces()
-            self.loaders.destroy()
-            self.loaders = None
+            if self._failure_post_behavior == 'destroy':
+                self.loaders.destroy()
+                self.loaders = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.loaders:
+                    node.instance.stop()
+                self.db_cluster = None
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
-            self.credentials.destroy()
-            self.credentials = None
+            if self._failure_post_behavior == 'destroy':
+                self.credentials.destroy()
+                self.credentials = None
 
     def tearDown(self):
         self.clean_resources()

@@ -43,15 +43,27 @@ EC2_INSTANCES = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 
 
-def cleanup_instances():
+def cleanup_instances(behavior='destroy'):
     global EC2_INSTANCES
     global CREDENTIALS
 
     for instance in EC2_INSTANCES:
-        instance.terminate()
+        if behavior == 'destroy':
+            instance.terminate()
+        elif behavior == 'stop':
+            instance.stop()
 
     for cred in CREDENTIALS:
-        cred.destroy()
+        if behavior == 'destroy':
+            cred.destroy()
+
+
+def destroy_instances():
+    cleanup_instances(behavior='destroy')
+
+
+def stop_instances():
+    cleanup_instances(behavior='stop')
 
 
 def remove_cred_from_cleanup(cred):
@@ -60,10 +72,11 @@ def remove_cred_from_cleanup(cred):
         CREDENTIALS.remove(cred)
 
 
-def register_cleanup():
-    atexit.register(cleanup_instances)
-
-register_cleanup()
+def register_cleanup(cleanup='destroy'):
+    if cleanup == 'destroy':
+        atexit.register(destroy_instances)
+    elif cleanup == 'stop':
+        atexit.register(stop_instances)
 
 
 class NodeError(Exception):

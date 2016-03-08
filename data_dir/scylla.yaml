@@ -15,6 +15,11 @@ nemesis_interval: 15
 # Prefix for your AWS VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
 user_prefix:
+# Failure/post test behavior
+# Default: Destroy AWS instances and credentials (destroy)
+# Keep AWS instances running and leave credentials alone (keep)
+# Stop AWS instances and leave credentials alone (stop)
+failure_post_behavior: destroy
 
 regions: !mux
     us_west_1:
