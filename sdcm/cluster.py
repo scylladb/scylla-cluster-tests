@@ -259,6 +259,8 @@ class Node(object):
                 self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
                 self.remoter.run("sudo curl --request PUT --upload-file '%s' '%s'" %
                                  (coredump, upload_url))
+                self.log.info("To download it, you may use 'curl --user-agent [user-agent] %s > %s'", upload_url,
+                              os.path.basename(coredump))
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
         for line in output.splitlines():
