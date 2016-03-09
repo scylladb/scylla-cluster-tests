@@ -414,7 +414,7 @@ class ClusterTester(Test):
                 self.db_cluster.destroy()
                 self.db_cluster = None
             elif self._failure_post_behavior == 'stop':
-                for node in self.db_cluster:
+                for node in self.db_cluster.nodes:
                     node.instance.stop()
                 self.db_cluster = None
         if self.loaders is not None:
@@ -423,7 +423,7 @@ class ClusterTester(Test):
                 self.loaders.destroy()
                 self.loaders = None
             elif self._failure_post_behavior == 'stop':
-                for node in self.loaders:
+                for node in self.loaders.nodes:
                     node.instance.stop()
                 self.db_cluster = None
         if self.credentials is not None:
