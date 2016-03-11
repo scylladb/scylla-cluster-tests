@@ -649,8 +649,6 @@ class ScyllaCluster(Cluster):
             nemesis_thread.join(10)
 
     def destroy(self):
-        for nemesis in self.nemesis:
-            nemesis.report()
         self.stop_nemesis()
         super(ScyllaCluster, self).destroy()
 

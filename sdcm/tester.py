@@ -410,6 +410,8 @@ class ClusterTester(Test):
         self.log.debug('Cleaning up resources used in the test')
         if self.db_cluster is not None:
             self.db_cluster.get_backtraces()
+            for current_nemesis in self.db_cluster.nemesis:
+                current_nemesis.report()
             if self._failure_post_behavior == 'destroy':
                 self.db_cluster.destroy()
                 self.db_cluster = None
