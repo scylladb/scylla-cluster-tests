@@ -1,13 +1,15 @@
 # default cassandra stress duration (min) if none specified
 cassandra_stress_duration: 60
 # default cassandra stress thread number if none specified
-cassandra_stress_threads: 4
+cassandra_stress_threads: 1000
 n_db_nodes: 6
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
-instance_type_loader: 't2.micro'
+# From 0.19 on, iotune will require bigger disk, so let's use a big
+# loader instance by default.
+instance_type_loader: 'c3.large'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'StopStartMonkey'
 # Nemesis sleep interval to use if None provided specifically
@@ -26,9 +28,9 @@ regions: !mux
         region_name: 'us-west-1'
         security_group_ids: 'sg-dcd785b9'
         subnet_id: 'subnet-10a04c75'
-        ami_id_db_scylla: 'ami-be84f5de'
+        ami_id_db_scylla: 'ami-8daddeed'
         ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-be84f5de'
+        ami_id_loader: 'ami-8daddeed'
         ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-3cf7c979'
         ami_db_cassandra_user: 'ubuntu'
@@ -36,9 +38,9 @@ regions: !mux
         region_name: 'us-west-2'
         security_group_ids: 'sg-81703ae4'
         subnet_id: 'subnet-5207ee37'
-        ami_id_db_scylla: 'ami-d56d8eb5'
+        ami_id_db_scylla: 'ami-a2a846c2'
         ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-d56d8eb5'
+        ami_id_loader: 'ami-a2a846c2'
         ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-1cff962c'
         ami_db_cassandra_user: 'ubuntu'
@@ -46,9 +48,9 @@ regions: !mux
         region_name: 'us-east-1'
         security_group_ids: 'sg-c5e1f7a0'
         subnet_id: 'subnet-ec4a72c4'
-        ami_id_db_scylla: 'ami-e7e4d28d'
+        ami_id_db_scylla: 'ami-f90a0e93'
         ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-e7e4d28d'
+        ami_id_loader: 'ami-f90a0e93'
         ami_loader_user: 'centos'
         ami_id_db_cassandra: 'ami-ada2b6c4'
         ami_db_cassandra_user: 'ubuntu'
@@ -56,9 +58,9 @@ regions: !mux
 databases: !mux
     cassandra:
         db_type: cassandra
-        # The Cassandra AMI can't run with the default t2.micro instance
         instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        # Scylla AMIs can use smaller instances for testing purposes
-        instance_type_db: 't2.micro'
+        # Let's use c3.large since we're using iotune
+        # and we'll stress the DB nodes more thoroughly
+        instance_type_db: 'c3.large'
