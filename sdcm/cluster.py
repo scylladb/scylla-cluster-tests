@@ -207,7 +207,9 @@ class Node(object):
     def retrieve_journal(self):
         try:
             log_file = os.path.join(self.logdir, 'db_services.log')
-            self.remoter.run('sudo journalctl -f -u scylla-server.service '
+            self.remoter.run('sudo journalctl -f '
+                             '-u scylla-io-setup.service '
+                             '-u scylla-server.service '
                              '-u scylla-jmx.service',
                              verbose=True, ignore_status=True,
                              log_file=log_file)
