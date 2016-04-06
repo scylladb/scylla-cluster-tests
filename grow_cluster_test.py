@@ -83,7 +83,7 @@ class GrowClusterTest(ClusterTester):
         :see: https://github.com/scylladb/scylla/issues/1157
         """
         time.sleep(10 * 60)
-        self.grow_cluster(cluster_target_size=1)
+        self.grow_cluster(cluster_target_size=4)
         time.sleep(10 * 60)
 
     def test_grow_3_to_30(self):
