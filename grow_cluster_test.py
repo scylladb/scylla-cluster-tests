@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 import logging
+import time
 
 from avocado import main
 
@@ -67,6 +68,23 @@ class GrowClusterTest(ClusterTester):
         4) Keep repeating 3) until we get to the target number of 5 nodes
         """
         self.grow_cluster(cluster_target_size=5)
+
+    def test_grow_3_to_4_while_filled(self):
+        """
+        Grow an already filled cluster.
+
+        This is a regression test for scylla #1157.
+
+        1) Start a 1 node cluster
+        2) Start cassandra-stress on the loader node
+        3) wait 10 minutes so that some data can fill the cluster
+        3) Add a new node
+
+        :see: https://github.com/scylladb/scylla/issues/1157
+        """
+        time.sleep(10 * 60)
+        self.grow_cluster(cluster_target_size=1)
+        time.sleep(10 * 60)
 
     def test_grow_3_to_30(self):
         """
