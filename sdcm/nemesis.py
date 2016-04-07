@@ -225,7 +225,7 @@ def log_time_elapsed(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
-        args[0].log.debug('%s Start', method)
+        args[0].log.debug('%s Start', method.__name__)
         start_time = time.time()
         result = None
         try:
