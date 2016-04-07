@@ -100,8 +100,51 @@ class Nemesis(object):
                            exc_info=True)
             return None
 
+    def _kill_scylla_daemon(self):
+        self.log.info('Kill all scylla processes in %s', self.target_node)
+        kill_cmd = "sudo pkill -9 scylla"
+        self.target_node.remoter.run(kill_cmd, ignore_status=True)
+
+        # TODO: Due to scylla-server.service changing behavior
+        # now we don't wait the DB to be down
+        # self.target_node.wait_db_down()
+
+        # TODO: Remove scylla-server restart upon systemd service is fixed
+        # https://github.com/scylladb/scylla/issues/904
+        restart_cmd = 'sudo systemctl restart scylla-server.service'
+        self.target_node.remoter.run(restart_cmd)
+
+        # Let's wait for the target Node to have their services re-started
+        self.target_node.wait_db_up()
+
+    def _destroy_data(self):
+        # Send the script used to corrupt the DB
+        break_scylla = get_data_path('break_scylla.sh')
+        self.target_node.remoter.send_files(break_scylla,
+                                            "/tmp/break_scylla.sh")
+
+        # corrupt the DB
+        self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
+        self.target_node.remoter.run('/tmp/break_scylla.sh')
+
+        self._kill_scylla_daemon()
+
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
+
+    def disrupt_destroy_data_then_repair(self):
+        self.log.info('CorruptThenRepair %s',
+                      self.target_node)
+        self._destroy_data()
+        # try to save the node
+        self.repair_nodetool_repair()
+
+    def disrupt_destroy_data_then_rebuild(self):
+        self.log.info('CorruptThenRebuild %s',
+                      self.target_node)
+        self._destroy_data()
+        # try to save the node
+        self.repair_nodetool_rebuild()
 
     def disrupt_nodetool_drain(self):
         self.log.info('Drainer %s', self.target_node)
@@ -137,49 +180,6 @@ class Nemesis(object):
     def disrupt_stop_start(self):
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
-
-    def disrupt_kill_scylla_daemon(self):
-        self.log.info('Kill all scylla processes in %s', self.target_node)
-        kill_cmd = "sudo pkill -9 scylla"
-        self.target_node.remoter.run(kill_cmd, ignore_status=True)
-
-        # TODO: Due to scylla-server.service changing behavior
-        # now we don't wait the DB to be down
-        # self.target_node.wait_db_down()
-
-        # TODO: Remove scylla-server restart upon systemd service is fixed
-        # https://github.com/scylladb/scylla/issues/904
-        restart_cmd = 'sudo systemctl restart scylla-server.service'
-        self.target_node.remoter.run(restart_cmd)
-
-        # Let's wait for the target Node to have their services re-started
-        self.target_node.wait_db_up()
-
-    def _destroy_data(self):
-        # Send the script used to corrupt the DB
-        break_scylla = get_data_path('break_scylla.sh')
-        self.target_node.remoter.send_files(break_scylla,
-                                            "/tmp/break_scylla.sh")
-
-        # corrupt the DB
-        self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('/tmp/break_scylla.sh')
-
-        self.disrupt_kill_scylla_daemon()
-
-    def disrupt_destroy_data_then_repair(self):
-        self.log.info('CorruptThenRepair %s',
-                      self.target_node)
-        self._destroy_data()
-        # try to save the node
-        self.repair_nodetool_repair()
-
-    def disrupt_destroy_data_then_rebuild(self):
-        self.log.info('CorruptThenRebuild %s',
-                      self.target_node)
-        self._destroy_data()
-        # try to save the node
-        self.repair_nodetool_rebuild()
 
     def call_random_disrupt_method(self):
         disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
