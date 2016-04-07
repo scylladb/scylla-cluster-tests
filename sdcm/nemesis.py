@@ -104,7 +104,7 @@ class Nemesis(object):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
     def disrupt_nodetool_drain(self):
-        self.log.info('Drain %s and restart it', self.target_node)
+        self.log.info('Drainer %s', self.target_node)
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
         if result is not None:
@@ -135,7 +135,7 @@ class Nemesis(object):
                 self.cluster.wait_for_init(node_list=new_nodes)
 
     def disrupt_stop_start(self):
-        self.log.info('Stop %s then restart it', self.target_node)
+        self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
     def disrupt_kill_scylla_daemon(self):
@@ -168,14 +168,14 @@ class Nemesis(object):
         self.disrupt_kill_scylla_daemon()
 
     def disrupt_destroy_data_then_repair(self):
-        self.log.info('Destroy user data in %s, then run nodetool repair',
+        self.log.info('CorruptThenRepair %s',
                       self.target_node)
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_repair()
 
     def disrupt_destroy_data_then_rebuild(self):
-        self.log.info('Destroy user data in %s, then run nodetool repair',
+        self.log.info('CorruptThenRebuild %s',
                       self.target_node)
         self._destroy_data()
         # try to save the node
