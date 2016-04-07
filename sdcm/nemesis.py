@@ -217,7 +217,7 @@ def log_time_elapsed(method):
         finally:
             elapsed_time = int(time.time() - start_time)
             args[0].duration_list.append(elapsed_time)
-            args[0].log.debug('%s duration -> %s s', method, elapsed_time)
+            args[0].log.debug('%s duration -> %s s', method.__name__, elapsed_time)
             return result
     return wrapper
 
