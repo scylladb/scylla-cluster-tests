@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import time
 
 from avocado import main
 
@@ -37,6 +38,7 @@ class MaintainanceTest(ClusterTester):
         self.db_cluster.add_nemesis(DrainerMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
+        time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 
@@ -47,6 +49,7 @@ class MaintainanceTest(ClusterTester):
         self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
+        time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 
@@ -57,6 +60,7 @@ class MaintainanceTest(ClusterTester):
         self.db_cluster.add_nemesis(CorruptThenRebuildMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
+        time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 
