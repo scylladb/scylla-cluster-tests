@@ -365,6 +365,32 @@ class Node(object):
             self.log.error('Error checking for cassandra-stress: %s', details)
             return False
 
+    @staticmethod
+    def _parse_cfstats(cfstats_output):
+        stat_dict = {}
+        for line in cfstats_output.splitlines()[1:]:
+            stat_line = [element for element in line.strip().split(':') if element]
+            if stat_line:
+                try:
+                    try:
+                        if '.' in stat_line[1].split()[0]:
+                            stat_dict[stat_line[0]] = float(stat_line[1].split()[0])
+                        else:
+                            stat_dict[stat_line[0]] = int(stat_line[1].split()[0])
+                    except IndexError:
+                        continue
+                except ValueError:
+                    stat_dict[stat_line[0]] = stat_line[1].split()[0]
+        return stat_dict
+
+    def get_cfstats(self):
+        def keyspace1_available():
+            res = self.remoter.run('nodetool cfstats keyspace1', ignore_status=True)
+            return res.exit_status == 0
+        wait.wait_for(keyspace1_available, step=60, text='Waiting until keyspace1 is available')
+        result = self.remoter.run('nodetool cfstats keyspace1')
+        return self._parse_cfstats(result.stdout)
+
     def wait_db_up(self, verbose=True):
         text = None
         if verbose:
@@ -495,6 +521,28 @@ class Cluster(object):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
+
+    def cfstat_reached_treshold(self, key, treshold):
+        """
+        Find whether a certain cfstat key in all nodes reached a certain treshold value.
+
+        :param key: cfstat key, example, 'Space used (total)'.
+        :param treshold: Treshold value for cfstats key. Example, 2432043080.
+        :return: Whether all nodes reached that treshold or not.
+        """
+        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        reached_treshold = True
+        for value in cfstats:
+            if value < treshold:
+                reached_treshold = False
+        if reached_treshold:
+            self.log.debug("Done waiting on cfstats: %s" % cfstats)
+        return reached_treshold
+
+    def wait_cfstat_reached_treshold(self, key, treshold):
+        text = "Waiting until cfstat '%s' reaches value '%s'" % (key, treshold)
+        wait.wait_for(func=self.cfstat_reached_treshold, step=10,
+                      text=text, key=key, treshold=treshold)
 
 
 class ScyllaCluster(Cluster):
