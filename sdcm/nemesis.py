@@ -57,12 +57,12 @@ class Nemesis(object):
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while True:
-            time.sleep(interval)
             self.disrupt()
             if termination_event is not None:
                 if self.termination_event.isSet():
                     self.termination_event = None
                     break
+            time.sleep(interval)
             self.set_target_node()
 
     def report(self):
