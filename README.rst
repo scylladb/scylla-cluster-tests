@@ -36,10 +36,11 @@ What's inside?
 Setup
 -----
 
-Install ``boto3`` and ``awscli`` (the last one is to help you configure aws)::
+Install ``boto3`` and ``awscli`` (the last one is to help you configure aws) and ``matplotlib``::
 
     sudo -H pip install boto3
     sudo -H pip install awscli
+    sudo -H pip install matplotlib
 
 Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
 

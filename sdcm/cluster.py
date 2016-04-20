@@ -21,6 +21,10 @@ import threading
 import time
 import uuid
 import yaml
+import matplotlib
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use('Agg')
+import matplotlib.pyplot as pl
 
 from avocado.utils import path
 from botocore.exceptions import WaiterError
@@ -882,6 +886,53 @@ class LoaderSet(Cluster):
 
         return queue
 
+    def do_plot(self, lines, plotfile='plot'):
+        time_plot = []
+        ops_plot = []
+        latmax_plot = []
+        lat999_plot = []
+        lat99_plot = []
+        lat95_plot = []
+        for line in lines:
+            line.strip()
+            if line.startswith('total,'):
+                items = line.split(',')
+                totalops = items[1]
+                ops = items[2]
+                lat95 = items[7]
+                lat99 = items[8]
+                lat999 = items[9]
+                latmax = items[10]
+                time = items[11]
+                time_plot.append(time)
+                ops_plot.append(ops)
+                lat95_plot.append(lat95)
+                lat99_plot.append(lat99)
+                lat999_plot.append(lat999)
+                latmax_plot.append(latmax)
+        # ops
+        pl.plot(time_plot, ops_plot, label='ops', color='green')
+        pl.title('Plot of time v.s. ops')
+        pl.xlabel('time')
+        pl.ylabel('ops')
+        pl.legend()
+        pl.savefig(plotfile + '-ops.png')
+        pl.close()
+
+        # lat
+        pl.plot(time_plot, lat95_plot, label='lat95', color='blue')
+        pl.plot(time_plot, lat99_plot, label='lat99', color='green')
+        pl.plot(time_plot, lat999_plot, label='lat999', color='black')
+        pl.plot(time_plot, latmax_plot, label='latmax', color='red')
+
+        pl.title('Plot of time v.s. latency')
+        pl.xlabel('time')
+        pl.ylabel('latency')
+        pl.legend()
+        pl.grid()
+        pl.savefig(plotfile + '-lat.png')
+        pl.close()
+
     def verify_stress_thread(self, queue):
         results = []
         while len(results) != len(self.nodes):
@@ -897,5 +948,7 @@ class LoaderSet(Cluster):
             for line in lines:
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
+            plotfile = os.path.join(self.logdir, str(node))
+            self.do_plot(lines, plotfile)
 
         return errors
