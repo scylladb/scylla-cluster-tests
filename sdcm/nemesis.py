@@ -52,15 +52,19 @@ class Nemesis(object):
         self.target_node = random.choice(non_seed_nodes)
         self.log.info('Current Target: %s', self.target_node)
 
-    def run(self, interval=30, termination_event=None):
+    def set_termination_event(self, termination_event):
+        self.termination_event = termination_event
+
+    def run(self, interval=30):
         interval *= 60
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while True:
             self.disrupt()
-            if termination_event is not None:
+            if self.termination_event is not None:
                 if self.termination_event.isSet():
                     self.termination_event = None
+                    self.log.info('Asked to stop running nemesis')
                     break
             time.sleep(interval)
             self.set_target_node()
@@ -155,7 +159,7 @@ class Nemesis(object):
         if result is not None:
             self.target_node.restart()
 
-    def disrupt_nodetool_decommission(self):
+    def disrupt_nodetool_decommission(self, add_node=True):
         self.log.info('Decommission %s', self.target_node)
         target_node_ip = self.target_node.instance.private_ip_address
         decommission_cmd = 'nodetool --host localhost decommission'
@@ -171,13 +175,16 @@ class Nemesis(object):
                          'Cluster status info: %s' % (self.target_node,
                                                       node_info_list))
             if target_node_ip in private_ips:
+                self.log.info('Decommission %s PASS', self.target_node)
                 self.log.error(error_msg)
             else:
+                self.log.info('Decommission %s FAIL', self.target_node)
                 self.cluster.nodes.remove(self.target_node)
                 self.target_node.destroy()
                 # Replace the node that was terminated.
-                new_nodes = self.cluster.add_nodes(count=1)
-                self.cluster.wait_for_init(node_list=new_nodes)
+                if add_node:
+                    new_nodes = self.cluster.add_nodes(count=1)
+                    self.cluster.wait_for_init(node_list=new_nodes)
 
     def disrupt_stop_start(self):
         self.log.info('StopStart %s', self.target_node)
@@ -273,7 +280,13 @@ class DecommissionMonkey(Nemesis):
 
     @log_time_elapsed
     def disrupt(self):
-        self.disrupt_nodetool_decommission()
+        self.disrupt_nodetool_decommission(add_node=True)
+
+
+class DecommissionNoAddMonkey(Nemesis):
+    @log_time_elapsed
+    def disrupt(self):
+        self.disrupt_nodetool_decommission(add_node=False)
 
 
 class ChaosMonkey(Nemesis):

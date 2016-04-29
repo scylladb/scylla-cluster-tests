@@ -691,16 +691,24 @@ class ScyllaCluster(Cluster):
                                     termination_event=self.termination_event))
 
     def start_nemesis(self, interval=30):
+        self.log.debug('Start nemesis begin')
+        self.termination_event = threading.Event()
         for nemesis in self.nemesis:
+            nemesis.set_termination_event(self.termination_event)
+            nemesis.set_target_node()
             nemesis_thread = threading.Thread(target=nemesis.run,
                                               args=(interval,), verbose=True)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
+        self.log.debug('Start nemesis end')
 
-    def stop_nemesis(self):
+    def stop_nemesis(self, timeout=10):
+        self.log.debug('Stop nemesis begin')
         self.termination_event.set()
         for nemesis_thread in self.nemesis_threads:
-            nemesis_thread.join(10)
+            nemesis_thread.join(timeout)
+        self.nemesis_threads = []
+        self.log.debug('Stop nemesis end')
 
     def destroy(self):
         self.stop_nemesis()
