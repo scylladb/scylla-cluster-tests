@@ -284,6 +284,7 @@ class DecommissionMonkey(Nemesis):
 
 
 class DecommissionNoAddMonkey(Nemesis):
+
     @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=False)
@@ -294,3 +295,36 @@ class ChaosMonkey(Nemesis):
     @log_time_elapsed
     def disrupt(self):
         self.call_random_disrupt_method()
+
+
+class UpgradeNemesis(Nemesis):
+
+    # upgrade a single node
+    def upgrade_node(self, node):
+        self.log.info('Upgrading a Node')
+        scylla_repo = get_data_path('scylla.repo.upgrade')
+        node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
+        node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo yum update scylla scylla-conf scylla-server scylla-jmx scylla-tools -y')
+        node.remoter.run('sudo systemctl restart scylla-server.service')
+        node.remoter.run('sudo systemctl restart scylla-jmx.service')
+
+    @log_time_elapsed
+    def disrupt(self):
+        self.log.info('Upgrade Nemesis begin')
+        # get the number of nodes
+        l = len(self.cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(l)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        # upgrade all the nodes in random order
+        for i in indexes:
+            node = self.cluster.nodes[i]
+            self.upgrade_node(node)
+
+        self.log.info('Upgrade Nemesis end')
