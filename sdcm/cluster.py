@@ -33,6 +33,8 @@ from .log import SDCMAdapter
 from .remote import Remote
 from . import wait
 
+from nemesis import UpgradeNemesis
+
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
                                            "DeleteOnTermination": True,
@@ -579,6 +581,7 @@ class ScyllaCluster(Cluster):
                                             node_prefix=node_prefix,
                                             n_nodes=n_nodes)
         self.nemesis = []
+        self.started_nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
@@ -692,7 +695,6 @@ class ScyllaCluster(Cluster):
 
     def start_nemesis(self, interval=30):
         self.log.debug('Start nemesis begin')
-        self.termination_event = threading.Event()
         for nemesis in self.nemesis:
             nemesis.set_termination_event(self.termination_event)
             nemesis.set_target_node()
@@ -700,6 +702,9 @@ class ScyllaCluster(Cluster):
                                               args=(interval,), verbose=True)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
+            self.started_nemesis.append(nemesis)
+            self.nemesis.remove(nemesis)
+
         self.log.debug('Start nemesis end')
 
     def stop_nemesis(self, timeout=10):
@@ -750,6 +755,7 @@ class CassandraCluster(ScyllaCluster):
                                             node_prefix=node_prefix,
                                             n_nodes=n_nodes)
         self.nemesis = []
+        self.started_nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
 
@@ -871,6 +877,12 @@ class LoaderSet(Cluster):
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
         queue = Queue.Queue()
+
+        test_upgrade = self.params.get('test_upgrade')
+        if test_upgrade == "True":
+            self.log.debug('Adding upgrade nemesis')
+            self.db_cluster.add_nemesis(UpgradeNemesis)
+            self.db_cluster.start_nemesis(interval=(self.params.get('nemesis_interval')/3*2))
 
         def node_run_stress(node):
             try:
