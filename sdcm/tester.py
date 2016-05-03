@@ -170,7 +170,8 @@ class ClusterTester(Test):
                                             credentials=self.credentials,
                                             ec2_block_device_mappings=dbs_block_device_mappings,
                                             user_prefix=user_prefix,
-                                            n_nodes=n_db_nodes)
+                                            n_nodes=n_db_nodes,
+                                            params=self.params)
         elif self.params.get('db_type') == 'cassandra':
             self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
                                                ec2_ami_username=self.params.get('ami_db_cassandra_user'),
@@ -181,7 +182,8 @@ class ClusterTester(Test):
                                                ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
                                                user_prefix=user_prefix,
-                                               n_nodes=n_db_nodes)
+                                               n_nodes=n_db_nodes,
+                                               params=self.params)
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
@@ -197,7 +199,8 @@ class ClusterTester(Test):
                                  credentials=self.credentials,
                                  scylla_repo=scylla_repo,
                                  user_prefix=user_prefix,
-                                 n_nodes=n_loader_nodes)
+                                 n_nodes=n_loader_nodes,
+                                 params=self.params)
 
     def get_stress_cmd(self, duration=None, threads=None):
         """
