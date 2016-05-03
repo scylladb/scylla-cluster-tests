@@ -27,6 +27,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as pl
 
 from avocado.utils import path
+from avocado.utils import script
 from botocore.exceptions import WaiterError
 
 from .log import SDCMAdapter
@@ -904,6 +905,21 @@ class LoaderSet(Cluster):
             setup_thread.start()
 
         return queue
+
+    def kill_stress_thread(self):
+        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
+        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
+                                             content=kill_script_contents)
+        kill_script.save()
+        kill_script_dir = os.path.dirname(kill_script.path)
+        for loader in self.nodes:
+            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
+            loader.remoter.send_files(kill_script.path, kill_script_dir)
+            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
+            result = loader.remoter.run(kill_script.path)
+            self.log.debug('Terminate cassandra-stress process on loader %s: %s', str(loader), str(result))
+            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
+        kill_script.remove()
 
     def do_plot(self, lines, plotfile='plot'):
         time_plot = []
