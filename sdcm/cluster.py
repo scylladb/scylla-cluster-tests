@@ -549,6 +549,11 @@ class Cluster(object):
         wait.wait_for(func=self.cfstat_reached_treshold, step=10,
                       text=text, key=key, treshold=treshold)
 
+    def wait_total_space_used_per_node(self, size=None):
+        if size is None:
+            size = int(self.params.get('space_node_treshold'))
+        self.wait_cfstat_reached_treshold('Space used (total)', size)
+
 
 class ScyllaCluster(Cluster):
 

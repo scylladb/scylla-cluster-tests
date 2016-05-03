@@ -35,8 +35,7 @@ class LongevityTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
         stress_queue = self.run_stress_thread(duration=self.params.get('cassandra_stress_duration'))
-        self.db_cluster.wait_cfstat_reached_treshold('Space used (total)',
-                                                     int(self.params.get('space_node_treshold')))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.verify_stress_thread(queue=stress_queue)
 
@@ -46,8 +45,7 @@ class LongevityTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
         stress_queue = self.run_stress(duration=60 * 12)
-        self.db_cluster.wait_cfstat_reached_treshold('Space used (total)',
-                                                     int(self.params.get('space_node_treshold')))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.verify_stress_thread(queue=stress_queue)
 
@@ -57,8 +55,7 @@ class LongevityTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
         stress_queue = self.run_stress(duration=60 * 24)
-        self.db_cluster.wait_cfstat_reached_treshold('Space used (total)',
-                                                     int(self.params.get('space_node_treshold')))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.verify_stress_thread(queue=stress_queue)
 
@@ -68,8 +65,7 @@ class LongevityTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
         stress_queue = self.run_stress(duration=60 * 24 * 7)
-        self.db_cluster.wait_cfstat_reached_treshold('Space used (total)',
-                                                     int(self.params.get('space_node_treshold')))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.verify_stress_thread(queue=stress_queue)
 
