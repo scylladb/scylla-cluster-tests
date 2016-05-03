@@ -50,9 +50,10 @@ class ReduceClusterTest(ClusterTester):
 
     def reduce_cluster(self, cluster_starting_size, cluster_target_size=3):
         self.wait_for_init(cluster_starting_size, cluster_target_size)
+
         nodes_to_remove = self._cluster_starting_size - self._cluster_target_size
-        # FIXME: we should find a way to stop c-s when decommission is finished instead of estimating time to run
-        duration = 8 * nodes_to_remove
+        # 60 minutes should be long enough for each node to do decommission
+        duration = 60 * nodes_to_remove
         stress_queue = self.run_stress_thread(duration=duration)
 
         # Wait for cluster is filled with data
@@ -68,6 +69,12 @@ class ReduceClusterTest(ClusterTester):
             # Run DecommissionNoAddMonkey once to decommission one node a time
             self.db_cluster.start_nemesis(interval=10)
             self.db_cluster.stop_nemesis(timeout=None)
+
+        # Run 2 more minutes before stop c-s
+        time.sleep(2 * 60)
+
+        # Kill c-s when decommission is done
+        self.kill_stress_thread()
 
         self.verify_stress_thread(queue=stress_queue)
 
