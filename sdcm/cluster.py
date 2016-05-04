@@ -428,7 +428,7 @@ class Cluster(object):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10):
+                 node_prefix='node', n_nodes=10, params=None):
         global CREDENTIALS
         CREDENTIALS.append(credentials)
 
@@ -464,6 +464,7 @@ class Cluster(object):
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
+        self.params = params
         self.add_nodes(n_nodes)
 
     def send_file(self, src, dst, verbose=False):
@@ -548,6 +549,11 @@ class Cluster(object):
         wait.wait_for(func=self.cfstat_reached_treshold, step=10,
                       text=text, key=key, treshold=treshold)
 
+    def wait_total_space_used_per_node(self, size=None):
+        if size is None:
+            size = int(self.params.get('space_node_treshold'))
+        self.wait_cfstat_reached_treshold('Space used (total)', size)
+
 
 class ScyllaCluster(Cluster):
 
@@ -556,7 +562,8 @@ class ScyllaCluster(Cluster):
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=10):
+                 n_nodes=10,
+                 params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
@@ -577,7 +584,8 @@ class ScyllaCluster(Cluster):
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
                                             node_prefix=node_prefix,
-                                            n_nodes=n_nodes)
+                                            n_nodes=n_nodes,
+                                            params=params)
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -722,7 +730,8 @@ class CassandraCluster(ScyllaCluster):
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=10):
+                 n_nodes=10,
+                 params=None):
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
@@ -748,7 +757,8 @@ class CassandraCluster(ScyllaCluster):
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
                                             node_prefix=node_prefix,
-                                            n_nodes=n_nodes)
+                                            n_nodes=n_nodes,
+                                            params=params)
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -822,7 +832,7 @@ class LoaderSet(Cluster):
                  service, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10):
+                 user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
         super(LoaderSet, self).__init__(ec2_ami_id=ec2_ami_id,
@@ -835,7 +845,8 @@ class LoaderSet(Cluster):
                                         credentials=credentials,
                                         cluster_prefix=cluster_prefix,
                                         node_prefix=node_prefix,
-                                        n_nodes=n_nodes)
+                                        n_nodes=n_nodes,
+                                        params=params)
         self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False):

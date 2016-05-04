@@ -54,6 +54,11 @@ class ReduceClusterTest(ClusterTester):
         # FIXME: we should find a way to stop c-s when decommission is finished instead of estimating time to run
         duration = 8 * nodes_to_remove
         stress_queue = self.run_stress_thread(duration=duration)
+
+        # Wait for cluster is filled with data
+        # Set space_node_treshold in config file for the size
+        self.db_cluster.wait_total_space_used_per_node()
+
         self.db_cluster.add_nemesis(DecommissionNoAddMonkey)
         # Have c-s run for 2 + 3 minutes before we start to do decommission
         time.sleep(2 * 60)
