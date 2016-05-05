@@ -11,7 +11,7 @@ n_loaders: 1
 # loader instance by default.
 instance_type_loader: 'c3.large'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
-nemesis_class_name: 'StopStartMonkey'
+nemesis_class_name: 'ChaosMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 15
 # Prefix for your AWS VMs (handy for telling instances from different

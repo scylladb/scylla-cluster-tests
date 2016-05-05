@@ -186,7 +186,9 @@ class Nemesis(object):
                     new_nodes = self.cluster.add_nodes(count=1)
                     self.cluster.wait_for_init(node_list=new_nodes)
 
-    def disrupt_stop_start(self):
+    def _deprecated_disrupt_stop_start(self):
+        # TODO: We don't support fully stopping the AMI instance anymore
+        # TODO: This nemesis has to be rewritten to just stop/start scylla server
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
@@ -252,7 +254,7 @@ class StopStartMonkey(Nemesis):
 
     @log_time_elapsed
     def disrupt(self):
-        self.disrupt_stop_start()
+        self._deprecated_disrupt_stop_start()
 
 
 class DrainerMonkey(Nemesis):
