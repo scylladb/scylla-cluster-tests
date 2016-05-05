@@ -71,6 +71,17 @@ class ReduceClusterTest(ClusterTester):
 
         self.verify_stress_thread(queue=stress_queue)
 
+    def test_reduce_4_to_3(self):
+        """
+        Reduce cluster from 4 to 3
+
+        1) Start a 4 node cluster
+        2) Start cassandra-stress on the loader node
+        3) Decommission a node
+        4) Keep repeating 3) until we get to the target number of 3 nodes
+        """
+        self.reduce_cluster(cluster_starting_size=4, cluster_target_size=3)
+
     def test_reduce_5_to_3(self):
         """
         Reduce cluster from 5 to 3
