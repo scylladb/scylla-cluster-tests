@@ -202,13 +202,6 @@ class ClusterTester(Test):
                                  n_nodes=n_loader_nodes,
                                  params=self.params)
 
-        # Share params with the clusters
-        self.db_cluster.params = self.params
-        self.loaders.params = self.params
-
-        # cross reference
-        self.loaders.db_cluster = self.db_cluster
-
     def get_stress_cmd(self, duration=None, threads=None):
         """
         Get a cassandra stress cmd string.
