@@ -182,10 +182,10 @@ class Nemesis(object):
                          'Cluster status info: %s' % (self.target_node,
                                                       node_info_list))
             if target_node_ip in private_ips:
-                self.log.info('Decommission %s PASS', self.target_node)
+                self.log.info('Decommission %s FAIL', self.target_node)
                 self.log.error(error_msg)
             else:
-                self.log.info('Decommission %s FAIL', self.target_node)
+                self.log.info('Decommission %s PASS', self.target_node)
                 self.cluster.nodes.remove(self.target_node)
                 self.target_node.destroy()
                 # Replace the node that was terminated.
