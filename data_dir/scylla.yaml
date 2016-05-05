@@ -28,6 +28,12 @@ failure_post_behavior: destroy
 # https://github.com/scylladb/scylla/issues/1140
 space_node_treshold: 6442450944
 
+# The new db binary will be uploaded to db instance to replace the one
+# provided by the ami. This is useful to test out a new scylla version
+# without making a new ami.
+# update_db_binary: $path_of_the_new_scylla_binary
+update_db_binary: ''
+
 regions: !mux
     us_west_1:
         region_name: 'us-west-1'
