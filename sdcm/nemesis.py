@@ -42,6 +42,8 @@ class Nemesis(object):
         if result.stdout:
             self.db_software_version = result.stdout.splitlines()
         self.termination_event = termination_event
+        self.operation_log = []
+        self.current_disruption = None
         self.duration_list = []
         self.error_list = []
         self.interval = 0
@@ -84,6 +86,9 @@ class Nemesis(object):
         self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
         self.log.info('Times executed: %s', len(self.duration_list))
         self.log.info('Unhandled exceptions: %s', len(self.error_list))
+        self.log.info('Operation log:')
+        for operation in self.operation_log:
+            self.log.info(operation)
 
     def __str__(self):
         try:
@@ -138,29 +143,31 @@ class Nemesis(object):
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
+    def _set_current_disruption(self, label):
+        self.current_disruption = label
+        self.log.info(label)
+
     def disrupt_destroy_data_then_repair(self):
-        self.log.info('CorruptThenRepair %s',
-                      self.target_node)
+        self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_repair()
 
     def disrupt_destroy_data_then_rebuild(self):
-        self.log.info('CorruptThenRebuild %s',
-                      self.target_node)
+        self._set_current_disruption('CorruptThenRebuild %s' % self.target_node)
         self._destroy_data()
         # try to save the node
         self.repair_nodetool_rebuild()
 
     def disrupt_nodetool_drain(self):
-        self.log.info('Drainer %s', self.target_node)
+        self._set_current_disruption('Drainer %s' % self.target_node)
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
         if result is not None:
             self.target_node.restart()
 
     def disrupt_nodetool_decommission(self, add_node=True):
-        self.log.info('Decommission %s', self.target_node)
+        self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.instance.private_ip_address
         decommission_cmd = 'nodetool --host localhost decommission'
         result = self._run_nodetool(decommission_cmd, self.target_node)
@@ -234,7 +241,7 @@ def log_time_elapsed(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
-        args[0].log.debug('%s Start', method.__name__)
+        args[0].log.debug('Start -> %s', args[0].current_disruption)
         start_time = time.time()
         result = None
         try:
@@ -243,9 +250,10 @@ def log_time_elapsed(method):
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
         finally:
-            elapsed_time = int(time.time() - start_time)
-            args[0].duration_list.append(elapsed_time)
-            args[0].log.debug('%s duration -> %s s', method.__name__, elapsed_time)
+            time_elapsed = int(time.time() - start_time)
+            args[0].duration_list.append(time_elapsed)
+            args[0].operation_log.append({'operation': args[0].current_disruption, 'duration': time_elapsed})
+            args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
             return result
     return wrapper
 
