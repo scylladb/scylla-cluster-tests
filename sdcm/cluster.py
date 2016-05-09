@@ -691,6 +691,8 @@ class ScyllaCluster(Cluster):
             except Queue.Empty:
                 pass
 
+        self.update_db_binary(node_list)
+
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
@@ -722,6 +724,32 @@ class ScyllaCluster(Cluster):
     def destroy(self):
         self.stop_nemesis()
         super(ScyllaCluster, self).destroy()
+
+    def update_db_binary(self, node_list=None):
+        if node_list is None:
+            node_list = self.nodes
+
+        new_scylla_bin = self.params.get('update_db_binary')
+        if new_scylla_bin != '':
+            for node in node_list:
+                self.log.info('Upgrading a DB binary for Node')
+
+                node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
+
+                # stop scylla-server before replace the binary
+                node.remoter.run('sudo systemctl stop scylla-server.service')
+
+                # replace the binary
+                node.remoter.run('sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
+                node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
+                node.remoter.run('sudo chown root.root /usr/bin/scylla')
+                node.remoter.run('sudo chmod +x  /usr/bin/scylla')
+
+                node.remoter.run('sudo systemctl restart scylla-server.service')
+                node.remoter.run('sudo systemctl restart scylla-jmx.service')
+            # Wait for DB is up
+            for node in node_list:
+                node.wait_db_up()
 
 
 class CassandraCluster(ScyllaCluster):
