@@ -128,6 +128,13 @@ class Nemesis(object):
         # Let's wait for the target Node to have their services re-started
         self.target_node.wait_db_up()
 
+    def disrupt_stop_start_scylla_server(self):
+        self._set_current_disruption('StopStartService %s' % self.target_node)
+        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+        self.target_node.wait_db_down()
+        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+        self.target_node.wait_db_up()
+
     def _destroy_data(self):
         # Send the script used to corrupt the DB
         break_scylla = get_data_path('break_scylla.sh')
@@ -262,7 +269,7 @@ class StopStartMonkey(Nemesis):
 
     @log_time_elapsed
     def disrupt(self):
-        self._deprecated_disrupt_stop_start()
+        self.disrupt_stop_start_scylla_server()
 
 
 class DrainerMonkey(Nemesis):
