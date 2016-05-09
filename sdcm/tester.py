@@ -245,7 +245,6 @@ class ClusterTester(Test):
     def kill_stress_thread(self):
         self.loaders.kill_stress_thread()
 
-
     @clean_aws_resources
     def verify_stress_thread(self, queue):
         errors = self.loaders.verify_stress_thread(queue)
