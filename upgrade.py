@@ -24,7 +24,7 @@ from sdcm.nemesis import UpgradeNemesis
 class UpgradeTest(ClusterTester):
 
     """
-    Test a Scylla cluster upgrade on a short period.
+    Test a Scylla cluster upgrade.
 
     :avocado: enable
     """
@@ -33,7 +33,7 @@ class UpgradeTest(ClusterTester):
 
     def test_20_minutes(self):
         """
-        Run cassandra-stress on a cluster for 12 hours.
+        Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
         """
         self.db_cluster.add_nemesis(UpgradeNemesis)
         self.db_cluster.start_nemesis(interval=10)
