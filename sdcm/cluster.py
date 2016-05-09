@@ -730,7 +730,7 @@ class ScyllaCluster(Cluster):
             node_list = self.nodes
 
         new_scylla_bin = self.params.get('update_db_binary')
-        if new_scylla_bin != '':
+        if new_scylla_bin:
             for node in node_list:
                 self.log.info('Upgrading a DB binary for Node')
 
