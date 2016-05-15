@@ -48,10 +48,9 @@ class GrowClusterTest(ClusterTester):
         self.stress_thread = None
 
     def grow_cluster(self, cluster_target_size):
-        # Let's estimate 10 minutes of c-s for each new node
-        # They initialize in ~ 5 minutes average
+        # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
-        duration = 10 * nodes_to_add
+        duration = 60 * nodes_to_add
         stress_queue = self.run_stress_thread(duration=duration)
 
         # Wait for cluster is filled with data
@@ -59,8 +58,18 @@ class GrowClusterTest(ClusterTester):
         self.db_cluster.wait_total_space_used_per_node()
 
         while len(self.db_cluster.nodes) < cluster_target_size:
+            # Sleep 3 minutes before adding a new node, so we can see the tps
+            # for each new cluster size
+            time.sleep(3 * 60)
             new_nodes = self.db_cluster.add_nodes(count=1)
             self.db_cluster.wait_for_init(node_list=new_nodes)
+
+        # Run 2 more minutes before stop c-s
+        time.sleep(2 * 60)
+
+        # Kill c-s when decommission is done
+        self.kill_stress_thread()
+
         self.verify_stress_thread(queue=stress_queue)
 
     def test_grow_3_to_5(self):
