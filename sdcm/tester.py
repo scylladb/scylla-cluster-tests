@@ -223,7 +223,7 @@ class ClusterTester(Test):
         return ("cassandra-stress write cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
                 "-mode cql3 native -rate threads=%s "
-                "-pop seq=1..10000000 -node %s" % (duration, threads, ip))
+                "-pop seq=1..1000000 -node %s" % (duration, threads, ip))
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None):
