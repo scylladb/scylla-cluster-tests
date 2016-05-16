@@ -966,8 +966,8 @@ class LoaderSet(Cluster):
                 lat99 = items[8]
                 lat999 = items[9]
                 latmax = items[10]
-                time = items[11]
-                time_plot.append(time)
+                time_point = items[11]
+                time_plot.append(time_point)
                 ops_plot.append(ops)
                 lat95_plot.append(lat95)
                 lat99_plot.append(lat99)
