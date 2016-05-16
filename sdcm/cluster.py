@@ -975,7 +975,7 @@ class LoaderSet(Cluster):
                 latmax_plot.append(latmax)
         # ops
         pl.plot(time_plot, ops_plot, label='ops', color='green')
-        pl.title('Plot of time v.s. ops')
+        pl.title('Operations vs. Time')
         pl.xlabel('time')
         pl.ylabel('ops')
         pl.legend()
@@ -988,7 +988,7 @@ class LoaderSet(Cluster):
         pl.plot(time_plot, lat999_plot, label='lat999', color='black')
         pl.plot(time_plot, latmax_plot, label='latmax', color='red')
 
-        pl.title('Plot of time v.s. latency')
+        pl.title('Latency vs. Time')
         pl.xlabel('time')
         pl.ylabel('latency')
         pl.legend()
