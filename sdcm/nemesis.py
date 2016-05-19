@@ -257,9 +257,12 @@ def log_time_elapsed(method):
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
         finally:
-            time_elapsed = int(time.time() - start_time)
+            end_time = time.time()
+            time_elapsed = int(end_time - start_time)
             args[0].duration_list.append(time_elapsed)
-            args[0].operation_log.append({'operation': args[0].current_disruption, 'duration': time_elapsed})
+            args[0].operation_log.append({'operation': args[0].current_disruption,
+                                          'start': int(start_time),
+                                          'end': int(end_time), 'duration': time_elapsed})
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
             return result
     return wrapper
