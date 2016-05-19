@@ -48,6 +48,25 @@ class ReduceClusterTest(ClusterTester):
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
 
+    def get_stress_cmd(self, duration=None, threads=None):
+        """
+        Get a cassandra stress cmd string suitable for reduce cluster purposes.
+
+        :param duration: Duration of stress (minutes).
+        :param threads: Number of threads used by cassandra stress.
+        :return: Cassandra stress string
+        :rtype: basestring
+        """
+        ip = self.db_cluster.get_node_private_ips()[0]
+        if duration is None:
+            duration = self.params.get('cassandra_stress_duration')
+        if threads is None:
+            threads = self.params.get('cassandra_stress_threads')
+        return ("cassandra-stress write cl=QUORUM duration=%sm "
+                "-schema 'replication(factor=3)' -port jmx=6868 "
+                "-mode cql3 native -rate threads=%s "
+                "-pop seq=1..100000 -node %s" % (duration, threads, ip))
+
     def reduce_cluster(self, cluster_starting_size, cluster_target_size=3):
         self.wait_for_init(cluster_starting_size, cluster_target_size)
 
