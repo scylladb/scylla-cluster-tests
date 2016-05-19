@@ -66,11 +66,13 @@ class SSHSubProcess(process.SubProcess):
 
     def __init__(self, cmd, verbose=True, allow_output_check='all',
                  shell=False, env=None, extra_text=None,
-                 log_file=None):
+                 log_file=None, watch_stdout_pattern=None):
         super(SSHSubProcess, self).__init__(cmd=cmd, verbose=verbose,
                                             allow_output_check=allow_output_check,
                                             shell=shell, env=env)
         self.extra_text = extra_text
+        self.watch_stdout_pattern = watch_stdout_pattern
+        self.result.stdout_pattern_found_at = None
         self._file_logger = None
         self._file_handler = None
         if log_file is not None:
@@ -131,6 +133,12 @@ class SSHSubProcess(process.SubProcess):
             except ValueError:
                 pass
 
+    def _detect_stdout_pattern(self, line):
+        if self.watch_stdout_pattern is not None:
+            if self.result.stdout_pattern_found_at is None:
+                if self.watch_stdout_pattern in line:
+                    self.result.stdout_pattern_found_at = time.time()
+
     def _fd_drainer(self, input_pipe):
         stream_prefix = "%s"
         prefix = ''
@@ -164,6 +172,7 @@ class SSHSubProcess(process.SubProcess):
             if tmp == '':
                 if self.verbose and bfr:
                     for line in bfr.splitlines():
+                        self._detect_stdout_pattern(line)
                         LOG.debug(prefix, line)
                         if stream_logger is not None:
                             stream_logger.debug(stream_prefix, line)
@@ -179,6 +188,7 @@ class SSHSubProcess(process.SubProcess):
                     bfr += tmp
                     if tmp.endswith('\n'):
                         for line in bfr.splitlines():
+                            self._detect_stdout_pattern(line)
                             LOG.debug(prefix, line)
                             if stream_logger is not None:
                                 stream_logger.debug(stream_prefix, line)
@@ -192,10 +202,11 @@ class SSHSubProcess(process.SubProcess):
 
 def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
             allow_output_check='all', shell=False, env=None,
-            extra_text=None, log_file=None):
+            extra_text=None, log_file=None, watch_stdout_pattern=None):
     sp = SSHSubProcess(cmd=cmd, verbose=verbose,
                        allow_output_check=allow_output_check, shell=shell,
-                       env=env, extra_text=extra_text, log_file=log_file)
+                       env=env, extra_text=extra_text, log_file=log_file,
+                       watch_stdout_pattern=watch_stdout_pattern)
     cmd_result = sp.run(timeout=timeout)
     fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
     if fail_condition and not ignore_status:
@@ -731,7 +742,7 @@ class Remote(BaseRemote):
         return "%s %s" % (base_cmd, self.hostname)
 
     def _run(self, cmd, timeout, verbose, ignore_status, connect_timeout,
-             env, options, args, log_file):
+             env, options, args, log_file, watch_stdout_pattern):
         ssh_cmd = self.ssh_command(connect_timeout, options)
         if not env.strip():
             env = ""
@@ -746,7 +757,8 @@ class Remote(BaseRemote):
         result = ssh_run(full_cmd, verbose=verbose,
                          ignore_status=ignore_status, timeout=timeout,
                          extra_text=self.hostname, shell=True,
-                         log_file=log_file)
+                         log_file=log_file,
+                         watch_stdout_pattern=watch_stdout_pattern)
 
         # The error messages will show up in band (indistinguishable
         # from stuff sent through the SSH connection), so we have the
@@ -766,7 +778,7 @@ class Remote(BaseRemote):
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None):
+            args=None, log_file=None, watch_stdout_pattern=None):
         if args is None:
             args = ()
         if verbose:
@@ -780,7 +792,8 @@ class Remote(BaseRemote):
                          ignore_status=ignore_status,
                          connect_timeout=connect_timeout,
                          env=env, options=options, args=args,
-                         log_file=log_file)
+                         log_file=log_file,
+                         watch_stdout_pattern=watch_stdout_pattern)
 
     def run_output_check(self, cmd, timeout=None, ignore_status=False,
                          stdout_ok_regexp=None, stdout_err_regexp=None,

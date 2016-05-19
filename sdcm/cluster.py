@@ -180,6 +180,7 @@ class Node(object):
         self._n_coredumps = 0
         self._backtrace_thread = None
         self.start_backtrace_thread()
+        self.cs_start_time = None
 
     def _instance_wait_safe(self, instance_method):
         """
@@ -918,7 +919,9 @@ class LoaderSet(Cluster):
             except OSError:
                 logdir = os.path.join(output_dir, self.name)
             result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
-                                      ignore_status=True)
+                                      ignore_status=True,
+                                      watch_stdout_pattern='total,')
+            node.cs_start_time = result.stdout_pattern_found_at
             log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' % uuid.uuid4())
             self.log.debug('Writing cassandra-stress log %s', log_file_name)
             with open(log_file_name, 'w') as log_file:
@@ -949,7 +952,16 @@ class LoaderSet(Cluster):
             loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
         kill_script.remove()
 
-    def do_plot(self, lines, plotfile='plot'):
+    @staticmethod
+    def _plot_nemesis_events(nemesis, node, plot):
+        nemesis_event_start_times = [operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
+        for start_time in nemesis_event_start_times:
+            plot.axvline(start_time, color='blue', linestyle='dashdot')
+        nemesis_event_end_times = [operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
+        for end_time in nemesis_event_end_times:
+            plot.axvline(end_time, color='red', linestyle='dashdot')
+
+    def do_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
         time_plot = []
         ops_plot = []
         latmax_plot = []
@@ -966,16 +978,19 @@ class LoaderSet(Cluster):
                 lat99 = items[8]
                 lat999 = items[9]
                 latmax = items[10]
-                time = items[11]
-                time_plot.append(time)
+                time_point = items[11]
+                time_plot.append(time_point)
                 ops_plot.append(ops)
                 lat95_plot.append(lat95)
                 lat99_plot.append(lat99)
                 lat999_plot.append(lat999)
                 latmax_plot.append(latmax)
         # ops
+        for nemesis in db_cluster.nemesis:
+            self._plot_nemesis_events(nemesis, node, pl)
+
         pl.plot(time_plot, ops_plot, label='ops', color='green')
-        pl.title('Plot of time v.s. ops')
+        pl.title('Operations vs. Time')
         pl.xlabel('time')
         pl.ylabel('ops')
         pl.legend()
@@ -983,12 +998,15 @@ class LoaderSet(Cluster):
         pl.close()
 
         # lat
+        for nemesis in db_cluster.nemesis:
+            self._plot_nemesis_events(nemesis, node, pl)
+
         pl.plot(time_plot, lat95_plot, label='lat95', color='blue')
         pl.plot(time_plot, lat99_plot, label='lat99', color='green')
         pl.plot(time_plot, lat999_plot, label='lat999', color='black')
         pl.plot(time_plot, latmax_plot, label='latmax', color='red')
 
-        pl.title('Plot of time v.s. latency')
+        pl.title('Latency vs. Time')
         pl.xlabel('time')
         pl.ylabel('latency')
         pl.legend()
@@ -996,7 +1014,7 @@ class LoaderSet(Cluster):
         pl.savefig(plotfile + '-lat.svg')
         pl.close()
 
-    def verify_stress_thread(self, queue):
+    def verify_stress_thread(self, queue, db_cluster):
         results = []
         while len(results) != len(self.nodes):
             try:
@@ -1012,6 +1030,6 @@ class LoaderSet(Cluster):
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
             plotfile = os.path.join(self.logdir, str(node))
-            self.do_plot(lines, plotfile)
+            self.do_plot(lines, plotfile, node, db_cluster)
 
         return errors
