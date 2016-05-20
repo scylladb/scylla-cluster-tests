@@ -20,6 +20,17 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
+from sdcm.nemesis import Nemesis
+from sdcm.nemesis import log_time_elapsed
+
+
+class GrowClusterMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        self._set_current_disruption('Add new node to %s' % self.cluster)
+        new_nodes = self.cluster.add_nodes(count=1)
+        self.cluster.wait_for_init(node_list=new_nodes)
 
 
 class GrowClusterTest(ClusterTester):
@@ -76,12 +87,17 @@ class GrowClusterTest(ClusterTester):
         # Set space_node_treshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
+        self.db_cluster.add_nemesis(GrowClusterMonkey)
+        # Have c-s run for 2 + 3 minutes before we start to do decommission
+        # TODO: I'm not sure why Asias put those sleeps here
+        time.sleep(2 * 60)
         while len(self.db_cluster.nodes) < cluster_target_size:
             # Sleep 3 minutes before adding a new node, so we can see the tps
             # for each new cluster size
             time.sleep(3 * 60)
-            new_nodes = self.db_cluster.add_nodes(count=1)
-            self.db_cluster.wait_for_init(node_list=new_nodes)
+            # Run GrowClusterMonkey to add one node at a time
+            self.db_cluster.start_nemesis(interval=10)
+            self.db_cluster.stop_nemesis(timeout=None)
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)
