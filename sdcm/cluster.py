@@ -995,6 +995,7 @@ class LoaderSet(Cluster):
         plt.ylabel('ops')
         plt.legend()
         plt.savefig(plotfile + '-ops.svg')
+        plt.savefig(plotfile + '-ops.png')
         plt.close()
 
         # lat
@@ -1012,6 +1013,7 @@ class LoaderSet(Cluster):
         plt.legend()
         plt.grid()
         plt.savefig(plotfile + '-lat.svg')
+        plt.savefig(plotfile + '-lat.png')
         plt.close()
 
     def verify_stress_thread(self, queue, db_cluster):
