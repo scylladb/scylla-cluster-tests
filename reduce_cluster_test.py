@@ -19,8 +19,16 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
-from sdcm.nemesis import DecommissionNoAddMonkey
+from sdcm.nemesis import Nemesis
+from sdcm.nemesis import log_time_elapsed
 import time
+
+
+class DecommissionNoAddMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        self.disrupt_nodetool_decommission(add_node=False)
 
 
 class ReduceClusterTest(ClusterTester):
