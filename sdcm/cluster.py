@@ -961,7 +961,7 @@ class LoaderSet(Cluster):
         for end_time in nemesis_event_end_times:
             plot.axvline(end_time, color='red', linestyle='dashdot')
 
-    def do_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
+    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
         time_plot = []
         ops_plot = []
         latmax_plot = []
@@ -1030,6 +1030,6 @@ class LoaderSet(Cluster):
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
             plotfile = os.path.join(self.logdir, str(node))
-            self.do_plot(lines, plotfile, node, db_cluster)
+            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return errors
