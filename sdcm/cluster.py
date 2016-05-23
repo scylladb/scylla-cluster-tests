@@ -870,6 +870,7 @@ class LoaderSet(Cluster):
                                         ec2_security_group_ids=ec2_security_group_ids,
                                         ec2_instance_type=ec2_instance_type,
                                         ec2_ami_username=ec2_ami_username,
+                                        ec2_user_data='--stop-services',
                                         service=service,
                                         ec2_block_device_mappings=ec2_block_device_mappings,
                                         credentials=credentials,
