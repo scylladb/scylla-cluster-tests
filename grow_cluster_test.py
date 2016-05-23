@@ -118,6 +118,16 @@ class GrowClusterTest(ClusterTester):
         """
         self.grow_cluster(cluster_target_size=5)
 
+    def test_grow_3_to_4(self):
+        """
+        Shorter version of the cluster growth test.
+
+        1) Start a 1 node cluster
+        2) Start cassandra-stress on the loader node
+        3) Add a new node
+        """
+        self.grow_cluster(cluster_target_size=4)
+
     def test_grow_3_to_4_while_filled(self):
         """
         Grow an already filled cluster.
