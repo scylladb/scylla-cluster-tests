@@ -303,13 +303,6 @@ class DecommissionMonkey(Nemesis):
         self.disrupt_nodetool_decommission(add_node=True)
 
 
-class DecommissionNoAddMonkey(Nemesis):
-
-    @log_time_elapsed
-    def disrupt(self):
-        self.disrupt_nodetool_decommission(add_node=False)
-
-
 class ChaosMonkey(Nemesis):
 
     @log_time_elapsed

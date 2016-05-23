@@ -19,8 +19,16 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
-from sdcm.nemesis import DecommissionNoAddMonkey
+from sdcm.nemesis import Nemesis
+from sdcm.nemesis import log_time_elapsed
 import time
+
+
+class DecommissionNoAddMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        self.disrupt_nodetool_decommission(add_node=False)
 
 
 class ReduceClusterTest(ClusterTester):
@@ -47,6 +55,25 @@ class ReduceClusterTest(ClusterTester):
         self.init_resources(n_db_nodes=self._cluster_starting_size, n_loader_nodes=1)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+
+    def get_stress_cmd(self, duration=None, threads=None):
+        """
+        Get a cassandra stress cmd string suitable for reduce cluster purposes.
+
+        :param duration: Duration of stress (minutes).
+        :param threads: Number of threads used by cassandra stress.
+        :return: Cassandra stress string
+        :rtype: basestring
+        """
+        ip = self.db_cluster.get_node_private_ips()[0]
+        if duration is None:
+            duration = self.params.get('cassandra_stress_duration')
+        if threads is None:
+            threads = self.params.get('cassandra_stress_threads')
+        return ("cassandra-stress write cl=QUORUM duration=%sm "
+                "-schema 'replication(factor=3)' -port jmx=6868 "
+                "-mode cql3 native -rate threads=%s "
+                "-pop seq=1..100000 -node %s" % (duration, threads, ip))
 
     def reduce_cluster(self, cluster_starting_size, cluster_target_size=3):
         self.wait_for_init(cluster_starting_size, cluster_target_size)

@@ -20,6 +20,17 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
+from sdcm.nemesis import Nemesis
+from sdcm.nemesis import log_time_elapsed
+
+
+class GrowClusterMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        self._set_current_disruption('Add new node to %s' % self.cluster)
+        new_nodes = self.cluster.add_nodes(count=1)
+        self.cluster.wait_for_init(node_list=new_nodes)
 
 
 class GrowClusterTest(ClusterTester):
@@ -47,6 +58,25 @@ class GrowClusterTest(ClusterTester):
         self.db_cluster.wait_for_init()
         self.stress_thread = None
 
+    def get_stress_cmd(self, duration=None, threads=None):
+        """
+        Get a cassandra stress cmd string suitable for grow cluster purposes.
+
+        :param duration: Duration of stress (minutes).
+        :param threads: Number of threads used by cassandra stress.
+        :return: Cassandra stress string
+        :rtype: basestring
+        """
+        ip = self.db_cluster.get_node_private_ips()[0]
+        if duration is None:
+            duration = self.params.get('cassandra_stress_duration')
+        if threads is None:
+            threads = self.params.get('cassandra_stress_threads')
+        return ("cassandra-stress write cl=QUORUM duration=%sm "
+                "-schema 'replication(factor=3)' -port jmx=6868 "
+                "-mode cql3 native -rate threads=%s "
+                "-pop seq=1..100000 -node %s" % (duration, threads, ip))
+
     def grow_cluster(self, cluster_target_size):
         # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
@@ -57,12 +87,17 @@ class GrowClusterTest(ClusterTester):
         # Set space_node_treshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
+        self.db_cluster.add_nemesis(GrowClusterMonkey)
+        # Have c-s run for 2 + 3 minutes before we start to do decommission
+        # TODO: I'm not sure why Asias put those sleeps here
+        time.sleep(2 * 60)
         while len(self.db_cluster.nodes) < cluster_target_size:
             # Sleep 3 minutes before adding a new node, so we can see the tps
             # for each new cluster size
             time.sleep(3 * 60)
-            new_nodes = self.db_cluster.add_nodes(count=1)
-            self.db_cluster.wait_for_init(node_list=new_nodes)
+            # Run GrowClusterMonkey to add one node at a time
+            self.db_cluster.start_nemesis(interval=10)
+            self.db_cluster.stop_nemesis(timeout=None)
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)

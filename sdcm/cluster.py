@@ -24,7 +24,7 @@ import yaml
 import matplotlib
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
-import matplotlib.pyplot as pl
+import matplotlib.pyplot as plt
 
 from avocado.utils import path
 from avocado.utils import script
@@ -961,7 +961,7 @@ class LoaderSet(Cluster):
         for end_time in nemesis_event_end_times:
             plot.axvline(end_time, color='red', linestyle='dashdot')
 
-    def do_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
+    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
         time_plot = []
         ops_plot = []
         latmax_plot = []
@@ -987,32 +987,34 @@ class LoaderSet(Cluster):
                 latmax_plot.append(latmax)
         # ops
         for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, pl)
+            self._plot_nemesis_events(nemesis, node, plt)
 
-        pl.plot(time_plot, ops_plot, label='ops', color='green')
-        pl.title('Operations vs. Time')
-        pl.xlabel('time')
-        pl.ylabel('ops')
-        pl.legend()
-        pl.savefig(plotfile + '-ops.svg')
-        pl.close()
+        plt.plot(time_plot, ops_plot, label='ops', color='green')
+        plt.title('Operations vs. Time')
+        plt.xlabel('time')
+        plt.ylabel('ops')
+        plt.legend()
+        plt.savefig(plotfile + '-ops.svg')
+        plt.savefig(plotfile + '-ops.png')
+        plt.close()
 
         # lat
         for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, pl)
+            self._plot_nemesis_events(nemesis, node, plt)
 
-        pl.plot(time_plot, lat95_plot, label='lat95', color='blue')
-        pl.plot(time_plot, lat99_plot, label='lat99', color='green')
-        pl.plot(time_plot, lat999_plot, label='lat999', color='black')
-        pl.plot(time_plot, latmax_plot, label='latmax', color='red')
+        plt.plot(time_plot, lat95_plot, label='lat95', color='blue')
+        plt.plot(time_plot, lat99_plot, label='lat99', color='green')
+        plt.plot(time_plot, lat999_plot, label='lat999', color='black')
+        plt.plot(time_plot, latmax_plot, label='latmax', color='red')
 
-        pl.title('Latency vs. Time')
-        pl.xlabel('time')
-        pl.ylabel('latency')
-        pl.legend()
-        pl.grid()
-        pl.savefig(plotfile + '-lat.svg')
-        pl.close()
+        plt.title('Latency vs. Time')
+        plt.xlabel('time')
+        plt.ylabel('latency')
+        plt.legend()
+        plt.grid()
+        plt.savefig(plotfile + '-lat.svg')
+        plt.savefig(plotfile + '-lat.png')
+        plt.close()
 
     def verify_stress_thread(self, queue, db_cluster):
         results = []
@@ -1030,6 +1032,6 @@ class LoaderSet(Cluster):
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
             plotfile = os.path.join(self.logdir, str(node))
-            self.do_plot(lines, plotfile, node, db_cluster)
+            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return errors
