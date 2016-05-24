@@ -84,7 +84,7 @@ class GrowClusterTest(ClusterTester):
         stress_queue = self.run_stress_thread(duration=duration)
 
         # Wait for cluster is filled with data
-        # Set space_node_treshold in config file for the size
+        # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
         self.db_cluster.add_nemesis(GrowClusterMonkey)

@@ -194,7 +194,7 @@ class Node(object):
         :see: [1] http://docs.aws.amazon.com/AWSEC2/latest/APIReference/query-api-troubleshooting.html#eventual-consistency
         :see: [2] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
         """
-        treshold = 300
+        threshold = 300
         ok = False
         retries = 0
         max_retries = 9
@@ -203,7 +203,7 @@ class Node(object):
                 instance_method()
                 ok = True
             except WaiterError:
-                time.sleep(max((2 ** retries) * 2, treshold))
+                time.sleep(max((2 ** retries) * 2, threshold))
                 retries += 1
 
         if not ok:
@@ -529,32 +529,32 @@ class Cluster(object):
         for node in self.nodes:
             node.destroy()
 
-    def cfstat_reached_treshold(self, key, treshold):
+    def cfstat_reached_threshold(self, key, threshold):
         """
-        Find whether a certain cfstat key in all nodes reached a certain treshold value.
+        Find whether a certain cfstat key in all nodes reached a certain threshold value.
 
         :param key: cfstat key, example, 'Space used (total)'.
-        :param treshold: Treshold value for cfstats key. Example, 2432043080.
-        :return: Whether all nodes reached that treshold or not.
+        :param threshold: threshold value for cfstats key. Example, 2432043080.
+        :return: Whether all nodes reached that threshold or not.
         """
         cfstats = [node.get_cfstats()[key] for node in self.nodes]
-        reached_treshold = True
+        reached_threshold = True
         for value in cfstats:
-            if value < treshold:
-                reached_treshold = False
-        if reached_treshold:
+            if value < threshold:
+                reached_threshold = False
+        if reached_threshold:
             self.log.debug("Done waiting on cfstats: %s" % cfstats)
-        return reached_treshold
+        return reached_threshold
 
-    def wait_cfstat_reached_treshold(self, key, treshold):
-        text = "Waiting until cfstat '%s' reaches value '%s'" % (key, treshold)
-        wait.wait_for(func=self.cfstat_reached_treshold, step=10,
-                      text=text, key=key, treshold=treshold)
+    def wait_cfstat_reached_threshold(self, key, threshold):
+        text = "Waiting until cfstat '%s' reaches value '%s'" % (key, threshold)
+        wait.wait_for(func=self.cfstat_reached_threshold, step=10,
+                      text=text, key=key, threshold=threshold)
 
     def wait_total_space_used_per_node(self, size=None):
         if size is None:
-            size = int(self.params.get('space_node_treshold'))
-        self.wait_cfstat_reached_treshold('Space used (total)', size)
+            size = int(self.params.get('space_node_threshold'))
+        self.wait_cfstat_reached_threshold('Space used (total)', size)
 
 
 class ScyllaCluster(Cluster):
