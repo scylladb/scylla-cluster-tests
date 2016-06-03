@@ -210,17 +210,35 @@ class Node(object):
             raise NodeError('AWS instance %s waiter error after '
                             'exponencial backoff wait' % self.instance.id)
 
+    def file_exists(self, file_path):
+        result = self.remoter.run('sudo test -e %s' % file_path,
+                                  ignore_status=True)
+        return result.exit_status == 0
+
     def retrieve_journal(self):
         try:
             log_file = os.path.join(self.logdir, 'db_services.log')
-            self.remoter.run('sudo journalctl -f '
-                             '-u scylla-io-setup.service '
-                             '-u scylla-server.service '
-                             '-u scylla-jmx.service',
+            result = self.remoter.run('journalctl --version',
+                                      ignore_status=True)
+            if result.exit_status == 0:
+                # Here we're assuming that journalctl systems are Scylla AMIs
+                db_services_log_cmd = ('sudo journalctl -f '
+                                       '-u scylla-io-setup.service '
+                                       '-u scylla-server.service '
+                                       '-u scylla-jmx.service')
+            else:
+                # Here we are assuming we're using a cassandra AMI, based
+                # on older Ubuntu
+                cassandra_log = '/var/log/cassandra/system.log'
+                wait.wait_for(self.file_exists, step=10,
+                              file_path=cassandra_log)
+                db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
+            self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
                              log_file=log_file)
         except Exception, details:
-            self.log.error('Error retrieving remote node journal: %s', details)
+            self.log.error('Error retrieving remote node DB service log: %s',
+                           details)
 
     def journal_thread(self):
         while True:
