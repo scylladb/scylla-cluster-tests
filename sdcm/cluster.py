@@ -27,6 +27,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from avocado.utils import path
+from avocado.utils import process
 from avocado.utils import script
 from botocore.exceptions import WaiterError
 
@@ -407,12 +408,33 @@ class Node(object):
                     stat_dict[stat_line[0]] = stat_line[1].split()[0]
         return stat_dict
 
+    def _get_tcpdump_logs(self, tcpdump_id):
+        try:
+            log_file = os.path.join(self.logdir, 'tcpdump-%s.log' % tcpdump_id)
+            self.remoter.run('sudo tcpdump -vv -i lo port 10000',
+                             ignore_status=True, log_file=log_file)
+        except Exception, details:
+            self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
+                           str(details))
+
     def get_cfstats(self):
         def keyspace1_available():
             res = self.remoter.run('nodetool cfstats keyspace1', ignore_status=True)
             return res.exit_status == 0
+        tcpdump_id = uuid.uuid4()
+        self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
+        tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
+                                          kwargs={'tcpdump_id': tcpdump_id})
+        tcpdump_thread.start()
         wait.wait_for(keyspace1_available, step=60, text='Waiting until keyspace1 is available')
-        result = self.remoter.run('nodetool cfstats keyspace1')
+        try:
+            result = self.remoter.run('nodetool cfstats keyspace1')
+        except process.CmdError:
+            self.log.error('nodetool error - see tcpdump thread uuid %s for '
+                           'debugging info', tcpdump_id)
+            raise
+        self.remoter.run('sudo killall tcpdump')
+        self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
     def wait_db_up(self, verbose=True):
