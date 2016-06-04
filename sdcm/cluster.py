@@ -436,7 +436,8 @@ class Node(object):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
             raise
-        self.remoter.run('sudo killall tcpdump')
+        finally:
+            self.remoter.run('sudo killall tcpdump')
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
