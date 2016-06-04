@@ -411,7 +411,8 @@ class Node(object):
     def _get_tcpdump_logs(self, tcpdump_id):
         try:
             log_file = os.path.join(self.logdir, 'tcpdump-%s.log' % tcpdump_id)
-            self.remoter.run('sudo tcpdump -vv -i lo port 10000',
+            pcap_file = os.path.join(self.logdir, 'tcpdump-%s.pcap' % tcpdump_id)
+            self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s' % pcap_file,
                              ignore_status=True, log_file=log_file)
         except Exception, details:
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
