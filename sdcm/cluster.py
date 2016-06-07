@@ -437,7 +437,7 @@ class Node(object):
                            'debugging info', tcpdump_id)
             raise
         finally:
-            self.remoter.run('sudo killall tcpdump')
+            self.remoter.run('sudo killall tcpdump', ignore_status=True)
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
