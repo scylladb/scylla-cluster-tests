@@ -39,7 +39,7 @@ regions: !mux
         region_name: 'us-west-1'
         security_group_ids: 'sg-dcd785b9'
         subnet_id: 'subnet-10a04c75'
-        ami_id_db_scylla: 'ami-32bcc552'
+        ami_id_db_scylla: 'ami-2be31b46'
         ami_db_scylla_user: 'centos'
         ami_id_loader: 'ami-32bcc552'
         ami_loader_user: 'centos'
