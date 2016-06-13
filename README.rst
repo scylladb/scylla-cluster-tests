@@ -44,11 +44,6 @@ Install ``boto3`` and ``awscli`` (the last one is to help you configure aws) and
 
 Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
 
-Due to a bug in avocado 0.32 that is going to be fixed for the next release,
-you also have to install the html plugin if you are on Fedora::
-
-    sudo dnf install avocado-plugins-output-html -y
-
 Configure aws::
 
     aws configure
