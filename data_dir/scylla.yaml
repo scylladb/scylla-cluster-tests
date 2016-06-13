@@ -2,6 +2,8 @@
 cassandra_stress_duration: 60
 # default cassandra stress thread number if none specified
 cassandra_stress_threads: 1000
+# default cassandra stress population size if none specified
+cassandra_stress_population_size: 10000000
 n_db_nodes: 6
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
