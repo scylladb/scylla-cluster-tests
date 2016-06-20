@@ -24,11 +24,11 @@ user_prefix:
 # Keep AWS instances running and leave credentials alone (keep)
 # Stop AWS instances and leave credentials alone (stop)
 failure_post_behavior: destroy
-# Space node treshold before starting nemesis (bytes)
+# Space node threshold before starting nemesis (bytes)
 # The default value is 6GB (6x1024^3 bytes)
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
-space_node_treshold: 6442450944
+space_node_threshold: 6442450944
 
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
