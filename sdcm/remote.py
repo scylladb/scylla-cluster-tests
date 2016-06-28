@@ -273,6 +273,15 @@ class BaseRemote(object):
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
 
+    def ssh_debug_cmd(self):
+        if self.key_file:
+            return "SSH access -> 'ssh -i %s %s@%s'" % (self.key_file,
+                                                        self.user,
+                                                        self.ip)
+        else:
+            return "SSH access -> 'ssh %s@%s'" % (self.user,
+                                                  self.ip)
+
     def __str__(self):
         return 'Remote [%s@%s]' % (self.user, self.hostname)
 
