@@ -211,30 +211,33 @@ class ClusterTester(Test):
 
     def get_cluster_libvirt(self, loader_info, db_info):
 
-        def _set_from_params(dict_key, params_key):
-            conf_dict = dict()
-            conf_dict[dict_key] = self.params.get(params_key)
-            return conf_dict
+        def _set_from_params(base_dict, dict_key, params_key):
+            if base_dict.get(dict_key) is None:
+                conf_dict = dict()
+                conf_dict[dict_key] = self.params.get(params_key)
+                return conf_dict
+            else:
+                return {}
 
-        loader_info.update(_set_from_params('n_nodes', 'n_loaders'))
-        loader_info.update(_set_from_params('image', 'libvirt_loader_image'))
-        loader_info.update(_set_from_params('user', 'libvirt_loader_image_user'))
-        loader_info.update(_set_from_params('password', 'libvirt_loader_image_password'))
-        loader_info.update(_set_from_params('os_type', 'libvirt_loader_os_type'))
-        loader_info.update(_set_from_params('os_variant', 'libvirt_loader_os_variant'))
-        loader_info.update(_set_from_params('memory', 'libvirt_loader_memory'))
-        loader_info.update(_set_from_params('bridge', 'libvirt_bridge'))
-        loader_info.update(_set_from_params('uri', 'libvirt_uri'))
+        loader_info.update(_set_from_params(loader_info, 'n_nodes', 'n_loaders'))
+        loader_info.update(_set_from_params(loader_info, 'image', 'libvirt_loader_image'))
+        loader_info.update(_set_from_params(loader_info, 'user', 'libvirt_loader_image_user'))
+        loader_info.update(_set_from_params(loader_info, 'password', 'libvirt_loader_image_password'))
+        loader_info.update(_set_from_params(loader_info, 'os_type', 'libvirt_loader_os_type'))
+        loader_info.update(_set_from_params(loader_info, 'os_variant', 'libvirt_loader_os_variant'))
+        loader_info.update(_set_from_params(loader_info, 'memory', 'libvirt_loader_memory'))
+        loader_info.update(_set_from_params(loader_info, 'bridge', 'libvirt_bridge'))
+        loader_info.update(_set_from_params(loader_info, 'uri', 'libvirt_uri'))
 
-        db_info.update(_set_from_params('n_nodes', 'n_db_nodes'))
-        db_info.update(_set_from_params('image', 'libvirt_db_image'))
-        db_info.update(_set_from_params('user', 'libvirt_db_image_user'))
-        db_info.update(_set_from_params('password', 'libvirt_db_image_password'))
-        db_info.update(_set_from_params('os_type', 'libvirt_db_os_type'))
-        db_info.update(_set_from_params('os_variant', 'libvirt_db_os_variant'))
-        db_info.update(_set_from_params('memory', 'libvirt_db_memory'))
-        db_info.update(_set_from_params('bridge', 'libvirt_bridge'))
-        db_info.update(_set_from_params('uri', 'libvirt_uri'))
+        db_info.update(_set_from_params(db_info, 'n_nodes', 'n_db_nodes'))
+        db_info.update(_set_from_params(db_info, 'image', 'libvirt_db_image'))
+        db_info.update(_set_from_params(db_info, 'user', 'libvirt_db_image_user'))
+        db_info.update(_set_from_params(db_info, 'password', 'libvirt_db_image_password'))
+        db_info.update(_set_from_params(db_info, 'os_type', 'libvirt_db_os_type'))
+        db_info.update(_set_from_params(db_info, 'os_variant', 'libvirt_db_os_variant'))
+        db_info.update(_set_from_params(db_info, 'memory', 'libvirt_db_memory'))
+        db_info.update(_set_from_params(db_info, 'bridge', 'libvirt_bridge'))
+        db_info.update(_set_from_params(db_info, 'uri', 'libvirt_uri'))
 
         user_prefix = self.params.get('user_prefix', None)
 
@@ -338,7 +341,7 @@ class ClusterTester(Test):
     def _create_session(self, node, keyspace, user, password, compression,
                         protocol_version, load_balancing_policy=None,
                         port=None, ssl_opts=None):
-        node_ips = [node.instance.public_ip_address]
+        node_ips = [node.public_ip_address]
         if not port:
             port = 9042
 
@@ -387,7 +390,7 @@ class ClusterTester(Test):
                                  protocol_version=None, port=None,
                                  ssl_opts=None):
 
-        wlrr = WhiteListRoundRobinPolicy([node.instance.public_ip_address])
+        wlrr = WhiteListRoundRobinPolicy([node.public_ip_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)
