@@ -52,7 +52,11 @@ class ReduceClusterTest(ClusterTester):
         # replication factor settings we're using with cassandra-stress
         self._cluster_starting_size = cluster_starting_size
         self._cluster_target_size = cluster_target_size
-        self.init_resources(n_db_nodes=self._cluster_starting_size, n_loader_nodes=1)
+        loader_info = {'n_nodes': 1, 'device_mappings': None,
+                       'type': None}
+        db_info = {'n_nodes': self._cluster_starting_size,
+                   'device_mappings': None, 'type': None}
+        self.init_resources(loader_info=loader_info, db_info=db_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
 

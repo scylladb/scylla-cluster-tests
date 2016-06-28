@@ -268,6 +268,13 @@ def log_time_elapsed(method):
     return wrapper
 
 
+class NoOpMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        time.sleep(300)
+
+
 class StopStartMonkey(Nemesis):
 
     @log_time_elapsed
