@@ -38,7 +38,9 @@ class HugeClusterTest(ClusterTester):
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
 
-        self.init_resources(n_db_nodes=40, n_loader_nodes=1)
+        loader_info = {'n_nodes': 1, 'device_mappings': None, 'type': None}
+        db_info = {'n_nodes': 40, 'device_mappings': None, 'type': None}
+        self.init_resources(loader_info=loader_info, db_info=db_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
         self.stress_thread = None
