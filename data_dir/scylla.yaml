@@ -9,12 +9,6 @@ n_db_nodes: 6
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
-# What is the backend that the suite will use to get machines from.
-# Right now the only supported mode is 'aws'
-cluster_backend: 'aws'
-# From 0.19 on, iotune will require bigger disk, so let's use a big
-# loader instance by default.
-instance_type_loader: 'c3.large'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'ChaosMonkey'
 # Nemesis sleep interval to use if None provided specifically
@@ -39,37 +33,59 @@ space_node_threshold: 6442450944
 # update_db_binary: $path_of_the_new_scylla_binary
 update_db_binary: ''
 
-regions: !mux
-    us_west_1:
-        region_name: 'us-west-1'
-        security_group_ids: 'sg-dcd785b9'
-        subnet_id: 'subnet-10a04c75'
-        ami_id_db_scylla: 'ami-2be31b46'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-32bcc552'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-3cf7c979'
-        ami_db_cassandra_user: 'ubuntu'
-    us_west_2:
-        region_name: 'us-west-2'
-        security_group_ids: 'sg-81703ae4'
-        subnet_id: 'subnet-5207ee37'
-        ami_id_db_scylla: 'ami-15b84575'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-15b84575'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-1cff962c'
-        ami_db_cassandra_user: 'ubuntu'
-    us_east_1:
-        region_name: 'us-east-1'
-        security_group_ids: 'sg-c5e1f7a0'
-        subnet_id: 'subnet-ec4a72c4'
-        ami_id_db_scylla: 'ami-e16a888c'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-e16a888c'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-ada2b6c4'
-        ami_db_cassandra_user: 'ubuntu'
+backends: !mux
+    libvirt: !mux
+        cluster_backend: 'libvirt'
+        libvirt_uri: 'qemu:///system'
+        libvirt_bridge: 'virbr0'
+        libvirt_loader_image: '/path/to/your/loader_base_image.qcow2'
+        libvirt_loader_image_user: 'centos'
+        libvirt_loader_image_password: '123456'
+        libvirt_loader_os_type: 'linux'
+        libvirt_loader_os_variant: 'centos7.0'
+        libvirt_loader_memory: 2048
+        libvirt_db_image: '/path/to/your/db_base_image.qcow2'
+        libvirt_db_image_user: 'centos'
+        libvirt_db_image_password: '123456'
+        libvirt_db_os_type: 'linux'
+        libvirt_db_os_variant: 'centos7.0'
+        libvirt_db_memory: 2048
+    aws: !mux
+        # What is the backend that the suite will use to get machines from.
+        cluster_backend: 'aws'
+        # From 0.19 on, iotune will require bigger disk, so let's use a big
+        # loader instance by default.
+        instance_type_loader: 'c3.large'
+        us_west_1:
+            region_name: 'us-west-1'
+            security_group_ids: 'sg-dcd785b9'
+            subnet_id: 'subnet-10a04c75'
+            ami_id_db_scylla: 'ami-2be31b46'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-32bcc552'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-3cf7c979'
+            ami_db_cassandra_user: 'ubuntu'
+        us_west_2:
+            region_name: 'us-west-2'
+            security_group_ids: 'sg-81703ae4'
+            subnet_id: 'subnet-5207ee37'
+            ami_id_db_scylla: 'ami-15b84575'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-15b84575'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-1cff962c'
+            ami_db_cassandra_user: 'ubuntu'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-ec4a72c4'
+            ami_id_db_scylla: 'ami-e16a888c'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-e16a888c'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-ada2b6c4'
+            ami_db_cassandra_user: 'ubuntu'
 
 databases: !mux
     cassandra:
