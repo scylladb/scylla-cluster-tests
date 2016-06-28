@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import aexpect
 import StringIO
 import glob
 import logging
@@ -29,6 +30,7 @@ import uuid
 from avocado.utils import astring
 from avocado.utils import path
 from avocado.utils import process
+from avocado.utils import wait
 
 from .log import SDCMAdapter
 
@@ -272,6 +274,42 @@ class BaseRemote(object):
         self.master_ssh_option = ''
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self._check_install_key_required()
+
+    def _check_install_key_required(self):
+        def _safe_ssh_ping():
+            try:
+                self._ssh_ping()
+                return True
+            except (SSHPermissionDeniedError, process.CmdError):
+                return None
+
+        if not self.key_file and self.password:
+            try:
+                self._ssh_ping()
+            except (SSHPermissionDeniedError, process.CmdError):
+                copy_id_cmd = ('ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p %s %s@%s' %
+                               (self.port, self.user, self.hostname))
+                while True:
+                    try:
+                        expect = aexpect.Expect(copy_id_cmd)
+                        expect.read_until_output_matches(['.*password:'], timeout=60)
+                        expect.sendline(self.password)
+                        break
+                    except aexpect.ExpectProcessTerminatedError:
+                        time.sleep(1)
+
+                result = wait.wait_for(func=_safe_ssh_ping, timeout=10,
+                                       text='Waiting for password-less SSH')
+
+                if result is None:
+                    raise SSHPermissionDeniedError('Unable to configure '
+                                                   'password less SSH. '
+                                                   'Output of %s: %s' %
+                                                   (copy_id_cmd,
+                                                    expect.get_output()))
+                else:
+                    self.log.info('Successfully configured SSH key auth')
 
     def ssh_debug_cmd(self):
         if self.key_file:
