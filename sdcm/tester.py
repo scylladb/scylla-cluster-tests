@@ -149,6 +149,10 @@ class ClusterTester(Test):
             n_db_nodes = self.params.get('n_db_nodes')
         if n_loader_nodes is None:
             n_loader_nodes = self.params.get('n_loaders')
+        if n_loader_nodes <= 0:
+            self.error('Invalid parameter n_loader_nodes/n_loaders: %s,'
+                       ' it should be larger than zero.' % n_loader_nodes)
+
         if loaders_type is None:
             loaders_type = self.params.get('instance_type_loader')
         if dbs_type is None:
