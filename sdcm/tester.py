@@ -210,7 +210,8 @@ class ClusterTester(Test):
                                  n_nodes=n_loader_nodes,
                                  params=self.params)
 
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None):
+    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
+                       mode='write'):
         """
         Get a cassandra stress cmd string.
 
@@ -221,6 +222,7 @@ class ClusterTester(Test):
         :param duration: Duration of stress (minutes).
         :param threads: Number of threads used by cassandra stress.
         :param population_size: Size of the -pop seq1..%s argument.
+        :param mode: stress mode, write/read/mixed/ect
         :return: Cassandra stress string
         :rtype: basestring
         """
@@ -231,24 +233,25 @@ class ClusterTester(Test):
             duration = self.params.get('cassandra_stress_duration')
         if threads is None:
             threads = self.params.get('cassandra_stress_threads')
-        return ("cassandra-stress write cl=QUORUM duration=%sm "
+        return ("cassandra-stress %s cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
                 "-mode cql3 native -rate threads=%s "
                 "-pop seq=1..%s -node %s" %
-                (duration, threads, population_size, ip))
+                (mode, duration, threads, population_size, ip))
 
     @clean_aws_resources
-    def run_stress(self, stress_cmd=None, duration=None):
+    def run_stress(self, stress_cmd=None, duration=None, mode='write'):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration)
+                                              duration=duration, mode=mode)
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
     def run_stress_thread(self, stress_cmd=None, duration=None,
-                          threads=None, population_size=None):
+                          threads=None, population_size=None, mode='write'):
         if stress_cmd is None:
             stress_cmd = self.get_stress_cmd(duration=duration, threads=threads,
-                                             population_size=population_size)
+                                             population_size=population_size,
+                                             mode=mode)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         timeout = duration * 60 + 600
