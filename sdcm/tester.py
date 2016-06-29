@@ -275,6 +275,10 @@ class ClusterTester(Test):
             self.fail("cassandra-stress errors on "
                       "nodes:\n%s" % "\n".join(errors))
 
+    @clean_aws_resources
+    def get_stress_results(self, queue):
+        return self.loaders.get_stress_results(queue)
+
     def get_auth_provider(self, user, password):
         return PlainTextAuthProvider(username=user, password=password)
 
