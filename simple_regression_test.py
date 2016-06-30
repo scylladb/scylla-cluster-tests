@@ -27,6 +27,26 @@ class SimpleRegressionTest(ClusterTester):
     :avocado: enable
     """
 
+    str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s'
+
+    def display_single_result(self, result):
+        self.log.info(self.str_pattern % (result['op rate'],
+                                          result['partition rate'],
+                                          result['row rate'],
+                                          result['latency mean'],
+                                          result['latency median'],
+                                          result['latency 95th percentile'],
+                                          result['latency 99th percentile'],
+                                          result['latency 99.9th percentile']))
+
+    def display_results(self, results):
+        self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
+                                          'row-rate', 'latency-mean',
+                                          'latency-median', 'l-94th-pct',
+                                          'l-99th-pct', 'l-99.9th-pct'))
+        for single_result in results:
+            self.display_single_result(single_result)
+
     def test_simple_regression(self):
         """
         Test steps:
@@ -67,6 +87,9 @@ class SimpleRegressionTest(ClusterTester):
                          mode='mixed')
         mixed_results = self.get_stress_results(queue=stress_queue)
 
+        self.display_results(write_results)
+        self.display_results(read_results)
+        self.display_results(mixed_results)
 
 if __name__ == '__main__':
     main()
