@@ -1061,6 +1061,32 @@ class LoaderSet(Cluster):
         plt.savefig(plotfile + '-lat.png')
         plt.close()
 
+    def _parse_results(self, lines):
+        """
+        Parsing c-stress results, only parse the summary results.
+        Collect results of all nodes and return a dictionaries' list,
+        the new structure data will be easy to parse, compare, display or save.
+        """
+        results = {}
+        enable_parse = False
+
+        for line in lines:
+            line.strip()
+            if line.startswith('Results:'):
+                enable_parse = True
+                continue
+            if line == 'END':
+                break
+            if not enable_parse:
+                continue
+
+            split_idx = line.index(':')
+            key = line[:split_idx].strip()
+            value = line[split_idx + 1:].split()[0]
+            results[key] = value
+
+        return results
+
     def verify_stress_thread(self, queue, db_cluster):
         results = []
         while len(results) != len(self.nodes):
@@ -1080,3 +1106,19 @@ class LoaderSet(Cluster):
             self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return errors
+
+    def get_stress_results(self, queue):
+        results = []
+        ret = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            ret.append(self._parse_results(lines))
+
+        return ret
