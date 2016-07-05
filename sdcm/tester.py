@@ -147,6 +147,10 @@ class ClusterTester(Test):
     def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None, loaders_type=None, dbs_type=None):
         if n_db_nodes is None:
             n_db_nodes = self.params.get('n_db_nodes')
+        if n_db_nodes <= 0:
+            self.error('Invalid parameter n_db_nodes: %s,'
+                       ' it should be larger than zero.' % n_db_nodes)
+
         if n_loader_nodes is None:
             n_loader_nodes = self.params.get('n_loaders')
         if n_loader_nodes <= 0:
