@@ -38,6 +38,7 @@ backends: !mux
         cluster_backend: 'libvirt'
         libvirt_uri: 'qemu:///system'
         libvirt_bridge: 'virbr0'
+        scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.2.repo'
         libvirt_loader_image: '/path/to/your/loader_base_image.qcow2'
         libvirt_loader_image_user: 'centos'
         libvirt_loader_image_password: '123456'
