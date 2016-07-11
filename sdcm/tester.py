@@ -28,10 +28,10 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 
 from . import cluster
 from . import nemesis
-from .cluster import CassandraCluster
-from .cluster import LoaderSet
+from .cluster import CassandraAWSCluster
+from .cluster import LoaderSetAWS
 from .cluster import RemoteCredentials
-from .cluster import ScyllaCluster
+from .cluster import ScyllaAWSCluster
 from .data_path import get_data_path
 
 try:
@@ -169,46 +169,46 @@ class ClusterTester(Test):
                                              user_prefix=user_prefix)
 
         if self.params.get('db_type') == 'scylla':
-            self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
-                                            ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                                            ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                            ec2_subnet_id=self.params.get('subnet_id'),
-                                            ec2_instance_type=dbs_type,
-                                            service=service,
-                                            credentials=self.credentials,
-                                            ec2_block_device_mappings=dbs_block_device_mappings,
-                                            user_prefix=user_prefix,
-                                            n_nodes=n_db_nodes,
-                                            params=self.params)
-        elif self.params.get('db_type') == 'cassandra':
-            self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
-                                               ec2_ami_username=self.params.get('ami_db_cassandra_user'),
+            self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
+                                               ec2_ami_username=self.params.get('ami_db_scylla_user'),
                                                ec2_security_group_ids=[self.params.get('security_group_ids')],
                                                ec2_subnet_id=self.params.get('subnet_id'),
                                                ec2_instance_type=dbs_type,
                                                service=service,
-                                               ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
+                                               ec2_block_device_mappings=dbs_block_device_mappings,
                                                user_prefix=user_prefix,
                                                n_nodes=n_db_nodes,
                                                params=self.params)
+        elif self.params.get('db_type') == 'cassandra':
+            self.db_cluster = CassandraAWSCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
+                                                  ec2_ami_username=self.params.get('ami_db_cassandra_user'),
+                                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                                  ec2_subnet_id=self.params.get('subnet_id'),
+                                                  ec2_instance_type=dbs_type,
+                                                  service=service,
+                                                  ec2_block_device_mappings=dbs_block_device_mappings,
+                                                  credentials=self.credentials,
+                                                  user_prefix=user_prefix,
+                                                  n_nodes=n_db_nodes,
+                                                  params=self.params)
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
-        self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
-                                 ec2_ami_username=self.params.get('ami_loader_user'),
-                                 ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                 ec2_subnet_id=self.params.get('subnet_id'),
-                                 ec2_instance_type=loaders_type,
-                                 service=service,
-                                 ec2_block_device_mappings=loaders_block_device_mappings,
-                                 credentials=self.credentials,
-                                 scylla_repo=scylla_repo,
-                                 user_prefix=user_prefix,
-                                 n_nodes=n_loader_nodes,
-                                 params=self.params)
+        self.loaders = LoaderSetAWS(ec2_ami_id=self.params.get('ami_id_loader'),
+                                    ec2_ami_username=self.params.get('ami_loader_user'),
+                                    ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                    ec2_subnet_id=self.params.get('subnet_id'),
+                                    ec2_instance_type=loaders_type,
+                                    service=service,
+                                    ec2_block_device_mappings=loaders_block_device_mappings,
+                                    credentials=self.credentials,
+                                    scylla_repo=scylla_repo,
+                                    user_prefix=user_prefix,
+                                    n_nodes=n_loader_nodes,
+                                    params=self.params)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
                        mode='write'):
