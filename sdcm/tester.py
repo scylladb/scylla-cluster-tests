@@ -267,9 +267,14 @@ class ClusterTester(Test):
         if db_info is None:
             db_info = {'n_nodes': None, 'type': None,
                        'device_mappings': None}
-        if self.params.get('cluster_backend') == 'aws':
+
+        cluster_backend = self.params.get('cluster_backend')
+        if cluster_backend is None:
+            cluster_backend = 'aws'
+
+        if cluster_backend == 'aws':
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info)
-        elif self.params.get('cluster_backend') == 'libvirt':
+        elif cluster_backend == 'libvirt':
             self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
