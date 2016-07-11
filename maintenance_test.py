@@ -46,12 +46,15 @@ class MaintainanceTest(ClusterTester):
         """
         Repair a node
         """
+        self.run_stress_thread(duration=240)
+        self.db_cluster.wait_total_space_used_per_node()
+
         self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
         # this nemesis is not periodic and will do
         # the stop and restart
         time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        time.sleep(180 * 60)
 
     def test_rebuild(self):
         """
