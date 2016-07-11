@@ -15,6 +15,8 @@ import logging
 import time
 import types
 
+import libvirt
+
 import boto3.session
 
 from avocado import Test
@@ -28,10 +30,12 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 
 from . import cluster
 from . import nemesis
-from .cluster import CassandraCluster
-from .cluster import LoaderSet
+from .cluster import CassandraAWSCluster
+from .cluster import LoaderSetAWS
+from .cluster import LoaderSetLibvirt
 from .cluster import RemoteCredentials
-from .cluster import ScyllaCluster
+from .cluster import ScyllaAWSCluster
+from .cluster import ScyllaLibvirtCluster
 from .data_path import get_data_path
 
 try:
@@ -114,11 +118,14 @@ class ClusterTester(Test):
 
     def __init__(self, methodName='test', name=None, params=None,
                  base_logdir=None, tag=None, job=None, runner_queue=None):
-        super(ClusterTester, self).__init__(methodName=methodName, name=name, params=params,
-                                            base_logdir=base_logdir, tag=tag, job=job,
-                                            runner_queue=runner_queue)
-        self._failure_post_behavior = self.params.get(key='failure_post_behavior', default='destroy')
-        self.log.debug("Behavior on failure/post test is '%s'", self._failure_post_behavior)
+        super(ClusterTester, self).__init__(methodName=methodName, name=name,
+                                            params=params,
+                                            base_logdir=base_logdir, tag=tag,
+                                            job=job, runner_queue=runner_queue)
+        self._failure_post_behavior = self.params.get(key='failure_post_behavior',
+                                                      default='destroy')
+        self.log.debug("Behavior on failure/post test is '%s'",
+                       self._failure_post_behavior)
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
 
     @clean_aws_resources
@@ -143,24 +150,15 @@ class ClusterTester(Test):
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
 
-    @clean_aws_resources
-    def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None, loaders_type=None, dbs_type=None):
-        if n_db_nodes is None:
-            n_db_nodes = self.params.get('n_db_nodes')
-        if n_db_nodes <= 0:
-            self.error('Invalid parameter n_db_nodes: %s,'
-                       ' it should be larger than zero.' % n_db_nodes)
-
-        if n_loader_nodes is None:
-            n_loader_nodes = self.params.get('n_loaders')
-        if n_loader_nodes <= 0:
-            self.error('Invalid parameter n_loader_nodes/n_loaders: %s,'
-                       ' it should be larger than zero.' % n_loader_nodes)
-
-        if loaders_type is None:
-            loaders_type = self.params.get('instance_type_loader')
-        if dbs_type is None:
-            dbs_type = self.params.get('instance_type_db')
+    def get_cluster_aws(self, loader_info, db_info):
+        if loader_info['n_nodes'] is None:
+            loader_info['n_nodes'] = self.params.get('n_loaders')
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.get('instance_type_loader')
+        if db_info['n_nodes'] is None:
+            db_info['n_nodes'] = self.params.get('n_db_nodes')
+        if db_info['type'] is None is None:
+            db_info['type'] = self.params.get('instance_type_db')
         user_prefix = self.params.get('user_prefix', None)
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
@@ -169,46 +167,110 @@ class ClusterTester(Test):
                                              user_prefix=user_prefix)
 
         if self.params.get('db_type') == 'scylla':
-            self.db_cluster = ScyllaCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
-                                            ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                                            ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                            ec2_subnet_id=self.params.get('subnet_id'),
-                                            ec2_instance_type=dbs_type,
-                                            service=service,
-                                            credentials=self.credentials,
-                                            ec2_block_device_mappings=dbs_block_device_mappings,
-                                            user_prefix=user_prefix,
-                                            n_nodes=n_db_nodes,
-                                            params=self.params)
-        elif self.params.get('db_type') == 'cassandra':
-            self.db_cluster = CassandraCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
-                                               ec2_ami_username=self.params.get('ami_db_cassandra_user'),
+            self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
+                                               ec2_ami_username=self.params.get('ami_db_scylla_user'),
                                                ec2_security_group_ids=[self.params.get('security_group_ids')],
                                                ec2_subnet_id=self.params.get('subnet_id'),
-                                               ec2_instance_type=dbs_type,
+                                               ec2_instance_type=db_info['type'],
                                                service=service,
-                                               ec2_block_device_mappings=dbs_block_device_mappings,
                                                credentials=self.credentials,
+                                               ec2_block_device_mappings=db_info['device_mappings'],
                                                user_prefix=user_prefix,
-                                               n_nodes=n_db_nodes,
+                                               n_nodes=db_info['n_nodes'],
                                                params=self.params)
+        elif self.params.get('db_type') == 'cassandra':
+            self.db_cluster = CassandraAWSCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
+                                                  ec2_ami_username=self.params.get('ami_db_cassandra_user'),
+                                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                                  ec2_subnet_id=self.params.get('subnet_id'),
+                                                  ec2_instance_type=db_info['type'],
+                                                  service=service,
+                                                  ec2_block_device_mappings=db_info['device_mappings'],
+                                                  credentials=self.credentials,
+                                                  user_prefix=user_prefix,
+                                                  n_nodes=db_info['n_nodes'],
+                                                  params=self.params)
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
-        self.loaders = LoaderSet(ec2_ami_id=self.params.get('ami_id_loader'),
-                                 ec2_ami_username=self.params.get('ami_loader_user'),
-                                 ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                 ec2_subnet_id=self.params.get('subnet_id'),
-                                 ec2_instance_type=loaders_type,
-                                 service=service,
-                                 ec2_block_device_mappings=loaders_block_device_mappings,
-                                 credentials=self.credentials,
-                                 scylla_repo=scylla_repo,
-                                 user_prefix=user_prefix,
-                                 n_nodes=n_loader_nodes,
-                                 params=self.params)
+        self.loaders = LoaderSetAWS(ec2_ami_id=self.params.get('ami_id_loader'),
+                                    ec2_ami_username=self.params.get('ami_loader_user'),
+                                    ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                    ec2_subnet_id=self.params.get('subnet_id'),
+                                    ec2_instance_type=loader_info['type'],
+                                    service=service,
+                                    ec2_block_device_mappings=loader_info['device_mappings'],
+                                    credentials=self.credentials,
+                                    scylla_repo=scylla_repo,
+                                    user_prefix=user_prefix,
+                                    n_nodes=loader_info['n_nodes'],
+                                    params=self.params)
+
+    def get_cluster_libvirt(self, loader_info, db_info):
+
+        def _set_from_params(base_dict, dict_key, params_key):
+            if base_dict.get(dict_key) is None:
+                conf_dict = dict()
+                conf_dict[dict_key] = self.params.get(params_key)
+                return conf_dict
+            else:
+                return {}
+
+        loader_info.update(_set_from_params(loader_info, 'n_nodes', 'n_loaders'))
+        loader_info.update(_set_from_params(loader_info, 'image', 'libvirt_loader_image'))
+        loader_info.update(_set_from_params(loader_info, 'user', 'libvirt_loader_image_user'))
+        loader_info.update(_set_from_params(loader_info, 'password', 'libvirt_loader_image_password'))
+        loader_info.update(_set_from_params(loader_info, 'os_type', 'libvirt_loader_os_type'))
+        loader_info.update(_set_from_params(loader_info, 'os_variant', 'libvirt_loader_os_variant'))
+        loader_info.update(_set_from_params(loader_info, 'memory', 'libvirt_loader_memory'))
+        loader_info.update(_set_from_params(loader_info, 'bridge', 'libvirt_bridge'))
+        loader_info.update(_set_from_params(loader_info, 'uri', 'libvirt_uri'))
+
+        db_info.update(_set_from_params(db_info, 'n_nodes', 'n_db_nodes'))
+        db_info.update(_set_from_params(db_info, 'image', 'libvirt_db_image'))
+        db_info.update(_set_from_params(db_info, 'user', 'libvirt_db_image_user'))
+        db_info.update(_set_from_params(db_info, 'password', 'libvirt_db_image_password'))
+        db_info.update(_set_from_params(db_info, 'os_type', 'libvirt_db_os_type'))
+        db_info.update(_set_from_params(db_info, 'os_variant', 'libvirt_db_os_variant'))
+        db_info.update(_set_from_params(db_info, 'memory', 'libvirt_db_memory'))
+        db_info.update(_set_from_params(db_info, 'bridge', 'libvirt_bridge'))
+        db_info.update(_set_from_params(db_info, 'uri', 'libvirt_uri'))
+
+        user_prefix = self.params.get('user_prefix', None)
+
+        hypervisor = libvirt.open('qemu:///system')
+
+        if self.params.get('db_type') == 'scylla':
+            self.db_cluster = ScyllaLibvirtCluster(domain_info=db_info,
+                                                   hypervisor=hypervisor,
+                                                   user_prefix=user_prefix,
+                                                   n_nodes=db_info['n_nodes'],
+                                                   params=self.params)
+
+        elif self.params.get('db_type') == 'cassandra':
+            raise NotImplementedError('No cassandra libvirt cluster '
+                                      'implementation yet.')
+
+        self.loaders = LoaderSetLibvirt(domain_info=loader_info,
+                                        hypervisor=hypervisor,
+                                        user_prefix=user_prefix,
+                                        n_nodes=loader_info['n_nodes'],
+                                        params=self.params)
+
+    @clean_aws_resources
+    def init_resources(self, loader_info=None, db_info=None):
+        if loader_info is None:
+            loader_info = {'n_nodes': None, 'type': None,
+                           'device_mappings': None}
+        if db_info is None:
+            db_info = {'n_nodes': None, 'type': None,
+                       'device_mappings': None}
+        if self.params.get('cluster_backend') == 'aws':
+            self.get_cluster_aws(loader_info=loader_info, db_info=db_info)
+        elif self.params.get('cluster_backend') == 'libvirt':
+            self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
                        mode='write'):
@@ -285,7 +347,7 @@ class ClusterTester(Test):
     def _create_session(self, node, keyspace, user, password, compression,
                         protocol_version, load_balancing_policy=None,
                         port=None, ssl_opts=None):
-        node_ips = [node.instance.public_ip_address]
+        node_ips = [node.public_ip_address]
         if not port:
             port = 9042
 
@@ -334,7 +396,7 @@ class ClusterTester(Test):
                                  protocol_version=None, port=None,
                                  ssl_opts=None):
 
-        wlrr = WhiteListRoundRobinPolicy([node.instance.public_ip_address])
+        wlrr = WhiteListRoundRobinPolicy([node.public_ip_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)

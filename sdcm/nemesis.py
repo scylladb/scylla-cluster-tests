@@ -175,7 +175,7 @@ class Nemesis(object):
 
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
-        target_node_ip = self.target_node.instance.private_ip_address
+        target_node_ip = self.target_node.private_ip_address
         decommission_cmd = 'nodetool --host localhost decommission'
         result = self._run_nodetool(decommission_cmd, self.target_node)
         if result is not None:
@@ -266,6 +266,13 @@ def log_time_elapsed(method):
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
             return result
     return wrapper
+
+
+class NoOpMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        time.sleep(300)
 
 
 class StopStartMonkey(Nemesis):
