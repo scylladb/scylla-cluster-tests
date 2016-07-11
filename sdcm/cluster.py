@@ -1039,8 +1039,14 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
     def _node_setup(self, node, seed_address):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
+        node.remoter.run('sudo yum remove -y abrt')
+        node.remoter.run('sudo yum update -y')
         node.remoter.run('sudo yum install -y rsync')
         node.remoter.run('sudo yum install -y tcpdump')
+        yum_config_path = '/etc/yum.repos.d/scylla.repo'
+        node.remoter.run('sudo curl %s -o %s' %
+                         (self.params.get('scylla_repo'), yum_config_path))
+        node.remoter.run('sudo yum install -y scylla')
         node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                    dst=yaml_dst_path)
 
