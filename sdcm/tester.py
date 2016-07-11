@@ -114,11 +114,14 @@ class ClusterTester(Test):
 
     def __init__(self, methodName='test', name=None, params=None,
                  base_logdir=None, tag=None, job=None, runner_queue=None):
-        super(ClusterTester, self).__init__(methodName=methodName, name=name, params=params,
-                                            base_logdir=base_logdir, tag=tag, job=job,
-                                            runner_queue=runner_queue)
-        self._failure_post_behavior = self.params.get(key='failure_post_behavior', default='destroy')
-        self.log.debug("Behavior on failure/post test is '%s'", self._failure_post_behavior)
+        super(ClusterTester, self).__init__(methodName=methodName, name=name,
+                                            params=params,
+                                            base_logdir=base_logdir, tag=tag,
+                                            job=job, runner_queue=runner_queue)
+        self._failure_post_behavior = self.params.get(key='failure_post_behavior',
+                                                      default='destroy')
+        self.log.debug("Behavior on failure/post test is '%s'",
+                       self._failure_post_behavior)
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
 
     @clean_aws_resources
@@ -144,7 +147,10 @@ class ClusterTester(Test):
         return getattr(nemesis, class_name)
 
     @clean_aws_resources
-    def init_resources(self, n_db_nodes=None, n_loader_nodes=None, dbs_block_device_mappings=None, loaders_block_device_mappings=None, loaders_type=None, dbs_type=None):
+    def init_resources(self, n_db_nodes=None, n_loader_nodes=None,
+                       dbs_block_device_mappings=None,
+                       loaders_block_device_mappings=None,
+                       loaders_type=None, dbs_type=None):
         if n_db_nodes is None:
             n_db_nodes = self.params.get('n_db_nodes')
         if n_db_nodes <= 0:
