@@ -44,12 +44,12 @@ class QueryLimitsTest(ClusterTester):
                 "Ebs": {"Iops": 100,
                         "VolumeType": "io1",
                         "DeleteOnTermination": True}}]
-
+        loader_info = {'n_nodes': 1, 'device_mappings': None,
+                       'type': 'm4.4xlarge'}
+        db_info = {'n_nodes': 1, 'device_mappings': bdm,
+                   'type': 'm4.4xlarge'}
         # Use big instance to be not throttled by the network
-        self.init_resources(n_db_nodes=1, n_loader_nodes=1,
-                            dbs_block_device_mappings=bdm,
-                            dbs_type='m4.4xlarge',
-                            loaders_type='m4.4xlarge')
+        self.init_resources(loader_info=loader_info, db_info=db_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
         self.stress_thread = None

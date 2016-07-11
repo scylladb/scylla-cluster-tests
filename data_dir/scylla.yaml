@@ -9,6 +9,9 @@ n_db_nodes: 6
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
+# What is the backend that the suite will use to get machines from.
+# Right now the only supported mode is 'aws'
+cluster_backend: 'aws'
 # From 0.19 on, iotune will require bigger disk, so let's use a big
 # loader instance by default.
 instance_type_loader: 'c3.large'
