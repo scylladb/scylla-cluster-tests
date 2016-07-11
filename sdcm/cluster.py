@@ -16,12 +16,17 @@ import atexit
 import getpass
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
 import uuid
 import yaml
 import matplotlib
+import subprocess
+import shutil
+import xml.etree.cElementTree as etree
+
 # Force matplotlib to not use any Xwindows backend.
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -502,6 +507,90 @@ class AWSNode(BaseNode):
         self.log.info('Destroyed')
 
 
+class LibvirtNode(BaseNode):
+
+    """
+    Wraps a domain object, so that we can also control the it through SSH.
+    """
+
+    def __init__(self, domain, hypervisor, node_prefix='node', node_index=1,
+                 domain_username='root', domain_password='', base_logdir=None):
+        name = '%s-%s' % (node_prefix, node_index)
+        self._backing_image = None
+        self._domain = domain
+        self._hypervisor = hypervisor
+        wait.wait_for(self._domain.isActive)
+        self._wait_public_ip()
+        ssh_login_info = {'hostname': self.public_ip_address,
+                          'user': domain_username,
+                          'password': domain_password}
+        super(LibvirtNode, self).__init__(name=name,
+                                          ssh_login_info=ssh_login_info,
+                                          base_logdir=base_logdir)
+
+    def _get_public_ip_address(self):
+        desc = etree.fromstring(self._domain.XMLDesc(0))
+        mac_path = "devices/interface[@type='bridge']/mac"
+        node = desc.find(mac_path)
+        if node is None:
+            return None
+
+        mac = node.get("address")
+        if mac is None:
+            return None
+
+        mac = mac.lower().strip()
+        output = subprocess.Popen(["arp", "-n"],
+                                  stdout=subprocess.PIPE).communicate()[0]
+        lines = [line.split() for line in output.split("\n")[1:]]
+        addresses = [line[0] for line in lines if (line and (line[2] == mac))]
+        if addresses:
+            # Just return the first address, this is a best effort attempt
+            return addresses[0]
+
+    @property
+    def public_ip_address(self):
+        return self._get_public_ip_address()
+
+    @property
+    def private_ip_address(self):
+        return self._get_public_ip_address()
+
+    def _wait_public_ip(self):
+        while self._get_public_ip_address() is None:
+            time.sleep(1)
+
+    # Remove after node setup is finished
+    def db_up(self):
+        try:
+            result = self.remoter.run('netstat -a | grep :9042',
+                                      verbose=False, ignore_status=True)
+            return result.exit_status == 0
+        except Exception as details:
+            self.log.error('Error checking for DB status: %s', details)
+            return False
+
+    # Remove after node setup is finished
+    def cs_installed(self, cassandra_stress_bin=None):
+        if cassandra_stress_bin is None:
+            cassandra_stress_bin = '/usr/bin/cassandra-stress'
+        return self.file_exists(cassandra_stress_bin)
+
+    def restart(self):
+        self._domain.reboot()
+        self._wait_public_ip()
+        self.log.debug('Got new public IP %s',
+                       self.public_ip_address)
+        self.remoter.hostname = self.public_ip_address
+        self.wait_db_up()
+
+    def destroy(self):
+        self._domain.destroy()
+        self._domain.undefine()
+        os.remove(self._backing_image)
+        self.log.info('Destroyed')
+
+
 class BaseCluster(object):
 
     """
@@ -530,6 +619,7 @@ class BaseCluster(object):
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
+        self.nemesis = []
         self.params = params
         self.add_nodes(n_nodes)
 
@@ -558,6 +648,502 @@ class BaseCluster(object):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
+
+
+class LibvirtCluster(BaseCluster):
+
+    """
+    Cluster of Node objects, started on Libvirt.
+    """
+
+    def __init__(self, domain_info, hypervisor, cluster_uuid=None,
+                 cluster_prefix='cluster',
+                 node_prefix='node', n_nodes=10, params=None):
+        self._domain_info = domain_info
+        self._hypervisor = hypervisor
+        super(LibvirtCluster, self).__init__(cluster_uuid=cluster_uuid,
+                                             cluster_prefix=cluster_prefix,
+                                             node_prefix=node_prefix,
+                                             n_nodes=n_nodes,
+                                             params=params)
+
+    def __str__(self):
+        return 'LibvirtCluster %s (Image: %s)' % (self.name,
+                                                  os.path.basename(self._domain_info['image']))
+
+    def add_nodes(self, count, user_data=None):
+        del user_data
+        nodes = []
+        os_type = self._domain_info['os_type']
+        os_variant = self._domain_info['os_variant']
+        memory = self._domain_info['memory']
+        bridge = self._domain_info['bridge']
+        uri = self._domain_info['uri']
+        image_parent_dir = os.path.dirname(self._domain_info['image'])
+        for index in range(count):
+            index += 1
+            name = '%s-%s' % (self.node_prefix, index)
+            dst_image_basename = '%s.qcow2' % name
+            dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
+            self.log.info('Copying %s -> %s',
+                          self._domain_info['image'], dst_image_path)
+            shutil.copyfile(self._domain_info['image'], dst_image_path)
+            virt_install_cmd = ('virt-install --connect %s --name %s '
+                                '--memory %s --os-type=%s '
+                                '--os-variant=%s '
+                                '--disk %s,device=disk,bus=virtio '
+                                '--network bridge=%s,model=virtio '
+                                '--vnc --noautoconsole --import' %
+                                (uri, name, memory, os_type, os_variant,
+                                 dst_image_path, bridge))
+            process.run(virt_install_cmd)
+            for domain in self._hypervisor.listAllDomains():
+                if domain.name() == name:
+                    node = LibvirtNode(hypervisor=self._hypervisor,
+                                       domain=domain,
+                                       node_prefix=self.node_prefix,
+                                       node_index=index,
+                                       domain_username=self._domain_info[
+                                           'user'],
+                                       domain_password=self._domain_info[
+                                           'password'],
+                                       base_logdir=self.logdir)
+                    node._backing_image = dst_image_path
+                    nodes.append(node)
+        self.log.info('added nodes: %s', nodes)
+        self.nodes += nodes
+        return nodes
+
+
+class ScyllaLibvirtCluster(LibvirtCluster):
+
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+                 params=None):
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+
+        super(ScyllaLibvirtCluster, self).__init__(domain_info=domain_info,
+                                                   hypervisor=hypervisor,
+                                                   cluster_uuid=cluster_uuid,
+                                                   cluster_prefix=cluster_prefix,
+                                                   node_prefix=node_prefix,
+                                                   n_nodes=n_nodes,
+                                                   params=params)
+        self.seed_nodes_private_ips = None
+        self.termination_event = None
+        self.nemesis_threads = []
+
+    def _node_setup(self, node, seed_address):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                     'scylla.yaml')
+        node.remoter.run('sudo yum install -y rsync')
+        node.remoter.run('sudo yum install -y tcpdump')
+        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                   dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+
+        # Set seeds
+        p = re.compile('seeds:.*')
+        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
+                                     scylla_yaml_contents)
+
+        # Set listen_address
+        p = re.compile('listen_address:.*')
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        # Set rpc_address
+        p = re.compile('rpc_address:.*')
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
+                                                            "cluster_name: '{0}'".format(self.name))
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        node.remoter.run(
+            'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
+        node.remoter.run('sudo systemctl enable scylla-server.service')
+        node.remoter.run('sudo systemctl enable scylla-jmx.service')
+        node.remoter.run('sudo systemctl enable collectd.service')
+        node.remoter.run('sudo systemctl start scylla-server.service')
+        node.remoter.run('sudo systemctl start scylla-jmx.service')
+        node.remoter.run('sudo systemctl start collectd.service')
+        node.remoter.run('sudo iptables -F')
+
+    def get_seed_nodes_private_ips(self):
+        if self.seed_nodes_private_ips is None:
+            node = self.nodes[0]
+            yaml_dst_path = os.path.join(tempfile.mkdtemp(
+                prefix='scylla-longevity'), 'scylla.yaml')
+            node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                       dst=yaml_dst_path)
+            with open(yaml_dst_path, 'r') as yaml_stream:
+                conf_dict = yaml.load(yaml_stream)
+                try:
+                    self.seed_nodes_private_ips = conf_dict['seed_provider'][
+                        0]['parameters'][0]['seeds'].split(',')
+                except:
+                    raise ValueError('Unexpected scylla.yaml '
+                                     'contents:\n%s' % yaml_stream.read())
+        return self.seed_nodes_private_ips
+
+    def get_seed_nodes(self):
+        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
+        seed_nodes = []
+        for node in self.nodes:
+            if node.private_ip_address in seed_nodes_private_ips:
+                node.is_seed = True
+                seed_nodes.append(node)
+            else:
+                node.is_seed = False
+        return seed_nodes
+
+    def update_db_binary(self, node_list=None):
+        if node_list is None:
+            node_list = self.nodes
+
+        new_scylla_bin = self.params.get('update_db_binary')
+        if new_scylla_bin:
+            for node in node_list:
+                self.log.info('Upgrading a DB binary for Node')
+
+                node.remoter.send_files(
+                    new_scylla_bin, '/tmp/scylla', verbose=True)
+
+                # stop scylla-server before replace the binary
+                node.remoter.run('sudo systemctl stop scylla-server.service')
+
+                # replace the binary
+                node.remoter.run(
+                    'sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
+                node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
+                node.remoter.run('sudo chown root.root /usr/bin/scylla')
+                node.remoter.run('sudo chmod +x  /usr/bin/scylla')
+
+                node.remoter.run(
+                    'sudo systemctl restart scylla-server.service')
+                node.remoter.run('sudo systemctl restart scylla-jmx.service')
+            # Wait for DB is up
+            for node in node_list:
+                node.wait_db_up()
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        """
+        Configure scylla.yaml on all cluster nodes.
+
+        We have to modify scylla.yaml on our own because we are not on AWS,
+        where there are auto config scripts in place.
+
+        :param node_list: List of nodes to watch for init.
+        :param verbose: Whether to print extra info while watching for init.
+        :return:
+        """
+        if node_list is None:
+            node_list = self.nodes
+
+        queue = Queue.Queue()
+
+        def node_setup(node, seed_address):
+            node.wait_ssh_up(verbose=verbose)
+            self._node_setup(node=node, seed_address=seed_address)
+            node.wait_db_up(verbose=verbose)
+            node.remoter.run('sudo yum install -y scylla-gdb',
+                             verbose=verbose, ignore_status=True)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        seed = node_list[0].public_ip_address
+        for loader in node_list:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader, seed))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
+        self.update_db_binary(node_list)
+        self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def get_node_info_list(self, verification_node):
+        assert verification_node in self.nodes
+        cmd_result = verification_node.remoter.run('nodetool status')
+        node_info_list = []
+        for line in cmd_result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith('UN'):
+                try:
+                    status, ip, load, _, tokens, owns, host_id, rack = line.split()
+                    node_info = {'status': status,
+                                 'ip': ip,
+                                 'load': load,
+                                 'tokens': tokens,
+                                 'owns': owns,
+                                 'host_id': host_id,
+                                 'rack': rack}
+                    # Cassandra banners have nodetool status output as well.
+                    # Need to guarantee unique set of results.
+                    node_ips = [node_info['ip']
+                                for node_info in node_info_list]
+                    if node_info['ip'] not in node_ips:
+                        node_info_list.append(node_info)
+                except ValueError:
+                    pass
+        return node_info_list
+
+    def cfstat_reached_threshold(self, key, threshold):
+        """
+        Find whether a certain cfstat key in all nodes reached a certain value.
+
+        :param key: cfstat key, example, 'Space used (total)'.
+        :param threshold: threshold value for cfstats key. Example, 2432043080.
+        :return: Whether all nodes reached that threshold or not.
+        """
+        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        reached_threshold = True
+        for value in cfstats:
+            if value < threshold:
+                reached_threshold = False
+        if reached_threshold:
+            self.log.debug("Done waiting on cfstats: %s" % cfstats)
+        return reached_threshold
+
+    def wait_cfstat_reached_threshold(self, key, threshold):
+        text = "Waiting until cfstat '%s' reaches value '%s'" % (
+            key, threshold)
+        wait.wait_for(func=self.cfstat_reached_threshold, step=10,
+                      text=text, key=key, threshold=threshold)
+
+    def wait_total_space_used_per_node(self, size=None):
+        if size is None:
+            size = int(self.params.get('space_node_threshold'))
+        self.wait_cfstat_reached_threshold('Space used (total)', size)
+
+    def add_nemesis(self, nemesis):
+        self.nemesis.append(nemesis(cluster=self,
+                                    termination_event=self.termination_event))
+
+    def start_nemesis(self, interval=30):
+        self.log.debug('Start nemesis begin')
+        self.termination_event = threading.Event()
+        for nemesis in self.nemesis:
+            nemesis.set_termination_event(self.termination_event)
+            nemesis.set_target_node()
+            nemesis_thread = threading.Thread(target=nemesis.run,
+                                              args=(interval,), verbose=True)
+            nemesis_thread.start()
+            self.nemesis_threads.append(nemesis_thread)
+        self.log.debug('Start nemesis end')
+
+    def stop_nemesis(self, timeout=10):
+        self.log.debug('Stop nemesis begin')
+        self.termination_event.set()
+        for nemesis_thread in self.nemesis_threads:
+            nemesis_thread.join(timeout)
+        self.nemesis_threads = []
+        self.log.debug('Stop nemesis end')
+
+    def destroy(self):
+        self.stop_nemesis()
+        super(ScyllaLibvirtCluster, self).destroy()
+
+
+class LoaderSetLibvirt(LibvirtCluster):
+
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+                 params=None):
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = _prepend_user_prefix(
+            user_prefix, 'scylla-loader-node')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+
+        super(LoaderSetLibvirt, self).__init__(domain_info=domain_info,
+                                               hypervisor=hypervisor,
+                                               cluster_uuid=cluster_uuid,
+                                               cluster_prefix=cluster_prefix,
+                                               node_prefix=node_prefix,
+                                               n_nodes=n_nodes,
+                                               params=params)
+
+    def wait_for_init(self, verbose=False):
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            self.log.info('Setup')
+            node.wait_ssh_up(verbose=verbose)
+            # The init scripts should install/update c-s, so
+            # let's try to guarantee it will be there before
+            # proceeding
+            node.wait_cs_installed(verbose=verbose)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def run_stress_thread(self, stress_cmd, timeout, output_dir):
+        queue = Queue.Queue()
+
+        def node_run_stress(node):
+            try:
+                logdir = path.init_dir(output_dir, self.name)
+            except OSError:
+                logdir = os.path.join(output_dir, self.name)
+            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
+                                      ignore_status=True,
+                                      watch_stdout_pattern='total,')
+            node.cs_start_time = result.stdout_pattern_found_at
+            log_file_name = os.path.join(
+                logdir, 'cassandra-stress-%s.log' % uuid.uuid4())
+            self.log.debug('Writing cassandra-stress log %s', log_file_name)
+            with open(log_file_name, 'w') as log_file:
+                log_file.write(str(result))
+            queue.put((node, result))
+            queue.task_done()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_run_stress,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        return queue
+
+    def kill_stress_thread(self):
+        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
+        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
+                                             content=kill_script_contents)
+        kill_script.save()
+        kill_script_dir = os.path.dirname(kill_script.path)
+        for loader in self.nodes:
+            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
+            loader.remoter.send_files(kill_script.path, kill_script_dir)
+            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
+            result = loader.remoter.run(kill_script.path)
+            self.log.debug(
+                'Terminate cassandra-stress process on loader %s: %s', str(loader), str(result))
+            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
+        kill_script.remove()
+
+    @staticmethod
+    def _plot_nemesis_events(nemesis, node, plot):
+        nemesis_event_start_times = [
+            operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
+        for start_time in nemesis_event_start_times:
+            plot.axvline(start_time, color='blue', linestyle='dashdot')
+        nemesis_event_end_times = [
+            operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
+        for end_time in nemesis_event_end_times:
+            plot.axvline(end_time, color='red', linestyle='dashdot')
+
+    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
+        time_plot = []
+        ops_plot = []
+        latmax_plot = []
+        lat999_plot = []
+        lat99_plot = []
+        lat95_plot = []
+        for line in lines:
+            line.strip()
+            if line.startswith('total,'):
+                items = line.split(',')
+                totalops = items[1]
+                ops = items[2]
+                lat95 = items[7]
+                lat99 = items[8]
+                lat999 = items[9]
+                latmax = items[10]
+                time_point = items[11]
+                time_plot.append(time_point)
+                ops_plot.append(ops)
+                lat95_plot.append(lat95)
+                lat99_plot.append(lat99)
+                lat999_plot.append(lat999)
+                latmax_plot.append(latmax)
+        # ops
+        for nemesis in db_cluster.nemesis:
+            self._plot_nemesis_events(nemesis, node, plt)
+
+        plt.plot(time_plot, ops_plot, label='ops', color='green')
+        plt.title('Operations vs. Time')
+        plt.xlabel('time')
+        plt.ylabel('ops')
+        plt.legend()
+        plt.savefig(plotfile + '-ops.svg')
+        plt.savefig(plotfile + '-ops.png')
+        plt.close()
+
+        # lat
+        for nemesis in db_cluster.nemesis:
+            self._plot_nemesis_events(nemesis, node, plt)
+
+        plt.plot(time_plot, lat95_plot, label='lat95', color='blue')
+        plt.plot(time_plot, lat99_plot, label='lat99', color='green')
+        plt.plot(time_plot, lat999_plot, label='lat999', color='black')
+        plt.plot(time_plot, latmax_plot, label='latmax', color='red')
+
+        plt.title('Latency vs. Time')
+        plt.xlabel('time')
+        plt.ylabel('latency')
+        plt.legend()
+        plt.grid()
+        plt.savefig(plotfile + '-lat.svg')
+        plt.savefig(plotfile + '-lat.png')
+        plt.close()
+
+    def verify_stress_thread(self, queue, db_cluster):
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        errors = []
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            for line in lines:
+                if 'java.io.IOException' in line:
+                    errors += ['%s: %s' % (node, line.strip())]
+            plotfile = os.path.join(self.logdir, str(node))
+            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
+
+        return errors
 
 
 class AWSCluster(BaseCluster):

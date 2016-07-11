@@ -15,6 +15,8 @@ import logging
 import time
 import types
 
+import libvirt
+
 import boto3.session
 
 from avocado import Test
@@ -30,8 +32,10 @@ from . import cluster
 from . import nemesis
 from .cluster import CassandraAWSCluster
 from .cluster import LoaderSetAWS
+from .cluster import LoaderSetLibvirt
 from .cluster import RemoteCredentials
 from .cluster import ScyllaAWSCluster
+from .cluster import ScyllaLibvirtCluster
 from .data_path import get_data_path
 
 try:
@@ -205,7 +209,52 @@ class ClusterTester(Test):
                                     params=self.params)
 
     def get_cluster_libvirt(self, loader_info, db_info):
-        raise NotImplementedError('Yet to be implemented')
+
+        def _set_from_params(dict_key, params_key):
+            conf_dict = dict()
+            conf_dict[dict_key] = self.params.get(params_key)
+            return conf_dict
+
+        loader_info.update(_set_from_params('n_nodes', 'n_loaders'))
+        loader_info.update(_set_from_params('image', 'libvirt_loader_image'))
+        loader_info.update(_set_from_params('user', 'libvirt_loader_image_user'))
+        loader_info.update(_set_from_params('password', 'libvirt_loader_image_password'))
+        loader_info.update(_set_from_params('os_type', 'libvirt_loader_os_type'))
+        loader_info.update(_set_from_params('os_variant', 'libvirt_loader_os_variant'))
+        loader_info.update(_set_from_params('memory', 'libvirt_loader_memory'))
+        loader_info.update(_set_from_params('bridge', 'libvirt_bridge'))
+        loader_info.update(_set_from_params('uri', 'libvirt_uri'))
+
+        db_info.update(_set_from_params('n_nodes', 'n_db_nodes'))
+        db_info.update(_set_from_params('image', 'libvirt_db_image'))
+        db_info.update(_set_from_params('user', 'libvirt_db_image_user'))
+        db_info.update(_set_from_params('password', 'libvirt_db_image_password'))
+        db_info.update(_set_from_params('os_type', 'libvirt_db_os_type'))
+        db_info.update(_set_from_params('os_variant', 'libvirt_db_os_variant'))
+        db_info.update(_set_from_params('memory', 'libvirt_db_memory'))
+        db_info.update(_set_from_params('bridge', 'libvirt_bridge'))
+        db_info.update(_set_from_params('uri', 'libvirt_uri'))
+
+        user_prefix = self.params.get('user_prefix', None)
+
+        hypervisor = libvirt.open('qemu:///system')
+
+        if self.params.get('db_type') == 'scylla':
+            self.db_cluster = ScyllaLibvirtCluster(domain_info=db_info,
+                                                   hypervisor=hypervisor,
+                                                   user_prefix=user_prefix,
+                                                   n_nodes=db_info['n_nodes'],
+                                                   params=self.params)
+
+        elif self.params.get('db_type') == 'cassandra':
+            raise NotImplementedError('No cassandra libvirt cluster '
+                                      'implementation yet.')
+
+        self.loaders = LoaderSetLibvirt(domain_info=loader_info,
+                                        hypervisor=hypervisor,
+                                        user_prefix=user_prefix,
+                                        n_nodes=loader_info['n_nodes'],
+                                        params=self.params)
 
     @clean_aws_resources
     def init_resources(self, loader_info=None, db_info=None):
