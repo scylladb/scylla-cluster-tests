@@ -650,132 +650,7 @@ class BaseCluster(object):
             node.destroy()
 
 
-class LibvirtCluster(BaseCluster):
-
-    """
-    Cluster of Node objects, started on Libvirt.
-    """
-
-    def __init__(self, domain_info, hypervisor, cluster_uuid=None,
-                 cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
-        self._domain_info = domain_info
-        self._hypervisor = hypervisor
-        super(LibvirtCluster, self).__init__(cluster_uuid=cluster_uuid,
-                                             cluster_prefix=cluster_prefix,
-                                             node_prefix=node_prefix,
-                                             n_nodes=n_nodes,
-                                             params=params)
-
-    def __str__(self):
-        return 'LibvirtCluster %s (Image: %s)' % (self.name,
-                                                  os.path.basename(self._domain_info['image']))
-
-    def add_nodes(self, count, user_data=None):
-        del user_data
-        nodes = []
-        os_type = self._domain_info['os_type']
-        os_variant = self._domain_info['os_variant']
-        memory = self._domain_info['memory']
-        bridge = self._domain_info['bridge']
-        uri = self._domain_info['uri']
-        image_parent_dir = os.path.dirname(self._domain_info['image'])
-        for index in range(count):
-            index += 1
-            name = '%s-%s' % (self.node_prefix, index)
-            dst_image_basename = '%s.qcow2' % name
-            dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
-            self.log.info('Copying %s -> %s',
-                          self._domain_info['image'], dst_image_path)
-            shutil.copyfile(self._domain_info['image'], dst_image_path)
-            virt_install_cmd = ('virt-install --connect %s --name %s '
-                                '--memory %s --os-type=%s '
-                                '--os-variant=%s '
-                                '--disk %s,device=disk,bus=virtio '
-                                '--network bridge=%s,model=virtio '
-                                '--vnc --noautoconsole --import' %
-                                (uri, name, memory, os_type, os_variant,
-                                 dst_image_path, bridge))
-            process.run(virt_install_cmd)
-            for domain in self._hypervisor.listAllDomains():
-                if domain.name() == name:
-                    node = LibvirtNode(hypervisor=self._hypervisor,
-                                       domain=domain,
-                                       node_prefix=self.node_prefix,
-                                       node_index=index,
-                                       domain_username=self._domain_info[
-                                           'user'],
-                                       domain_password=self._domain_info[
-                                           'password'],
-                                       base_logdir=self.logdir)
-                    node._backing_image = dst_image_path
-                    nodes.append(node)
-        self.log.info('added nodes: %s', nodes)
-        self.nodes += nodes
-        return nodes
-
-
-class ScyllaLibvirtCluster(LibvirtCluster):
-
-    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
-                 params=None):
-        cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
-
-        super(ScyllaLibvirtCluster, self).__init__(domain_info=domain_info,
-                                                   hypervisor=hypervisor,
-                                                   cluster_uuid=cluster_uuid,
-                                                   cluster_prefix=cluster_prefix,
-                                                   node_prefix=node_prefix,
-                                                   n_nodes=n_nodes,
-                                                   params=params)
-        self.seed_nodes_private_ips = None
-        self.termination_event = None
-        self.nemesis_threads = []
-
-    def _node_setup(self, node, seed_address):
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
-                                     'scylla.yaml')
-        node.remoter.run('sudo yum install -y rsync')
-        node.remoter.run('sudo yum install -y tcpdump')
-        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
-                                   dst=yaml_dst_path)
-
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
-
-        # Set seeds
-        p = re.compile('seeds:.*')
-        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
-                                     scylla_yaml_contents)
-
-        # Set listen_address
-        p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        # Set rpc_address
-        p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
-                                                            "cluster_name: '{0}'".format(self.name))
-
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
-
-        node.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
-        node.remoter.run(
-            'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
-        node.remoter.run('sudo systemctl enable scylla-server.service')
-        node.remoter.run('sudo systemctl enable scylla-jmx.service')
-        node.remoter.run('sudo systemctl enable collectd.service')
-        node.remoter.run('sudo systemctl start scylla-server.service')
-        node.remoter.run('sudo systemctl start scylla-jmx.service')
-        node.remoter.run('sudo systemctl start collectd.service')
-        node.remoter.run('sudo iptables -F')
+class BaseScyllaCluster(object):
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -833,56 +708,6 @@ class ScyllaLibvirtCluster(LibvirtCluster):
             # Wait for DB is up
             for node in node_list:
                 node.wait_db_up()
-
-    def wait_for_init(self, node_list=None, verbose=False):
-        """
-        Configure scylla.yaml on all cluster nodes.
-
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-
-        :param node_list: List of nodes to watch for init.
-        :param verbose: Whether to print extra info while watching for init.
-        :return:
-        """
-        if node_list is None:
-            node_list = self.nodes
-
-        queue = Queue.Queue()
-
-        def node_setup(node, seed_address):
-            node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node, seed_address=seed_address)
-            node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y scylla-gdb',
-                             verbose=verbose, ignore_status=True)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        seed = node_list[0].public_ip_address
-        for loader in node_list:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader, seed))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list),
-                              int(time_elapsed))
-            except Queue.Empty:
-                pass
-
-        self.update_db_binary(node_list)
-        self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
@@ -962,27 +787,8 @@ class ScyllaLibvirtCluster(LibvirtCluster):
         self.nemesis_threads = []
         self.log.debug('Stop nemesis end')
 
-    def destroy(self):
-        self.stop_nemesis()
-        super(ScyllaLibvirtCluster, self).destroy()
 
-
-class LoaderSetLibvirt(LibvirtCluster):
-
-    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
-                 params=None):
-        cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(
-            user_prefix, 'scylla-loader-node')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
-
-        super(LoaderSetLibvirt, self).__init__(domain_info=domain_info,
-                                               hypervisor=hypervisor,
-                                               cluster_uuid=cluster_uuid,
-                                               cluster_prefix=cluster_prefix,
-                                               node_prefix=node_prefix,
-                                               n_nodes=n_nodes,
-                                               params=params)
+class BaseLoaderSet(object):
 
     def wait_for_init(self, verbose=False):
         queue = Queue.Queue()
@@ -1146,6 +952,206 @@ class LoaderSetLibvirt(LibvirtCluster):
         return errors
 
 
+class LibvirtCluster(BaseCluster):
+
+    """
+    Cluster of Node objects, started on Libvirt.
+    """
+
+    def __init__(self, domain_info, hypervisor, cluster_uuid=None,
+                 cluster_prefix='cluster',
+                 node_prefix='node', n_nodes=10, params=None):
+        self._domain_info = domain_info
+        self._hypervisor = hypervisor
+        super(LibvirtCluster, self).__init__(cluster_uuid=cluster_uuid,
+                                             cluster_prefix=cluster_prefix,
+                                             node_prefix=node_prefix,
+                                             n_nodes=n_nodes,
+                                             params=params)
+
+    def __str__(self):
+        return 'LibvirtCluster %s (Image: %s)' % (self.name,
+                                                  os.path.basename(self._domain_info['image']))
+
+    def add_nodes(self, count, user_data=None):
+        del user_data
+        nodes = []
+        os_type = self._domain_info['os_type']
+        os_variant = self._domain_info['os_variant']
+        memory = self._domain_info['memory']
+        bridge = self._domain_info['bridge']
+        uri = self._domain_info['uri']
+        image_parent_dir = os.path.dirname(self._domain_info['image'])
+        for index in range(len(self.nodes), len(self.nodes) + count):
+            index += 1
+            name = '%s-%s' % (self.node_prefix, index)
+            dst_image_basename = '%s.qcow2' % name
+            dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
+            self.log.info('Copying %s -> %s',
+                          self._domain_info['image'], dst_image_path)
+            shutil.copyfile(self._domain_info['image'], dst_image_path)
+            virt_install_cmd = ('virt-install --connect %s --name %s '
+                                '--memory %s --os-type=%s '
+                                '--os-variant=%s '
+                                '--disk %s,device=disk,bus=virtio '
+                                '--network bridge=%s,model=virtio '
+                                '--vnc --noautoconsole --import' %
+                                (uri, name, memory, os_type, os_variant,
+                                 dst_image_path, bridge))
+            process.run(virt_install_cmd)
+            for domain in self._hypervisor.listAllDomains():
+                if domain.name() == name:
+                    node = LibvirtNode(hypervisor=self._hypervisor,
+                                       domain=domain,
+                                       node_prefix=self.node_prefix,
+                                       node_index=index,
+                                       domain_username=self._domain_info[
+                                           'user'],
+                                       domain_password=self._domain_info[
+                                           'password'],
+                                       base_logdir=self.logdir)
+                    node._backing_image = dst_image_path
+                    nodes.append(node)
+        self.log.info('added nodes: %s', nodes)
+        self.nodes += nodes
+        return nodes
+
+
+class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
+
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+                 params=None):
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+
+        super(ScyllaLibvirtCluster, self).__init__(domain_info=domain_info,
+                                                   hypervisor=hypervisor,
+                                                   cluster_uuid=cluster_uuid,
+                                                   cluster_prefix=cluster_prefix,
+                                                   node_prefix=node_prefix,
+                                                   n_nodes=n_nodes,
+                                                   params=params)
+        self.seed_nodes_private_ips = None
+        self.termination_event = threading.Event()
+        self.nemesis_threads = []
+
+    def _node_setup(self, node, seed_address):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                     'scylla.yaml')
+        node.remoter.run('sudo yum install -y rsync')
+        node.remoter.run('sudo yum install -y tcpdump')
+        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                   dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+
+        # Set seeds
+        p = re.compile('seeds:.*')
+        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
+                                     scylla_yaml_contents)
+
+        # Set listen_address
+        p = re.compile('listen_address:.*')
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        # Set rpc_address
+        p = re.compile('rpc_address:.*')
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
+                                                            "cluster_name: '{0}'".format(self.name))
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        node.remoter.run(
+            'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
+        node.remoter.run('sudo systemctl enable scylla-server.service')
+        node.remoter.run('sudo systemctl enable scylla-jmx.service')
+        node.remoter.run('sudo systemctl enable collectd.service')
+        node.remoter.run('sudo systemctl start scylla-server.service')
+        node.remoter.run('sudo systemctl start scylla-jmx.service')
+        node.remoter.run('sudo systemctl start collectd.service')
+        node.remoter.run('sudo iptables -F')
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        """
+        Configure scylla.yaml on all cluster nodes.
+
+        We have to modify scylla.yaml on our own because we are not on AWS,
+        where there are auto config scripts in place.
+
+        :param node_list: List of nodes to watch for init.
+        :param verbose: Whether to print extra info while watching for init.
+        :return:
+        """
+        if node_list is None:
+            node_list = self.nodes
+
+        queue = Queue.Queue()
+
+        def node_setup(node, seed_address):
+            node.wait_ssh_up(verbose=verbose)
+            self._node_setup(node=node, seed_address=seed_address)
+            node.wait_db_up(verbose=verbose)
+            node.remoter.run('sudo yum install -y scylla-gdb',
+                             verbose=verbose, ignore_status=True)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        seed = node_list[0].public_ip_address
+        for loader in node_list:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader, seed))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
+        self.update_db_binary(node_list)
+        self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def destroy(self):
+        self.stop_nemesis()
+        super(ScyllaLibvirtCluster, self).destroy()
+
+
+class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
+
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+                 params=None):
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = _prepend_user_prefix(
+            user_prefix, 'scylla-loader-node')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+
+        super(LoaderSetLibvirt, self).__init__(domain_info=domain_info,
+                                               hypervisor=hypervisor,
+                                               cluster_uuid=cluster_uuid,
+                                               cluster_prefix=cluster_prefix,
+                                               node_prefix=node_prefix,
+                                               n_nodes=n_nodes,
+                                               params=params)
+
+
 class AWSCluster(BaseCluster):
 
     """
@@ -1243,7 +1249,7 @@ class AWSCluster(BaseCluster):
         self.wait_cfstat_reached_threshold('Space used (total)', size)
 
 
-class ScyllaAWSCluster(AWSCluster):
+class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
@@ -1280,32 +1286,6 @@ class ScyllaAWSCluster(AWSCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
-    def get_seed_nodes_private_ips(self):
-        if self.seed_nodes_private_ips is None:
-            node = self.nodes[0]
-            yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-            node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
-                                       dst=yaml_dst_path)
-            with open(yaml_dst_path, 'r') as yaml_stream:
-                conf_dict = yaml.load(yaml_stream)
-                try:
-                    self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-                except:
-                    raise ValueError('Unexpected scylla.yaml '
-                                     'contents:\n%s' % yaml_stream.read())
-        return self.seed_nodes_private_ips
-
-    def get_seed_nodes(self):
-        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
-        seed_nodes = []
-        for node in self.nodes:
-            if node.private_ip_address in seed_nodes_private_ips:
-                node.is_seed = True
-                seed_nodes.append(node)
-            else:
-                node.is_seed = False
-        return seed_nodes
-
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
@@ -1319,31 +1299,6 @@ class ScyllaAWSCluster(AWSCluster):
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data)
         return added_nodes
-
-    def get_node_info_list(self, verification_node):
-        assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status')
-        node_info_list = []
-        for line in cmd_result.stdout.splitlines():
-            line = line.strip()
-            if line.startswith('UN'):
-                try:
-                    status, ip, load, _, tokens, owns, host_id, rack = line.split()
-                    node_info = {'status': status,
-                                 'ip': ip,
-                                 'load': load,
-                                 'tokens': tokens,
-                                 'owns': owns,
-                                 'host_id': host_id,
-                                 'rack': rack}
-                    # Cassandra banners have nodetool status output as well.
-                    # Need to guarantee unique set of results.
-                    node_ips = [node_info['ip'] for node_info in node_info_list]
-                    if node_info['ip'] not in node_ips:
-                        node_info_list.append(node_info)
-                except ValueError:
-                    pass
-        return node_info_list
 
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
@@ -1384,59 +1339,9 @@ class ScyllaAWSCluster(AWSCluster):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def add_nemesis(self, nemesis):
-        self.nemesis.append(nemesis(cluster=self,
-                                    termination_event=self.termination_event))
-
-    def start_nemesis(self, interval=30):
-        self.log.debug('Start nemesis begin')
-        self.termination_event = threading.Event()
-        for nemesis in self.nemesis:
-            nemesis.set_termination_event(self.termination_event)
-            nemesis.set_target_node()
-            nemesis_thread = threading.Thread(target=nemesis.run,
-                                              args=(interval,), verbose=True)
-            nemesis_thread.start()
-            self.nemesis_threads.append(nemesis_thread)
-        self.log.debug('Start nemesis end')
-
-    def stop_nemesis(self, timeout=10):
-        self.log.debug('Stop nemesis begin')
-        self.termination_event.set()
-        for nemesis_thread in self.nemesis_threads:
-            nemesis_thread.join(timeout)
-        self.nemesis_threads = []
-        self.log.debug('Stop nemesis end')
-
     def destroy(self):
         self.stop_nemesis()
         super(ScyllaAWSCluster, self).destroy()
-
-    def update_db_binary(self, node_list=None):
-        if node_list is None:
-            node_list = self.nodes
-
-        new_scylla_bin = self.params.get('update_db_binary')
-        if new_scylla_bin:
-            for node in node_list:
-                self.log.info('Upgrading a DB binary for Node')
-
-                node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
-
-                # stop scylla-server before replace the binary
-                node.remoter.run('sudo systemctl stop scylla-server.service')
-
-                # replace the binary
-                node.remoter.run('sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
-                node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
-                node.remoter.run('sudo chown root.root /usr/bin/scylla')
-                node.remoter.run('sudo chmod +x  /usr/bin/scylla')
-
-                node.remoter.run('sudo systemctl restart scylla-server.service')
-                node.remoter.run('sudo systemctl restart scylla-jmx.service')
-            # Wait for DB is up
-            for node in node_list:
-                node.wait_db_up()
 
 
 class CassandraAWSCluster(ScyllaAWSCluster):
@@ -1542,7 +1447,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
-class LoaderSetAWS(AWSCluster):
+class LoaderSetAWS(AWSCluster, BaseLoaderSet):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  service, credentials, ec2_instance_type='c4.xlarge',
