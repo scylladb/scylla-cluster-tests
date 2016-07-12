@@ -295,7 +295,7 @@ class ClusterTester(Test):
         """
         ip = self.db_cluster.get_node_private_ips()[0]
         if population_size is None:
-            population_size = 10000000
+            population_size = self.params.get('cassandra_stress_population_size')
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         if threads is None:
