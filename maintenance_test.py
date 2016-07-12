@@ -36,33 +36,36 @@ class MaintainanceTest(ClusterTester):
         Drain a node an restart it.
         """
         self.db_cluster.add_nemesis(DrainerMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
+        stress_queue = self.run_stress_thread(
+            duration=self.params.get('cassandra_stress_duration'),
+            population_size=self.params.get('cassandra_stress_population_size'))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.verify_stress_thread(queue=stress_queue)
 
     def test_repair(self):
         """
         Repair a node
         """
         self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
+        stress_queue = self.run_stress_thread(
+            duration=self.params.get('cassandra_stress_duration'),
+            population_size=self.params.get('cassandra_stress_population_size'))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.verify_stress_thread(queue=stress_queue)
 
     def test_rebuild(self):
         """
         Rebuild all nodes
         """
         self.db_cluster.add_nemesis(CorruptThenRebuildMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
+        stress_queue = self.run_stress_thread(
+            duration=self.params.get('cassandra_stress_duration'),
+            population_size=self.params.get('cassandra_stress_population_size'))
+        self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.verify_stress_thread(queue=stress_queue)
 
 
 if __name__ == '__main__':
