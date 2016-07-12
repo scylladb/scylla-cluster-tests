@@ -46,7 +46,7 @@ class MaintainanceTest(ClusterTester):
         """
         Repair a node
         """
-        self.run_stress_thread(duration=240)
+        stress_queue = self.run_stress_thread(duration=240)
         self.db_cluster.wait_total_space_used_per_node()
 
         self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
@@ -55,6 +55,11 @@ class MaintainanceTest(ClusterTester):
         time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
         time.sleep(180 * 60)
+
+        # Kill c-s when done
+        self.kill_stress_thread()
+        self.verify_stress_thread(queue=stress_queue)
+
 
     def test_rebuild(self):
         """
