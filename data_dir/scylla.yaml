@@ -5,7 +5,7 @@ cassandra_stress_threads: 5
 # limit
 cassandra_stress_limits: 5000/s
 # default cassandra stress population size if none specified
-cassandra_stress_population_size: 100000000
+cassandra_stress_population_size: 50000000
 n_db_nodes: 4
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
@@ -17,7 +17,7 @@ instance_type_loader: 'c3.xlarge'
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'CorruptThenRepairMonkey'
 # Nemesis sleep interval to use if None provided specifically
-nemesis_interval: 15
+nemesis_interval: 30
 # Prefix for your AWS VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
 user_prefix:
@@ -30,7 +30,7 @@ failure_post_behavior: destroy
 # The default value is 6GB (6x1024^3 bytes)
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
-space_node_threshold: 1442450944
+space_node_threshold: 1073741824
 
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
