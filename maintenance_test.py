@@ -31,38 +31,33 @@ class MaintainanceTest(ClusterTester):
     :avocado: enable
     """
 
+    def _base_procedure(self, nemesis_class):
+        self.db_cluster.add_nemesis(nemesis_class)
+        stress_queue = self.run_stress_thread(duration=4 * 60,
+                                              population_size=50000000)
+        self.db_cluster.wait_total_space_used_per_node(size=1073741824)
+        self.db_cluster.start_nemesis(interval=10)
+        time.sleep(3 * 60 * 60)
+        self.kill_stress_thread()
+        self.verify_stress_thread(queue=stress_queue)
+
     def test_drain(self):
         """
         Drain a node an restart it.
         """
-        self.db_cluster.add_nemesis(DrainerMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
-        self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self._base_procedure(DrainerMonkey)
 
     def test_repair(self):
         """
         Repair a node
         """
-        self.db_cluster.add_nemesis(CorruptThenRepairMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
-        self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self._base_procedure(CorruptThenRepairMonkey)
 
     def test_rebuild(self):
         """
         Rebuild all nodes
         """
-        self.db_cluster.add_nemesis(CorruptThenRebuildMonkey)
-        # this nemesis is not periodic and will do
-        # the stop and restart
-        time.sleep(10 * 60)
-        self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self._base_procedure(CorruptThenRebuildMonkey)
 
 
 if __name__ == '__main__':
