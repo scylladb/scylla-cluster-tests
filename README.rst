@@ -36,11 +36,12 @@ What's inside?
 Setup
 -----
 
-Install ``boto3`` and ``awscli`` (the last one is to help you configure aws) and ``matplotlib``::
+Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib`` and ``aexpect``::
 
     sudo -H pip install boto3
     sudo -H pip install awscli
     sudo -H pip install matplotlib
+    sudo -H pip install aexpect
 
 Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
 
@@ -69,13 +70,35 @@ to ``data_dir/your_config.yaml``.
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in ``data_dir/your_config.yaml``.
 
+Setup - Libvirt
+---------------
+
+You might want to setup libvirt to access the qemu system session as your regular
+user. You might want to refer to [3], in case that is not available, here's the
+gist of the procedure:
+
+With Fedora 20 onwards, virt-manager implements PolicyKit (I recommend reading the man page). If you want to allow a certain group of users access to virt-manager without providing root credentials, you can create a new rules file in /etc/polkit-1/rules.d and add a rule to permit users who are local, logged in, and in the group you specify (wheel in the example below) access to the virt-manager software::
+
+    sudo vim /etc/polkit-1/rules.d/80-libvirt.rules
+
+And then write::
+
+    polkit.addRule(function(action, subject) {
+      if (action.id == "org.libvirt.unix.manage" && subject.local && subject.active && subject.isInGroup("wheel")) {
+          return polkit.Result.YES;
+      }
+    });
+
 Run the tests
 -------------
+
+AWS - Amazon Web Services
+-------------------------
 
 Change your current working directory to this test suite base directory,
 then run avocado. Example command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/your_config.yaml --filter-only /run/regions/us_east_1 /run/databases/scylla --open-browser
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/your_config.yaml --filter-only /run/backends/aws/us_east_1 /run/databases/scylla --filter-out /run/backends/libvirt --open-browser
 
 This command line is to run the test method ``test_custom_time``, in
 the class ``Longevitytest``, that lies inside the file ``longevity_test.py``,
@@ -92,6 +115,44 @@ to ``/run/databases/cassandra`` to run the same test on a cassandra node.
 Also, please note that ``scylla.yaml`` is a sample configuration.
 On your organization, you really have to update values with ones you
 actually have access to.
+
+You'll see something like::
+
+    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
+    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
+    TESTS      : 1
+     (1/1) longevity_test.py:LongevityTest.test_custom_time : /
+
+A throbber, that will spin until the test ends. This will hopefully evolve to::
+
+    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
+    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
+    TESTS      : 1
+     (1/1) longevity_test.py:LongevityTest.test_custom_time : PASS (1083.19 s)
+    RESULTS    : PASS 1 | ERROR 0 | FAIL 0 | SKIP 0 | WARN 0 | INTERRUPT 0
+    JOB HTML   : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/html/results.html
+    TIME       : 1083.19 s
+
+
+Libvirt
+-------
+
+In order to run tests based on libvirt, you'll need:
+
+1. One qcow2 base image with CentOS 7 installed. This image needs to have a user
+   named 'centos', and this user needs to be configured to not require a password
+   when running commands with sudo.
+
+2. `cp data_dir/scylla.yaml data_dir/your_config.yaml`
+
+3. Edit the configuration file (data_dir/your_config.yaml) to add the path to
+   the CentOS image mentioned on step 1, as well as tweak values present in the
+   `libvirt:` session of that file. One of the values you might want to tweak is
+   the scylla yum repository used to install scylla on the CentOS 7 VM.
+
+With that said and done, you can run your test using the command line::
+
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --open-browser
 
 You'll see something like::
 
@@ -264,3 +325,4 @@ Footnotes
 
 * [1] http://avocado-framework.github.io/
 * [2] http://aws.amazon.com/sdk-for-python/
+* [3] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
