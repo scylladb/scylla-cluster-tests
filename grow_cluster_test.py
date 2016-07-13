@@ -95,13 +95,7 @@ class GrowClusterTest(ClusterTester):
         self.db_cluster.wait_total_space_used_per_node()
 
         self.db_cluster.add_nemesis(GrowClusterMonkey)
-        # Have c-s run for 2 + 3 minutes before we start to do decommission
-        # TODO: I'm not sure why Asias put those sleeps here
-        time.sleep(2 * 60)
         while len(self.db_cluster.nodes) < cluster_target_size:
-            # Sleep 3 minutes before adding a new node, so we can see the tps
-            # for each new cluster size
-            time.sleep(3 * 60)
             # Run GrowClusterMonkey to add one node at a time
             self.db_cluster.start_nemesis(interval=10)
             self.db_cluster.stop_nemesis(timeout=None)
