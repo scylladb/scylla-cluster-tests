@@ -44,12 +44,12 @@ class PerformanceRegressionTest(ClusterTester):
   <test name="simple_regression_test" executed="yes">
     <description>"simple regression test"</description>
     <targets>
-      <target threaded="yes">target-%s</target>
-      <ami_id>%s</ami_id>
-      <stress_modes>%s</stress_modes>
+      <target threaded="yes">target-ami_id-%s</target>
+      <target threaded="yes">target-version-%s</target>
+      <target threaded="yes">stress_modes-%s</target>
     </targets>
-    <platform name="scylla_platform">
-      <instance_type_db>%s</instance_type_db>
+    <platform name="AWS platform">
+      <hardware>%s</hardware>
     </platform>
 
     <result>
@@ -69,7 +69,7 @@ class PerformanceRegressionTest(ClusterTester):
   </test>
 </report>
 """ % (self.params.get('ami_id_db_scylla'),
-            self.params.get('ami_id_db_scylla'),
+            self.params.get('ami_id_db_scylla_desc'),
             self.params.get('stress_modes'),
             self.params.get('instance_type_db'),
             result['op rate'],

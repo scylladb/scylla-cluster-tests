@@ -68,6 +68,7 @@ backends: !mux
         instance_type_loader: 'c3.large'
         # Size of AWS monitor instance
         instance_type_monitor: t2.small
+        ami_id_db_scylla_desc: '1.3-dev'
         us_west_1:
             user_credentials_path: ''
             region_name: 'us-west-1'
