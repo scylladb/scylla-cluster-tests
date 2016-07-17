@@ -314,18 +314,21 @@ class ClusterTester(Test):
                 (mode, duration, threads, limit, population_size, ip))
 
     @clean_aws_resources
-    def run_stress(self, stress_cmd=None, duration=None, mode='write'):
+    def run_stress(self, stress_cmd=None, duration=None, mode='write',
+                   limit=None):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration, mode=mode)
+                                              duration=duration, mode=mode,
+                                              limit=limit)
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
     def run_stress_thread(self, stress_cmd=None, duration=None,
-                          threads=None, population_size=None, mode='write'):
+                          threads=None, population_size=None, mode='write',
+                          limit=None):
         if stress_cmd is None:
             stress_cmd = self.get_stress_cmd(duration=duration, threads=threads,
                                              population_size=population_size,
-                                             mode=mode)
+                                             mode=mode, limit=limit)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         timeout = duration * 60 + 600
