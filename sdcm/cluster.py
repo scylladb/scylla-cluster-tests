@@ -1039,7 +1039,13 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
     def _node_setup(self, node, seed_address):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
+        # Sometimes people might set up base images with
+        # previous versions of scylla installed (they shouldn't).
+        # But anyway, let's cover our bases as much as possible.
+        node.remoter.run('sudo yum remove -y scylla*')
         node.remoter.run('sudo yum remove -y abrt')
+        # Let's re-create the yum database upon update
+        node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum update -y')
         node.remoter.run('sudo yum install -y rsync')
         node.remoter.run('sudo yum install -y tcpdump')
