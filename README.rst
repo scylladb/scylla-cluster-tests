@@ -36,14 +36,20 @@ What's inside?
 Setup
 -----
 
-Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib`` and ``aexpect``::
+Install a few packages necessary for some of the suite main libraries:
 
-    sudo -H pip install boto3
-    sudo -H pip install awscli
-    sudo -H pip install matplotlib
-    sudo -H pip install aexpect
+    sudo dnf install gcc python-devel libpng-devel libfreetype-devel libev libev-devel -y
 
-Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
+Install avocado long term support (LTS): http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
+
+Run the setup script, that will create a python virtual environment, that will isolate all the suite environment and sofware install to a separate filesystem, that does not interfere with your main distribution:
+
+    ./setup-sct.sh
+
+From now on, it's recommended that you get into the created virtual environment
+every time you're going to execute the suite::
+
+    source sct-venv/bin/activate
 
 Configure aws::
 
@@ -51,16 +57,6 @@ Configure aws::
 
 That will ask you for your ``region``, ``aws_access_key_id``,
 ``aws_secret_access_key``. Please complete that.
-
-You'll also need to install cassandra-driver (needed to support issuing CQL
-queries to nodes)::
-
-    sudo -H pip install cassandra-driver
-
-That install command requires gcc and python-devel, so if you still don't have
-either, please install them::
-
-    sudo dnf install gcc python-devel -y
 
 Take a look at the ``data_dir/scylla.yaml`` file. It contains a number of
 configurable test parameters, such as DB cluster instance types and AMI IDs.
