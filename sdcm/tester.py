@@ -278,7 +278,7 @@ class ClusterTester(Test):
             self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None):
+                       mode='write', limit=None, row_size=None):
         """
         Get a cassandra stress cmd string.
 
@@ -307,11 +307,17 @@ class ClusterTester(Test):
             limit = "limit=%s" % self.params.get('cassandra_stress_limits')
         else:
             limit = ""
+        if row_size is not None:
+            row_size = "-col 'size=FIXED(%s) n=FIXED(1)'" % row_size
+        elif self.params.get('cassandra_stress_row_size'):
+            row_size = "-col 'size=FIXED(%s) n=FIXED(1)'" % self.params.get('cassandra_stress_row_size')
+        else:
+            row_size = ""
         return ("cassandra-stress %s cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
-                "-mode cql3 native -rate threads=%s %s "
+                "-mode cql3 native -rate threads=%s %s %s "
                 "-pop seq=1..%s -node %s" %
-                (mode, duration, threads, limit, population_size, ip))
+                (mode, duration, threads, limit, row_size, population_size, ip))
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None, mode='write',

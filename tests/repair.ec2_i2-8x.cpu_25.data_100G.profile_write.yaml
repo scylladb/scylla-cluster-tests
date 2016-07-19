@@ -1,0 +1,83 @@
+# default cassandra stress duration (min) if none specified
+cassandra_stress_duration: 240
+# default cassandra stress thread number if none specified
+cassandra_stress_threads: 200
+# limit
+cassandra_stress_limits: 5000/s
+# cassandra-stress row size
+cassandra_stress_row_size: 10240
+# default cassandra stress population size if none specified
+cassandra_stress_population_size: 100000000
+n_db_nodes: 3
+# If you want to use more than 1 loader node, I recommend
+# increasing the size of the DB instance (instance_type_db parameter),
+# since 't2.micro' nodes tend to struggle with a lot of load.
+n_loaders: 4
+# From 0.19 on, iotune will require bigger disk, so let's use a big
+# loader instance by default.
+instance_type_loader: 'c3.xlarge'
+# Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
+nemesis_class_name: 'CorruptThenRepairMonkey'
+# Nemesis sleep interval to use if None provided specifically
+nemesis_interval: 30
+# Prefix for your AWS VMs (handy for telling instances from different
+# users apart). If you leave this empty, the prefix will be your unix username.
+user_prefix:
+# Failure/post test behavior
+# Default: Destroy AWS instances and credentials (destroy)
+# Keep AWS instances running and leave credentials alone (keep)
+# Stop AWS instances and leave credentials alone (stop)
+failure_post_behavior: destroy
+# Space node threshold before starting nemesis (bytes)
+# The default value is 6GB (6x1024^3 bytes)
+# This value is supposed to reproduce
+# https://github.com/scylladb/scylla/issues/1140
+space_node_threshold: 107374182400
+
+# The new db binary will be uploaded to db instance to replace the one
+# provided by the ami. This is useful to test out a new scylla version
+# without making a new ami.
+# update_db_binary: $path_of_the_new_scylla_binary
+update_db_binary: ''
+
+regions: !mux
+    us_west_1:
+        region_name: 'us-west-1'
+        security_group_ids: 'sg-dcd785b9'
+        subnet_id: 'subnet-10a04c75'
+        ami_id_db_scylla: 'ami-2be31b46'
+        ami_db_scylla_user: 'centos'
+        ami_id_loader: 'ami-32bcc552'
+        ami_loader_user: 'centos'
+        ami_id_db_cassandra: 'ami-3cf7c979'
+        ami_db_cassandra_user: 'ubuntu'
+    us_west_2:
+        region_name: 'us-west-2'
+        security_group_ids: 'sg-81703ae4'
+        subnet_id: 'subnet-5207ee37'
+        ami_id_db_scylla: 'ami-15b84575'
+        ami_db_scylla_user: 'centos'
+        ami_id_loader: 'ami-15b84575'
+        ami_loader_user: 'centos'
+        ami_id_db_cassandra: 'ami-1cff962c'
+        ami_db_cassandra_user: 'ubuntu'
+    us_east_1:
+        region_name: 'us-east-1'
+        security_group_ids: 'sg-c5e1f7a0'
+        subnet_id: 'subnet-ec4a72c4'
+        ami_id_db_scylla: 'ami-dd46ffca'
+        ami_db_scylla_user: 'centos'
+        ami_id_loader: 'ami-dd46ffca'
+        ami_loader_user: 'centos'
+        ami_id_db_cassandra: 'ami-ada2b6c4'
+        ami_db_cassandra_user: 'ubuntu'
+
+databases: !mux
+    cassandra:
+        db_type: cassandra
+        instance_type_db: 'i2.8xlarge'
+    scylla:
+        db_type: scylla
+        # Let's use c3.xlarge since we're using iotune
+        # and we'll stress the DB nodes more thoroughly
+        instance_type_db: 'i2.8xlarge'
