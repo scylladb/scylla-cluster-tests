@@ -53,12 +53,16 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 
 CREDENTIALS = []
 EC2_INSTANCES = []
+LIBVIRT_DOMAINS = []
+LIBVIRT_IMAGES = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 
 
 def cleanup_instances(behavior='destroy'):
     global EC2_INSTANCES
     global CREDENTIALS
+    global LIBVIRT_DOMAINS
+    global LIBVIRT_IMAGES
 
     for instance in EC2_INSTANCES:
         if behavior == 'destroy':
@@ -69,6 +73,15 @@ def cleanup_instances(behavior='destroy'):
     for cred in CREDENTIALS:
         if behavior == 'destroy':
             cred.destroy()
+
+    for libvirt_domain in LIBVIRT_DOMAINS:
+        process.run('virsh -c qemu:///system destroy %s' % libvirt_domain,
+                    ignore_status=True)
+        process.run('virsh -c qemu:///system undefine %s' % libvirt_domain,
+                    ignore_status=True)
+
+    for libvirt_image in LIBVIRT_IMAGES:
+        shutil.rmtree(libvirt_image, ignore_errors=True)
 
 
 def destroy_instances():
@@ -1233,6 +1246,8 @@ class LibvirtCluster(BaseCluster):
 
     def add_nodes(self, count, user_data=None):
         del user_data
+        global LIBVIRT_DOMAINS
+        global LIBVIRT_IMAGES
         nodes = []
         os_type = self._domain_info['os_type']
         os_variant = self._domain_info['os_variant']
@@ -1247,6 +1262,7 @@ class LibvirtCluster(BaseCluster):
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
+            LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
@@ -1257,6 +1273,7 @@ class LibvirtCluster(BaseCluster):
                                 (uri, name, memory, os_type, os_variant,
                                  dst_image_path, bridge))
             process.run(virt_install_cmd)
+            LIBVIRT_DOMAINS.append(name)
             for domain in self._hypervisor.listAllDomains():
                 if domain.name() == name:
                     node = LibvirtNode(hypervisor=self._hypervisor,
