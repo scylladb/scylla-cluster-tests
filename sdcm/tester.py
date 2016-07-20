@@ -157,7 +157,7 @@ class ClusterTester(Test):
             loader_info['type'] = self.params.get('instance_type_loader')
         if db_info['n_nodes'] is None:
             db_info['n_nodes'] = self.params.get('n_db_nodes')
-        if db_info['type'] is None is None:
+        if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
         user_prefix = self.params.get('user_prefix', None)
         session = boto3.session.Session(region_name=self.params.get('region_name'))
