@@ -33,6 +33,8 @@ from . import nemesis
 from .cluster import CassandraAWSCluster
 from .cluster import LoaderSetAWS
 from .cluster import LoaderSetLibvirt
+from .cluster import MonitorSetAWS
+from .cluster import MonitorSetLibvirt
 from .cluster import RemoteCredentials
 from .cluster import ScyllaAWSCluster
 from .cluster import ScyllaLibvirtCluster
@@ -133,12 +135,15 @@ class ClusterTester(Test):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        self.monitors = None
         self.connections = []
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+        nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
+        self.monitors.wait_for_init(targets=nodes_monitored)
 
     def get_nemesis_class(self):
         """
@@ -150,7 +155,7 @@ class ClusterTester(Test):
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
 
-    def get_cluster_aws(self, loader_info, db_info):
+    def get_cluster_aws(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
             loader_info['n_nodes'] = self.params.get('n_loaders')
         if loader_info['type'] is None:
@@ -159,6 +164,10 @@ class ClusterTester(Test):
             db_info['n_nodes'] = self.params.get('n_db_nodes')
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
+        if monitor_info['n_nodes'] is None:
+            monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
+        if monitor_info['type'] is None:
+            monitor_info['type'] = self.params.get('instance_type_monitor')
         user_prefix = self.params.get('user_prefix', None)
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
@@ -208,7 +217,20 @@ class ClusterTester(Test):
                                     n_nodes=loader_info['n_nodes'],
                                     params=self.params)
 
-    def get_cluster_libvirt(self, loader_info, db_info):
+        self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor'),
+                                      ec2_ami_username=self.params.get('ami_monitor_user'),
+                                      ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                      ec2_subnet_id=self.params.get('subnet_id'),
+                                      ec2_instance_type=monitor_info['type'],
+                                      service=service,
+                                      ec2_block_device_mappings=monitor_info['device_mappings'],
+                                      credentials=self.credentials,
+                                      scylla_repo=scylla_repo,
+                                      user_prefix=user_prefix,
+                                      n_nodes=monitor_info['n_nodes'],
+                                      params=self.params)
+
+    def get_cluster_libvirt(self, loader_info, db_info, monitor_info):
 
         def _set_from_params(base_dict, dict_key, params_key):
             if base_dict.get(dict_key) is None:
@@ -238,6 +260,16 @@ class ClusterTester(Test):
         db_info.update(_set_from_params(db_info, 'bridge', 'libvirt_bridge'))
         db_info.update(_set_from_params(db_info, 'uri', 'libvirt_uri'))
 
+        monitor_info.update(_set_from_params(monitor_info, 'n_nodes', 'n_monitor_nodes'))
+        monitor_info.update(_set_from_params(monitor_info, 'image', 'libvirt_monitor_image'))
+        monitor_info.update(_set_from_params(monitor_info, 'user', 'libvirt_monitor_image_user'))
+        monitor_info.update(_set_from_params(monitor_info, 'password', 'libvirt_monitor_image_password'))
+        monitor_info.update(_set_from_params(monitor_info, 'os_type', 'libvirt_monitor_os_type'))
+        monitor_info.update(_set_from_params(monitor_info, 'os_variant', 'libvirt_monitor_os_variant'))
+        monitor_info.update(_set_from_params(monitor_info, 'memory', 'libvirt_monitor_memory'))
+        monitor_info.update(_set_from_params(monitor_info, 'bridge', 'libvirt_bridge'))
+        monitor_info.update(_set_from_params(monitor_info, 'uri', 'libvirt_uri'))
+
         user_prefix = self.params.get('user_prefix', None)
 
         hypervisor = libvirt.open('qemu:///system')
@@ -259,8 +291,15 @@ class ClusterTester(Test):
                                         n_nodes=loader_info['n_nodes'],
                                         params=self.params)
 
+        self.monitors = MonitorSetLibvirt(domain_info=monitor_info,
+                                          hypervisor=hypervisor,
+                                          user_prefix=user_prefix,
+                                          n_nodes=monitor_info['n_nodes'],
+                                          params=self.params)
+
     @clean_aws_resources
-    def init_resources(self, loader_info=None, db_info=None):
+    def init_resources(self, loader_info=None, db_info=None,
+                       monitor_info=None):
         if loader_info is None:
             loader_info = {'n_nodes': None, 'type': None,
                            'device_mappings': None}
@@ -268,14 +307,20 @@ class ClusterTester(Test):
             db_info = {'n_nodes': None, 'type': None,
                        'device_mappings': None}
 
+        if monitor_info is None:
+            monitor_info = {'n_nodes': None, 'type': None,
+                            'device_mappings': None}
+
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend is None:
             cluster_backend = 'aws'
 
         if cluster_backend == 'aws':
-            self.get_cluster_aws(loader_info=loader_info, db_info=db_info)
+            self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
+                                 monitor_info=monitor_info)
         elif cluster_backend == 'libvirt':
-            self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info)
+            self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info,
+                                     monitor_info=monitor_info)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
                        mode='write', limit=None, row_size=None):
@@ -545,6 +590,15 @@ class ClusterTester(Test):
                 for node in self.loaders.nodes:
                     node.instance.stop()
                 self.db_cluster = None
+        if self.monitors is not None:
+            self.monitors.get_backtraces()
+            if self._failure_post_behavior == 'destroy':
+                self.monitors.destroy()
+                self.monitors = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.monitors.nodes:
+                    node.instance.stop()
+                self.monitors = None
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
             if self._failure_post_behavior == 'destroy':

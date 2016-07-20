@@ -166,6 +166,8 @@ class BaseNode(object):
         self._backtrace_thread = None
         self._public_ip_address = None
         self._private_ip_address = None
+        self._prometheus_thread = None
+        self._collectd_exporter_thread = None
 
         self.cs_start_time = None
         self.start_journal_thread()
@@ -212,6 +214,149 @@ class BaseNode(object):
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
+
+    def _set_prometheus_paths(self):
+        self.prometheus_system_base_dir = '/var/tmp'
+        self.prometheus_base_dir = 'prometheus-1.0.0.linux-amd64'
+        self.prometheus_tarball = '%s.tar.gz' % self.prometheus_base_dir
+        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.0'
+        self.prometheus_system_dir = os.path.join(self.prometheus_system_base_dir,
+                                                  self.prometheus_base_dir)
+        self.prometheus_path = os.path.join(self.prometheus_system_dir, 'prometheus')
+        self.prometheus_custom_cfg_basename = 'prometheus-scylla.yml'
+        self.prometheus_custom_cfg_path = os.path.join(self.prometheus_system_dir,
+                                                       self.prometheus_custom_cfg_basename)
+        self.prometheus_data_dir = os.path.join(self.prometheus_system_dir, 'data')
+
+    def install_prometheus(self):
+        self._set_prometheus_paths()
+        self.remoter.run('curl %s/%s -o %s/%s -L' %
+                         (self.prometheus_base_url, self.prometheus_tarball,
+                          self.prometheus_system_base_dir, self.prometheus_tarball))
+        self.remoter.run('tar -xzvf %s/%s -C %s' %
+                         (self.prometheus_system_base_dir,
+                          self.prometheus_tarball,
+                          self.prometheus_system_base_dir))
+
+    def download_prometheus_data_dir(self):
+        dst = os.path.join(self.logdir, 'prometheus')
+        self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
+
+    def run_prometheus(self, targets):
+        targets_list = ['%s:9103' % ip for ip in targets]
+        prometheus_cfg = """
+global:
+  scrape_interval: 15s
+
+  external_labels:
+    monitor: 'scylla-monitor'
+
+scrape_configs:
+- job_name: scylla
+  static_configs:
+  - targets: %s
+""" % targets_list
+        tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
+        tmp_path_prom = os.path.join(tmp_dir_prom,
+                                     self.prometheus_custom_cfg_basename)
+        with open(tmp_path_prom, 'w') as tmp_cfg_prom:
+            tmp_cfg_prom.write(prometheus_cfg)
+        try:
+            self.remoter.send_files(src=tmp_path_prom,
+                                    dst=self.prometheus_custom_cfg_path)
+        finally:
+            shutil.rmtree(tmp_dir_prom)
+        self.remoter.run('%s -config.file %s -storage.local.path %s' %
+                         (self.prometheus_path,
+                          self.prometheus_custom_cfg_path,
+                          self.prometheus_data_dir))
+
+    def prometheus_thread(self, targets):
+        while True:
+            self.wait_ssh_up(verbose=False)
+            self.run_prometheus(targets=targets)
+            time.sleep(60)
+
+    def start_prometheus_thread(self, targets):
+        self._prometheus_thread = threading.Thread(target=self.prometheus_thread,
+                                                   args=(targets,))
+        self._prometheus_thread.start()
+
+    def _set_collectd_exporter_paths(self):
+        self.collectd_exporter_system_base_dir = '/var/tmp'
+        self.collectd_exporter_base_dir = 'collectd_exporter-0.3.1.linux-amd64'
+        self.collectd_exporter_tarball = '%s.tar.gz' % self.collectd_exporter_base_dir
+        self.collectd_exporter_base_url = 'https://github.com/prometheus/collectd_exporter/releases/download/0.3.1'
+        self.collectd_exporter_system_dir = os.path.join(self.collectd_exporter_system_base_dir,
+                                                         self.collectd_exporter_base_dir)
+        self.collectd_exporter_path = os.path.join(self.collectd_exporter_system_dir, 'collectd_exporter')
+
+    def _setup_collectd(self):
+        collectd_cfg = """
+LoadPlugin network
+LoadPlugin disk
+LoadPlugin interface
+LoadPlugin unixsock
+LoadPlugin df
+LoadPlugin processes
+<Plugin network>
+        Listen "127.0.0.1" "25826"
+        Server "127.0.0.1" "65534"
+        Forward true
+</Plugin>
+<Plugin disk>
+</Plugin>
+<Plugin interface>
+</Plugin>
+<Plugin "df">
+  FSType "xfs"
+  IgnoreSelected false
+</Plugin>
+<Plugin unixsock>
+    SocketFile "/var/run/collectd-unixsock"
+    SocketPerms "0666"
+</Plugin>
+<Plugin processes>
+    Process "scylla"
+</Plugin>
+"""
+        tmp_dir_exporter = tempfile.mkdtemp(prefix='scm-collectd-exporter')
+        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'scylla.conf')
+        tmp_path_remote = '/tmp/scylla-collectd.conf'
+        system_path_remote = '/etc/collectd.d/scylla.conf'
+        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
+            tmp_cfg_prom.write(collectd_cfg)
+        try:
+            self.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
+            self.remoter.run('sudo mv %s %s' %
+                             (tmp_path_remote, system_path_remote))
+            self.remoter.run('sudo service collectd restart')
+        finally:
+            shutil.rmtree(tmp_dir_exporter)
+
+    def install_collectd_exporter(self):
+        self._setup_collectd()
+        self._set_collectd_exporter_paths()
+        self.remoter.run('curl %s/%s -o %s/%s -L' %
+                         (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
+                          self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
+        self.remoter.run('tar -xzvf %s/%s -C %s' %
+                         (self.collectd_exporter_system_base_dir,
+                          self.collectd_exporter_tarball,
+                          self.collectd_exporter_system_base_dir))
+
+    def run_collectd_exporter(self):
+        self.remoter.run('%s -collectd.listen-address="0.0.0.0:65534"' % self.collectd_exporter_path, ignore_status=True)
+
+    def collectd_exporter_thread(self):
+        while True:
+            self.wait_ssh_up(verbose=False)
+            self.run_collectd_exporter()
+            time.sleep(60)
+
+    def start_collectd_exporter_thread(self):
+        self._collectd_exporter_thread = threading.Thread(target=self.collectd_exporter_thread)
+        self._collectd_exporter_thread.start()
 
     def journal_thread(self):
         while True:
@@ -953,6 +1098,58 @@ class BaseLoaderSet(object):
         return errors
 
 
+class BaseMonitorSet(object):
+
+    def wait_for_init(self, targets, verbose=False):
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            self.log.info('Setup')
+            node.wait_ssh_up(verbose=verbose)
+            # The init scripts should install/update c-s, so
+            # let's try to guarantee it will be there before
+            # proceeding
+            node.install_prometheus()
+            node.start_prometheus_thread(targets=targets)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def download_monitor_data(self):
+        kill_script_contents = 'PIDS=$(pgrep -f prometheus) && kill $PIDS'
+        kill_script = script.TemporaryScript(name='kill_prometheus.sh',
+                                             content=kill_script_contents)
+        kill_script.save()
+        kill_script_dir = os.path.dirname(kill_script.path)
+        for node in self.nodes:
+            node.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
+            node.remoter.send_files(kill_script.path, kill_script_dir)
+            node.remoter.run(cmd='chmod +x %s' % kill_script.path)
+            node.remoter.run(kill_script.path, ignore_status=True)
+            time.sleep(5)
+            node.download_prometheus_data_dir()
+            node.remoter.run(cmd='rm -rf %s' % kill_script_dir)
+        kill_script.remove()
+
+
 class LibvirtCluster(BaseCluster):
 
     """
@@ -1114,6 +1311,8 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
+            node.install_collectd_exporter()
+            node.start_collectd_exporter_thread()
             queue.put(node)
             queue.task_done()
 
@@ -1163,6 +1362,29 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
+
+
+class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
+
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=1,
+                 params=None):
+        cluster_uuid = uuid.uuid4()
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+
+        super(MonitorSetLibvirt, self).__init__(domain_info=domain_info,
+                                                hypervisor=hypervisor,
+                                                cluster_uuid=cluster_uuid,
+                                                cluster_prefix=cluster_prefix,
+                                                node_prefix=node_prefix,
+                                                n_nodes=n_nodes,
+                                                params=params)
+
+    def destroy(self):
+        self.log.info('Destroy nodes')
+        self.download_monitor_data()
+        for node in self.nodes:
+            node.destroy()
 
 
 class AWSCluster(BaseCluster):
@@ -1324,6 +1546,8 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
+            node.install_collectd_exporter()
+            node.start_collectd_exporter_thread()
             queue.put(node)
             queue.task_done()
 
@@ -1682,3 +1906,34 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
             ret.append(self._parse_results(lines))
 
         return ret
+
+
+class MonitorSetAWS(AWSCluster, BaseMonitorSet):
+
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+                 service, credentials, ec2_instance_type='c4.xlarge',
+                 ec2_block_device_mappings=None,
+                 ec2_ami_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
+                                            ec2_subnet_id=ec2_subnet_id,
+                                            ec2_security_group_ids=ec2_security_group_ids,
+                                            ec2_instance_type=ec2_instance_type,
+                                            ec2_ami_username=ec2_ami_username,
+                                            ec2_user_data='--stop-services',
+                                            service=service,
+                                            ec2_block_device_mappings=ec2_block_device_mappings,
+                                            credentials=credentials,
+                                            cluster_prefix=cluster_prefix,
+                                            node_prefix=node_prefix,
+                                            n_nodes=n_nodes,
+                                            params=params)
+        self.scylla_repo = scylla_repo
+
+    def destroy(self):
+        self.log.info('Destroy nodes')
+        self.download_monitor_data()
+        for node in self.nodes:
+            node.destroy()
