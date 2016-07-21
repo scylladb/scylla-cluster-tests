@@ -38,11 +38,12 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['latency 95th percentile'],
                                           result['latency 99th percentile'],
                                           result['latency 99.9th percentile']))
-        f = open('jenkins_perf_PerfPublisher.xml', 'w')
-        content = """<report name="simple_regression_test report" categ="none">
 
-  <test name="simple_regression_test" executed="yes">
-    <description>"simple regression test"</description>
+    def get_test_xml(self, result, idx):
+        test_content = """
+  <test name="simple_regression_test-stress_modes: (%s) Loader%s" executed="yes">
+    <description>"simple regression test, ami_id: %s, scylla version:
+    %s", stress_mode: %s, hardware: %s</description>
     <targets>
       <target threaded="yes">target-ami_id-%s</target>
       <target threaded="yes">target-version-%s</target>
@@ -67,8 +68,13 @@ class PerformanceRegressionTest(ClusterTester):
       </metrics>
     </result>
   </test>
-</report>
-""" % (self.params.get('ami_id_db_scylla'),
+""" % (self.params.get('stress_modes'),
+            idx,
+            self.params.get('ami_id_db_scylla'),
+            self.params.get('ami_id_db_scylla_desc'),
+            self.params.get('stress_modes'),
+            self.params.get('instance_type_db'),
+            self.params.get('ami_id_db_scylla'),
             self.params.get('ami_id_db_scylla_desc'),
             self.params.get('stress_modes'),
             self.params.get('instance_type_db'),
@@ -82,16 +88,26 @@ class PerformanceRegressionTest(ClusterTester):
             result['latency 99th percentile'],
             result['latency 99.9th percentile'])
 
-        f.write(content)
-        f.close()
+        return test_content
 
     def display_results(self, results):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
                                           'row-rate', 'latency-mean',
                                           'latency-median', 'l-94th-pct',
                                           'l-99th-pct', 'l-99.9th-pct'))
-        for single_result in results:
+
+        test_xml = ""
+        for idx, single_result in enumerate(results):
             self.display_single_result(single_result)
+            test_xml += self.get_test_xml(single_result, idx)
+
+        f = open('jenkins_perf_PerfPublisher.xml', 'w')
+        content = """<report name="simple_regression_test report" categ="none">
+%s
+</report>""" % test_xml
+
+        f.write(content)
+        f.close()
 
     def test_simple_regression(self):
         """
