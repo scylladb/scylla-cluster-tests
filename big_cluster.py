@@ -34,15 +34,20 @@ class HugeClusterTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        self.monitors = None
 
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
 
         loader_info = {'n_nodes': 1, 'device_mappings': None, 'type': None}
         db_info = {'n_nodes': 40, 'device_mappings': None, 'type': None}
-        self.init_resources(loader_info=loader_info, db_info=db_info)
+        monitor_info = {'n_nodes': 1, 'device_mappings': None, 'type': None}
+        self.init_resources(loader_info=loader_info, db_info=db_info,
+                            monitor_info=monitor_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+        nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
+        self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
     def test_huge(self):

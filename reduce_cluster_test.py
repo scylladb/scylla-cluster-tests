@@ -56,9 +56,14 @@ class ReduceClusterTest(ClusterTester):
                        'type': None}
         db_info = {'n_nodes': self._cluster_starting_size,
                    'device_mappings': None, 'type': None}
-        self.init_resources(loader_info=loader_info, db_info=db_info)
+        monitor_info = {'n_nodes': 1, 'device_mappings': None,
+                        'type': None}
+        self.init_resources(loader_info=loader_info, db_info=db_info,
+                            monitor_info=monitor_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+        nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
+        self.monitors.wait_for_init(targets=nodes_monitored)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None):
         """
