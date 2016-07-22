@@ -570,6 +570,7 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
+        db_cluster_errors = self.db_cluster.get_node_database_errors()
         if self.db_cluster is not None:
             self.db_cluster.get_backtraces()
             for current_nemesis in self.db_cluster.nemesis:
@@ -604,6 +605,13 @@ class ClusterTester(Test):
             if self._failure_post_behavior == 'destroy':
                 self.credentials.destroy()
                 self.credentials = None
+        if db_cluster_errors:
+            self.log.warning('Possible problems found on DB node logs:')
+            for node_errors in db_cluster_errors:
+                for node_name in node_errors:
+                    for (index, line) in node_errors[node_name]:
+                        self.log.warning('%s: L%s -> %s',
+                                         node_name, index+1, line.strip())
 
     def tearDown(self):
         self.clean_resources()

@@ -171,6 +171,8 @@ class BaseNode(object):
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
+        self._database_log_errors_index = []
+        self._database_error_patterns = ['std::bad_alloc']
         self.start_journal_thread()
         self.start_backtrace_thread()
 
@@ -566,6 +568,24 @@ LoadPlugin processes
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
 
+    def search_database_log(self, expression):
+        matches = []
+        pattern = re.compile(expression, re.IGNORECASE)
+        with open(self.database_log, 'r') as f:
+            for index, line in enumerate(f):
+                if index not in self._database_log_errors_index:
+                    m = pattern.search(line)
+                    if m:
+                        self._database_log_errors_index.append(index)
+                        matches.append((index, line))
+        return matches
+
+    def search_database_log_errors(self):
+        errors = []
+        for expression in self._database_error_patterns:
+            errors += self.search_database_log(expression)
+        return errors
+
 
 class AWSNode(BaseNode):
 
@@ -788,6 +808,14 @@ class BaseCluster(object):
 
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
+
+    def get_node_database_errors(self):
+        errors = []
+        for node in self.nodes:
+            node_errors = node.search_database_log_errors()
+            if node_errors:
+                errors.append({node.name: node_errors})
+        return errors
 
     def destroy(self):
         self.log.info('Destroy nodes')
