@@ -170,6 +170,7 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
 
         self.cs_start_time = None
+        self.database_log = os.path.join(self.logdir, 'database.log')
         self.start_journal_thread()
         self.start_backtrace_thread()
 
@@ -192,7 +193,6 @@ class BaseNode(object):
 
     def retrieve_journal(self):
         try:
-            log_file = os.path.join(self.logdir, 'db_services.log')
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
             if result.exit_status == 0:
@@ -210,7 +210,7 @@ class BaseNode(object):
                 db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
             self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
-                             log_file=log_file)
+                             log_file=self.database_log)
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
