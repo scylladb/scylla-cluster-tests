@@ -19,7 +19,7 @@ from avocado import main
 from sdcm.tester import ClusterTester
 
 
-class SimpleRegressionTest(ClusterTester):
+class PerformanceRegressionTest(ClusterTester):
 
     """
     Test Scylla performance regression with cassandra-stress.
