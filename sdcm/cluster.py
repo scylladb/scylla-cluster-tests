@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import ConfigParser
 import Queue
 import atexit
 import getpass
@@ -38,6 +39,7 @@ from botocore.exceptions import WaiterError
 
 from .log import SDCMAdapter
 from .remote import Remote
+from . import data_path
 from . import wait
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -214,6 +216,62 @@ class BaseNode(object):
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
+
+    def install_grafana(self):
+        self.remoter.run('sudo yum install rsync -y')
+        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.0-1468321182.x86_64.rpm -y')
+        self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
+
+    def setup_grafana(self):
+        self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
+        self.remoter.run('sudo chown centos /tmp/grafana-noedit.ini')
+        grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                            'grafana.ini')
+        self.remoter.receive_files(src='/tmp/grafana-noedit.ini',
+                                   dst=grafana_ini_dst_path)
+
+        grafana_cfg = ConfigParser.SafeConfigParser()
+        grafana_cfg.read(grafana_ini_dst_path)
+        grafana_cfg.set(section='auth.basic', option='enabled', value='false')
+        grafana_cfg.set(section='auth.anonymous', option='enabled', value='true')
+        grafana_cfg.set(section='auth.anonymous', option='org_role', value='Admin')
+        with open(grafana_ini_dst_path, 'wb') as grafana_ini_dst:
+            grafana_cfg.write(grafana_ini_dst)
+        self.remoter.send_files(src=grafana_ini_dst_path,
+                                dst='/tmp/grafana.ini')
+        self.remoter.run('sudo mv /tmp/grafana.ini /etc/grafana/grafana.ini')
+        self.remoter.run('sudo chmod 666 /etc/grafana/grafana.ini')
+
+        self.remoter.run('sudo systemctl daemon-reload')
+        self.remoter.run('sudo systemctl start grafana-server')
+        self.remoter.run('sudo systemctl enable grafana-server.service')
+
+        def _register_data_source():
+            scylla_data_source_json = data_path.get_data_path('scylla-data-source.json')
+            result = process.run('curl -XPOST -i http://%s:3000/api/datasources --data-binary @%s -H "Content-Type: application/json"' %
+                                 (self.public_ip_address, scylla_data_source_json), ignore_status=True)
+            return result.exit_status == 0
+
+        def _register_dash():
+            scylla_dash_json = data_path.get_data_path('scylla-dash.json')
+            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
+                                 (self.public_ip_address, scylla_dash_json), ignore_status=True)
+            return result.exit_status == 0
+
+        def _register_dash_per_server():
+            scylla_dash_per_server_json = data_path.get_data_path('scylla-dash-per-server.json')
+            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
+                                 (self.public_ip_address, scylla_dash_per_server_json), ignore_status=True)
+            return result.exit_status == 0
+
+        wait.wait_for(_register_data_source, step=10,
+                      text='Waiting to register data source...')
+        wait.wait_for(_register_dash, step=10,
+                      text='Waiting to register dash...')
+        wait.wait_for(_register_dash_per_server, step=10,
+                      text='Waiting to register dash per server...')
+
+        self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
 
     def _set_prometheus_paths(self):
         self.prometheus_system_base_dir = '/var/tmp'
@@ -1111,6 +1169,8 @@ class BaseMonitorSet(object):
             # proceeding
             node.install_prometheus()
             node.start_prometheus_thread(targets=targets)
+            node.install_grafana()
+            node.setup_grafana()
             queue.put(node)
             queue.task_done()
 
