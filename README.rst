@@ -200,10 +200,22 @@ Setup
 2) Instantiate a set of loader nodes. They will be the ones to initiate
    cassandra stress, and possibly other database stress inducing activities.
 
-3) Wait until the loaders are ready (SSH up and cassandra-stress is present)
+3) Instantiate a set of monitoring nodes. They will run prometheus [4], to
+   store metrics information about the database cluster, and also grafana [5],
+   to let the user see real time dashboards of said metrics while the test is
+   running. This is very useful in case you want to run the test suite and keep
+   watching the behavior of each node.
 
-4) Wait until the DB nodes are ready (SSH up and DB services are up, port 9042
+4) Wait until the loaders are ready (SSH up and cassandra-stress is present)
+
+5) Wait until the DB nodes are ready (SSH up and DB services are up, port 9042
    occupied)
+
+6) Wait until the monitoring nodes are ready. If you are following the job log,
+   you will see a message with the address you can point your browser to while
+   the test is executing ::
+
+    02:09:37 INFO | Node lmr-scylla-monitor-node-235cdfb0-1 [54.86.66.156 | 172.30.0.105] (seed: None): Grafana Web UI: http://54.86.66.156:3000
 
 Actual test
 -----------
@@ -326,3 +338,5 @@ Footnotes
 * [1] http://avocado-framework.github.io/
 * [2] http://aws.amazon.com/sdk-for-python/
 * [3] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
+* [4] https://prometheus.io/
+* [5] http://grafana.org/
