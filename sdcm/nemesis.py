@@ -128,6 +128,15 @@ class Nemesis(object):
         # Let's wait for the target Node to have their services re-started
         self.target_node.wait_db_up()
 
+    def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
+        self._set_current_disruption('StopWaitStartService %s' % self.target_node)
+        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+        self.target_node.wait_db_down()
+        self.log.info("Sleep for %s seconds", sleep_time)
+        time.sleep(sleep_time)
+        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+        self.target_node.wait_db_up()
+
     def disrupt_stop_start_scylla_server(self):
         self._set_current_disruption('StopStartService %s' % self.target_node)
         self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
@@ -273,6 +282,13 @@ class NoOpMonkey(Nemesis):
     @log_time_elapsed
     def disrupt(self):
         time.sleep(300)
+
+
+class StopWaitStartMonkey(Nemesis):
+
+    @log_time_elapsed
+    def disrupt(self):
+        self.disrupt_stop_wait_start_scylla_server(600)
 
 
 class StopStartMonkey(Nemesis):
