@@ -1,3 +1,6 @@
+# Test duration (min). Parameter used to keep instances produced by tests that
+# are supposed to run longer than 24 hours from being killed
+test_duration: 60
 # default cassandra stress duration (min) if none specified
 cassandra_stress_duration: 60
 # default cassandra stress thread number if none specified

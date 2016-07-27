@@ -129,6 +129,8 @@ class ClusterTester(Test):
         self.log.debug("Behavior on failure/post test is '%s'",
                        self._failure_post_behavior)
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
+        self._duration = self.params.get(key='test_duration', default=60)
+        cluster.set_duration(self._duration)
 
     @clean_aws_resources
     def setUp(self):

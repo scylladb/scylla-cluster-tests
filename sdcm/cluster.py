@@ -54,6 +54,14 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 CREDENTIALS = []
 EC2_INSTANCES = []
 DEFAULT_USER_PREFIX = getpass.getuser()
+# Test duration (min). Parameter used to keep instances produced by tests that
+# are supposed to run longer than 24 hours from being killed
+TEST_DURATION = 60
+
+
+def set_duration(duration):
+    global TEST_DURATION
+    TEST_DURATION = duration
 
 
 def cleanup_instances(behavior='destroy'):
@@ -172,6 +180,7 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
 
         self.cs_start_time = None
+        self.database_log = os.path.join(self.logdir, 'database.log')
         self.start_journal_thread()
         self.start_backtrace_thread()
 
@@ -194,12 +203,12 @@ class BaseNode(object):
 
     def retrieve_journal(self):
         try:
-            log_file = os.path.join(self.logdir, 'db_services.log')
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
             if result.exit_status == 0:
                 # Here we're assuming that journalctl systems are Scylla images
                 db_services_log_cmd = ('sudo journalctl -f '
+                                       '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
                                        '-u scylla-jmx.service')
@@ -212,7 +221,7 @@ class BaseNode(object):
                 db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
             self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
-                             log_file=log_file)
+                             log_file=self.database_log)
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
@@ -641,15 +650,18 @@ class AWSNode(BaseNode):
         self._wait_public_ip()
         self._ec2.create_tags(Resources=[self._instance.id],
                               Tags=[{'Key': 'Name', 'Value': name}])
-        # Make the instance created to be immune to Tzach's killer script
-        self._ec2.create_tags(Resources=[self._instance.id],
-                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
         ssh_login_info = {'hostname': self._instance.public_ip_address,
                           'user': ami_username,
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
+        if TEST_DURATION >= 24 * 60:
+            self.log.info('Test duration set to %s. '
+                          'Tagging node with {"keep": "alive"}',
+                          TEST_DURATION)
+            self._ec2.create_tags(Resources=[self._instance.id],
+                                  Tags=[{'Key': 'keep', 'Value': 'alive'}])
 
     @property
     def public_ip_address(self):
@@ -1753,12 +1765,14 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
+                     (cluster_prefix, n_nodes))
         super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                            ec2_subnet_id=ec2_subnet_id,
                                            ec2_security_group_ids=ec2_security_group_ids,
                                            ec2_instance_type=ec2_instance_type,
                                            ec2_ami_username=ec2_ami_username,
-                                           ec2_user_data='--stop-services',
+                                           ec2_user_data=user_data,
                                            service=service,
                                            ec2_block_device_mappings=ec2_block_device_mappings,
                                            credentials=credentials,
@@ -1977,12 +1991,14 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
+                     (cluster_prefix, n_nodes))
         super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
                                             ec2_instance_type=ec2_instance_type,
                                             ec2_ami_username=ec2_ami_username,
-                                            ec2_user_data='--stop-services',
+                                            ec2_user_data=user_data,
                                             service=service,
                                             ec2_block_device_mappings=ec2_block_device_mappings,
                                             credentials=credentials,
