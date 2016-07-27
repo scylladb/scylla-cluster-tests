@@ -172,6 +172,9 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
 
         self.cs_start_time = None
+        self.database_log = os.path.join(self.logdir, 'database.log')
+        self._database_log_errors_index = []
+        self._database_error_patterns = ['std::bad_alloc']
         self.start_journal_thread()
         self.start_backtrace_thread()
 
@@ -194,7 +197,6 @@ class BaseNode(object):
 
     def retrieve_journal(self):
         try:
-            log_file = os.path.join(self.logdir, 'db_services.log')
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
             if result.exit_status == 0:
@@ -212,7 +214,7 @@ class BaseNode(object):
                 db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
             self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
-                             log_file=log_file)
+                             log_file=self.database_log)
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
@@ -624,6 +626,24 @@ LoadPlugin processes
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
 
+    def search_database_log(self, expression):
+        matches = []
+        pattern = re.compile(expression, re.IGNORECASE)
+        with open(self.database_log, 'r') as f:
+            for index, line in enumerate(f):
+                if index not in self._database_log_errors_index:
+                    m = pattern.search(line)
+                    if m:
+                        self._database_log_errors_index.append(index)
+                        matches.append((index, line))
+        return matches
+
+    def search_database_log_errors(self):
+        errors = []
+        for expression in self._database_error_patterns:
+            errors += self.search_database_log(expression)
+        return errors
+
 
 class AWSNode(BaseNode):
 
@@ -846,6 +866,14 @@ class BaseCluster(object):
 
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
+
+    def get_node_database_errors(self):
+        errors = []
+        for node in self.nodes:
+            node_errors = node.search_database_log_errors()
+            if node_errors:
+                errors.append({node.name: node_errors})
+        return errors
 
     def destroy(self):
         self.log.info('Destroy nodes')
