@@ -35,7 +35,10 @@ import matplotlib.pyplot as plt
 from avocado.utils import path
 from avocado.utils import process
 from avocado.utils import script
+from avocado.utils import runtime as avocado_runtime
+
 from botocore.exceptions import WaiterError
+import boto3.session
 
 from .log import SDCMAdapter
 from .remote import Remote
@@ -53,12 +56,46 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 
 CREDENTIALS = []
 EC2_INSTANCES = []
+LIBVIRT_DOMAINS = []
+LIBVIRT_IMAGES = []
 DEFAULT_USER_PREFIX = getpass.getuser()
+
+
+def clean_domain(domain_name):
+    process.run('virsh -c qemu:///system destroy %s' % domain_name,
+                ignore_status=True)
+
+    process.run('virsh -c qemu:///system undefine %s' % domain_name,
+                ignore_status=True)
+
+
+def clean_aws_instances(region_name, instance_ids):
+    try:
+        session = boto3.session.Session(region_name=region_name)
+        service = session.resource('ec2')
+        service.instances.filter(InstanceIds=instance_ids).terminate()
+    except Exception as details:
+        test_logger = logging.getLogger('avocado.test')
+        test_logger.error(str(details))
+
+
+def clean_aws_credential(region_name, credential_key_name, credential_key_file):
+    try:
+        session = boto3.session.Session(region_name=region_name)
+        service = session.resource('ec2')
+        key_pair_info = service.KeyPair(credential_key_name)
+        key_pair_info.delete()
+        os.unlink(credential_key_file)
+    except Exception as details:
+        test_logger = logging.getLogger('avocado.test')
+        test_logger.error(str(details))
 
 
 def cleanup_instances(behavior='destroy'):
     global EC2_INSTANCES
     global CREDENTIALS
+    global LIBVIRT_DOMAINS
+    global LIBVIRT_IMAGES
 
     for instance in EC2_INSTANCES:
         if behavior == 'destroy':
@@ -69,6 +106,12 @@ def cleanup_instances(behavior='destroy'):
     for cred in CREDENTIALS:
         if behavior == 'destroy':
             cred.destroy()
+
+    for domain_name in LIBVIRT_DOMAINS:
+        clean_domain(domain_name)
+
+    for libvirt_image in LIBVIRT_IMAGES:
+        shutil.rmtree(libvirt_image, ignore_errors=True)
 
 
 def destroy_instances():
@@ -1233,6 +1276,8 @@ class LibvirtCluster(BaseCluster):
 
     def add_nodes(self, count, user_data=None):
         del user_data
+        global LIBVIRT_DOMAINS
+        global LIBVIRT_IMAGES
         nodes = []
         os_type = self._domain_info['os_type']
         os_variant = self._domain_info['os_variant']
@@ -1245,9 +1290,16 @@ class LibvirtCluster(BaseCluster):
             name = '%s-%s' % (self.node_prefix, index)
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
+            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
+                                                           'args': (dst_image_path,),
+                                                           'once': True})
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
+            LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
+            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
+                                                           'args': (name,),
+                                                           'once': True})
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
@@ -1257,6 +1309,7 @@ class LibvirtCluster(BaseCluster):
                                 (uri, name, memory, os_type, os_variant,
                                  dst_image_path, bridge))
             process.run(virt_install_cmd)
+            LIBVIRT_DOMAINS.append(name)
             for domain in self._hypervisor.listAllDomains():
                 if domain.name() == name:
                     node = LibvirtNode(hypervisor=self._hypervisor,
@@ -1459,6 +1512,14 @@ class AWSCluster(BaseCluster):
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
+        credential_key_name = credentials.key_pair.name
+        credential_key_file = credentials.key_file
+        region_name = params.get('region_name')
+        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
+                                                       'args': (region_name,
+                                                                credential_key_name,
+                                                                credential_key_file),
+                                                       'once': True})
         global CREDENTIALS
         CREDENTIALS.append(credentials)
 
@@ -1500,6 +1561,12 @@ class AWSCluster(BaseCluster):
                                                BlockDeviceMappings=self._ec2_block_device_mappings,
                                                SubnetId=self._ec2_subnet_id,
                                                InstanceType=self._ec2_instance_type)
+        instance_ids = [i.id for i in instances]
+        region_name = self.params.get('region_name')
+        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
+                                                       'args': (region_name,
+                                                                instance_ids),
+                                                       'once': True})
         EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
