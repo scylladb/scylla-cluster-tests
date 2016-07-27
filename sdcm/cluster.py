@@ -200,6 +200,7 @@ class BaseNode(object):
             if result.exit_status == 0:
                 # Here we're assuming that journalctl systems are Scylla images
                 db_services_log_cmd = ('sudo journalctl -f '
+                                       '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
                                        '-u scylla-jmx.service')
