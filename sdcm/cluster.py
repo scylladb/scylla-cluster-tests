@@ -1765,12 +1765,14 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
+                     (cluster_prefix, n_nodes))
         super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                            ec2_subnet_id=ec2_subnet_id,
                                            ec2_security_group_ids=ec2_security_group_ids,
                                            ec2_instance_type=ec2_instance_type,
                                            ec2_ami_username=ec2_ami_username,
-                                           ec2_user_data='--stop-services',
+                                           ec2_user_data=user_data,
                                            service=service,
                                            ec2_block_device_mappings=ec2_block_device_mappings,
                                            credentials=credentials,
@@ -1989,12 +1991,14 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
+                     (cluster_prefix, n_nodes))
         super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
                                             ec2_instance_type=ec2_instance_type,
                                             ec2_ami_username=ec2_ami_username,
-                                            ec2_user_data='--stop-services',
+                                            ec2_user_data=user_data,
                                             service=service,
                                             ec2_block_device_mappings=ec2_block_device_mappings,
                                             credentials=credentials,
