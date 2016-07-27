@@ -54,6 +54,14 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 CREDENTIALS = []
 EC2_INSTANCES = []
 DEFAULT_USER_PREFIX = getpass.getuser()
+# Test duration (min). Parameter used to keep instances produced by tests that
+# are supposed to run longer than 24 hours from being killed
+TEST_DURATION = 60
+
+
+def set_duration(duration):
+    global TEST_DURATION
+    TEST_DURATION = duration
 
 
 def cleanup_instances(behavior='destroy'):
@@ -642,15 +650,18 @@ class AWSNode(BaseNode):
         self._wait_public_ip()
         self._ec2.create_tags(Resources=[self._instance.id],
                               Tags=[{'Key': 'Name', 'Value': name}])
-        # Make the instance created to be immune to Tzach's killer script
-        self._ec2.create_tags(Resources=[self._instance.id],
-                              Tags=[{'Key': 'keep', 'Value': 'alive'}])
         ssh_login_info = {'hostname': self._instance.public_ip_address,
                           'user': ami_username,
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
+        if TEST_DURATION >= 24 * 60:
+            self.log.info('Test duration set to %s. '
+                          'Tagging node with {"keep": "alive"}',
+                          TEST_DURATION)
+            self._ec2.create_tags(Resources=[self._instance.id],
+                                  Tags=[{'Key': 'keep', 'Value': 'alive'}])
 
     @property
     def public_ip_address(self):
