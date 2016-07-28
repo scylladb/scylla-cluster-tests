@@ -1,0 +1,14 @@
+# avocado-framework requirements
+stevedore==1.11.0
+PyYAML==3.11
+fabric==1.12.0
+pystache==0.5.4
+libvirt-python==2.0.0
+# avocado-framework
+avocado-framework==36.0
+# sdcm requirements
+matplotlib==2.0.0b3
+boto3==1.3.1
+awscli==1.10.47
+aexpect==1.2.0
+cassandra-driver==2.7.2
