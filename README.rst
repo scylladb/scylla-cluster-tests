@@ -33,8 +33,8 @@ What's inside?
 
 3. Python files with tests. The convention is that test files have the ``_test.py`` suffix.
 
-Setup
------
+Regular Setup
+-------------
 
 Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib`` and ``aexpect``::
 
@@ -70,8 +70,57 @@ to ``data_dir/your_config.yaml``.
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in ``data_dir/your_config.yaml``.
 
-Setup - Libvirt
----------------
+Before running the suite, you should make avocado aware of the scdm libraries.
+In order to do that, you can issue a::
+
+    sudo python setup.py develop
+
+That will put sdcm in the python library path, while still allowing you to edit
+the code and make changes if you want. If you don't perform this step, you'll
+end up with the following error messages in the avocado test runner output,
+when trying to execute the tests::
+
+    Error receiving message from test: <type 'exceptions.ImportError'> -> No module named sdcm.cluster
+
+    Reproduced traceback from: /usr/lib/python2.7/site-packages/avocado/core/runner.py:75
+    Traceback (most recent call last):
+      File "/usr/lib64/python2.7/multiprocessing/queues.py", line 378, in get
+        return recv()
+    ImportError: No module named sdcm.cluster
+
+That happens because avocado does not know about the sdcm library, place where
+the resource cleanup functions are defined. Once avocado knows about that library,
+you won't get this error anymore.
+
+Setup - Virtual Environment
+---------------------------
+
+For people seeking to run the tests using a self contained virtual environment,
+we provide a script to help you out with installing all the python dependencies.
+You will need to install a few development packages for the install process to
+work though::
+
+    sudo dnf install gcc python-devel libpng-devel libfreetype-devel libev libev-devel libyaml-devel libvirt-devel -y
+
+This is of course if you are running Fedora. Please adapt this instruction if
+you are running on another distro that won't have the same package names.
+
+Then you can run the `setup_venv` script::
+
+    ./setup_venv
+
+That will install everything you need then give you the command to start the
+virtual environment::
+
+    ...
+    Scylla Cluster Tests successfully configured
+    Now run 'source .sct_venv/bin/activate' to work from the created virtual environment
+
+As you can see, the dir of the virtual environment is `.sct_venv`, and that will
+be created inside the suite top level dir.
+
+Setup Notes - Making your regular user able to access qemu:///session
+---------------------------------------------------------------------
 
 You might want to setup libvirt to access the qemu system session as your regular
 user. You might want to refer to [3], in case that is not available, here's the
