@@ -22,6 +22,7 @@ from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
 from sdcm.nemesis import Nemesis
 from sdcm.nemesis import log_time_elapsed
+from sdcm.data_path import get_data_path
 
 
 class GrowClusterMonkey(Nemesis):
@@ -47,6 +48,7 @@ class GrowClusterTest(ClusterTester):
         self.db_cluster = None
         self.loaders = None
         self.monitors = None
+        self.custom_cs_command = None
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         # We're starting the cluster with 3 nodes due to
@@ -67,6 +69,23 @@ class GrowClusterTest(ClusterTester):
         self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
+    def setup_custom_cs_profile(self):
+        cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
+        with open(cs_custom_config, 'r') as cs_custom_config_file:
+            self.log.info('Using custom cassandra-stress config:')
+            self.log.info(cs_custom_config_file.read())
+        for node in self.loaders.nodes:
+            node.remoter.send_files(cs_custom_config,
+                                    '/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml',
+                                    verbose=True)
+        ip = self.db_cluster.get_node_private_ips()[0]
+        self.custom_cs_command = ('cassandra-stress user '
+                      'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
+                      'ops\(insert=1\) -node %s' % ip)
+
+    def cleanup_custom_cs_profile(self):
+        self.custom_cs_command = None
+
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
                        mode='write', limit=None, row_size=None):
         """
@@ -78,6 +97,10 @@ class GrowClusterTest(ClusterTester):
         :return: Cassandra stress string
         :rtype: basestring
         """
+
+        if self.custom_cs_command:
+            return self.custom_cs_command
+
         ip = self.db_cluster.get_node_private_ips()[0]
         if population_size is None:
             population_size = 1000000
@@ -144,6 +167,18 @@ class GrowClusterTest(ClusterTester):
         4) Keep repeating 3) until we get to the target number of 30 nodes
         """
         self.grow_cluster(cluster_target_size=30)
+
+    def test_grow_3_to_4_large_partition(self):
+        """
+        Shorter version of the cluster growth test.
+
+        1) Start a 1 node cluster
+        2) Start cassandra-stress on the loader node
+        3) Add a new node
+        """
+        self.setup_custom_cs_profile()
+        self.grow_cluster(cluster_target_size=4)
+        self.cleanup_custom_cs_profile()
 
 if __name__ == '__main__':
     main()
