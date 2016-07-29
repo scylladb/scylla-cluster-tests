@@ -43,6 +43,7 @@ class ReduceClusterTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        self.monitors = None
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.stress_thread = None
@@ -65,7 +66,8 @@ class ReduceClusterTest(ClusterTester):
         nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
         self.monitors.wait_for_init(targets=nodes_monitored)
 
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None):
+    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
+                       mode='write', limit=None, row_size=None):
         """
         Get a cassandra stress cmd string suitable for reduce cluster purposes.
 

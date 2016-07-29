@@ -46,6 +46,7 @@ class GrowClusterTest(ClusterTester):
         self.credentials = None
         self.db_cluster = None
         self.loaders = None
+        self.monitors = None
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         # We're starting the cluster with 3 nodes due to
@@ -66,7 +67,8 @@ class GrowClusterTest(ClusterTester):
         self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None):
+    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
+                       mode='write', limit=None, row_size=None):
         """
         Get a cassandra stress cmd string suitable for grow cluster purposes.
 
