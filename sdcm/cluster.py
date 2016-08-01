@@ -918,7 +918,7 @@ class BaseScyllaCluster(object):
             node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                        dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
-                conf_dict = yaml.load(yaml_stream)
+                conf_dict = yaml.safe_load(yaml_stream)
                 try:
                     self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
                 except Exception, details:
