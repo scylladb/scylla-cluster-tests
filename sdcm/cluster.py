@@ -922,6 +922,7 @@ class BaseScyllaCluster(object):
                 try:
                     self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
                 except Exception, details:
+                    self.log.debug('Loaded YAML data structure: %s', conf_dict)
                     self.log.error('Scylla YAML config contents:')
                     with open(yaml_dst_path, 'r') as yaml_stream:
                         self.log.error(yaml_stream.read())
