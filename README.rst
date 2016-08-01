@@ -50,7 +50,10 @@ Configure aws::
     aws configure
 
 That will ask you for your ``region``, ``aws_access_key_id``,
-``aws_secret_access_key``. Please complete that.
+``aws_secret_access_key``. Please complete that setup.
+
+Note: `aws configure` will also ask for ``Default output format``, but you can
+just use the default value (None) as a valid answer.
 
 You'll also need to install cassandra-driver (needed to support issuing CQL
 queries to nodes)::
