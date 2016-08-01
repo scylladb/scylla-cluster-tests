@@ -1152,15 +1152,15 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
-    def _plot_nemesis_events(nemesis, node, plot):
+    def _plot_nemesis_events(nemesis, node):
         nemesis_event_start_times = [
             operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
         for start_time in nemesis_event_start_times:
-            plot.axvline(start_time, color='blue', linestyle='dashdot')
+            plt.axvline(start_time, color='blue', linestyle='dashdot')
         nemesis_event_end_times = [
             operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
         for end_time in nemesis_event_end_times:
-            plot.axvline(end_time, color='red', linestyle='dashdot')
+            plt.axvline(end_time, color='red', linestyle='dashdot')
 
     @staticmethod
     def _parse_cs_results(lines):
@@ -1195,7 +1195,7 @@ class BaseLoaderSet(object):
     def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
         cs_results = self._parse_cs_results(lines)
         for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, plt)
+            self._plot_nemesis_events(nemesis, node)
 
         plt.plot(cs_results['time'], cs_results['ops'], label='ops', color='green')
         plt.title('Operations vs. Time')
@@ -1208,7 +1208,7 @@ class BaseLoaderSet(object):
 
         # lat
         for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, plt)
+            self._plot_nemesis_events(nemesis, node)
 
         plt.plot(cs_results['time'], cs_results['lat95'], label='lat95', color='blue')
         plt.plot(cs_results['time'], cs_results['lat99'], label='lat99', color='green')
