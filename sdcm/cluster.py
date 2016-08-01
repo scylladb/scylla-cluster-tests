@@ -1192,37 +1192,58 @@ class BaseLoaderSet(object):
                 results['latmax'].append(latmax)
         return results
 
-    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
+    def _plot_metric_data(self, cs_results, x_title, y_title, color, title,
+                          db_cluster, plotfile, node):
+        for nemesis in db_cluster.nemesis:
+            self._plot_nemesis_events(nemesis, node)
+        plt.plot(cs_results[x_title], cs_results[y_title], label=y_title,
+                 color=color)
+        plt.title(title)
+        plt.xlabel(x_title)
+        plt.ylabel(y_title)
+        plt.legend()
+        plt.savefig(plotfile + '-%s.svg' % y_title)
+        plt.savefig(plotfile + '-%s.png' % y_title)
+        plt.close()
+
+    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None,
+                               db_cluster=None):
         cs_results = self._parse_cs_results(lines)
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node)
 
-        plt.plot(cs_results['time'], cs_results['ops'], label='ops', color='green')
-        plt.title('Operations vs. Time')
-        plt.xlabel('time')
-        plt.ylabel('ops')
-        plt.legend()
-        plt.savefig(plotfile + '-ops.svg')
-        plt.savefig(plotfile + '-ops.png')
-        plt.close()
+        self._plot_metric_data(cs_results=cs_results, x_title='time',
+                               y_title='ops', color='green',
+                               title='Operations vs Time',
+                               db_cluster=db_cluster,
+                               plotfile=plotfile,
+                               node=node)
 
-        # lat
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node)
+        self._plot_metric_data(cs_results=cs_results, x_title='time',
+                               y_title='lat95', color='blue',
+                               title='Latency 95% vs Time',
+                               db_cluster=db_cluster,
+                               plotfile=plotfile,
+                               node=node)
 
-        plt.plot(cs_results['time'], cs_results['lat95'], label='lat95', color='blue')
-        plt.plot(cs_results['time'], cs_results['lat99'], label='lat99', color='green')
-        plt.plot(cs_results['time'], cs_results['lat999'], label='lat999', color='black')
-        plt.plot(cs_results['time'], cs_results['latmax'], label='latmax', color='red')
+        self._plot_metric_data(cs_results=cs_results, x_title='time',
+                               y_title='lat99', color='green',
+                               title='Latency 99% vs Time',
+                               db_cluster=db_cluster,
+                               plotfile=plotfile,
+                               node=node)
 
-        plt.title('Latency vs. Time')
-        plt.xlabel('time')
-        plt.ylabel('latency')
-        plt.legend()
-        plt.grid()
-        plt.savefig(plotfile + '-lat.svg')
-        plt.savefig(plotfile + '-lat.png')
-        plt.close()
+        self._plot_metric_data(cs_results=cs_results, x_title='time',
+                               y_title='lat999', color='black',
+                               title='Latency 99.9% vs Time',
+                               db_cluster=db_cluster,
+                               plotfile=plotfile,
+                               node=node)
+
+        self._plot_metric_data(cs_results=cs_results, x_title='time',
+                               y_title='latmax', color='red',
+                               title='Maximum Latency vs Time',
+                               db_cluster=db_cluster,
+                               plotfile=plotfile,
+                               node=node)
 
     def verify_stress_thread(self, queue, db_cluster):
         results = []
