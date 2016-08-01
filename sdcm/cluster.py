@@ -918,13 +918,16 @@ class BaseScyllaCluster(object):
             node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                        dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
-                conf_dict = yaml.load(yaml_stream)
+                conf_dict = yaml.safe_load(yaml_stream)
                 try:
-                    self.seed_nodes_private_ips = conf_dict['seed_provider'][
-                        0]['parameters'][0]['seeds'].split(',')
-                except:
-                    raise ValueError('Unexpected scylla.yaml '
-                                     'contents:\n%s' % yaml_stream.read())
+                    self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+                except Exception, details:
+                    self.log.debug('Loaded YAML data structure: %s', conf_dict)
+                    self.log.error('Scylla YAML config contents:')
+                    with open(yaml_dst_path, 'r') as yaml_stream:
+                        self.log.error(yaml_stream.read())
+                    raise ValueError('Exception determining seed node ips: %s' %
+                                     details)
         return self.seed_nodes_private_ips
 
     def get_seed_nodes(self):
