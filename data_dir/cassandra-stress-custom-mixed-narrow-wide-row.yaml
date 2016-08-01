@@ -1,0 +1,67 @@
+### DML ###
+
+# Keyspace Name
+keyspace: keyspace2
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE keyspace2 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 2};
+
+# Table name
+table: standard1
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE standard1 (
+      key blob,
+      key2 blob,
+      c0 blob,
+      c1 blob,
+      c2 blob,
+      c3 blob,
+      c4 blob,
+      PRIMARY KEY (key, key2)
+  ) with
+  compression = { };
+#   compression = { 'sstable_compression' : 'LZ4Compressor'};
+#   compression = { 'sstable_compression' : 'SnappyCompressor'};
+#   compression = { 'sstable_compression' : 'DeflateCompressor', 'chunk_length_kb' : 64 };
+
+### Column Distribution Specifications ###
+
+# each cql row is 1KB * 5 = 5KB in size
+# each partition can be 5KB * [1 to 50], that is 5KB to 500KB in size
+columnspec:
+  - name: key
+    size: fixed(10)
+    population: uniform(1..10M)
+
+  - name: key2
+    cluster: uniform(1..100)
+
+  - name: c0
+    size: fixed(1024)
+
+  - name: c1
+    size: fixed(1024)
+
+  - name: c2
+    size: fixed(1024)
+
+  - name: c3
+    size: fixed(1024)
+
+  - name: c4
+    size: fixed(1024)
+
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)
+  select:    fixed(1)/1
+  batchtype: UNLOGGED
+
+queries:
+  single:
+    cql: select * from standard1 where key = ? LIMIT 1
