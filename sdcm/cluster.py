@@ -1125,6 +1125,33 @@ class BaseLoaderSet(object):
         kill_script.remove()
 
     @staticmethod
+    def _parse_cs_summary(lines):
+        """
+        Parsing c-stress results, only parse the summary results.
+        Collect results of all nodes and return a dictionaries' list,
+        the new structure data will be easy to parse, compare, display or save.
+        """
+        results = {}
+        enable_parse = False
+
+        for line in lines:
+            line.strip()
+            if line.startswith('Results:'):
+                enable_parse = True
+                continue
+            if line == 'END':
+                break
+            if not enable_parse:
+                continue
+
+            split_idx = line.index(':')
+            key = line[:split_idx].strip()
+            value = line[split_idx + 1:].split()[0]
+            results[key] = value
+
+        return results
+
+    @staticmethod
     def _plot_nemesis_events(nemesis, node, plot):
         nemesis_event_start_times = [
             operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
@@ -1209,6 +1236,22 @@ class BaseLoaderSet(object):
             self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return errors
+
+    def get_stress_results(self, queue):
+        results = []
+        ret = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            ret.append(self._parse_cs_summary(lines))
+
+        return ret
 
 
 class BaseMonitorSet(object):
@@ -1848,205 +1891,6 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                                            n_nodes=n_nodes,
                                            params=params)
         self.scylla_repo = scylla_repo
-
-    def wait_for_init(self, verbose=False):
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            self.log.info('Setup')
-            node.wait_ssh_up(verbose=verbose)
-            # The init scripts should install/update c-s, so
-            # let's try to guarantee it will be there before
-            # proceeding
-            node.wait_cs_installed(verbose=verbose)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
-
-    def run_stress_thread(self, stress_cmd, timeout, output_dir):
-        queue = Queue.Queue()
-
-        def node_run_stress(node):
-            try:
-                logdir = path.init_dir(output_dir, self.name)
-            except OSError:
-                logdir = os.path.join(output_dir, self.name)
-            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
-                                      ignore_status=True,
-                                      watch_stdout_pattern='total,')
-            node.cs_start_time = result.stdout_pattern_found_at
-            log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' % uuid.uuid4())
-            self.log.debug('Writing cassandra-stress log %s', log_file_name)
-            with open(log_file_name, 'w') as log_file:
-                log_file.write(str(result))
-            queue.put((node, result))
-            queue.task_done()
-
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_run_stress,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        return queue
-
-    def kill_stress_thread(self):
-        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
-        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
-                                             content=kill_script_contents)
-        kill_script.save()
-        kill_script_dir = os.path.dirname(kill_script.path)
-        for loader in self.nodes:
-            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
-            loader.remoter.send_files(kill_script.path, kill_script_dir)
-            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            result = loader.remoter.run(kill_script.path)
-            self.log.debug('Terminate cassandra-stress process on loader %s: %s', str(loader), str(result))
-            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
-        kill_script.remove()
-
-    @staticmethod
-    def _plot_nemesis_events(nemesis, node, plot):
-        nemesis_event_start_times = [operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
-        for start_time in nemesis_event_start_times:
-            plot.axvline(start_time, color='blue', linestyle='dashdot')
-        nemesis_event_end_times = [operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
-        for end_time in nemesis_event_end_times:
-            plot.axvline(end_time, color='red', linestyle='dashdot')
-
-    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
-        time_plot = []
-        ops_plot = []
-        latmax_plot = []
-        lat999_plot = []
-        lat99_plot = []
-        lat95_plot = []
-        for line in lines:
-            line.strip()
-            if line.startswith('total,'):
-                items = line.split(',')
-                totalops = items[1]
-                ops = items[2]
-                lat95 = items[7]
-                lat99 = items[8]
-                lat999 = items[9]
-                latmax = items[10]
-                time_point = items[11]
-                time_plot.append(time_point)
-                ops_plot.append(ops)
-                lat95_plot.append(lat95)
-                lat99_plot.append(lat99)
-                lat999_plot.append(lat999)
-                latmax_plot.append(latmax)
-        # ops
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, plt)
-
-        plt.plot(time_plot, ops_plot, label='ops', color='green')
-        plt.title('Operations vs. Time')
-        plt.xlabel('time')
-        plt.ylabel('ops')
-        plt.legend()
-        plt.savefig(plotfile + '-ops.svg')
-        plt.savefig(plotfile + '-ops.png')
-        plt.close()
-
-        # lat
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node, plt)
-
-        plt.plot(time_plot, lat95_plot, label='lat95', color='blue')
-        plt.plot(time_plot, lat99_plot, label='lat99', color='green')
-        plt.plot(time_plot, lat999_plot, label='lat999', color='black')
-        plt.plot(time_plot, latmax_plot, label='latmax', color='red')
-
-        plt.title('Latency vs. Time')
-        plt.xlabel('time')
-        plt.ylabel('latency')
-        plt.legend()
-        plt.grid()
-        plt.savefig(plotfile + '-lat.svg')
-        plt.savefig(plotfile + '-lat.png')
-        plt.close()
-
-    def _parse_results(self, lines):
-        """
-        Parsing c-stress results, only parse the summary results.
-        Collect results of all nodes and return a dictionaries' list,
-        the new structure data will be easy to parse, compare, display or save.
-        """
-        results = {}
-        enable_parse = False
-
-        for line in lines:
-            line.strip()
-            if line.startswith('Results:'):
-                enable_parse = True
-                continue
-            if line == 'END':
-                break
-            if not enable_parse:
-                continue
-
-            split_idx = line.index(':')
-            key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
-            results[key] = value
-
-        return results
-
-    def verify_stress_thread(self, queue, db_cluster):
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-
-        errors = []
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            for line in lines:
-                if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
-            plotfile = os.path.join(self.logdir, str(node))
-            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
-
-        return errors
-
-    def get_stress_results(self, queue):
-        results = []
-        ret = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            ret.append(self._parse_results(lines))
-
-        return ret
 
 
 class MonitorSetAWS(AWSCluster, BaseMonitorSet):
