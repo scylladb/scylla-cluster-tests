@@ -1740,7 +1740,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
-                     '--release 2.1.8' % (name, n_nodes))
+                     '--release 2.1.15' % (name, n_nodes))
 
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
@@ -1780,9 +1780,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 ec2_user_data = ('--clustername %s --bootstrap true '
                                  '--totalnodes %s --seeds %s '
                                  '--version community '
-                                 '--release 2.1.8' % (self.name,
-                                                      count,
-                                                      seeds))
+                                 '--release 2.1.15' % (self.name,
+                                                       count,
+                                                       seeds))
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data)
         return added_nodes
