@@ -1162,13 +1162,16 @@ class BaseLoaderSet(object):
         for end_time in nemesis_event_end_times:
             plot.axvline(end_time, color='red', linestyle='dashdot')
 
-    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
-        time_plot = []
-        ops_plot = []
-        latmax_plot = []
-        lat999_plot = []
-        lat99_plot = []
-        lat95_plot = []
+    @staticmethod
+    def _parse_cs_results(lines):
+        results = dict()
+        results['time'] = []
+        results['ops'] = []
+        results['totalops'] = []
+        results['latmax'] = []
+        results['lat999'] = []
+        results['lat99'] = []
+        results['lat95'] = []
         for line in lines:
             line.strip()
             if line.startswith('total,'):
@@ -1180,17 +1183,21 @@ class BaseLoaderSet(object):
                 lat999 = items[9]
                 latmax = items[10]
                 time_point = items[11]
-                time_plot.append(time_point)
-                ops_plot.append(ops)
-                lat95_plot.append(lat95)
-                lat99_plot.append(lat99)
-                lat999_plot.append(lat999)
-                latmax_plot.append(latmax)
-        # ops
+                results['time'].append(time_point)
+                results['totalops'].append(totalops)
+                results['ops'].append(ops)
+                results['lat95'].append(lat95)
+                results['lat99'].append(lat99)
+                results['lat999'].append(lat999)
+                results['latmax'].append(latmax)
+        return results
+
+    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None, db_cluster=None):
+        cs_results = self._parse_cs_results(lines)
         for nemesis in db_cluster.nemesis:
             self._plot_nemesis_events(nemesis, node, plt)
 
-        plt.plot(time_plot, ops_plot, label='ops', color='green')
+        plt.plot(cs_results['time'], cs_results['ops'], label='ops', color='green')
         plt.title('Operations vs. Time')
         plt.xlabel('time')
         plt.ylabel('ops')
@@ -1203,10 +1210,10 @@ class BaseLoaderSet(object):
         for nemesis in db_cluster.nemesis:
             self._plot_nemesis_events(nemesis, node, plt)
 
-        plt.plot(time_plot, lat95_plot, label='lat95', color='blue')
-        plt.plot(time_plot, lat99_plot, label='lat99', color='green')
-        plt.plot(time_plot, lat999_plot, label='lat999', color='black')
-        plt.plot(time_plot, latmax_plot, label='latmax', color='red')
+        plt.plot(cs_results['time'], cs_results['lat95'], label='lat95', color='blue')
+        plt.plot(cs_results['time'], cs_results['lat99'], label='lat99', color='green')
+        plt.plot(cs_results['time'], cs_results['lat999'], label='lat999', color='black')
+        plt.plot(cs_results['time'], cs_results['latmax'], label='latmax', color='red')
 
         plt.title('Latency vs. Time')
         plt.xlabel('time')
