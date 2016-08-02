@@ -880,6 +880,7 @@ class BaseCluster(object):
         self.nemesis = []
         self.params = params
         self.add_nodes(n_nodes)
+        self.coredumps = dict()
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
@@ -892,6 +893,8 @@ class BaseCluster(object):
     def get_backtraces(self):
         for node in self.nodes:
             node.get_backtraces()
+            if node.n_coredumps > 0:
+                self.coredumps[node.name] = node.n_coredumps
 
     def add_nodes(self, count, ec2_user_data=''):
         pass
