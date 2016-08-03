@@ -318,6 +318,7 @@ class UpgradeNemesis(Nemesis):
     # upgrade a single node
     def upgrade_node(self, node):
         self.log.info('Upgrading a Node')
+        orig_ver = node.remoter.run('rpm -qa scylla-server')
         scylla_repo = get_data_path('scylla.repo.upgrade')
         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
@@ -331,6 +332,9 @@ class UpgradeNemesis(Nemesis):
         node.remoter.run('sudo nodetool drain')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
+        new_ver = node.remoter.run('rpm -qa scylla-server')
+        if orig_ver == new_ver:
+            self.log.error('scylla-server version isn\'t changed')
 
     @log_time_elapsed
     def disrupt(self):
