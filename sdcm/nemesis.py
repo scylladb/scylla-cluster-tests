@@ -321,10 +321,14 @@ class UpgradeNemesis(Nemesis):
         scylla_repo = get_data_path('scylla.repo.upgrade')
         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+        # backup the data
+        node.remoter.run('sudo nodetool snapshot')
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum update scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
+        # flush all memtables to SSTables
+        node.remoter.run('sudo nodetool drain')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
 
