@@ -324,7 +324,7 @@ class UpgradeNemesis(Nemesis):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update scylla scylla-conf scylla-server scylla-jmx scylla-tools -y')
+        node.remoter.run('sudo yum update scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
 
