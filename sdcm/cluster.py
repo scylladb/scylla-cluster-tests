@@ -58,6 +58,7 @@ CREDENTIALS = []
 EC2_INSTANCES = []
 LIBVIRT_DOMAINS = []
 LIBVIRT_IMAGES = []
+LIBVIRT_URI = 'qemu:///system'
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -70,10 +71,11 @@ def set_duration(duration):
 
 
 def clean_domain(domain_name):
-    process.run('virsh -c qemu:///system destroy %s' % domain_name,
+    global LIBVIRT_URI
+    process.run('virsh -c %s destroy %s' % domain_name, LIBVIRT_URI,
                 ignore_status=True)
 
-    process.run('virsh -c qemu:///system undefine %s' % domain_name,
+    process.run('virsh -c %s undefine %s' % domain_name, LIBVIRT_URI,
                 ignore_status=True)
 
 
@@ -1364,12 +1366,14 @@ class LibvirtCluster(BaseCluster):
         del user_data
         global LIBVIRT_DOMAINS
         global LIBVIRT_IMAGES
+        global LIBVIRT_URI
         nodes = []
         os_type = self._domain_info['os_type']
         os_variant = self._domain_info['os_variant']
         memory = self._domain_info['memory']
         bridge = self._domain_info['bridge']
         uri = self._domain_info['uri']
+        LIBVIRT_URI = uri
         image_parent_dir = os.path.dirname(self._domain_info['image'])
         for index in range(len(self.nodes), len(self.nodes) + count):
             index += 1
