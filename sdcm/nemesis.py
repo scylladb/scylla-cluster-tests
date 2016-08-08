@@ -228,25 +228,7 @@ class Nemesis(object):
 
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
-        queue = Queue.Queue()
-
-        def run_nodetool(local_node):
-            self._run_nodetool(rebuild_cmd, local_node)
-            queue.put(local_node)
-            queue.task_done()
-
-        for node in self.cluster.nodes:
-            setup_thread = threading.Thread(target=run_nodetool,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(self.cluster.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
+        self._run_nodetool(rebuild_cmd, self.target_node)
 
 
 def log_time_elapsed(method):
