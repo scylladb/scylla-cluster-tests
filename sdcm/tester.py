@@ -572,8 +572,10 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
+        db_cluster_coredumps = None
         if self.db_cluster is not None:
             self.db_cluster.get_backtraces()
+            db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
                 current_nemesis.report()
             if self._failure_post_behavior == 'destroy':
@@ -606,6 +608,10 @@ class ClusterTester(Test):
             if self._failure_post_behavior == 'destroy':
                 self.credentials.destroy()
                 self.credentials = None
+
+        if db_cluster_coredumps:
+            self.fail('Found coredumps on DB cluster nodes: %s' %
+                      db_cluster_coredumps)
 
     def tearDown(self):
         self.clean_resources()

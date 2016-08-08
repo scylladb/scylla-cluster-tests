@@ -217,7 +217,7 @@ class BaseNode(object):
         self.log.debug(self.remoter.ssh_debug_cmd())
 
         self._journal_thread = None
-        self._n_coredumps = 0
+        self.n_coredumps = 0
         self._backtrace_thread = None
         self._public_ip_address = None
         self._private_ip_address = None
@@ -549,11 +549,11 @@ LoadPlugin processes
         self.wait_ssh_up(verbose=False)
         new_n_coredumps = self._get_n_coredumps()
         if new_n_coredumps is not None:
-            if (new_n_coredumps - self._n_coredumps) == 1:
+            if (new_n_coredumps - self.n_coredumps) == 1:
                 self._notify_backtrace(last=True)
-            elif (new_n_coredumps - self._n_coredumps) > 1:
+            elif (new_n_coredumps - self.n_coredumps) > 1:
                 self._notify_backtrace(last=False)
-            self._n_coredumps = new_n_coredumps
+            self.n_coredumps = new_n_coredumps
 
     def backtrace_thread(self):
         """
@@ -882,6 +882,7 @@ class BaseCluster(object):
         self.nemesis = []
         self.params = params
         self.add_nodes(n_nodes)
+        self.coredumps = dict()
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
@@ -894,6 +895,8 @@ class BaseCluster(object):
     def get_backtraces(self):
         for node in self.nodes:
             node.get_backtraces()
+            if node.n_coredumps > 0:
+                self.coredumps[node.name] = node.n_coredumps
 
     def add_nodes(self, count, ec2_user_data=''):
         pass
