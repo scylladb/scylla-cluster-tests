@@ -19,8 +19,6 @@ import inspect
 import logging
 import random
 import time
-import threading
-import Queue
 
 from avocado.utils import process
 
