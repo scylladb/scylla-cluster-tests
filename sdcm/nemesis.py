@@ -318,15 +318,25 @@ class UpgradeNemesis(Nemesis):
     # upgrade a single node
     def upgrade_node(self, node):
         self.log.info('Upgrading a Node')
+        orig_ver = node.remoter.run('rpm -qa scylla-server')
         scylla_repo = get_data_path('scylla.repo.upgrade')
         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
+        node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+        # backup the data
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
+        node.remoter.run('sudo nodetool snapshot')
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update scylla scylla-conf scylla-server scylla-jmx scylla-tools -y')
+        node.remoter.run('sudo yum update scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
+        # flush all memtables to SSTables
+        node.remoter.run('sudo nodetool drain')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
+        new_ver = node.remoter.run('rpm -qa scylla-server')
+        if orig_ver == new_ver:
+            self.log.error('scylla-server version isn\'t changed')
 
     @log_time_elapsed
     def disrupt(self):
@@ -345,3 +355,46 @@ class UpgradeNemesis(Nemesis):
             self.upgrade_node(node)
 
         self.log.info('Upgrade Nemesis end')
+
+
+class RollbackNemesis(Nemesis):
+
+    # rollback a single node
+    def rollback_node(self, node):
+        self.log.info('Rollbacking a Node')
+        orig_ver = node.remoter.run('rpm -qa scylla-server')
+        node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
+        # backup the data
+        node.remoter.run('nodetool snapshot')
+        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo yum clean all')
+        node.remoter.run('sudo yum remove scylla -y')
+        node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
+        # flush all memtables to SSTables
+        node.remoter.run('nodetool drain')
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo systemctl restart scylla-server.service')
+        node.wait_db_up(verbose=True)
+        new_ver = node.remoter.run('rpm -qa scylla-server')
+        self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
+        if orig_ver == new_ver:
+            raise ValueError('scylla-server version isn\'t changed')
+
+    @log_time_elapsed
+    def disrupt(self):
+        self.log.info('Rollback Nemesis begin')
+        # get the number of nodes
+        l = len(self.cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(l)]
+        # shuffle it so we will rollback the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        # rollback all the nodes in random order
+        for i in indexes:
+            node = self.cluster.nodes[i]
+            self.rollback_node(node)
+
+        self.log.info('Rollback Nemesis end')

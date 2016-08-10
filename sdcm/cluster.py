@@ -1033,6 +1033,9 @@ class BaseScyllaCluster(object):
         self.nemesis.append(nemesis(cluster=self,
                                     termination_event=self.termination_event))
 
+    def clean_nemesis(self):
+        self.nemesis = []
+
     def start_nemesis(self, interval=30):
         self.log.debug('Start nemesis begin')
         self.termination_event = threading.Event()
