@@ -1124,9 +1124,14 @@ class BaseLoaderSet(object):
             loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
             loader.remoter.send_files(kill_script.path, kill_script_dir)
             loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            result = loader.remoter.run(kill_script.path)
-            self.log.debug(
-                'Terminate cassandra-stress process on loader %s: %s', str(loader), str(result))
+            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
+                                           ignore_status=True)
+            if cs_active.exit_status == 0:
+                kill_result = loader.remoter.run(kill_script.path,
+                                                 ignore_status=True)
+                if kill_result.exit_status != 0:
+                    self.log.error('Terminate c-s on node %s:\n%s',
+                                   loader, kill_result)
             loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
         kill_script.remove()
 
