@@ -1113,6 +1113,7 @@ class BaseLoaderSet(object):
                                             args=(loader,))
             setup_thread.daemon = True
             setup_thread.start()
+            time.sleep(30)
 
         return queue
 
