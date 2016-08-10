@@ -271,7 +271,7 @@ class BaseNode(object):
 
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
-        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.0-1468321182.x86_64.rpm -y')
+        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
         self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
 
     def setup_grafana(self):
