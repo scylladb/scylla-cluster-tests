@@ -1347,6 +1347,27 @@ class BaseMonitorSet(object):
         kill_script.remove()
 
 
+class NoMonitorSet(object):
+
+    def __init__(self):
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+
+    def __str__(self):
+        return 'NoMonitorSet'
+
+    def wait_for_init(self, targets, verbose=False):
+        del targets
+        del verbose
+        self.log.info('Monitor nodes disabled for this run')
+
+    def get_backtraces(self):
+        pass
+
+    def destroy(self):
+        pass
+
+
 class LibvirtCluster(BaseCluster):
 
     """

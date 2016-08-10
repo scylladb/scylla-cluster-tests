@@ -33,6 +33,7 @@ from . import nemesis
 from .cluster import CassandraAWSCluster
 from .cluster import LoaderSetAWS
 from .cluster import LoaderSetLibvirt
+from .cluster import NoMonitorSet
 from .cluster import MonitorSetAWS
 from .cluster import MonitorSetLibvirt
 from .cluster import RemoteCredentials
@@ -219,18 +220,21 @@ class ClusterTester(Test):
                                     n_nodes=loader_info['n_nodes'],
                                     params=self.params)
 
-        self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor'),
-                                      ec2_ami_username=self.params.get('ami_monitor_user'),
-                                      ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                      ec2_subnet_id=self.params.get('subnet_id'),
-                                      ec2_instance_type=monitor_info['type'],
-                                      service=service,
-                                      ec2_block_device_mappings=monitor_info['device_mappings'],
-                                      credentials=self.credentials,
-                                      scylla_repo=scylla_repo,
-                                      user_prefix=user_prefix,
-                                      n_nodes=monitor_info['n_nodes'],
-                                      params=self.params)
+        if monitor_info['n_nodes'] > 0:
+            self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor'),
+                                          ec2_ami_username=self.params.get('ami_monitor_user'),
+                                          ec2_security_group_ids=[self.params.get('security_group_ids')],
+                                          ec2_subnet_id=self.params.get('subnet_id'),
+                                          ec2_instance_type=monitor_info['type'],
+                                          service=service,
+                                          ec2_block_device_mappings=monitor_info['device_mappings'],
+                                          credentials=self.credentials,
+                                          scylla_repo=scylla_repo,
+                                          user_prefix=user_prefix,
+                                          n_nodes=monitor_info['n_nodes'],
+                                          params=self.params)
+        else:
+            self.monitors = NoMonitorSet()
 
     def get_cluster_libvirt(self, loader_info, db_info, monitor_info):
 
@@ -293,11 +297,14 @@ class ClusterTester(Test):
                                         n_nodes=loader_info['n_nodes'],
                                         params=self.params)
 
-        self.monitors = MonitorSetLibvirt(domain_info=monitor_info,
-                                          hypervisor=hypervisor,
-                                          user_prefix=user_prefix,
-                                          n_nodes=monitor_info['n_nodes'],
-                                          params=self.params)
+        if monitor_info['n_nodes'] > 0:
+            self.monitors = MonitorSetLibvirt(domain_info=monitor_info,
+                                              hypervisor=hypervisor,
+                                              user_prefix=user_prefix,
+                                              n_nodes=monitor_info['n_nodes'],
+                                              params=self.params)
+        else:
+            self.monitors = NoMonitorSet()
 
     @clean_aws_resources
     def init_resources(self, loader_info=None, db_info=None,
