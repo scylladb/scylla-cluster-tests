@@ -46,12 +46,13 @@ class UpgradeTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(UpgradeNemesis)
         self.db_cluster.start_nemesis(interval=10)
+        self.db_cluster.stop_nemesis(timeout=None)
 
         self.db_cluster.clean_nemesis()
 
         self.db_cluster.add_nemesis(RollbackNemesis)
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.run_stress(duration=self.params.get('cassandra_stress_duration', 20))
 
 if __name__ == '__main__':
     main()
