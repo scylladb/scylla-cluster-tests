@@ -46,6 +46,7 @@ class UpgradeTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(UpgradeNemesis)
         self.db_cluster.start_nemesis(interval=10)
+        self.db_cluster.stop_nemesis(timeout=None)
 
         self.db_cluster.clean_nemesis()
 
