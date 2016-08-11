@@ -16,6 +16,7 @@ n_db_nodes: 6
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
 # Number of monitor nodes running prometheus
+# To disable monitoring nodes, set n_monitor_nodes to 0.
 n_monitor_nodes: 1
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'ChaosMonkey'

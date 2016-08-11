@@ -273,7 +273,7 @@ class BaseNode(object):
 
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
-        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.0-1468321182.x86_64.rpm -y')
+        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
         self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
 
     def setup_grafana(self):
@@ -1130,9 +1130,14 @@ class BaseLoaderSet(object):
             loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
             loader.remoter.send_files(kill_script.path, kill_script_dir)
             loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            result = loader.remoter.run(kill_script.path)
-            self.log.debug(
-                'Terminate cassandra-stress process on loader %s: %s', str(loader), str(result))
+            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
+                                           ignore_status=True)
+            if cs_active.exit_status == 0:
+                kill_result = loader.remoter.run(kill_script.path,
+                                                 ignore_status=True)
+                if kill_result.exit_status != 0:
+                    self.log.error('Terminate c-s on node %s:\n%s',
+                                   loader, kill_result)
             loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
         kill_script.remove()
 
@@ -1346,6 +1351,27 @@ class BaseMonitorSet(object):
             node.download_prometheus_data_dir()
             node.remoter.run(cmd='rm -rf %s' % kill_script_dir)
         kill_script.remove()
+
+
+class NoMonitorSet(object):
+
+    def __init__(self):
+        logger = logging.getLogger('avocado.test')
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+
+    def __str__(self):
+        return 'NoMonitorSet'
+
+    def wait_for_init(self, targets, verbose=False):
+        del targets
+        del verbose
+        self.log.info('Monitor nodes disabled for this run')
+
+    def get_backtraces(self):
+        pass
+
+    def destroy(self):
+        pass
 
 
 class LibvirtCluster(BaseCluster):
