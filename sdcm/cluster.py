@@ -1099,15 +1099,14 @@ class BaseLoaderSet(object):
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
                 logdir = os.path.join(output_dir, self.name)
+            log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' %
+                                         uuid.uuid4())
+            self.log.debug('cassandra-stress log: %s', log_file_name)
             result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
                                       ignore_status=True,
-                                      watch_stdout_pattern='total,')
+                                      watch_stdout_pattern='total,',
+                                      log_file=log_file_name)
             node.cs_start_time = result.stdout_pattern_found_at
-            log_file_name = os.path.join(
-                logdir, 'cassandra-stress-%s.log' % uuid.uuid4())
-            self.log.debug('Writing cassandra-stress log %s', log_file_name)
-            with open(log_file_name, 'w') as log_file:
-                log_file.write(str(result))
             queue.put((node, result))
             queue.task_done()
 
