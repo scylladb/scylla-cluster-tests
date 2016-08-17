@@ -282,6 +282,7 @@ class ClusterTester(Test):
         if libvirt_uri is None:
             libvirt_uri = 'qemu:///system'
         hypervisor = libvirt.open(libvirt_uri)
+        cluster.set_libvirt_uri(libvirt_uri)
 
         if self.params.get('db_type') == 'scylla':
             self.db_cluster = ScyllaLibvirtCluster(domain_info=db_info,

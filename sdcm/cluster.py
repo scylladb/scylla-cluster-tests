@@ -70,12 +70,17 @@ def set_duration(duration):
     TEST_DURATION = duration
 
 
+def set_libvirt_uri(libvirt_uri):
+    global LIBVIRT_URI
+    LIBVIRT_URI = libvirt_uri
+
+
 def clean_domain(domain_name):
     global LIBVIRT_URI
-    process.run('virsh -c %s destroy %s' % domain_name, LIBVIRT_URI,
+    process.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
                 ignore_status=True)
 
-    process.run('virsh -c %s undefine %s' % domain_name, LIBVIRT_URI,
+    process.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
                 ignore_status=True)
 
 
