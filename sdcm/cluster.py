@@ -1466,16 +1466,18 @@ class LibvirtCluster(BaseCluster):
             name = '%s-%s' % (self.node_prefix, index)
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
-                                                           'args': (dst_image_path,),
-                                                           'once': True})
+            if self.params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
+                                                               'args': (dst_image_path,),
+                                                               'once': True})
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
             LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
-                                                           'args': (name,),
-                                                           'once': True})
+            if self.params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
+                                                               'args': (name,),
+                                                               'once': True})
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
@@ -1697,11 +1699,12 @@ class AWSCluster(BaseCluster):
             credential_key_name = credentials.key_pair_name
             credential_key_file = credentials.key_file
             region_name = params.get('region_name')
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                           'args': (region_name,
-                                                                    credential_key_name,
-                                                                    credential_key_file),
-                                                           'once': True})
+            if params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
+                                                               'args': (region_name,
+                                                                        credential_key_name,
+                                                                        credential_key_file),
+                                                               'once': True})
         global CREDENTIALS
         CREDENTIALS.append(credentials)
 
@@ -1757,10 +1760,11 @@ class AWSCluster(BaseCluster):
                                                InstanceType=self._ec2_instance_type)
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
-        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
-                                                       'args': (region_name,
-                                                                instance_ids),
-                                                       'once': True})
+        if self.params.get('failure_post_behavior') == 'destroy':
+            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
+                                                           'args': (region_name,
+                                                                    instance_ids),
+                                                           'once': True})
         EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
