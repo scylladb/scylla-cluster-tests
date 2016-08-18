@@ -342,7 +342,8 @@ class ClusterTester(Test):
                                      monitor_info=monitor_info)
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None, row_size=None):
+                       mode='write', limit=None, row_size=None,
+                       row_limit=None, column_per_row=1):
         """
         Get a cassandra stress cmd string.
 
@@ -355,6 +356,10 @@ class ClusterTester(Test):
         :param population_size: Size of the -pop seq1..%s argument.
         :param mode: stress mode, write/read/mixed/ect
         :param limit: rate limit used by cassandra stress.
+        :param row_size: Size of the c-s row.
+        :param row_limit: Number of rows to be written. If non None,
+            this will override duration if that is set.
+        :param column_per_row: Number of columns per row inserted.
         :return: Cassandra stress string
         :rtype: basestring
         """
@@ -372,16 +377,25 @@ class ClusterTester(Test):
         else:
             limit = ""
         if row_size is not None:
-            row_size = "-col 'size=FIXED(%s) n=FIXED(1)'" % row_size
+            row_size = ("-col 'size=FIXED(%s) n=FIXED(%s)'" %
+                        (row_size, column_per_row))
         elif self.params.get('cassandra_stress_row_size'):
-            row_size = "-col 'size=FIXED(%s) n=FIXED(1)'" % self.params.get('cassandra_stress_row_size')
+            row_size = ("-col 'size=FIXED(%s) n=FIXED(%s)'" %
+                        (self.params.get('cassandra_stress_row_size'),
+                         column_per_row))
         else:
             row_size = ""
-        return ("cassandra-stress %s cl=QUORUM duration=%sm "
+        # This is c-s stop criteria: Eiter we pass 'duration=%sm' or 'n=%s'
+        # to its command line.
+        stop_criteria = "duration=%sm" % duration
+        if row_limit is not None:
+            stop_criteria = "n=%s" % row_limit
+        return ("cassandra-stress %s cl=QUORUM %s "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
                 "-mode cql3 native -rate threads=%s %s %s "
                 "-pop seq=1..%s -node %s" %
-                (mode, duration, threads, limit, row_size, population_size, ip))
+                (mode, stop_criteria, threads, limit, row_size,
+                 population_size, ip))
 
     @clean_aws_resources
     def run_stress(self, stress_cmd=None, duration=None, mode='write',
@@ -394,11 +408,13 @@ class ClusterTester(Test):
     @clean_aws_resources
     def run_stress_thread(self, stress_cmd=None, duration=None,
                           threads=None, population_size=None, mode='write',
-                          limit=None):
+                          limit=None, row_limit=None, column_per_row=1):
         if stress_cmd is None:
             stress_cmd = self.get_stress_cmd(duration=duration, threads=threads,
                                              population_size=population_size,
-                                             mode=mode, limit=limit)
+                                             mode=mode, limit=limit,
+                                             row_limit=row_limit,
+                                             column_per_row=column_per_row)
         if duration is None:
             duration = self.params.get('cassandra_stress_duration')
         timeout = duration * 60 + 600

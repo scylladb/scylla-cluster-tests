@@ -87,7 +87,8 @@ class GrowClusterTest(ClusterTester):
         self.custom_cs_command = None
 
     def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None, row_size=None):
+                       mode='write', limit=None, row_size=None,
+                       row_limit=None, column_per_row=1):
         """
         Get a cassandra stress cmd string suitable for grow cluster purposes.
 
