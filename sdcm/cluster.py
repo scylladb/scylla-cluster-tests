@@ -70,12 +70,17 @@ def set_duration(duration):
     TEST_DURATION = duration
 
 
+def set_libvirt_uri(libvirt_uri):
+    global LIBVIRT_URI
+    LIBVIRT_URI = libvirt_uri
+
+
 def clean_domain(domain_name):
     global LIBVIRT_URI
-    process.run('virsh -c %s destroy %s' % domain_name, LIBVIRT_URI,
+    process.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
                 ignore_status=True)
 
-    process.run('virsh -c %s undefine %s' % domain_name, LIBVIRT_URI,
+    process.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
                 ignore_status=True)
 
 
@@ -1554,7 +1559,11 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         start_time = time.time()
 
         seed = node_list[0].public_ip_address
-        for loader in node_list:
+        # If we setup all nodes in paralel, we might have troubles
+        # with nodes not able to contact the seed node.
+        # Let's setup the seed node first, then set up the others
+        node_setup(node_list[0], seed_address=seed)
+        for loader in node_list[1:]:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(loader, seed))
             setup_thread.daemon = True
