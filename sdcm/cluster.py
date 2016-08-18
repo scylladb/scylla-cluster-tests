@@ -1120,6 +1120,10 @@ class BaseLoaderSet(object):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
+        # We'll save a script with the last c-s command executed on loaders
+        stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
+                                               content='%s\n' % stress_cmd)
+        stress_script.save()
         queue = Queue.Queue()
 
         def node_run_stress(node):
@@ -1130,7 +1134,15 @@ class BaseLoaderSet(object):
             log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' %
                                          uuid.uuid4())
             self.log.debug('cassandra-stress log: %s', log_file_name)
-            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
+            loader_user = (self.params.get('libvirt_loader_image_user') or
+                           self.params.get('ami_loader_user'))
+            dst_stress_script_dir = os.path.join('/home', loader_user)
+            dst_stress_script = os.path.join(dst_stress_script_dir,
+                                             os.path.basename(stress_script.path))
+            node.remoter.send_files(stress_script.path, dst_stress_script_dir)
+            node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
+            result = node.remoter.run(cmd=stress_cmd,
+                                      timeout=timeout,
                                       ignore_status=True,
                                       watch_stdout_pattern='total,',
                                       log_file=log_file_name)
