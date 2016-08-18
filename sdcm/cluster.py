@@ -1094,6 +1094,7 @@ class BaseLoaderSet(object):
             # let's try to guarantee it will be there before
             # proceeding
             node.wait_cs_installed(verbose=verbose)
+            node.remoter.run('sudo yum install -y screen')
             if db_node_address is not None:
                 node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
                                  db_node_address)
@@ -1341,6 +1342,7 @@ class BaseMonitorSet(object):
             node.start_prometheus_thread(targets=targets)
             node.install_grafana()
             node.setup_grafana()
+            node.remoter.run('sudo yum install screen -y')
             queue.put(node)
             queue.task_done()
 
@@ -1508,8 +1510,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum update -y')
-        node.remoter.run('sudo yum install -y rsync')
-        node.remoter.run('sudo yum install -y tcpdump')
+        node.remoter.run('sudo yum install -y rsync tcpdump screen')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
