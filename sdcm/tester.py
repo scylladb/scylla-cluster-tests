@@ -37,6 +37,7 @@ from .cluster import NoMonitorSet
 from .cluster import MonitorSetAWS
 from .cluster import MonitorSetLibvirt
 from .cluster import RemoteCredentials
+from .cluster import UserRemoteCredentials
 from .cluster import ScyllaAWSCluster
 from .cluster import ScyllaLibvirtCluster
 from .data_path import get_data_path
@@ -174,9 +175,13 @@ class ClusterTester(Test):
         user_prefix = self.params.get('user_prefix', None)
         session = boto3.session.Session(region_name=self.params.get('region_name'))
         service = session.resource('ec2')
-        self.credentials = RemoteCredentials(service=service,
-                                             key_prefix='longevity-test',
-                                             user_prefix=user_prefix)
+        user_credentials = self.params.get('user_credentials_path', None)
+        if user_credentials:
+            self.credentials = UserRemoteCredentials(key_file=user_credentials)
+        else:
+            self.credentials = RemoteCredentials(service=service,
+                                                 key_prefix='longevity-test',
+                                                 user_prefix=user_prefix)
 
         if self.params.get('db_type') == 'scylla':
             self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),

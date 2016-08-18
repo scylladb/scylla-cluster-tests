@@ -177,11 +177,13 @@ class RemoteCredentials(object):
     """
 
     def __init__(self, service, key_prefix='keypair', user_prefix=None):
+        self.type = 'generated'
         self.uuid = uuid.uuid4()
         self.shortid = str(self.uuid)[:8]
         key_prefix = _prepend_user_prefix(user_prefix, key_prefix)
         self.name = '%s-%s' % (key_prefix, self.shortid)
         self.key_pair = service.create_key_pair(KeyName=self.name)
+        self.key_pair_name = self.key_pair.name
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '%s.pem' % self.name)
         self.write_key_file()
@@ -204,6 +206,24 @@ class RemoteCredentials(object):
         except OSError:
             pass
         self.log.info('Destroyed')
+
+
+class UserRemoteCredentials(object):
+
+    def __init__(self, key_file):
+        self.type = 'user'
+        self.key_file = key_file
+        self.name = os.path.basename(self.key_file)[:-4]
+        self.key_pair_name = self.name
+
+    def __str__(self):
+        return "Key Pair %s -> %s" % (self.name, self.key_file)
+
+    def write_key_file(self):
+        pass
+
+    def destroy(self):
+        pass
 
 
 class BaseNode(object):
@@ -1643,14 +1663,15 @@ class AWSCluster(BaseCluster):
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
-        credential_key_name = credentials.key_pair.name
-        credential_key_file = credentials.key_file
-        region_name = params.get('region_name')
-        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                       'args': (region_name,
-                                                                credential_key_name,
-                                                                credential_key_file),
-                                                       'once': True})
+        if credentials.type == 'generated':
+            credential_key_name = credentials.key_pair_name
+            credential_key_file = credentials.key_file
+            region_name = params.get('region_name')
+            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
+                                                           'args': (region_name,
+                                                                    credential_key_name,
+                                                                    credential_key_file),
+                                                           'once': True})
         global CREDENTIALS
         CREDENTIALS.append(credentials)
 
@@ -1687,7 +1708,7 @@ class AWSCluster(BaseCluster):
                                                UserData=ec2_user_data,
                                                MinCount=count,
                                                MaxCount=count,
-                                               KeyName=self._credentials.key_pair.name,
+                                               KeyName=self._credentials.key_pair_name,
                                                SecurityGroupIds=self._ec2_security_group_ids,
                                                BlockDeviceMappings=self._ec2_block_device_mappings,
                                                SubnetId=self._ec2_subnet_id,
