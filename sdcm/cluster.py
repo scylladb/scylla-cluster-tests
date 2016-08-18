@@ -1116,7 +1116,6 @@ class BaseLoaderSet(object):
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
                 pass
-
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
@@ -1424,6 +1423,18 @@ class LibvirtCluster(BaseCluster):
         return 'LibvirtCluster %s (Image: %s)' % (self.name,
                                                   os.path.basename(self._domain_info['image']))
 
+    def write_node_public_ip_file(self):
+        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
+        with open(public_ip_file_path, 'w') as public_ip_file:
+            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
+            public_ip_file.write("\n")
+
+    def write_node_private_ip_file(self):
+        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
+        with open(private_ip_file_path, 'w') as private_ip_file:
+            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
+            private_ip_file.write("\n")
+
     def add_nodes(self, count, user_data=None):
         del user_data
         global LIBVIRT_DOMAINS
@@ -1477,6 +1488,8 @@ class LibvirtCluster(BaseCluster):
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
         self.nodes += nodes
+        self.write_node_public_ip_file()
+        self.write_node_private_ip_file()
         return nodes
 
 
@@ -1702,6 +1715,18 @@ class AWSCluster(BaseCluster):
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
+    def write_node_public_ip_file(self):
+        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
+        with open(public_ip_file_path, 'w') as public_ip_file:
+            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
+            public_ip_file.write("\n")
+
+    def write_node_private_ip_file(self):
+        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
+        with open(private_ip_file_path, 'w') as private_ip_file:
+            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
+            private_ip_file.write("\n")
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -1730,6 +1755,8 @@ class AWSCluster(BaseCluster):
                        for node_index, instance in
                        enumerate(instances, start=len(self.nodes) + 1)]
         self.nodes += added_nodes
+        self.write_node_public_ip_file()
+        self.write_node_private_ip_file()
         return added_nodes
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,
