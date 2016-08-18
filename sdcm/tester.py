@@ -144,8 +144,9 @@ class ClusterTester(Test):
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
-        self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
+        db_node_address = self.db_cluster.nodes[0].private_ip_address
+        self.loaders.wait_for_init(db_node_address=db_node_address)
         nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
         self.monitors.wait_for_init(targets=nodes_monitored)
 

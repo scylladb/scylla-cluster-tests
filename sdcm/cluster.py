@@ -1084,7 +1084,7 @@ class BaseScyllaCluster(object):
 
 class BaseLoaderSet(object):
 
-    def wait_for_init(self, verbose=False):
+    def wait_for_init(self, verbose=False, db_node_address=None):
         queue = Queue.Queue()
 
         def node_setup(node):
@@ -1094,6 +1094,9 @@ class BaseLoaderSet(object):
             # let's try to guarantee it will be there before
             # proceeding
             node.wait_cs_installed(verbose=verbose)
+            if db_node_address is not None:
+                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                                 db_node_address)
             queue.put(node)
             queue.task_done()
 
