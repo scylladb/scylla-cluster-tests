@@ -661,6 +661,7 @@ LoadPlugin processes
 
     def get_cfstats(self):
         def keyspace1_available():
+            self.remoter.run('nodetool flush', ignore_status=True)
             res = self.remoter.run('nodetool cfstats keyspace1',
                                    ignore_status=True)
             return res.exit_status == 0
