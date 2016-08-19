@@ -2055,7 +2055,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y scylla*')
+        node.remoter.run('sudo yum remove -y "scylla*"')
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
@@ -2605,7 +2605,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y scylla*')
+        node.remoter.run('sudo yum remove -y "scylla*"')
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
@@ -2759,7 +2759,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y scylla*')
+        node.remoter.run('sudo yum remove -y "scylla*"')
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
