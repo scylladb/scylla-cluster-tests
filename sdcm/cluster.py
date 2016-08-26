@@ -177,11 +177,13 @@ class RemoteCredentials(object):
     """
 
     def __init__(self, service, key_prefix='keypair', user_prefix=None):
+        self.type = 'generated'
         self.uuid = uuid.uuid4()
         self.shortid = str(self.uuid)[:8]
         key_prefix = _prepend_user_prefix(user_prefix, key_prefix)
         self.name = '%s-%s' % (key_prefix, self.shortid)
         self.key_pair = service.create_key_pair(KeyName=self.name)
+        self.key_pair_name = self.key_pair.name
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '%s.pem' % self.name)
         self.write_key_file()
@@ -204,6 +206,24 @@ class RemoteCredentials(object):
         except OSError:
             pass
         self.log.info('Destroyed')
+
+
+class UserRemoteCredentials(object):
+
+    def __init__(self, key_file):
+        self.type = 'user'
+        self.key_file = key_file
+        self.name = os.path.basename(self.key_file)[:-4]
+        self.key_pair_name = self.name
+
+    def __str__(self):
+        return "Key Pair %s -> %s" % (self.name, self.key_file)
+
+    def write_key_file(self):
+        pass
+
+    def destroy(self):
+        pass
 
 
 class BaseNode(object):
@@ -641,6 +661,7 @@ LoadPlugin processes
 
     def get_cfstats(self):
         def keyspace1_available():
+            self.remoter.run('nodetool flush', ignore_status=True)
             res = self.remoter.run('nodetool cfstats keyspace1',
                                    ignore_status=True)
             return res.exit_status == 0
@@ -1064,7 +1085,7 @@ class BaseScyllaCluster(object):
 
 class BaseLoaderSet(object):
 
-    def wait_for_init(self, verbose=False):
+    def wait_for_init(self, verbose=False, db_node_address=None):
         queue = Queue.Queue()
 
         def node_setup(node):
@@ -1074,6 +1095,10 @@ class BaseLoaderSet(object):
             # let's try to guarantee it will be there before
             # proceeding
             node.wait_cs_installed(verbose=verbose)
+            node.remoter.run('sudo yum install -y screen')
+            if db_node_address is not None:
+                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                                 db_node_address)
             queue.put(node)
             queue.task_done()
 
@@ -1092,11 +1117,14 @@ class BaseLoaderSet(object):
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
                 pass
-
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir):
+        # We'll save a script with the last c-s command executed on loaders
+        stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
+                                               content='%s\n' % stress_cmd)
+        stress_script.save()
         queue = Queue.Queue()
 
         def node_run_stress(node):
@@ -1107,7 +1135,15 @@ class BaseLoaderSet(object):
             log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' %
                                          uuid.uuid4())
             self.log.debug('cassandra-stress log: %s', log_file_name)
-            result = node.remoter.run(cmd=stress_cmd, timeout=timeout,
+            loader_user = (self.params.get('libvirt_loader_image_user') or
+                           self.params.get('ami_loader_user'))
+            dst_stress_script_dir = os.path.join('/home', loader_user)
+            dst_stress_script = os.path.join(dst_stress_script_dir,
+                                             os.path.basename(stress_script.path))
+            node.remoter.send_files(stress_script.path, dst_stress_script_dir)
+            node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
+            result = node.remoter.run(cmd=stress_cmd,
+                                      timeout=timeout,
                                       ignore_status=True,
                                       watch_stdout_pattern='total,',
                                       log_file=log_file_name)
@@ -1318,6 +1354,7 @@ class BaseMonitorSet(object):
             node.start_prometheus_thread(targets=targets)
             node.install_grafana()
             node.setup_grafana()
+            node.remoter.run('sudo yum install screen -y')
             queue.put(node)
             queue.task_done()
 
@@ -1399,6 +1436,18 @@ class LibvirtCluster(BaseCluster):
         return 'LibvirtCluster %s (Image: %s)' % (self.name,
                                                   os.path.basename(self._domain_info['image']))
 
+    def write_node_public_ip_file(self):
+        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
+        with open(public_ip_file_path, 'w') as public_ip_file:
+            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
+            public_ip_file.write("\n")
+
+    def write_node_private_ip_file(self):
+        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
+        with open(private_ip_file_path, 'w') as private_ip_file:
+            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
+            private_ip_file.write("\n")
+
     def add_nodes(self, count, user_data=None):
         del user_data
         global LIBVIRT_DOMAINS
@@ -1417,16 +1466,18 @@ class LibvirtCluster(BaseCluster):
             name = '%s-%s' % (self.node_prefix, index)
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
-                                                           'args': (dst_image_path,),
-                                                           'once': True})
+            if self.params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
+                                                               'args': (dst_image_path,),
+                                                               'once': True})
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
             LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
-                                                           'args': (name,),
-                                                           'once': True})
+            if self.params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
+                                                               'args': (name,),
+                                                               'once': True})
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
@@ -1452,6 +1503,8 @@ class LibvirtCluster(BaseCluster):
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
         self.nodes += nodes
+        self.write_node_public_ip_file()
+        self.write_node_private_ip_file()
         return nodes
 
 
@@ -1485,8 +1538,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum update -y')
-        node.remoter.run('sudo yum install -y rsync')
-        node.remoter.run('sudo yum install -y tcpdump')
+        node.remoter.run('sudo yum install -y rsync tcpdump screen')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
@@ -1643,14 +1695,16 @@ class AWSCluster(BaseCluster):
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
-        credential_key_name = credentials.key_pair.name
-        credential_key_file = credentials.key_file
-        region_name = params.get('region_name')
-        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                       'args': (region_name,
-                                                                credential_key_name,
-                                                                credential_key_file),
-                                                       'once': True})
+        if credentials.type == 'generated':
+            credential_key_name = credentials.key_pair_name
+            credential_key_file = credentials.key_file
+            region_name = params.get('region_name')
+            if params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
+                                                               'args': (region_name,
+                                                                        credential_key_name,
+                                                                        credential_key_file),
+                                                               'once': True})
         global CREDENTIALS
         CREDENTIALS.append(credentials)
 
@@ -1677,6 +1731,18 @@ class AWSCluster(BaseCluster):
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
+    def write_node_public_ip_file(self):
+        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
+        with open(public_ip_file_path, 'w') as public_ip_file:
+            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
+            public_ip_file.write("\n")
+
+    def write_node_private_ip_file(self):
+        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
+        with open(private_ip_file_path, 'w') as private_ip_file:
+            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
+            private_ip_file.write("\n")
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -1687,17 +1753,18 @@ class AWSCluster(BaseCluster):
                                                UserData=ec2_user_data,
                                                MinCount=count,
                                                MaxCount=count,
-                                               KeyName=self._credentials.key_pair.name,
+                                               KeyName=self._credentials.key_pair_name,
                                                SecurityGroupIds=self._ec2_security_group_ids,
                                                BlockDeviceMappings=self._ec2_block_device_mappings,
                                                SubnetId=self._ec2_subnet_id,
                                                InstanceType=self._ec2_instance_type)
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
-        avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
-                                                       'args': (region_name,
-                                                                instance_ids),
-                                                       'once': True})
+        if self.params.get('failure_post_behavior') == 'destroy':
+            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
+                                                           'args': (region_name,
+                                                                    instance_ids),
+                                                           'once': True})
         EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
@@ -1705,6 +1772,8 @@ class AWSCluster(BaseCluster):
                        for node_index, instance in
                        enumerate(instances, start=len(self.nodes) + 1)]
         self.nodes += added_nodes
+        self.write_node_public_ip_file()
+        self.write_node_private_ip_file()
         return added_nodes
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,

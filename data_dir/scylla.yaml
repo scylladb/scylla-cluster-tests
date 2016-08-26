@@ -7,6 +7,11 @@ cassandra_stress_duration: 60
 cassandra_stress_threads: 1000
 # default cassandra stress population size if none specified
 cassandra_stress_population_size: 10000000
+# default cassandra stress columns per row
+#cassandra_column_per_row: 5
+# default cassandra stress row limit. If specified, this will override
+# 'cassandra_stress_duration'
+#cassandra_row_limit: 1000000
 # default rate limit if none specified
 #cassandra_stress_limits: 5000/s
 # Number of database nodes
@@ -75,6 +80,7 @@ backends: !mux
         # Size of AWS monitor instance
         instance_type_monitor: t2.small
         us_west_1:
+            user_credentials_path: ''
             region_name: 'us-west-1'
             security_group_ids: 'sg-dcd785b9'
             subnet_id: 'subnet-10a04c75'
@@ -87,6 +93,7 @@ backends: !mux
             ami_id_monitor: 'ami-e2246382'
             ami_monitor_user: 'centos'
         us_west_2:
+            user_credentials_path: ''
             region_name: 'us-west-2'
             security_group_ids: 'sg-81703ae4'
             subnet_id: 'subnet-5207ee37'
@@ -99,6 +106,7 @@ backends: !mux
             ami_id_monitor: 'ami-ed4d8b8d'
             ami_monitor_user: 'centos'
         us_east_1:
+            user_credentials_path: ''
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
