@@ -83,7 +83,7 @@ class Nemesis(object):
         self.log.info('Average duration: %s s', avg_duration)
         self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
         self.log.info('Times executed: %s', len(self.duration_list))
-        self.log.info('Unhandled exceptions: %s', len(self.error_list))
+        self.log.info('Unexpected errors: %s', len(self.error_list))
         self.log.info('Operation log:')
         for operation in self.operation_log:
             self.log.info(operation)
@@ -101,12 +101,15 @@ class Nemesis(object):
                            result.duration)
             return result
         except process.CmdError, details:
-            self.log.error("nodetool command '%s' failed on node %s: %s",
-                           cmd, self.target_node, details.result)
+            err = ("nodetool command '%s' failed on node %s: %s" %
+                   (cmd, self.target_node, details.result))
+            self.error_list.append(err)
+            self.log.error(err)
             return None
         except Exception:
-            self.log.error('Unexpected exception running nodetool',
-                           exc_info=True)
+            err = 'Unexpected exception running nodetool'
+            self.error_list.append(err)
+            self.log.error(err, exc_info=True)
             return None
 
     def _kill_scylla_daemon(self):
