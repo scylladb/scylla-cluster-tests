@@ -1659,6 +1659,42 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
                                                n_nodes=n_nodes,
                                                params=params)
 
+    def wait_for_init(self, verbose=False, db_node_address=None):
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            self.log.info('Setup')
+            node.wait_ssh_up(verbose=verbose)
+            yum_config_path = '/etc/yum.repos.d/scylla.repo'
+            node.remoter.run('sudo curl %s -o %s' %
+                             (self.params.get('scylla_repo'), yum_config_path))
+            node.remoter.run('sudo yum install -y scylla-tools')
+            node.wait_cs_installed(verbose=verbose)
+            node.remoter.run('sudo yum install -y screen')
+            if db_node_address is not None:
+                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                                 db_node_address)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
 
 class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
 
