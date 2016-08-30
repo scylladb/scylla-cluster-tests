@@ -181,7 +181,7 @@ class Nemesis(object):
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
         if result is not None:
-            self.target_node.restart()
+            self.target_node.remoter.run('sudo systemctl restart scylla-server.service')
 
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
