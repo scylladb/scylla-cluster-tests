@@ -66,11 +66,9 @@ class ReduceClusterTest(ClusterTester):
         nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
         self.monitors.wait_for_init(targets=nodes_monitored)
 
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None, row_size=None,
-                       row_limit=None, column_per_row=1):
+    def get_stress_cmd(self):
         """
-        Get a cassandra stress cmd string suitable for reduce cluster purposes.
+        Get a cassandra stress cmd string suitable for grow cluster purposes.
 
         :param duration: Duration of stress (minutes).
         :param threads: Number of threads used by cassandra stress.
@@ -79,12 +77,9 @@ class ReduceClusterTest(ClusterTester):
         :rtype: basestring
         """
         ip = self.db_cluster.get_node_private_ips()[0]
-        if population_size is None:
-            population_size = 1000000
-        if duration is None:
-            duration = self.params.get('cassandra_stress_duration')
-        if threads is None:
-            threads = self.params.get('cassandra_stress_threads')
+        population_size = 1000000
+        duration = self.params.get('test_duration')
+        threads = 1000
         return ("cassandra-stress write cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
                 "-mode cql3 native -rate threads=%s "
@@ -97,7 +92,8 @@ class ReduceClusterTest(ClusterTester):
         nodes_to_remove = self._cluster_starting_size - self._cluster_target_size
         # 60 minutes should be long enough for each node to do decommission
         duration = 60 * nodes_to_remove
-        stress_queue = self.run_stress_thread(duration=duration)
+        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd(),
+                                              duration=duration)
 
         # Wait for cluster is filled with data
         # Set space_node_threshold in config file for the size
