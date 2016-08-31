@@ -180,8 +180,19 @@ class Nemesis(object):
         self._set_current_disruption('Drainer %s' % self.target_node)
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
+        for node in self.cluster.nodes:
+            if node == self.target_node:
+                self.log.info('Status for target %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+            else:
+                self.log.info('Status for regular %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+
         if result is not None:
-            self.target_node.remoter.run('sudo systemctl restart scylla-server.service')
+            self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+            self.target_node.wait_db_down()
+            self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+            self.target_node.wait_db_up()
 
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
