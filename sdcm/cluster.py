@@ -248,6 +248,7 @@ class BaseNode(object):
         self._private_ip_address = None
         self._prometheus_thread = None
         self._collectd_exporter_thread = None
+        self._sct_log_formatter_installed = False
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -277,11 +278,12 @@ class BaseNode(object):
                                       ignore_status=True)
             if result.exit_status == 0:
                 # Here we're assuming that journalctl systems are Scylla images
-                db_services_log_cmd = ('sudo journalctl -f '
+                db_services_log_cmd = ('journalctl -f --no-tail --no-pager '
                                        '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
-                                       '-u scylla-jmx.service')
+                                       '-u scylla-jmx.service '
+                                       '-o json | /var/tmp/sct_log_formatter')
             else:
                 # Here we are assuming we're using a cassandra image, based
                 # on older Ubuntu
@@ -295,6 +297,15 @@ class BaseNode(object):
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
+
+    def install_sct_log_formatter(self):
+        result = self.remoter.run('test -e /var/tmp/sct_log_formatter',
+                                  ignore_status=True)
+        if result.exit_status != 0:
+            sct_log_formatter = data_path.get_data_path('sct_log_formatter')
+            self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
+            self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
+            self._sct_log_formatter_installed = True
 
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
@@ -610,6 +621,8 @@ LoadPlugin processes
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10,
                       text=text)
+        if not self._sct_log_formatter_installed:
+            self.install_sct_log_formatter()
 
     def db_up(self):
         try:
