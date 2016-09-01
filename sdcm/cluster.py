@@ -249,6 +249,7 @@ class BaseNode(object):
         self._prometheus_thread = None
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
+        self._init_system = None
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -272,11 +273,21 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
-    def retrieve_journal(self):
-        try:
+    @property
+    def init_system(self):
+        if self._init_system is None:
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
             if result.exit_status == 0:
+                self._init_system = 'systemd'
+            else:
+                self._init_system = 'sysvinit'
+
+        return self._init_system
+
+    def retrieve_journal(self):
+        try:
+            if self.init_system == 'systemd':
                 # Here we're assuming that journalctl systems are Scylla images
                 db_services_log_cmd = ('journalctl -f --no-tail --no-pager '
                                        '-u scylla-ami-setup.service '
