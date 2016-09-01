@@ -1,19 +1,9 @@
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
 test_duration: 60
-# default cassandra stress duration (min) if none specified
-cassandra_stress_duration: 60
-# default cassandra stress thread number if none specified
-cassandra_stress_threads: 1000
-# default cassandra stress population size if none specified
-cassandra_stress_population_size: 10000000
-# default cassandra stress columns per row
-#cassandra_column_per_row: 5
-# default cassandra stress row limit. If specified, this will override
-# 'cassandra_stress_duration'
-#cassandra_row_limit: 1000000
-# default rate limit if none specified
-#cassandra_stress_limits: 5000/s
+# cassandra-stress command. You can specify everything but the -node parameter,
+# which is going to be provided by the test suite infrastructure
+stress_cmd: cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
 # Number of database nodes
 n_db_nodes: 6
 # If you want to use more than 1 loader node, I recommend

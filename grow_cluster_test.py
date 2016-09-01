@@ -69,7 +69,7 @@ class GrowClusterTest(ClusterTester):
         self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
-    def setup_custom_cs_profile(self):
+    def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
         with open(cs_custom_config, 'r') as cs_custom_config_file:
             self.log.info('Using custom cassandra-stress config:')
@@ -79,16 +79,11 @@ class GrowClusterTest(ClusterTester):
                                     '/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml',
                                     verbose=True)
         ip = self.db_cluster.get_node_private_ips()[0]
-        self.custom_cs_command = ('cassandra-stress user '
-                                  'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
-                                  'ops\(insert=1\) -node %s' % ip)
+        return ('cassandra-stress user '
+                'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
+                'ops\(insert=1\) -node %s' % ip)
 
-    def cleanup_custom_cs_profile(self):
-        self.custom_cs_command = None
-
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None, row_size=None,
-                       row_limit=None, column_per_row=1):
+    def get_stress_cmd(self):
         """
         Get a cassandra stress cmd string suitable for grow cluster purposes.
 
@@ -98,29 +93,22 @@ class GrowClusterTest(ClusterTester):
         :return: Cassandra stress string
         :rtype: basestring
         """
-
-        if self.custom_cs_command:
-            return self.custom_cs_command
-
         ip = self.db_cluster.get_node_private_ips()[0]
-        if population_size is None:
-            population_size = 1000000
-        if duration is None:
-            duration = self.params.get('cassandra_stress_duration')
-        if threads is None:
-            threads = self.params.get('cassandra_stress_threads')
+        population_size = 1000000
+        duration = self.params.get('test_duration')
+        threads = 1000
         return ("cassandra-stress write cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 "
                 "-mode cql3 native -rate threads=%s "
                 "-pop seq=1..%s -node %s" %
                 (duration, threads, population_size, ip))
 
-    def grow_cluster(self, cluster_target_size):
+    def grow_cluster(self, cluster_target_size, stress_cmd):
         # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
         duration = 60 * nodes_to_add
-        stress_queue = self.run_stress_thread(duration=duration)
-
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
+                                              duration=duration)
         # Wait for cluster is filled with data
         # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
@@ -148,7 +136,8 @@ class GrowClusterTest(ClusterTester):
         3) Add a new node
         4) Keep repeating 3) until we get to the target number of 5 nodes
         """
-        self.grow_cluster(cluster_target_size=5)
+        self.grow_cluster(cluster_target_size=5,
+                          stress_cmd=self.get_stress_cmd())
 
     def test_grow_3_to_4(self):
         """
@@ -158,7 +147,8 @@ class GrowClusterTest(ClusterTester):
         2) Start cassandra-stress on the loader node
         3) Add a new node
         """
-        self.grow_cluster(cluster_target_size=4)
+        self.grow_cluster(cluster_target_size=4,
+                          stress_cmd=self.get_stress_cmd())
 
     def test_grow_3_to_30(self):
         """
@@ -167,7 +157,8 @@ class GrowClusterTest(ClusterTester):
         3) Add a new node
         4) Keep repeating 3) until we get to the target number of 30 nodes
         """
-        self.grow_cluster(cluster_target_size=30)
+        self.grow_cluster(cluster_target_size=30,
+                          stress_cmd=self.get_stress_cmd())
 
     def test_grow_3_to_4_large_partition(self):
         """
@@ -177,9 +168,8 @@ class GrowClusterTest(ClusterTester):
         2) Start cassandra-stress on the loader node
         3) Add a new node
         """
-        self.setup_custom_cs_profile()
-        self.grow_cluster(cluster_target_size=4)
-        self.cleanup_custom_cs_profile()
+        self.grow_cluster(cluster_target_size=4,
+                          stress_cmd=self.get_stress_cmd_profile())
 
 if __name__ == '__main__':
     main()

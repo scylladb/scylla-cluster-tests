@@ -32,7 +32,8 @@ class MaintainanceTest(ClusterTester):
     """
 
     def _base_procedure(self, nemesis_class):
-        stress_queue = self.run_stress_thread(duration=240)
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
+                                              duration=240)
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.add_nemesis(nemesis_class)
         # Wait another 10 minutes

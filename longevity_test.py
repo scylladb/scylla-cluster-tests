@@ -29,58 +29,12 @@ class LongevityTest(ClusterTester):
 
     default_params = {'timeout': 650000}
 
-    def test_row_limit(self):
-        """
-        Run cassandra-stress with params defined in data_dir/scylla.yaml
-        """
-        self.db_cluster.add_nemesis(self.get_nemesis_class())
-        stress_queue = self.run_stress_thread(row_limit=self.params.get('cassandra_row_limit'),
-                                              population_size=self.params.get('cassandra_stress_population_size'),
-                                              column_per_row=self.params.get('cassandra_column_per_row'))
-        self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        self.verify_stress_thread(queue=stress_queue)
-
     def test_custom_time(self):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
         self.db_cluster.add_nemesis(self.get_nemesis_class())
-        stress_queue = self.run_stress_thread(duration=self.params.get('cassandra_stress_duration'),
-                                              population_size=self.params.get('cassandra_stress_population_size'))
-        self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        self.verify_stress_thread(queue=stress_queue)
-
-    def test_12_hours(self):
-        """
-        Run cassandra-stress on a cluster for 12 hours.
-        """
-        self.db_cluster.add_nemesis(self.get_nemesis_class())
-        stress_queue = self.run_stress(duration=60 * 12,
-                                       population_size=self.params.get('cassandra_stress_population_size'))
-        self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        self.verify_stress_thread(queue=stress_queue)
-
-    def test_1_day(self):
-        """
-        Run cassandra-stress on a cluster for 24 hours.
-        """
-        self.db_cluster.add_nemesis(self.get_nemesis_class())
-        stress_queue = self.run_stress(duration=60 * 24,
-                                       population_size=self.params.get('cassandra_stress_population_size'))
-        self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        self.verify_stress_thread(queue=stress_queue)
-
-    def test_1_week(self):
-        """
-        Run cassandra-stress on a cluster for 1 week.
-        """
-        self.db_cluster.add_nemesis(self.get_nemesis_class())
-        stress_queue = self.run_stress(duration=60 * 24 * 7,
-                                       population_size=self.params.get('cassandra_stress_population_size'))
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         self.verify_stress_thread(queue=stress_queue)

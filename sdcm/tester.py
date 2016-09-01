@@ -341,82 +341,24 @@ class ClusterTester(Test):
             self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info,
                                      monitor_info=monitor_info)
 
-    def get_stress_cmd(self, duration=None, threads=None, population_size=None,
-                       mode='write', limit=None, row_size=None,
-                       row_limit=None, column_per_row=1):
-        """
-        Get a cassandra stress cmd string.
-
-        The default for this class is RF=3 and CL=QUORUM.
-        Other tests might want to override this method to use something
-        that suits them better.
-
-        :param duration: Duration of stress (minutes).
-        :param threads: Number of threads used by cassandra stress.
-        :param population_size: Size of the -pop seq1..%s argument.
-        :param mode: stress mode, write/read/mixed/ect
-        :param limit: rate limit used by cassandra stress.
-        :param row_size: Size of the c-s row.
-        :param row_limit: Number of rows to be written. If non None,
-            this will override duration if that is set.
-        :param column_per_row: Number of columns per row inserted.
-        :return: Cassandra stress string
-        :rtype: basestring
-        """
-        ip = self.db_cluster.get_node_private_ips()[0]
-        if population_size is None:
-            population_size = self.params.get('cassandra_stress_population_size')
-        if duration is None:
-            duration = self.params.get('cassandra_stress_duration')
-        if threads is None:
-            threads = self.params.get('cassandra_stress_threads')
-        if limit is not None:
-            limit = "limit=%s" % limit
-        elif self.params.get('cassandra_stress_limits'):
-            limit = "limit=%s" % self.params.get('cassandra_stress_limits')
-        else:
-            limit = ""
-        if row_size is not None:
-            row_size = ("-col 'size=FIXED(%s) n=FIXED(%s)'" %
-                        (row_size, column_per_row))
-        elif self.params.get('cassandra_stress_row_size'):
-            row_size = ("-col 'size=FIXED(%s) n=FIXED(%s)'" %
-                        (self.params.get('cassandra_stress_row_size'),
-                         column_per_row))
-        else:
-            row_size = ""
-        # This is c-s stop criteria: Eiter we pass 'duration=%sm' or 'n=%s'
-        # to its command line.
-        stop_criteria = "duration=%sm" % duration
-        if row_limit is not None:
-            stop_criteria = "n=%s" % row_limit
-        return ("cassandra-stress %s cl=QUORUM %s "
-                "-schema 'replication(factor=3)' -port jmx=6868 "
-                "-mode cql3 native -rate threads=%s %s %s "
-                "-pop seq=1..%s -node %s" %
-                (mode, stop_criteria, threads, limit, row_size,
-                 population_size, ip))
+    def _cs_add_node_flag(self, stress_cmd):
+        if '-node' not in stress_cmd:
+            ip = self.db_cluster.get_node_private_ips()[0]
+            stress_cmd = '%s -node %s' % (stress_cmd, ip)
+        return stress_cmd
 
     @clean_aws_resources
-    def run_stress(self, stress_cmd=None, duration=None, mode='write',
-                   limit=None):
+    def run_stress(self, stress_cmd, duration=None):
+        stress_cmd = self._cs_add_node_flag(stress_cmd)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration, mode=mode,
-                                              limit=limit)
+                                              duration=duration)
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
-    def run_stress_thread(self, stress_cmd=None, duration=None,
-                          threads=None, population_size=None, mode='write',
-                          limit=None, row_limit=None, column_per_row=1):
-        if stress_cmd is None:
-            stress_cmd = self.get_stress_cmd(duration=duration, threads=threads,
-                                             population_size=population_size,
-                                             mode=mode, limit=limit,
-                                             row_limit=row_limit,
-                                             column_per_row=column_per_row)
+    def run_stress_thread(self, stress_cmd, duration=None):
+        stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
-            duration = self.params.get('cassandra_stress_duration')
+            duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir)

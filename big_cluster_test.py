@@ -54,7 +54,7 @@ class HugeClusterTest(ClusterTester):
         """
         Test a huge Scylla cluster
         """
-        self.run_stress(duration=20)
+        self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
 
 if __name__ == '__main__':
     main()

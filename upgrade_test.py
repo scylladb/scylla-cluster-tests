@@ -38,7 +38,7 @@ class UpgradeTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(UpgradeNemesis)
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=20)
+        self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
 
     def test_20_minutes_rollback(self):
         """
@@ -52,7 +52,8 @@ class UpgradeTest(ClusterTester):
 
         self.db_cluster.add_nemesis(RollbackNemesis)
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(duration=self.params.get('cassandra_stress_duration', 20))
+        self.run_stress(stress_cmd=self.params.get('stress_cmd'),
+                        duration=self.params.get('cassandra_stress_duration', 20))
 
 if __name__ == '__main__':
     main()

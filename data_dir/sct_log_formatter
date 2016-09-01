@@ -1,0 +1,50 @@
+#!/bin/env python
+
+import os
+import sys
+import json
+import datetime
+
+systemd_logging_level_mapping = {
+    u'0': 'emerg  ',
+    u'1': 'alert  ',
+    u'2': 'crit   ',
+    u'3': 'err    ',
+    u'4': 'warning',
+    u'5': 'notice ',
+    u'6': 'info   ',
+    u'7': 'debug  ',
+}
+
+
+def process_entry(entry):
+    if entry:
+        try:
+            realtime_timestamp = datetime.datetime.fromtimestamp(float(entry['__REALTIME_TIMESTAMP']) / 1E6)
+            message = entry['MESSAGE']
+            formatted_timestamp = realtime_timestamp.strftime('%b %d %H:%M:%S')
+            priority = systemd_logging_level_mapping[entry['PRIORITY']]
+            msg = '%s %s| %s\n' % (formatted_timestamp, priority, message)
+            sys.stdout.write(msg)
+            sys.stdout.flush()
+        except Exception:
+            pass
+
+
+def main():
+    sys.stdout.flush()
+    try:
+        with os.fdopen(sys.stdin.fileno(), 'r', 1) as input:
+            while True:
+                line = sys.stdin.readline()
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    entry = {}
+                process_entry(entry)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == '__main__':
+    main()

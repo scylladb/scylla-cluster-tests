@@ -83,7 +83,7 @@ class Nemesis(object):
         self.log.info('Average duration: %s s', avg_duration)
         self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
         self.log.info('Times executed: %s', len(self.duration_list))
-        self.log.info('Unhandled exceptions: %s', len(self.error_list))
+        self.log.info('Unexpected errors: %s', len(self.error_list))
         self.log.info('Operation log:')
         for operation in self.operation_log:
             self.log.info(operation)
@@ -101,12 +101,15 @@ class Nemesis(object):
                            result.duration)
             return result
         except process.CmdError, details:
-            self.log.error("nodetool command '%s' failed on node %s: %s",
-                           cmd, self.target_node, details.result)
+            err = ("nodetool command '%s' failed on node %s: %s" %
+                   (cmd, self.target_node, details.result))
+            self.error_list.append(err)
+            self.log.error(err)
             return None
         except Exception:
-            self.log.error('Unexpected exception running nodetool',
-                           exc_info=True)
+            err = 'Unexpected exception running nodetool'
+            self.error_list.append(err)
+            self.log.error(err, exc_info=True)
             return None
 
     def _kill_scylla_daemon(self):
@@ -177,8 +180,19 @@ class Nemesis(object):
         self._set_current_disruption('Drainer %s' % self.target_node)
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
+        for node in self.cluster.nodes:
+            if node == self.target_node:
+                self.log.info('Status for target %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+            else:
+                self.log.info('Status for regular %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+
         if result is not None:
-            self.target_node.restart()
+            self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+            self.target_node.wait_db_down()
+            self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+            self.target_node.wait_db_up()
 
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
