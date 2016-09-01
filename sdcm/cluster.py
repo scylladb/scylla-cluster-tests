@@ -659,14 +659,11 @@ LoadPlugin processes
 
     def _get_tcpdump_logs(self, tcpdump_id):
         try:
-            log_name = 'tcpdump-%s.log' % tcpdump_id
             pcap_name = 'tcpdump-%s.pcap' % tcpdump_id
-            log_file = os.path.join(self.logdir, log_name)
             pcap_tmp_file = os.path.join('/tmp', pcap_name)
             pcap_file = os.path.join(self.logdir, pcap_name)
-            self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s' %
-                             pcap_tmp_file, ignore_status=True,
-                             log_file=log_file)
+            self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s > /dev/null 2>&1' %
+                             pcap_tmp_file, ignore_status=True)
             self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)
         except Exception as details:
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
