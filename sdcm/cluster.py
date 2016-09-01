@@ -384,9 +384,9 @@ class BaseNode(object):
 
     def _set_prometheus_paths(self):
         self.prometheus_system_base_dir = '/var/tmp'
-        self.prometheus_base_dir = 'prometheus-1.0.0.linux-amd64'
+        self.prometheus_base_dir = 'prometheus-1.0.2.linux-amd64'
         self.prometheus_tarball = '%s.tar.gz' % self.prometheus_base_dir
-        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.0'
+        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.2'
         self.prometheus_system_dir = os.path.join(self.prometheus_system_base_dir,
                                                   self.prometheus_base_dir)
         self.prometheus_path = os.path.join(self.prometheus_system_dir, 'prometheus')
