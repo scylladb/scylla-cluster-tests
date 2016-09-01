@@ -354,12 +354,20 @@ class BaseNode(object):
                                  (self.public_ip_address, scylla_dash_per_server_json), ignore_status=True)
             return result.exit_status == 0
 
+        def _register_dash_io_per_server():
+            scylla_dash_io_per_server_json = data_path.get_data_path('scylla-dash-io-per-server.json')
+            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
+                                 (self.public_ip_address, scylla_dash_io_per_server_json), ignore_status=True)
+            return result.exit_status == 0
+
         wait.wait_for(_register_data_source, step=10,
                       text='Waiting to register data source...')
         wait.wait_for(_register_dash, step=10,
                       text='Waiting to register dash...')
         wait.wait_for(_register_dash_per_server, step=10,
                       text='Waiting to register dash per server...')
+        wait.wait_for(_register_dash_io_per_server, step=10,
+                      text='Waiting to register dash IO per server...')
 
         self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
 
