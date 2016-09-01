@@ -10,9 +10,6 @@ n_db_nodes: 6
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
-# Number of monitor nodes running prometheus
-# To disable monitoring nodes, set n_monitor_nodes to 0.
-n_monitor_nodes: 1
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'ChaosMonkey'
 # Nemesis sleep interval to use if None provided specifically
@@ -113,8 +110,14 @@ databases: !mux
     cassandra:
         db_type: cassandra
         instance_type_db: 'm3.large'
+        # The monitoring infrastructure is very specific to cassandra
+        # So let's not spawn a monitor node
+        n_monitor_nodes: 0
     scylla:
         db_type: scylla
         # Let's use c3.large since we're using iotune
         # and we'll stress the DB nodes more thoroughly
         instance_type_db: 'c3.large'
+        # The monitoring infrastructure is very specific to cassandra
+        # So let's not spawn a monitor node
+        n_monitor_nodes: 1
