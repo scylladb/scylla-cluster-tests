@@ -545,16 +545,17 @@ WantedBy=multi-user.target
             shutil.rmtree(tmp_dir_exporter)
 
     def install_collectd_exporter(self):
-        self._setup_collectd()
-        self._set_collectd_exporter_paths()
-        self.remoter.run('curl %s/%s -o %s/%s -L' %
-                         (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
-                          self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
-        self.remoter.run('tar -xzvf %s/%s -C %s' %
-                         (self.collectd_exporter_system_base_dir,
-                          self.collectd_exporter_tarball,
-                          self.collectd_exporter_system_base_dir))
-        self._setup_collectd_exporter()
+        if self.init_system == 'systemd':
+            self._setup_collectd()
+            self._set_collectd_exporter_paths()
+            self.remoter.run('curl %s/%s -o %s/%s -L' %
+                             (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
+                              self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
+            self.remoter.run('tar -xzvf %s/%s -C %s' %
+                             (self.collectd_exporter_system_base_dir,
+                              self.collectd_exporter_tarball,
+                              self.collectd_exporter_system_base_dir))
+            self._setup_collectd_exporter()
 
     def journal_thread(self):
         while True:
