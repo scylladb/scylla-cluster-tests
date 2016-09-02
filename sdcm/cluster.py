@@ -165,7 +165,7 @@ class LoaderSetInitError(Exception):
 
 
 def _prepend_user_prefix(user_prefix, base_name):
-    if user_prefix is None:
+    if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
     return '%s-%s' % (user_prefix, base_name)
 
@@ -249,6 +249,7 @@ class BaseNode(object):
         self._prometheus_thread = None
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
+        self._init_system = None
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -272,11 +273,21 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
-    def retrieve_journal(self):
-        try:
+    @property
+    def init_system(self):
+        if self._init_system is None:
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
             if result.exit_status == 0:
+                self._init_system = 'systemd'
+            else:
+                self._init_system = 'sysvinit'
+
+        return self._init_system
+
+    def retrieve_journal(self):
+        try:
+            if self.init_system == 'systemd':
                 # Here we're assuming that journalctl systems are Scylla images
                 db_services_log_cmd = ('journalctl -f --no-tail --no-pager '
                                        '-u scylla-ami-setup.service '
@@ -354,20 +365,28 @@ class BaseNode(object):
                                  (self.public_ip_address, scylla_dash_per_server_json), ignore_status=True)
             return result.exit_status == 0
 
+        def _register_dash_io_per_server():
+            scylla_dash_io_per_server_json = data_path.get_data_path('scylla-dash-io-per-server.json')
+            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
+                                 (self.public_ip_address, scylla_dash_io_per_server_json), ignore_status=True)
+            return result.exit_status == 0
+
         wait.wait_for(_register_data_source, step=10,
                       text='Waiting to register data source...')
         wait.wait_for(_register_dash, step=10,
                       text='Waiting to register dash...')
         wait.wait_for(_register_dash_per_server, step=10,
                       text='Waiting to register dash per server...')
+        wait.wait_for(_register_dash_io_per_server, step=10,
+                      text='Waiting to register dash IO per server...')
 
         self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
 
     def _set_prometheus_paths(self):
         self.prometheus_system_base_dir = '/var/tmp'
-        self.prometheus_base_dir = 'prometheus-1.0.0.linux-amd64'
+        self.prometheus_base_dir = 'prometheus-1.0.2.linux-amd64'
         self.prometheus_tarball = '%s.tar.gz' % self.prometheus_base_dir
-        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.0'
+        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.2'
         self.prometheus_system_dir = os.path.join(self.prometheus_system_base_dir,
                                                   self.prometheus_base_dir)
         self.prometheus_path = os.path.join(self.prometheus_system_dir, 'prometheus')
@@ -375,6 +394,8 @@ class BaseNode(object):
         self.prometheus_custom_cfg_path = os.path.join(self.prometheus_system_dir,
                                                        self.prometheus_custom_cfg_basename)
         self.prometheus_data_dir = os.path.join(self.prometheus_system_dir, 'data')
+        self.prometheus_service_path_tmp = '/tmp/prometheus.service'
+        self.prometheus_service_path = '/etc/systemd/system/prometheus.service'
 
     def install_prometheus(self):
         self._set_prometheus_paths()
@@ -387,10 +408,12 @@ class BaseNode(object):
                           self.prometheus_system_base_dir))
 
     def download_prometheus_data_dir(self):
+        self.remoter.run('sudo chown -R centos:centos %s' %
+                         self.prometheus_data_dir)
         dst = os.path.join(self.logdir, 'prometheus')
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
-    def run_prometheus(self, targets):
+    def setup_prometheus(self, targets):
         targets_list = ['%s:9103' % ip for ip in targets]
         prometheus_cfg = """
 global:
@@ -414,21 +437,32 @@ scrape_configs:
                                     dst=self.prometheus_custom_cfg_path)
         finally:
             shutil.rmtree(tmp_dir_prom)
-        self.remoter.run('%s -config.file %s -storage.local.path %s' %
-                         (self.prometheus_path,
-                          self.prometheus_custom_cfg_path,
-                          self.prometheus_data_dir))
 
-    def prometheus_thread(self, targets):
-        while True:
-            self.wait_ssh_up(verbose=False)
-            self.run_prometheus(targets=targets)
-            time.sleep(60)
+        systemd_unit = """[Unit]
+Description=Prometheus
 
-    def start_prometheus_thread(self, targets):
-        self._prometheus_thread = threading.Thread(target=self.prometheus_thread,
-                                                   args=(targets,))
-        self._prometheus_thread.start()
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=%s -config.file %s -storage.local.path %s
+
+[Install]
+WantedBy=multi-user.target
+""" % (self.prometheus_path, self.prometheus_custom_cfg_path, self.prometheus_data_dir)
+        tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus-systemd')
+        tmp_path_prom = os.path.join(tmp_dir_prom, 'prometheus.service')
+        with open(tmp_path_prom, 'w') as tmp_cfg_prom:
+            tmp_cfg_prom.write(systemd_unit)
+        try:
+            self.remoter.send_files(src=tmp_path_prom,
+                                    dst=self.prometheus_service_path_tmp)
+            self.remoter.run('sudo mv %s %s' %
+                             (self.prometheus_service_path_tmp,
+                              self.prometheus_service_path))
+            self.remoter.run('sudo systemctl start prometheus.service')
+        finally:
+            shutil.rmtree(tmp_dir_prom)
 
     def _set_collectd_exporter_paths(self):
         self.collectd_exporter_system_base_dir = '/var/tmp'
@@ -482,29 +516,46 @@ LoadPlugin processes
         finally:
             shutil.rmtree(tmp_dir_exporter)
 
+    def _setup_collectd_exporter(self):
+        systemd_unit = """[Unit]
+Description=Collectd Exporter
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=%s -collectd.listen-address=:65534
+
+[Install]
+WantedBy=multi-user.target
+""" % self.collectd_exporter_path
+
+        tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd-systemd-service')
+        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd-exporter.service')
+        tmp_path_remote = '/tmp/collectd-exporter.service'
+        system_path_remote = '/etc/systemd/system/collectd-exporter.service'
+        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
+            tmp_cfg_prom.write(systemd_unit)
+        try:
+            self.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
+            self.remoter.run('sudo mv %s %s' %
+                             (tmp_path_remote, system_path_remote))
+            self.remoter.run('sudo systemctl start collectd-exporter.service')
+        finally:
+            shutil.rmtree(tmp_dir_exporter)
+
     def install_collectd_exporter(self):
-        self._setup_collectd()
-        self._set_collectd_exporter_paths()
-        self.remoter.run('curl %s/%s -o %s/%s -L' %
-                         (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
-                          self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
-        self.remoter.run('tar -xzvf %s/%s -C %s' %
-                         (self.collectd_exporter_system_base_dir,
-                          self.collectd_exporter_tarball,
-                          self.collectd_exporter_system_base_dir))
-
-    def run_collectd_exporter(self):
-        self.remoter.run('%s -collectd.listen-address="0.0.0.0:65534"' % self.collectd_exporter_path, ignore_status=True)
-
-    def collectd_exporter_thread(self):
-        while True:
-            self.wait_ssh_up(verbose=False)
-            self.run_collectd_exporter()
-            time.sleep(60)
-
-    def start_collectd_exporter_thread(self):
-        self._collectd_exporter_thread = threading.Thread(target=self.collectd_exporter_thread)
-        self._collectd_exporter_thread.start()
+        if self.init_system == 'systemd':
+            self._setup_collectd()
+            self._set_collectd_exporter_paths()
+            self.remoter.run('curl %s/%s -o %s/%s -L' %
+                             (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
+                              self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
+            self.remoter.run('tar -xzvf %s/%s -C %s' %
+                             (self.collectd_exporter_system_base_dir,
+                              self.collectd_exporter_tarball,
+                              self.collectd_exporter_system_base_dir))
+            self._setup_collectd_exporter()
 
     def journal_thread(self):
         while True:
@@ -1361,7 +1412,7 @@ class BaseMonitorSet(object):
             # let's try to guarantee it will be there before
             # proceeding
             node.install_prometheus()
-            node.start_prometheus_thread(targets=targets)
+            node.setup_prometheus(targets=targets)
             node.install_grafana()
             node.setup_grafana()
             node.remoter.run('sudo yum install screen -y')
@@ -1388,20 +1439,9 @@ class BaseMonitorSet(object):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def download_monitor_data(self):
-        kill_script_contents = 'PIDS=$(pgrep -f prometheus) && kill $PIDS'
-        kill_script = script.TemporaryScript(name='kill_prometheus.sh',
-                                             content=kill_script_contents)
-        kill_script.save()
-        kill_script_dir = os.path.dirname(kill_script.path)
         for node in self.nodes:
-            node.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
-            node.remoter.send_files(kill_script.path, kill_script_dir)
-            node.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            node.remoter.run(kill_script.path, ignore_status=True)
-            time.sleep(5)
+            node.remoter.run('sudo systemctl stop prometheus.service')
             node.download_prometheus_data_dir()
-            node.remoter.run(cmd='rm -rf %s' % kill_script_dir)
-        kill_script.remove()
 
 
 class NoMonitorSet(object):
@@ -1614,7 +1654,6 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
             node.install_collectd_exporter()
-            node.start_collectd_exporter_thread()
             queue.put(node)
             queue.task_done()
 
@@ -1920,7 +1959,6 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
             node.install_collectd_exporter()
-            node.start_collectd_exporter_thread()
             queue.put(node)
             queue.task_done()
 

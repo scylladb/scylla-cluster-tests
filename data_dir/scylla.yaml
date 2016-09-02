@@ -10,16 +10,13 @@ n_db_nodes: 6
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.
 n_loaders: 1
-# Number of monitor nodes running prometheus
-# To disable monitoring nodes, set n_monitor_nodes to 0.
-n_monitor_nodes: 1
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'ChaosMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 15
 # Prefix for your AWS VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
-user_prefix:
+user_prefix: ''
 # Failure/post test behavior
 # Default: Destroy AWS instances and credentials (destroy)
 # Keep AWS instances running and leave credentials alone (keep)
@@ -42,7 +39,7 @@ backends: !mux
         cluster_backend: 'libvirt'
         libvirt_uri: 'qemu:///system'
         libvirt_bridge: 'virbr0'
-        scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.2.repo'
+        scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.3.repo'
         libvirt_loader_image: '/path/to/your/loader_base_image.qcow2'
         libvirt_loader_image_user: 'centos'
         libvirt_loader_image_password: '123456'
@@ -74,47 +71,53 @@ backends: !mux
             region_name: 'us-west-1'
             security_group_ids: 'sg-dcd785b9'
             subnet_id: 'subnet-10a04c75'
-            ami_id_db_scylla: 'ami-e2246382'
+            ami_id_db_scylla: 'ami-c3165ba3'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-e2246382'
+            ami_id_loader: 'ami-c3165ba3'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3cf7c979'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-e2246382'
+            ami_id_monitor: 'ami-c3165ba3'
             ami_monitor_user: 'centos'
         us_west_2:
             user_credentials_path: ''
             region_name: 'us-west-2'
             security_group_ids: 'sg-81703ae4'
             subnet_id: 'subnet-5207ee37'
-            ami_id_db_scylla: 'ami-ed4d8b8d'
+            ami_id_db_scylla: 'ami-4bda0d2b'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-ed4d8b8d'
+            ami_id_loader: 'ami-4bda0d2b'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-1cff962c'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-ed4d8b8d'
+            ami_id_monitor: 'ami-4bda0d2b'
             ami_monitor_user: 'centos'
         us_east_1:
             user_credentials_path: ''
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
-            ami_id_db_scylla: 'ami-dd46ffca'
+            ami_id_db_scylla: 'ami-78d7b46f'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-dd46ffca'
+            ami_id_loader: 'ami-78d7b46f'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-dd46ffca'
+            ami_id_monitor: 'ami-78d7b46f'
             ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
         db_type: cassandra
         instance_type_db: 'm3.large'
+        # The monitoring infrastructure is very specific to cassandra
+        # So let's not spawn a monitor node
+        n_monitor_nodes: 0
     scylla:
         db_type: scylla
         # Let's use c3.large since we're using iotune
         # and we'll stress the DB nodes more thoroughly
         instance_type_db: 'c3.large'
+        # The monitoring infrastructure is very specific to cassandra
+        # So let's not spawn a monitor node
+        n_monitor_nodes: 1

@@ -36,7 +36,7 @@ class Nemesis(object):
         self.set_target_node()
         result = self.target_node.remoter.run('rpm -qa | grep scylla | sort', verbose=False,
                                               ignore_status=True)
-        self.db_software_version = 'not available'
+        self.db_software_version = ['not available (using cassandra)']
         if result.stdout:
             self.db_software_version = result.stdout.splitlines()
         self.termination_event = termination_event

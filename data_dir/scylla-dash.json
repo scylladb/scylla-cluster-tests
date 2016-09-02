@@ -1,7 +1,6 @@
 {
     "dashboard": {
         "id": null,
-        "Name": "Scylla Cluster Metrics",
         "title": "Scylla Cluster Metrics",
         "originalTitle": "Scylla Cluster Metrics",
         "tags": [

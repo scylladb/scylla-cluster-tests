@@ -1,13 +1,8 @@
 # default cassandra stress duration (min) if none specified
 cassandra_stress_duration: 240
-# default cassandra stress thread number if none specified
-cassandra_stress_threads: 200
-# limit
-cassandra_stress_limits: 5000/s
-# cassandra-stress row size
-cassandra_stress_row_size: 10240
-# default cassandra stress population size if none specified
-cassandra_stress_population_size: 100000000
+# cassandra-stress command. You can specify everything but the -node parameter,
+# which is going to be provided by the test suite infrastructure
+stress_cmd: cassandra-stress write cl=QUORUM duration=240m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 limit=5000/s -col 'size=FIXED(1) n=FIXED(10240)' -pop seq=1..100000000
 n_db_nodes: 3
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
@@ -33,9 +28,6 @@ user_prefix:
 # Stop AWS instances and leave credentials alone (stop)
 failure_post_behavior: destroy
 # Space node threshold before starting nemesis (bytes)
-# The default value is 6GB (6x1024^3 bytes)
-# This value is supposed to reproduce
-# https://github.com/scylladb/scylla/issues/1140
 space_node_threshold: 107374182400
 
 # The new db binary will be uploaded to db instance to replace the one
