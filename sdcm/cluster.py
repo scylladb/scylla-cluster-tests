@@ -165,7 +165,7 @@ class LoaderSetInitError(Exception):
 
 
 def _prepend_user_prefix(user_prefix, base_name):
-    if user_prefix is None:
+    if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
     return '%s-%s' % (user_prefix, base_name)
 

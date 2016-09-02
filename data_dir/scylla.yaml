@@ -16,7 +16,7 @@ nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 15
 # Prefix for your AWS VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
-user_prefix:
+user_prefix: ''
 # Failure/post test behavior
 # Default: Destroy AWS instances and credentials (destroy)
 # Keep AWS instances running and leave credentials alone (keep)
