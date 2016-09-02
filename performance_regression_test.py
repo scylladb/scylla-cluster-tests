@@ -57,21 +57,15 @@ class PerformanceRegressionTest(ClusterTester):
         4. Run a mixed read write workload
         """
         # run a write workload
-        stress_queue = self.run_stress_thread(
-                         duration=self.params.get('cassandra_stress_duration'),
-                         population_size=self.params.get(
-                                           'cassandra_stress_population_size'),
-                         threads=self.params.get('cassandra_stress_threads'),
-                         mode='write')
+        base_cmd = ("cassandra-stress %s cl=QUORUM duration=60m "
+                    "-schema 'replication(factor=3)' -port jmx=6868 "
+                    "-mode cql3 native -rate threads=1000 "
+                    "-pop seq=1..10000000")
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'write')
         write_results = self.get_stress_results(queue=stress_queue)
 
         # run a read workload
-        stress_queue = self.run_stress_thread(
-                         duration=self.params.get('cassandra_stress_duration'),
-                         population_size=self.params.get(
-                                           'cassandra_stress_population_size'),
-                         threads=self.params.get('cassandra_stress_threads'),
-                         mode='read')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'read')
         read_results = self.get_stress_results(queue=stress_queue)
 
         # restart all the nodes
@@ -79,12 +73,7 @@ class PerformanceRegressionTest(ClusterTester):
             loader.restart()
 
         # run a mixed read write workload
-        stress_queue = self.run_stress_thread(
-                         duration=self.params.get('cassandra_stress_duration'),
-                         population_size=self.params.get(
-                                           'cassandra_stress_population_size'),
-                         threads=self.params.get('cassandra_stress_threads'),
-                         mode='mixed')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'mixed')
         mixed_results = self.get_stress_results(queue=stress_queue)
 
         self.display_results(write_results)
