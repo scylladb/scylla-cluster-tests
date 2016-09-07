@@ -318,6 +318,46 @@ class BaseNode(object):
             self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
             self._sct_log_formatter_installed = True
 
+    def run(self, cmd, timeout=None, ignore_status=False,
+            connect_timeout=300, options='', verbose=True,
+            args=None, log_file=None, watch_stdout_pattern=None):
+        """
+        Run a shell command on a Node. Shorthand to remoter.run.
+
+        See remote.Remoter.run() docstring for parameter documentation.
+        """
+        return self.remoter.run(cmd=cmd, timeout=timeout,
+                                ignore_status=ignore_status,
+                                connect_timeout=connect_timeout,
+                                options=options, verbose=verbose,
+                                args=args, log_file=log_file,
+                                watch_stdout_pattern=watch_stdout_pattern)
+
+    def send_files(self, src, dst, delete_dst=False,
+                   preserve_symlinks=False, verbose=False):
+        """
+        Copy files from a local path to a Node. Shorthand to remoter.send_files.
+
+        See remote.Remoter.send_files() docstring for parameter documentation.
+        """
+        self.remoter.send_files(src=src, dst=dst, delete_dst=delete_dst,
+                                preserve_symlinks=preserve_symlinks,
+                                verbose=verbose)
+
+    def receive_files(self, src, dst, delete_dst=False,
+                      preserve_perm=True, preserve_symlinks=False,
+                      verbose=False):
+        """
+        Copy files from this Node to a local path. Shorthand to remoter.receive_files.
+
+        See remote.Remoter.receive_files() docstring for parameter
+        documentation.
+        """
+        self.remoter.receive_files(src=src, dst=dst, delete_dst=delete_dst,
+                                   preserve_perm=preserve_perm,
+                                   preserve_symlinks=preserve_symlinks,
+                                   verbose=verbose)
+
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
         self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
