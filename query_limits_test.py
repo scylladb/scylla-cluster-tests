@@ -61,22 +61,33 @@ class QueryLimitsTest(ClusterTester):
 
         self.payload = "/tmp/payload"
 
+        # Stop scylla-server
+        self.db_cluster.run("sudo systemctl stop scylla-server.service")
+        # Restrict the amount of memory available to scylla to 1024M
         self.db_cluster.run("grep -v SCYLLA_ARGS /etc/sysconfig/scylla-server > /tmp/l")
-        self.db_cluster.run("""echo "SCYLLA_ARGS=\"-m 128M -c 1\"" >> /tmp/l""")
+        self.db_cluster.run('echo \'SCYLLA_ARGS="-m 1024M"\' >> /tmp/l')
         self.db_cluster.run("sudo cp /tmp/l /etc/sysconfig/scylla-server")
         self.db_cluster.run("sudo chown root.root /etc/sysconfig/scylla-server")
-        self.db_cluster.run("sudo systemctl stop scylla-server.service")
+        # Configure seastar IO to use the smallest acceptable values (slow disk)
+        self.db_cluster.run('echo \'SEASTAR_IO="--num-io-queues 1 --max-io-requests 4"\' > /tmp/m')
+        self.db_cluster.run("sudo mv /tmp/m /etc/scylla.d/io.conf")
+        self.db_cluster.run("sudo chown root.root /etc/scylla.d/io.conf")
+        # Start scylla-server
         self.db_cluster.run("sudo systemctl start scylla-server.service")
-
+        # Install boost-program-options and libuv
         self.loaders.run("sudo yum install -y boost-program-options")
         self.loaders.run("sudo yum install -y libuv")
+        # Copy payload to loader nodes
         self.loaders.send_file("queries-limits", self.payload)
         self.loaders.run("chmod +x " + self.payload)
 
     def test_connection_limits(self):
         ips = self.db_cluster.get_node_private_ips()
         params = " --servers %s --duration 600 --queries 1000000" % (ips[0])
-        self.run_stress(stress_cmd=(self.payload + params), duration=10)
+        cmd = '%s %s' % (self.payload, params)
+        result = self.loaders.nodes[0].remoter.run(cmd, ignore_status=True)
+        if result.exit_status != 0:
+            self.fail('Payload failed:\n%s' % result)
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ ExternalProject_Add(
   cpp-driver
 
   GIT_REPOSITORY "https://github.com/datastax/cpp-driver.git"
-  GIT_TAG "2.0"
+  GIT_TAG "2.2.2"
 
   UPDATE_COMMAND ""
   PATCH_COMMAND ""
@@ -52,7 +52,7 @@ find_package_handle_standard_args(Libuv "Could NOT find libuv, try to set the pa
   LIBUV_LIBRARY
   LIBUV_INCLUDE_DIR)
 
-find_package(Boost 1.57 REQUIRED COMPONENTS program_options)
+find_package(Boost 1.53 REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIR})
 
 add_executable(queries-limits payload/queries-limits.cc)
