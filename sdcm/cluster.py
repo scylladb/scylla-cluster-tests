@@ -318,6 +318,46 @@ class BaseNode(object):
             self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
             self._sct_log_formatter_installed = True
 
+    def run(self, cmd, timeout=None, ignore_status=False,
+            connect_timeout=300, options='', verbose=True,
+            args=None, log_file=None, watch_stdout_pattern=None):
+        """
+        Run a shell command on a Node. Shorthand to remoter.run.
+
+        See remote.Remoter.run() docstring for parameter documentation.
+        """
+        return self.remoter.run(cmd=cmd, timeout=timeout,
+                                ignore_status=ignore_status,
+                                connect_timeout=connect_timeout,
+                                options=options, verbose=verbose,
+                                args=args, log_file=log_file,
+                                watch_stdout_pattern=watch_stdout_pattern)
+
+    def send_files(self, src, dst, delete_dst=False,
+                   preserve_symlinks=False, verbose=False):
+        """
+        Copy files from a local path to a Node. Shorthand to remoter.send_files.
+
+        See remote.Remoter.send_files() docstring for parameter documentation.
+        """
+        self.remoter.send_files(src=src, dst=dst, delete_dst=delete_dst,
+                                preserve_symlinks=preserve_symlinks,
+                                verbose=verbose)
+
+    def receive_files(self, src, dst, delete_dst=False,
+                      preserve_perm=True, preserve_symlinks=False,
+                      verbose=False):
+        """
+        Copy files from this Node to a local path. Shorthand to remoter.receive_files.
+
+        See remote.Remoter.receive_files() docstring for parameter
+        documentation.
+        """
+        self.remoter.receive_files(src=src, dst=dst, delete_dst=delete_dst,
+                                   preserve_perm=preserve_perm,
+                                   preserve_symlinks=preserve_symlinks,
+                                   verbose=verbose)
+
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
         self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
@@ -979,6 +1019,23 @@ class BaseCluster(object):
         for loader in self.nodes:
             loader.remoter.run(cmd=cmd, verbose=verbose)
 
+    def run_func_parallel(self, func, node_list=None):
+        if node_list is None:
+            node_list = self.nodes
+
+        queue = Queue.Queue()
+        for node in node_list:
+            setup_thread = threading.Thread(target=func, args=(node, queue))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
     def get_backtraces(self):
         for node in self.nodes:
             node.get_backtraces()
@@ -1033,34 +1090,62 @@ class BaseScyllaCluster(object):
                 node.is_seed = False
         return seed_nodes
 
+    def _update_db_binary(self, new_scylla_bin, node_list):
+        self.log.debug('User requested to update DB binary...')
+
+        seed_nodes = self.get_seed_nodes()
+        non_seed_nodes = [n for n in self.nodes if not n.is_seed]
+
+        def update_scylla_bin(node, queue):
+            node.log.info('Updating DB binary')
+            node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
+            # replace the binary
+            node.remoter.run('sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
+            node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
+            node.remoter.run('sudo chown root.root /usr/bin/scylla')
+            node.remoter.run('sudo chmod +x  /usr/bin/scylla')
+            queue.put(node)
+            queue.task_done()
+
+        def stop_scylla(node, queue):
+            node.wait_db_up()
+            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.remoter.run('sudo systemctl stop scylla-jmx.service')
+            node.wait_db_down()
+            queue.put(node)
+            queue.task_done()
+
+        def start_scylla(node, queue):
+            node.wait_db_down()
+            node.remoter.run('sudo systemctl start scylla-server.service')
+            node.remoter.run('sudo systemctl start scylla-jmx.service')
+            node.wait_db_up()
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        # First, stop *all* non seed nodes
+        self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
+        # First, stop *all* seed nodes
+        self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
+        # Then, update bin only on requested nodes
+        self.run_func_parallel(func=update_scylla_bin, node_list=node_list)
+        # Start all seed nodes
+        self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
+        # Start all non seed nodes
+        self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
+
+        time_elapsed = time.time() - start_time
+        self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))
+
     def update_db_binary(self, node_list=None):
         if node_list is None:
             node_list = self.nodes
 
         new_scylla_bin = self.params.get('update_db_binary')
         if new_scylla_bin:
-            for node in node_list:
-                self.log.info('Upgrading a DB binary for Node')
-
-                node.remoter.send_files(
-                    new_scylla_bin, '/tmp/scylla', verbose=True)
-
-                # stop scylla-server before replace the binary
-                node.remoter.run('sudo systemctl stop scylla-server.service')
-
-                # replace the binary
-                node.remoter.run(
-                    'sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
-                node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
-                node.remoter.run('sudo chown root.root /usr/bin/scylla')
-                node.remoter.run('sudo chmod +x  /usr/bin/scylla')
-
-                node.remoter.run(
-                    'sudo systemctl restart scylla-server.service')
-                node.remoter.run('sudo systemctl restart scylla-jmx.service')
-            # Wait for DB is up
-            for node in node_list:
-                node.wait_db_up()
+            self._update_db_binary(new_scylla_bin, node_list)
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
@@ -1982,7 +2067,6 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                 pass
 
         self.update_db_binary(node_list)
-
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))

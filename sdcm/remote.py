@@ -826,6 +826,27 @@ class Remote(BaseRemote):
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
             args=None, log_file=None, watch_stdout_pattern=None):
+        """
+        Run a shell command on the remoter object.
+
+        :param cmd: Shell command to run on a Node.
+        :param timeout: Wait for timeout (seconds) for command to end,
+                otherwise throw a remote.SSHTimeout exception.
+        :param ignore_status: Whether to throw a process.CmdError if command
+                returned exit status != 0 (False), or not (True).
+        :param connect_timeout: Wait for connect_timeout to establish an SSH
+                connection in case one is not established.
+        :param options: Extra options to pass to the underlying SSH commands.
+        :param verbose: Whether to log commands and outputs to test/job log
+                (True) or not (False).
+        :param args: (Optional) parameters to pass to cmd.
+        :param log_file: Log all command output to log_file (path).
+        :param watch_stdout_pattern: Mark a timestamp (time.time()) on which
+                the given stdout pattern appeared first. This will be
+                available on result.stdout_pattern_found_at
+        :return: avocado.utils.process.CmdResult object with the result of
+                the remote command executed.
+        """
         if args is None:
             args = ()
         if verbose:
