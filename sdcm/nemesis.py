@@ -117,15 +117,6 @@ class Nemesis(object):
         kill_cmd = "sudo pkill -9 scylla"
         self.target_node.remoter.run(kill_cmd, ignore_status=True)
 
-        # TODO: Due to scylla-server.service changing behavior
-        # now we don't wait the DB to be down
-        # self.target_node.wait_db_down()
-
-        # TODO: Remove scylla-server restart upon systemd service is fixed
-        # https://github.com/scylladb/scylla/issues/904
-        restart_cmd = 'sudo systemctl restart scylla-server.service'
-        self.target_node.remoter.run(restart_cmd)
-
         # Let's wait for the target Node to have their services re-started
         self.target_node.wait_db_up()
 
