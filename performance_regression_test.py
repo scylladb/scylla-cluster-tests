@@ -61,24 +61,19 @@ class PerformanceRegressionTest(ClusterTester):
                     "-schema 'replication(factor=3)' -port jmx=6868 "
                     "-mode cql3 native -rate threads=1000 -errors ignore "
                     "-pop seq=1..10000000")
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'write')
-        write_results = self.get_stress_results(queue=stress_queue)
 
-        # run a read workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'read')
-        read_results = self.get_stress_results(queue=stress_queue)
-
-        # restart all the nodes
-        for loader in self.db_cluster.nodes:
-            loader.restart()
-
-        # run a mixed read write workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd % 'mixed')
-        mixed_results = self.get_stress_results(queue=stress_queue)
-
-        self.display_results(write_results)
-        self.display_results(read_results)
-        self.display_results(mixed_results)
+        stress_modes = self.params.get(key='stress_modes', default='write')
+        for mode in stress_modes.split():
+            if mode == 'restart':
+                # restart all the nodes
+                for loader in self.db_cluster.nodes:
+                    loader.restart()
+            else:
+                # run a workload
+                stress_queue = self.run_stress_thread(
+                    stress_cmd=base_cmd % mode)
+                results = self.get_stress_results(queue=stress_queue)
+                self.display_results(results)
 
 if __name__ == '__main__':
     main()
