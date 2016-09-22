@@ -27,7 +27,7 @@ class PerformanceRegressionTest(ClusterTester):
     :avocado: enable
     """
 
-    str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s'
+    str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
 
     def display_single_result(self, result):
         self.log.info(self.str_pattern % (result['op rate'],
@@ -37,7 +37,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['latency median'],
                                           result['latency 95th percentile'],
                                           result['latency 99th percentile'],
-                                          result['latency 99.9th percentile']))
+                                          result['latency 99.9th percentile'],
+                                          result['Total partitions'],
+                                          result['Total errors']))
 
     def get_test_xml(self, result, idx):
         test_content = """
@@ -65,6 +67,8 @@ class PerformanceRegressionTest(ClusterTester):
         <l-95th-pct unit=".95" mesure="%s" isRelevant="true" />
         <l-99th-pct unit=".99" mesure="%s" isRelevant="true" />
         <l-99.9th-pct unit=".999" mesure="%s" isRelevant="true" />
+        <total_partitions unit="total_partitions" mesure="%s" isRelevant="true" />
+        <total_errors unit="total_errors" mesure="%s" isRelevant="true" />
       </metrics>
     </result>
   </test>
@@ -86,7 +90,9 @@ class PerformanceRegressionTest(ClusterTester):
             result['latency median'],
             result['latency 95th percentile'],
             result['latency 99th percentile'],
-            result['latency 99.9th percentile'])
+            result['latency 99.9th percentile'],
+            result['Total partitions'],
+            result['Total errors'])
 
         return test_content
 
@@ -94,7 +100,8 @@ class PerformanceRegressionTest(ClusterTester):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
                                           'row-rate', 'latency-mean',
                                           'latency-median', 'l-94th-pct',
-                                          'l-99th-pct', 'l-99.9th-pct'))
+                                          'l-99th-pct', 'l-99.9th-pct',
+                                          'total-partitions', 'total-err'))
 
         test_xml = ""
         for idx, single_result in enumerate(results):
