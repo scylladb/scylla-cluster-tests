@@ -1297,7 +1297,7 @@ class BaseLoaderSet(object):
                                              os.path.basename(stress_script.path))
             node.remoter.send_files(stress_script.path, dst_stress_script_dir)
             node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
-            result = node.remoter.run(cmd=stress_cmd,
+            result = node.remoter.run(cmd=dst_stress_script,
                                       timeout=timeout,
                                       ignore_status=True,
                                       watch_stdout_pattern='total,',
