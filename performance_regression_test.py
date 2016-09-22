@@ -41,9 +41,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['Total partitions'],
                                           result['Total errors']))
 
-    def get_test_xml(self, result, idx):
+    def get_test_xml(self, result):
         test_content = """
-  <test name="simple_regression_test-stress_modes: (%s) Loader%s" executed="yes">
+  <test name="simple_regression_test-stress_modes: (%s) Loader%s CPU%s" executed="yes">
     <description>"simple regression test, ami_id: %s, scylla version:
     %s", stress_mode: %s, hardware: %s</description>
     <targets>
@@ -74,6 +74,8 @@ class PerformanceRegressionTest(ClusterTester):
   </test>
 """ % (self.params.get('stress_modes'),
             idx,
+            result['loader_idx'],
+            result['cpu_idx'],
             self.params.get('ami_id_db_scylla'),
             self.params.get('ami_id_db_scylla_desc'),
             self.params.get('stress_modes'),
@@ -104,9 +106,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           'total-partitions', 'total-err'))
 
         test_xml = ""
-        for idx, single_result in enumerate(results):
+        for single_result in results:
             self.display_single_result(single_result)
-            test_xml += self.get_test_xml(single_result, idx)
+            test_xml += self.get_test_xml(single_result)
 
         f = open('jenkins_perf_PerfPublisher.xml', 'w')
         content = """<report name="simple_regression_test report" categ="none">
