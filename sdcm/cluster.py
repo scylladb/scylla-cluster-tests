@@ -1279,6 +1279,7 @@ class BaseLoaderSet(object):
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
+        self.log.info('Stress script content:\n%s' % stress_cmd)
         stress_script.save()
         queue = Queue.Queue()
 
