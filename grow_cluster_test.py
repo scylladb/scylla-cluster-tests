@@ -15,6 +15,7 @@
 
 import logging
 import time
+import datetime
 
 from avocado import main
 
@@ -114,12 +115,19 @@ class GrowClusterTest(ClusterTester):
         # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
+        start = datetime.datetime.now()
+        self.log.info('Starting to grow cluster: %s' % str(start))
+
         self.db_cluster.add_nemesis(nemesis=GrowClusterMonkey,
                                     monitoring_set=self.monitors)
         while len(self.db_cluster.nodes) < cluster_target_size:
             # Run GrowClusterMonkey to add one node at a time
             self.db_cluster.start_nemesis(interval=10)
             self.db_cluster.stop_nemesis(timeout=None)
+
+        end = datetime.datetime.now()
+        self.log.info('Growing cluster finished: %s' % str(end))
+        self.log.info('Growing cluster costs: %s' % str(end - start))
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)
