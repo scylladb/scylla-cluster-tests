@@ -65,7 +65,8 @@ class PartialUpgradeDowngradeTest(ClusterTester):
         """
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
         """
-        self.db_cluster.add_nemesis(PartialUpgradeDowngradeNemesis)
+        self.db_cluster.add_nemesis(nemesis=PartialUpgradeDowngradeNemesis,
+                                    monitoring_set=self.monitors)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 

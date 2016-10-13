@@ -29,6 +29,7 @@ class DecommissionNoAddMonkey(Nemesis):
     @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=False)
+        self.reconfigure_monitoring()
 
 
 class ReduceClusterTest(ClusterTester):
@@ -99,7 +100,8 @@ class ReduceClusterTest(ClusterTester):
         # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
-        self.db_cluster.add_nemesis(DecommissionNoAddMonkey)
+        self.db_cluster.add_nemesis(nemesis=DecommissionNoAddMonkey,
+                                    monitoring_set=self.monitors)
         # Have c-s run for 2 + 3 minutes before we start to do decommission
         time.sleep(2 * 60)
         while len(self.db_cluster.nodes) > cluster_target_size:

@@ -453,7 +453,7 @@ class BaseNode(object):
         dst = os.path.join(self.logdir, 'prometheus')
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
-    def setup_prometheus(self, targets):
+    def _write_prometheus_cfg(self, targets):
         targets_list = ['%s:9103' % ip for ip in targets]
         prometheus_cfg = """
 global:
@@ -477,6 +477,13 @@ scrape_configs:
                                     dst=self.prometheus_custom_cfg_path)
         finally:
             shutil.rmtree(tmp_dir_prom)
+
+    def reconfigure_prometheus(self, targets):
+        self._write_prometheus_cfg(targets)
+        self.remoter.run('sudo systemctl restart prometheus.service')
+
+    def setup_prometheus(self, targets):
+        self._write_prometheus_cfg(targets)
 
         systemd_unit = """[Unit]
 Description=Prometheus
@@ -1202,8 +1209,9 @@ class BaseScyllaCluster(object):
             size = int(self.params.get('space_node_threshold'))
         self.wait_cfstat_reached_threshold('Space used (total)', size)
 
-    def add_nemesis(self, nemesis):
+    def add_nemesis(self, nemesis, monitoring_set):
         self.nemesis.append(nemesis(cluster=self,
+                                    monitoring_set=monitoring_set,
                                     termination_event=self.termination_event))
 
     def clean_nemesis(self):
