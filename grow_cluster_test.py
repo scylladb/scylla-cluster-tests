@@ -32,6 +32,7 @@ class GrowClusterMonkey(Nemesis):
         self._set_current_disruption('Add new node to %s' % self.cluster)
         new_nodes = self.cluster.add_nodes(count=1)
         self.cluster.wait_for_init(node_list=new_nodes)
+        self.reconfigure_monitoring()
 
 
 class GrowClusterTest(ClusterTester):
@@ -113,7 +114,8 @@ class GrowClusterTest(ClusterTester):
         # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
-        self.db_cluster.add_nemesis(GrowClusterMonkey)
+        self.db_cluster.add_nemesis(nemesis=GrowClusterMonkey,
+                                    monitoring_set=self.monitors)
         while len(self.db_cluster.nodes) < cluster_target_size:
             # Run GrowClusterMonkey to add one node at a time
             self.db_cluster.start_nemesis(interval=10)

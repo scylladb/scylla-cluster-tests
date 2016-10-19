@@ -33,7 +33,8 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
-        self.db_cluster.add_nemesis(self.get_nemesis_class())
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
+                                    monitoring_set=self.monitors)
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))

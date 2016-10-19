@@ -453,7 +453,7 @@ class BaseNode(object):
         dst = os.path.join(self.logdir, 'prometheus')
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
-    def setup_prometheus(self, targets):
+    def _write_prometheus_cfg(self, targets):
         targets_list = ['%s:9103' % ip for ip in targets]
         prometheus_cfg = """
 global:
@@ -477,6 +477,13 @@ scrape_configs:
                                     dst=self.prometheus_custom_cfg_path)
         finally:
             shutil.rmtree(tmp_dir_prom)
+
+    def reconfigure_prometheus(self, targets):
+        self._write_prometheus_cfg(targets)
+        self.remoter.run('sudo systemctl restart prometheus.service')
+
+    def setup_prometheus(self, targets):
+        self._write_prometheus_cfg(targets)
 
         systemd_unit = """[Unit]
 Description=Prometheus
@@ -993,6 +1000,7 @@ class BaseCluster(object):
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
+        self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
         assert 'AVOCADO_TEST_LOGDIR' in os.environ
@@ -1201,8 +1209,9 @@ class BaseScyllaCluster(object):
             size = int(self.params.get('space_node_threshold'))
         self.wait_cfstat_reached_threshold('Space used (total)', size)
 
-    def add_nemesis(self, nemesis):
+    def add_nemesis(self, nemesis, monitoring_set):
         self.nemesis.append(nemesis(cluster=self,
+                                    monitoring_set=monitoring_set,
                                     termination_event=self.termination_event))
 
     def clean_nemesis(self):
@@ -1596,7 +1605,7 @@ class LibvirtCluster(BaseCluster):
         uri = self._domain_info['uri']
         LIBVIRT_URI = uri
         image_parent_dir = os.path.dirname(self._domain_info['image'])
-        for index in range(len(self.nodes), len(self.nodes) + count):
+        for index in range(self._node_index, self._node_index + count):
             index += 1
             name = '%s-%s' % (self.node_prefix, index)
             dst_image_basename = '%s.qcow2' % name
@@ -1637,6 +1646,7 @@ class LibvirtCluster(BaseCluster):
                     node._backing_image = dst_image_path
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
+        self._node_index += len(nodes)
         self.nodes += nodes
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
@@ -1940,7 +1950,8 @@ class AWSCluster(BaseCluster):
                                          self.node_prefix, node_index,
                                          self.logdir)
                        for node_index, instance in
-                       enumerate(instances, start=len(self.nodes) + 1)]
+                       enumerate(instances, start=self._node_index + 1)]
+        self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()

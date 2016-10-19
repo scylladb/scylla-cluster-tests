@@ -28,8 +28,9 @@ from .log import SDCMAdapter
 
 class Nemesis(object):
 
-    def __init__(self, cluster, termination_event):
+    def __init__(self, cluster, monitoring_set, termination_event):
         self.cluster = cluster
+        self.monitoring_set = monitoring_set
         self.target_node = None
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
@@ -185,6 +186,12 @@ class Nemesis(object):
             self.target_node.remoter.run('sudo systemctl start scylla-server.service')
             self.target_node.wait_db_up()
 
+    def reconfigure_monitoring(self):
+        for monitoring_node in self.monitoring_set.nodes:
+            self.log.info('Monitoring node: %s', str(monitoring_node))
+            targets = [n.public_ip_address for n in self.cluster.nodes]
+            monitoring_node.reconfigure_prometheus(targets=targets)
+
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.private_ip_address
@@ -207,10 +214,12 @@ class Nemesis(object):
                 self.log.info('Decommission %s PASS', self.target_node)
                 self.cluster.nodes.remove(self.target_node)
                 self.target_node.destroy()
+                self.reconfigure_monitoring()
                 # Replace the node that was terminated.
                 if add_node:
                     new_nodes = self.cluster.add_nodes(count=1)
                     self.cluster.wait_for_init(node_list=new_nodes)
+                    self.reconfigure_monitoring()
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
