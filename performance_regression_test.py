@@ -143,7 +143,11 @@ class PerformanceRegressionTest(ClusterTester):
                 # run a workload
                 stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2)
                 results = self.get_stress_results(queue=stress_queue, stress_num=2)
-                self.display_results(results)
+
+        try:
+            self.display_results(results)
+        except:
+            pass
 
 if __name__ == '__main__':
     main()
