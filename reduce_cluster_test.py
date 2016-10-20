@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 import logging
+import datetime
 
 from avocado import main
 
@@ -100,6 +101,9 @@ class ReduceClusterTest(ClusterTester):
         # Set space_node_threshold in config file for the size
         self.db_cluster.wait_total_space_used_per_node()
 
+        start = datetime.datetime.now()
+        self.log.info('Starting to reduce cluster: %s' % str(start))
+
         self.db_cluster.add_nemesis(nemesis=DecommissionNoAddMonkey,
                                     monitoring_set=self.monitors)
         # Have c-s run for 2 + 3 minutes before we start to do decommission
@@ -110,6 +114,10 @@ class ReduceClusterTest(ClusterTester):
             # Run DecommissionNoAddMonkey once to decommission one node a time
             self.db_cluster.start_nemesis(interval=10)
             self.db_cluster.stop_nemesis(timeout=None)
+
+        end = datetime.datetime.now()
+        self.log.info('Reducing cluster finished: %s' % str(end))
+        self.log.info('Reducing cluster costs: %s' % str(end - start))
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)

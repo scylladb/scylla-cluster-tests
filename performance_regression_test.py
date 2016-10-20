@@ -41,9 +41,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['Total partitions'],
                                           result['Total errors']))
 
-    def get_test_xml(self, result, idx):
+    def get_test_xml(self, result):
         test_content = """
-  <test name="simple_regression_test-stress_modes: (%s) Loader%s" executed="yes">
+  <test name="simple_regression_test-stress_modes: (%s) Loader%s CPU%s" executed="yes">
     <description>"simple regression test, ami_id: %s, scylla version:
     %s", stress_mode: %s, hardware: %s</description>
     <targets>
@@ -74,6 +74,8 @@ class PerformanceRegressionTest(ClusterTester):
   </test>
 """ % (self.params.get('stress_modes'),
             idx,
+            result['loader_idx'],
+            result['cpu_idx'],
             self.params.get('ami_id_db_scylla'),
             self.params.get('ami_id_db_scylla_desc'),
             self.params.get('stress_modes'),
@@ -104,9 +106,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           'total-partitions', 'total-err'))
 
         test_xml = ""
-        for idx, single_result in enumerate(results):
+        for single_result in results:
             self.display_single_result(single_result)
-            test_xml += self.get_test_xml(single_result, idx)
+            test_xml += self.get_test_xml(single_result)
 
         f = open('jenkins_perf_PerfPublisher.xml', 'w')
         content = """<report name="simple_regression_test report" categ="none">
@@ -139,10 +141,41 @@ class PerformanceRegressionTest(ClusterTester):
                     loader.restart()
             else:
                 # run a workload
-                stress_queue = self.run_stress_thread(
-                    stress_cmd=base_cmd % mode)
-                results = self.get_stress_results(queue=stress_queue)
-                self.display_results(results)
+                stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2)
+                results = self.get_stress_results(queue=stress_queue, stress_num=2)
+
+        try:
+            self.display_results(results)
+        except:
+            pass
+
+    def test_read(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a read workload
+        """
+        base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM n=30000000 "
+                      "-schema 'replication(factor=3)' -port jmx=6868 "
+                      "-mode cql3 native -rate threads=500 -errors ignore "
+                      "-pop seq=1..30000000")
+        base_cmd_r = ("cassandra-stress read no-warmup cl=QUORUM duration=50m "
+                      "-schema 'replication(factor=3)' -port jmx=6868 "
+                      "-mode cql3 native -rate threads=500 -errors ignore "
+                      "-pop 'dist=gauss(1..30000000,15000000,1500000)' ")
+
+        # run a write workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2)
+        results = self.get_stress_results(queue=stress_queue, stress_num=2)
+
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
+        results = self.get_stress_results(queue=stress_queue, stress_num=2)
+
+        try:
+            self.display_results(results)
+        except:
+            pass
 
 if __name__ == '__main__':
     main()

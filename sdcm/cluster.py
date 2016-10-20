@@ -1275,20 +1275,26 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir):
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
+        self.log.info('Stress script content:\n%s' % stress_cmd)
         stress_script.save()
         queue = Queue.Queue()
 
-        def node_run_stress(node):
+        def node_run_stress(node, loader_idx, cpu_idx):
             try:
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
                 logdir = os.path.join(output_dir, self.name)
-            log_file_name = os.path.join(logdir, 'cassandra-stress-%s.log' %
-                                         uuid.uuid4())
+            log_file_name = os.path.join(logdir,
+                                         'cassandra-stress-l%s-c%s-%s.log' %
+                                         (loader_idx, cpu_idx, uuid.uuid4()))
+            # This tag will be output in the header of c-stress result,
+            # we parse it to know the loader & cpu info in _parse_cs_summary().
+            tag = 'TAG: loader_idx:%s-cpu_idx:%s' % (loader_idx, cpu_idx)
+
             self.log.debug('cassandra-stress log: %s', log_file_name)
             loader_user = (self.params.get('libvirt_loader_image_user') or
                            self.params.get('ami_loader_user'))
@@ -1297,7 +1303,14 @@ class BaseLoaderSet(object):
                                              os.path.basename(stress_script.path))
             node.remoter.send_files(stress_script.path, dst_stress_script_dir)
             node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
-            result = node.remoter.run(cmd=stress_cmd,
+
+            if stress_num > 1:
+                node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
+            else:
+                node_cmd = dst_stress_script
+            node_cmd = 'echo %s; %s' % (tag, node_cmd)
+
+            result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
                                       ignore_status=True,
                                       watch_stdout_pattern='total,',
@@ -1306,12 +1319,14 @@ class BaseLoaderSet(object):
             queue.put((node, result))
             queue.task_done()
 
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_run_stress,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
+        for loader_idx, loader in enumerate(self.nodes):
+            for cpu_idx in range(stress_num):
+                setup_thread = threading.Thread(target=node_run_stress,
+                                                args=(loader, loader_idx,
+                                                      cpu_idx))
+                setup_thread.daemon = True
+                setup_thread.start()
+                time.sleep(30)
 
         return queue
 
@@ -1348,6 +1363,12 @@ class BaseLoaderSet(object):
 
         for line in lines:
             line.strip()
+            # Parse loader & cpu info
+            if line.startswith('TAG:'):
+                ret = re.findall("TAG: loader_idx:(\d+)-cpu_idx:(\d+)", line)
+                results['loader_idx'] = ret[0][0]
+                results['cpu_idx'] = ret[0][1]
+
             if line.startswith('Results:'):
                 enable_parse = True
                 continue
@@ -1477,10 +1498,10 @@ class BaseLoaderSet(object):
 
         return errors
 
-    def get_stress_results(self, queue):
+    def get_stress_results(self, queue, stress_num=1):
         results = []
         ret = []
-        while len(results) != len(self.nodes):
+        while len(results) != len(self.nodes) * stress_num:
             try:
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
