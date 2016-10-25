@@ -177,5 +177,34 @@ class PerformanceRegressionTest(ClusterTester):
         except:
             pass
 
+    def test_mixed(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a mixed workload
+        """
+        base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM n=30000000 "
+                      "-schema 'replication(factor=3)' -port jmx=6868 "
+                      "-mode cql3 native -rate threads=500 -errors ignore "
+                      "-pop seq=1..30000000")
+        base_cmd_m = ("cassandra-stress mixed no-warmup cl=QUORUM duration=50m "
+                      "-schema 'replication(factor=3)' -port jmx=6868 "
+                      "-mode cql3 native -rate threads=500 -errors ignore "
+                      "-pop 'dist=gauss(1..30000000,15000000,1500000)' ")
+
+        # run a write workload as a preparation
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2)
+        self.get_stress_results(queue=stress_queue, stress_num=2)
+
+        # run a mixed workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
+        results = self.get_stress_results(queue=stress_queue, stress_num=2)
+
+        try:
+            self.display_results(results)
+        except:
+            pass
+
 if __name__ == '__main__':
     main()
