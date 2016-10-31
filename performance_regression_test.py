@@ -167,7 +167,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2)
-        results = self.get_stress_results(queue=stress_queue, stress_num=2)
+        self.get_stress_results(queue=stress_queue, stress_num=2)
 
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
