@@ -731,6 +731,15 @@ WantedBy=multi-user.target
             self.log.error('Error checking for DB status: %s', details)
             return False
 
+    def jmx_up(self):
+        try:
+            result = self.remoter.run('netstat -a | grep :7199',
+                                      verbose=False, ignore_status=True)
+            return result.exit_status == 0
+        except Exception as details:
+            self.log.error('Error checking for JMX status: %s', details)
+            return False
+
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
             cassandra_stress_bin = '/usr/bin/cassandra-stress'
@@ -790,6 +799,20 @@ WantedBy=multi-user.target
             self.remoter.run('sudo killall tcpdump', ignore_status=True)
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
+
+    def wait_jmx_up(self, verbose=True):
+        text = None
+        if verbose:
+            text = '%s: Waiting for JMX service to be up' % self
+        wait.wait_for(func=self.jmx_up, step=60,
+                      text=text)
+
+    def wait_jmx_down(self, verbose=True):
+        text = None
+        if verbose:
+            text = '%s: Waiting for JMX service to be down' % self
+        wait.wait_for(func=lambda: not self.jmx_up(), step=60,
+                      text=text)
 
     def wait_db_up(self, verbose=True):
         text = None

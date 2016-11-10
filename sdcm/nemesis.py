@@ -119,7 +119,10 @@ class Nemesis(object):
         self.target_node.remoter.run(kill_cmd, ignore_status=True)
 
         # Let's wait for the target Node to have their services re-started
+        self.log.info('Waiting scylla services to be restarted after we killed them...')
         self.target_node.wait_db_up()
+        self.log.info('Waiting JMX services to be restarted after we killed them...')
+        self.target_node.wait_jmx_up()
 
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
         self._set_current_disruption('StopWaitStartService %s' % self.target_node)
