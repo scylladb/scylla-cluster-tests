@@ -43,7 +43,35 @@ Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``
     sudo -H pip install matplotlib
     sudo -H pip install aexpect
 
-Install avocado: http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
+Install avocado. Make sure you install the LTS version (36.X), as newer versions have API incompatibilities with scylla-cluster-tests.
+
+You'll follow instructions in:
+
+http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
+
+The detail here is to ensure you're installing the LTS version.
+
+Example: Following the instructions in the link, after you download the repo file for Fedora, (avocado-fedora.repo) edit it. Before modifying it, its contents are:
+
+    [avocado]
+    name=Avocado
+    baseurl=https://repos-avocadoproject.rhcloud.com/static/fedora-$releasever-noarch/
+    skip_if_unavailable=True
+    gpgkey=https://repos-avocadoproject.rhcloud.com/static/crosa_redhat_com.gpg
+    gpgcheck=1
+    enabled=1
+    enabled_metadata=1
+
+    [avocado-lts]
+    name=Avocado LTS (Long Term Stability)
+    baseurl=https://repos-avocadoproject.rhcloud.com/static/lts/fedora-$releasever-noarch/
+    skip_if_unavailable=True
+    gpgkey=https://repos-avocadoproject.rhcloud.com/static/crosa_redhat_com.gpg
+    gpgcheck=1
+    enabled=0
+
+Change enabled=1 in [avocado] to enabled=0, and enabled=0 in [avocado-lts] to enabled=1.
+Now you can install avocado LTS with the dnf command mentioned in the docs.
 
 Configure aws::
 
