@@ -88,10 +88,10 @@ queries to nodes)::
 
     sudo -H pip install cassandra-driver
 
-That install command requires gcc and python-devel, so if you still don't have
-either, please install them::
+That install command requires gcc, python-devel and redhat-rpm-config, so if
+you still don't have either, please install them::
 
-    sudo dnf install gcc python-devel -y
+    sudo dnf install gcc python-devel redhat-rpm-config.noarch -y
 
 Take a look at the ``data_dir/scylla.yaml`` file. It contains a number of
 configurable test parameters, such as DB cluster instance types and AMI IDs.
