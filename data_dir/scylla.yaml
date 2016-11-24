@@ -29,6 +29,11 @@ failure_post_behavior: destroy
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
 space_node_threshold: 6442450944
+# Test type. 'functional' will trigger node monitoring, that will
+# interfere in performance numbers, and 'performance' will turn off
+# node monitoring, important to get realistic numbers for performance
+# regression.
+test_type: functional
 
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version

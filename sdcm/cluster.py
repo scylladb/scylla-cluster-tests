@@ -254,7 +254,7 @@ class UserRemoteCredentials(object):
 class BaseNode(object):
 
     def __init__(self, name, ssh_login_info=None, base_logdir=None,
-                 role='database'):
+                 role='database', test_type='functional'):
         self.name = name
         self.is_seed = None
         try:
@@ -280,9 +280,14 @@ class BaseNode(object):
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
         self.role = role
+        self.test_type = test_type
         if self.role == 'database':
-            self.start_journal_thread()
-            self.start_backtrace_thread()
+            if self.test_type == 'functional':
+                self.start_journal_thread()
+                self.start_backtrace_thread()
+            else:
+                self.log.debug('Test type is %s, not starting journal '
+                               'and bt threads on it', self.test_type)
         else:
             self.log.debug('Node role is %s, not starting journal and bt '
                            'threads on it', self.role)
@@ -875,7 +880,7 @@ class AWSNode(BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, role='database'):
+                 base_logdir=None, role='database', test_type='functional'):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2 = ec2_service
@@ -889,7 +894,7 @@ class AWSNode(BaseNode):
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
-                                      role=role)
+                                      role=role, test_type=test_type)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
@@ -964,7 +969,7 @@ class LibvirtNode(BaseNode):
 
     def __init__(self, domain, hypervisor, node_prefix='node', node_index=1,
                  domain_username='root', domain_password='', base_logdir=None,
-                 role='database'):
+                 role='database', test_type='functional'):
         name = '%s-%s' % (node_prefix, node_index)
         self._backing_image = None
         self._domain = domain
@@ -977,7 +982,7 @@ class LibvirtNode(BaseNode):
         super(LibvirtNode, self).__init__(name=name,
                                           ssh_login_info=ssh_login_info,
                                           base_logdir=base_logdir,
-                                          role=role)
+                                          role=role, test_type=test_type)
 
     def _get_public_ip_address(self):
         desc = etree.fromstring(self._domain.XMLDesc(0))
@@ -1073,6 +1078,7 @@ class BaseCluster(object):
         self.nodes = []
         self.nemesis = []
         self.params = params
+        self.test_type = self.params.get('test_type')
         self.add_nodes(n_nodes)
         self.coredumps = dict()
 
@@ -1724,7 +1730,8 @@ class LibvirtCluster(BaseCluster):
                                        domain_password=self._domain_info[
                                            'password'],
                                        base_logdir=self.logdir,
-                                       role=self.role)
+                                       role=self.role,
+                                       test_type=self.test_type)
                     node._backing_image = dst_image_path
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
@@ -2047,7 +2054,8 @@ class AWSCluster(BaseCluster):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2,
                        credentials=self._credentials, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, role=self.role)
+                       base_logdir=base_logdir, role=self.role,
+                       test_type=self.test_type)
 
     def cfstat_reached_threshold(self, key, threshold):
         """
