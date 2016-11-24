@@ -17,6 +17,7 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
+from sdcm.cluster import close_master_ssh_nodes
 
 
 class PerformanceRegressionTest(ClusterTester):
@@ -117,6 +118,7 @@ class PerformanceRegressionTest(ClusterTester):
         f.write(content)
         f.close()
 
+    @close_master_ssh_nodes
     def test_simple_regression(self):
         """
         Test steps:
@@ -148,6 +150,7 @@ class PerformanceRegressionTest(ClusterTester):
         except:
             pass
 
+    @close_master_ssh_nodes
     def test_read(self):
         """
         Test steps:
@@ -176,6 +179,7 @@ class PerformanceRegressionTest(ClusterTester):
         except:
             pass
 
+    @close_master_ssh_nodes
     def test_mixed(self):
         """
         Test steps:

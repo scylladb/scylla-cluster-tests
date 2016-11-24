@@ -150,6 +150,31 @@ def register_cleanup(cleanup='destroy'):
         atexit.register(stop_instances)
 
 
+def close_master_ssh_nodes(method):
+    """
+    Decorator that ensures we close the SSH master connections on nodes.
+
+    We use this mainly to reduce disruption on DB and loader nodes
+    (useful for performance testing).
+
+    :param method: Remote method to wrap.
+    :return: Wrapped method.
+    """
+    def wrapper(*args, **kwargs):
+        for db_node in args[0].db_cluster.nodes:
+            db_node.remoter.close()
+        for loader_node in args[0].loaders.nodes:
+            loader_node.remoter.close()
+        for monitor_node in args[0].monitors.nodes:
+            monitor_node.remoter.close()
+        result = None
+        try:
+            result = method(*args, **kwargs)
+        finally:
+            return result
+    return wrapper
+
+
 class NodeError(Exception):
 
     def __init__(self, msg=None):
