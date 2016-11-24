@@ -253,7 +253,8 @@ class UserRemoteCredentials(object):
 
 class BaseNode(object):
 
-    def __init__(self, name, ssh_login_info=None, base_logdir=None):
+    def __init__(self, name, ssh_login_info=None, base_logdir=None,
+                 role='database'):
         self.name = name
         self.is_seed = None
         try:
@@ -278,8 +279,13 @@ class BaseNode(object):
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
-        self.start_journal_thread()
-        self.start_backtrace_thread()
+        self.role = role
+        if self.role == 'database':
+            self.start_journal_thread()
+            self.start_backtrace_thread()
+        else:
+            self.log.debug('Node role is %s, not starting journal and bt '
+                           'threads on it', self.role)
 
     def file_exists(self, file_path):
         try:
@@ -869,7 +875,7 @@ class AWSNode(BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None):
+                 base_logdir=None, role='database'):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2 = ec2_service
@@ -882,7 +888,8 @@ class AWSNode(BaseNode):
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
-                                      base_logdir=base_logdir)
+                                      base_logdir=base_logdir,
+                                      role=role)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
@@ -956,7 +963,8 @@ class LibvirtNode(BaseNode):
     """
 
     def __init__(self, domain, hypervisor, node_prefix='node', node_index=1,
-                 domain_username='root', domain_password='', base_logdir=None):
+                 domain_username='root', domain_password='', base_logdir=None,
+                 role='database'):
         name = '%s-%s' % (node_prefix, node_index)
         self._backing_image = None
         self._domain = domain
@@ -968,7 +976,8 @@ class LibvirtNode(BaseNode):
                           'password': domain_password}
         super(LibvirtNode, self).__init__(name=name,
                                           ssh_login_info=ssh_login_info,
-                                          base_logdir=base_logdir)
+                                          base_logdir=base_logdir,
+                                          role=role)
 
     def _get_public_ip_address(self):
         desc = etree.fromstring(self._domain.XMLDesc(0))
@@ -1114,6 +1123,7 @@ class BaseCluster(object):
 
 
 class BaseScyllaCluster(object):
+    role = 'database'
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -1287,6 +1297,7 @@ class BaseScyllaCluster(object):
 
 
 class BaseLoaderSet(object):
+    role = 'loader'
 
     def wait_for_init(self, verbose=False, db_node_address=None):
         queue = Queue.Queue()
@@ -1564,6 +1575,7 @@ class BaseLoaderSet(object):
 
 
 class BaseMonitorSet(object):
+    role = 'monitor'
 
     def wait_for_init(self, targets, verbose=False):
         queue = Queue.Queue()
@@ -1711,7 +1723,8 @@ class LibvirtCluster(BaseCluster):
                                            'user'],
                                        domain_password=self._domain_info[
                                            'password'],
-                                       base_logdir=self.logdir)
+                                       base_logdir=self.logdir,
+                                       role=self.role)
                     node._backing_image = dst_image_path
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
@@ -1729,6 +1742,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        self.role = BaseScyllaCluster.role
 
         super(ScyllaLibvirtCluster, self).__init__(domain_info=domain_info,
                                                    hypervisor=hypervisor,
@@ -1863,6 +1877,7 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
         cluster_prefix = _prepend_user_prefix(
             user_prefix, 'scylla-loader-node')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        self.role = BaseLoaderSet.role
 
         super(LoaderSetLibvirt, self).__init__(domain_info=domain_info,
                                                hypervisor=hypervisor,
@@ -1916,6 +1931,7 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        self.role = BaseMonitorSet.role
 
         super(MonitorSetLibvirt, self).__init__(domain_info=domain_info,
                                                 hypervisor=hypervisor,
@@ -2031,7 +2047,7 @@ class AWSCluster(BaseCluster):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2,
                        credentials=self._credentials, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir)
+                       base_logdir=base_logdir, role=self.role)
 
     def cfstat_reached_threshold(self, key, threshold):
         """
@@ -2078,6 +2094,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s' % (name, n_nodes))
+        self.role = BaseScyllaCluster.role
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
                                                ec2_security_group_ids=ec2_security_group_ids,
@@ -2270,6 +2287,7 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
+        self.role = BaseLoaderSet.role
         super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                            ec2_subnet_id=ec2_subnet_id,
                                            ec2_security_group_ids=ec2_security_group_ids,
@@ -2297,6 +2315,7 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
+        self.role = BaseMonitorSet.role
         super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
                                             ec2_subnet_id=ec2_subnet_id,
                                             ec2_security_group_ids=ec2_security_group_ids,
