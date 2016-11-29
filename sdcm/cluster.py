@@ -45,6 +45,9 @@ from .remote import Remote
 from . import data_path
 from . import wait
 
+from .collectd import CassandraCollectdSetup
+from .collectd import ScyllaCollectdSetup
+
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
                                            "DeleteOnTermination": True,
@@ -510,99 +513,6 @@ WantedBy=multi-user.target
             self.remoter.run('sudo systemctl start prometheus.service')
         finally:
             shutil.rmtree(tmp_dir_prom)
-
-    def _set_collectd_exporter_paths(self):
-        self.collectd_exporter_system_base_dir = '/var/tmp'
-        self.collectd_exporter_base_dir = 'collectd_exporter-0.3.1.linux-amd64'
-        self.collectd_exporter_tarball = '%s.tar.gz' % self.collectd_exporter_base_dir
-        self.collectd_exporter_base_url = 'https://github.com/prometheus/collectd_exporter/releases/download/0.3.1'
-        self.collectd_exporter_system_dir = os.path.join(self.collectd_exporter_system_base_dir,
-                                                         self.collectd_exporter_base_dir)
-        self.collectd_exporter_path = os.path.join(self.collectd_exporter_system_dir, 'collectd_exporter')
-
-    def _setup_collectd(self):
-        collectd_cfg = """
-LoadPlugin network
-LoadPlugin disk
-LoadPlugin interface
-LoadPlugin unixsock
-LoadPlugin df
-LoadPlugin processes
-<Plugin network>
-        Listen "127.0.0.1" "25826"
-        Server "127.0.0.1" "65534"
-        Forward true
-</Plugin>
-<Plugin disk>
-</Plugin>
-<Plugin interface>
-</Plugin>
-<Plugin "df">
-  FSType "xfs"
-  IgnoreSelected false
-</Plugin>
-<Plugin unixsock>
-    SocketFile "/var/run/collectd-unixsock"
-    SocketPerms "0666"
-</Plugin>
-<Plugin processes>
-    Process "scylla"
-</Plugin>
-"""
-        tmp_dir_exporter = tempfile.mkdtemp(prefix='scm-collectd-exporter')
-        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'scylla.conf')
-        tmp_path_remote = '/tmp/scylla-collectd.conf'
-        system_path_remote = '/etc/collectd.d/scylla.conf'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(collectd_cfg)
-        try:
-            self.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
-            self.remoter.run('sudo mv %s %s' %
-                             (tmp_path_remote, system_path_remote))
-            self.remoter.run('sudo service collectd restart')
-        finally:
-            shutil.rmtree(tmp_dir_exporter)
-
-    def _setup_collectd_exporter(self):
-        systemd_unit = """[Unit]
-Description=Collectd Exporter
-
-[Service]
-Type=simple
-User=root
-Group=root
-ExecStart=%s -collectd.listen-address=:65534
-
-[Install]
-WantedBy=multi-user.target
-""" % self.collectd_exporter_path
-
-        tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd-systemd-service')
-        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd-exporter.service')
-        tmp_path_remote = '/tmp/collectd-exporter.service'
-        system_path_remote = '/etc/systemd/system/collectd-exporter.service'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(systemd_unit)
-        try:
-            self.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
-            self.remoter.run('sudo mv %s %s' %
-                             (tmp_path_remote, system_path_remote))
-            self.remoter.run('sudo systemctl start collectd-exporter.service')
-        finally:
-            shutil.rmtree(tmp_dir_exporter)
-
-    def install_collectd_exporter(self):
-        if self.init_system == 'systemd':
-            self._setup_collectd()
-            self._set_collectd_exporter_paths()
-            self.remoter.run('curl %s/%s -o %s/%s -L' %
-                             (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
-                              self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
-            self.remoter.run('tar -xzvf %s/%s -C %s' %
-                             (self.collectd_exporter_system_base_dir,
-                              self.collectd_exporter_tarball,
-                              self.collectd_exporter_system_base_dir))
-            self._setup_collectd_exporter()
 
     def journal_thread(self):
         while True:
@@ -1712,6 +1622,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
                                                    node_prefix=node_prefix,
                                                    n_nodes=n_nodes,
                                                    params=params)
+        self.collectd_setup = ScyllaCollectdSetup()
         self.seed_nodes_private_ips = None
         self.termination_event = threading.Event()
         self.nemesis_threads = []
@@ -1764,10 +1675,8 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         node.remoter.run('sudo systemctl enable scylla-server.service')
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
-        node.remoter.run('sudo systemctl enable collectd.service')
         node.remoter.run('sudo systemctl start scylla-server.service')
         node.remoter.run('sudo systemctl start scylla-jmx.service')
-        node.remoter.run('sudo systemctl start collectd.service')
         node.remoter.run('sudo iptables -F')
 
     def wait_for_init(self, node_list=None, verbose=False):
@@ -1792,11 +1701,14 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
-            node.install_collectd_exporter()
             queue.put(node)
             queue.task_done()
 
         start_time = time.time()
+
+        # avoid using node.remoter in thread
+        for node in node_list:
+            self.collectd_setup.install(node)
 
         seed = node_list[0].public_ip_address
         # If we setup all nodes in paralel, we might have troubles
@@ -2067,6 +1979,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
+        self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -2098,11 +2011,13 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)
-            node.install_collectd_exporter()
             queue.put(node)
             queue.task_done()
 
         start_time = time.time()
+
+        for node in node_list:
+            self.collectd_setup.install(node)
 
         for loader in node_list:
             setup_thread = threading.Thread(target=node_setup,
@@ -2167,6 +2082,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
+        self.collectd_setup = CassandraCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -2211,6 +2127,14 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             queue.task_done()
 
         start_time = time.time()
+
+        # We cannot run this in a thread since our SSH connection
+        # is not thread safe
+        for node in node_list:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y collectd collectd-utils')
+            node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
+            self.collectd_setup.install(node)
 
         for loader in node_list:
             setup_thread = threading.Thread(target=node_setup,
