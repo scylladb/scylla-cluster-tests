@@ -48,6 +48,8 @@ from . import wait
 from .collectd import CassandraCollectdSetup
 from .collectd import ScyllaCollectdSetup
 
+from .loader import CassandraStressExporterSetup
+
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
                                            "DeleteOnTermination": True,
@@ -1187,6 +1189,10 @@ class BaseLoaderSet(object):
             if db_node_address is not None:
                 node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
                                  db_node_address)
+
+            cs_exporter_setup = CassandraStressExporterSetup()
+            cs_exporter_setup.install(node)
+
             queue.put(node)
             queue.task_done()
 
@@ -1208,7 +1214,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
+    def run_stress_thread(self, cmd, timeout, output_dir, stress_num=1):
+        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + cmd + "|tee /tmp/cs_pipe"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
