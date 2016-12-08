@@ -1504,6 +1504,7 @@ class NoMonitorSet(object):
     def __init__(self):
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.nodes = []
 
     def __str__(self):
         return 'NoMonitorSet'
