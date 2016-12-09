@@ -1,10 +1,8 @@
 {
     "dashboard": {
         "id": null,
-        "title": "Database per Node Metrics",
-        "tags": [
-
-        ],
+        "title": "Database Per Node Timeout Metrics",
+        "tags": [],
         "style": "dark",
         "timezone": "browser",
         "editable": true,
@@ -22,9 +20,7 @@
                         "error": false,
                         "id": 41,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 12,
                         "title": "",
@@ -62,8 +58,17 @@
                         "id": 38,
                         "interval": null,
                         "isNew": true,
-                        "links": [
-
+                        "links": [],
+                        "mappingType": 1,
+                        "mappingTypes": [
+                            {
+                                "name": "value to text",
+                                "value": 1
+                            },
+                            {
+                                "name": "range to text",
+                                "value": 2
+                            }
                         ],
                         "maxDataPoints": 100,
                         "nullPointMode": "connected",
@@ -72,6 +77,13 @@
                         "postfixFontSize": "50%",
                         "prefix": "",
                         "prefixFontSize": "50%",
+                        "rangeMaps": [
+                            {
+                                "from": "null",
+                                "text": "N/A",
+                                "to": "null"
+                            }
+                        ],
                         "span": 1,
                         "sparkline": {
                             "fillColor": "rgba(31, 118, 189, 0.18)",
@@ -100,25 +112,7 @@
                                 "value": "null"
                             }
                         ],
-                        "valueName": "current",
-                        "mappingTypes": [
-                            {
-                                "name": "value to text",
-                                "value": 1
-                            },
-                            {
-                                "name": "range to text",
-                                "value": 2
-                            }
-                        ],
-                        "rangeMaps": [
-                            {
-                                "from": "null",
-                                "to": "null",
-                                "text": "N/A"
-                            }
-                        ],
-                        "mappingType": 1
+                        "valueName": "current"
                     },
                     {
                         "cacheTimeout": null,
@@ -143,8 +137,17 @@
                         "id": 33,
                         "interval": null,
                         "isNew": true,
-                        "links": [
-
+                        "links": [],
+                        "mappingType": 1,
+                        "mappingTypes": [
+                            {
+                                "name": "value to text",
+                                "value": 1
+                            },
+                            {
+                                "name": "range to text",
+                                "value": 2
+                            }
                         ],
                         "maxDataPoints": 100,
                         "nullPointMode": "connected",
@@ -153,6 +156,13 @@
                         "postfixFontSize": "50%",
                         "prefix": "",
                         "prefixFontSize": "50%",
+                        "rangeMaps": [
+                            {
+                                "from": "null",
+                                "text": "N/A",
+                                "to": "null"
+                            }
+                        ],
                         "span": 1,
                         "sparkline": {
                             "fillColor": "rgba(31, 118, 189, 0.18)",
@@ -180,25 +190,7 @@
                                 "value": "null"
                             }
                         ],
-                        "valueName": "current",
-                        "mappingTypes": [
-                            {
-                                "name": "value to text",
-                                "value": 1
-                            },
-                            {
-                                "name": "range to text",
-                                "value": 2
-                            }
-                        ],
-                        "rangeMaps": [
-                            {
-                                "from": "null",
-                                "to": "null",
-                                "text": "N/A"
-                            }
-                        ],
-                        "mappingType": 1
+                        "valueName": "current"
                     },
                     {
                         "content": "##  ",
@@ -206,14 +198,10 @@
                         "error": false,
                         "id": 39,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "markdown",
                         "span": 3,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -246,18 +234,14 @@
                         },
                         "lines": false,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
                         "seriesOverrides": [
-                            {
-
-                            }
+                            {}
                         ],
                         "span": 5,
                         "stack": false,
@@ -276,8 +260,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "transparent": false,
                         "type": "graph",
@@ -308,17 +292,13 @@
                         "id": 30,
                         "isNew": true,
                         "limit": 10,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "query": "",
                         "recent": false,
                         "search": false,
                         "span": 2,
                         "starred": true,
-                        "tags": [
-
-                        ],
+                        "tags": [],
                         "title": "Dashboards",
                         "type": "dashlist"
                     }
@@ -331,9 +311,7 @@
                 "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -358,26 +336,23 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
                         "seriesOverrides": [
-                            {
-
-                            }
+                            {}
                         ],
                         "span": 5,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "avg(collectd_reactor_gauge{type=\"load\"} ) by (instance)",
+                                "expr": "avg(collectd_reactor_gauge{type=\"load\"}) by (instance)",
                                 "intervalFactor": 2,
+                                "legendFormat": "",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -388,8 +363,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "transparent": false,
                         "type": "graph",
@@ -414,9 +389,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -441,17 +414,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 1,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 5,
                         "stack": false,
                         "steppedLine": false,
@@ -470,8 +439,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -495,10 +464,16 @@
                         ]
                     },
                     {
+                        "aliasColors": {},
                         "cacheTimeout": null,
+                        "combine": {
+                            "label": "Others",
+                            "threshold": 0
+                        },
                         "datasource": "prometheus",
                         "editable": true,
                         "error": false,
+                        "fontSize": "80%",
                         "format": "short",
                         "id": 40,
                         "interval": null,
@@ -513,14 +488,13 @@
                             "values": false
                         },
                         "legendType": "rightSide",
-                        "links": [
-
-                        ],
+                        "links": [],
                         "maxDataPoints": 3,
                         "nullPointMode": "connected",
                         "nullText": null,
                         "pieType": "pie",
                         "span": 2,
+                        "strokeWidth": 1,
                         "targets": [
                             {
                                 "expr": "sum(collectd_df_complex{df=\"var-lib-scylla\", type=\"free\"})/1000000000",
@@ -538,12 +512,7 @@
                         ],
                         "title": "Total Storage",
                         "type": "grafana-piechart-panel",
-                        "aliasColors": {
-
-                        },
-                        "valueName": "current",
-                        "strokeWidth": 1,
-                        "fontSize": "80%"
+                        "valueName": "current"
                     }
                 ],
                 "title": "New row"
@@ -560,14 +529,10 @@
                         "height": "30",
                         "id": 8,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 6,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -578,14 +543,10 @@
                         "error": false,
                         "id": 35,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 6,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -599,9 +560,7 @@
                 "height": "200px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -626,17 +585,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -654,8 +609,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -679,9 +634,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -706,17 +659,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -735,8 +684,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -760,9 +709,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -787,17 +734,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -815,8 +758,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -840,9 +783,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -867,17 +808,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -895,8 +832,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -928,9 +865,7 @@
                 "height": "200px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -955,17 +890,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -983,8 +914,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1008,9 +939,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1035,17 +964,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1063,8 +988,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1088,9 +1013,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1115,17 +1038,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1143,8 +1062,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1168,9 +1087,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1195,17 +1112,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1223,8 +1136,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1261,14 +1174,10 @@
                         "error": false,
                         "id": 21,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 6,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -1279,14 +1188,10 @@
                         "error": false,
                         "id": 18,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 6,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -1300,9 +1205,7 @@
                 "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1327,17 +1230,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1357,8 +1256,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1382,9 +1281,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1409,17 +1306,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1437,8 +1330,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1462,9 +1355,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1489,17 +1380,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1517,8 +1404,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1542,9 +1429,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1569,17 +1454,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1597,8 +1478,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1630,9 +1511,7 @@
                 "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1657,17 +1536,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1686,8 +1561,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1695,7 +1570,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "Bps",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -1711,9 +1586,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1738,17 +1611,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 3,
                         "stack": false,
                         "steppedLine": false,
@@ -1766,8 +1635,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1775,7 +1644,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "Bps",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -1804,14 +1673,10 @@
                         "error": false,
                         "id": 28,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 12,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -1825,9 +1690,7 @@
                 "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1852,17 +1715,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 6,
                         "stack": false,
                         "steppedLine": false,
@@ -1881,8 +1740,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1906,9 +1765,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -1933,17 +1790,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 6,
                         "stack": false,
                         "steppedLine": false,
@@ -1962,8 +1815,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -1995,9 +1848,7 @@
                 "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -2022,17 +1873,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 6,
                         "stack": false,
                         "steppedLine": false,
@@ -2051,8 +1898,8 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -2060,7 +1907,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "Bps",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -2076,9 +1923,7 @@
                         ]
                     },
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
@@ -2103,17 +1948,13 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
+                        "seriesOverrides": [],
                         "span": 6,
                         "stack": false,
                         "steppedLine": false,
@@ -2132,8 +1973,113 @@
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "Bps",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    }
+                ],
+                "title": "New row"
+            },
+            {
+                "collapse": false,
+                "editable": true,
+                "height": "25px",
+                "panels": [
+                    {
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Compaction</h1>",
+                        "editable": true,
+                        "error": false,
+                        "id": 42,
+                        "isNew": true,
+                        "links": [],
+                        "mode": "html",
+                        "span": 12,
+                        "style": {},
+                        "title": "",
+                        "transparent": true,
+                        "type": "text"
+                    }
+                ],
+                "title": "New row"
+            },
+            {
+                "collapse": false,
+                "editable": true,
+                "height": "250px",
+                "panels": [
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 43,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 12,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(collectd_compaction_manager_objects) by (instance)",
+                                "intervalFactor": 2,
+                                "metric": "",
+                                "refId": "A",
+                                "step": 2
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Running Compactions",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -2165,19 +2111,15 @@
                 "height": "25px",
                 "panels": [
                     {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Compaction</h1>",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Dirty Memory</h1>",
                         "editable": true,
                         "error": false,
-                        "id": 42,
+                        "id": 44,
                         "isNew": true,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "mode": "html",
                         "span": 12,
-                        "style": {
-
-                        },
+                        "style": {},
                         "title": "",
                         "transparent": true,
                         "type": "text"
@@ -2186,27 +2128,24 @@
                 "title": "New row"
             },
             {
-                "title": "New row",
-                "height": "250px",
-                "editable": true,
                 "collapse": false,
+                "editable": true,
+                "height": "250px",
                 "panels": [
                     {
-                        "aliasColors": {
-
-                        },
+                        "aliasColors": {},
                         "bars": false,
                         "datasource": "prometheus",
                         "editable": true,
                         "error": false,
-                        "fill": 0,
+                        "fill": 1,
                         "grid": {
                             "threshold1": null,
                             "threshold1Color": "rgba(216, 200, 27, 0.27)",
                             "threshold2": null,
                             "threshold2Color": "rgba(234, 112, 112, 0.22)"
                         },
-                        "id": 43,
+                        "id": 45,
                         "isNew": true,
                         "legend": {
                             "avg": false,
@@ -2219,37 +2158,600 @@
                         },
                         "lines": true,
                         "linewidth": 2,
-                        "links": [
-
-                        ],
+                        "links": [],
                         "nullPointMode": "connected",
                         "percentage": false,
                         "pointradius": 5,
                         "points": false,
                         "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 12,
+                        "seriesOverrides": [],
+                        "span": 6,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_compaction_manager_objects) by (instance)",
+                                "expr": "max(irate(collectd_commitlog_total_operations{type=\"flush_limit_exceeded\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
-                                "metric": "",
+                                "legendFormat": "",
+                                "metric": "collectd_commitlog_queue_length",
                                 "refId": "A",
-                                "step": 2
+                                "step": 4
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Running Compactions",
+                        "title": "Commitlog flush limit exceeded",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 46,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(irate(collectd_commitlog_total_operations{type=\"write_limit_exceeded\"}[30s]))",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Commitlog write limit exceeded",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 48,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": true,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_commitlog_delay{type=\"write_limit_exceeded\"}*1000000)",
+                                "intervalFactor": 2,
+                                "legendFormat": "value",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "A",
+                                "step": 4
+                            },
+                            {
+                                "expr": "max(collectd_commitlog_delay{type=\"write_limit_exceeded_max\"}*1000000)",
+                                "intervalFactor": 2,
+                                "legendFormat": "max",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "B",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Commitlog write limit exceeded delay",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 49,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_commitlog_queue_length{type=\"pending_allocations\"})",
+                                "intervalFactor": 2,
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Commitlog pending allocations",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 47,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_memory_bytes{type=\"dirty\"}) by (instance)",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_memory_bytes",
+                                "refId": "A",
+                                "step": 4
+                            },
+                            {
+                                "expr": "max(collectd_memory{type=\"total_memory\"}/2)",
+                                "intervalFactor": 2,
+                                "legendFormat": "virtual dirty memory",
+                                "metric": "collectd_memory_bytes",
+                                "refId": "C",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "dirty bytes",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "bytes",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 50,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": true,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_commitlog_delay{type=\"pending_allocations\"}*1000000)",
+                                "intervalFactor": 2,
+                                "legendFormat": "value",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "A",
+                                "step": 4
+                            },
+                            {
+                                "expr": "max(collectd_commitlog_delay{type=\"pending_allocations_max\"}*1000000)",
+                                "intervalFactor": 2,
+                                "legendFormat": "max",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "B",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Commitlog pending allocations delay",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 52,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(irate(collectd_storage_proxy_total_operations{type=\"write timeouts\"}[30s])) by (instance)",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Write Timeouts per Minute per Server",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
-                            "value_type": "cumulative",
-                            "sort": 0
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 53,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_memtables_queue_length{type=\"pending_flushes\"}) by (instance)",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_cpu",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "flushing memtables",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
                         },
                         "type": "graph",
                         "xaxis": {
@@ -2272,7 +2774,337 @@
                             }
                         ]
                     }
-                ]
+                ],
+                "title": "New row"
+            },
+            {
+                "collapse": false,
+                "editable": true,
+                "height": "250px",
+                "panels": [
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 51,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "collectd_database_delay{type=\"requests_blocked_memory\"}*1000000",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "database_delay",
+                                "refId": "A",
+                                "step": 4
+                            },
+                            {
+                                "expr": "collectd_database_delay{type=\"requests_blocked_memory_max\"}*1000000",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "",
+                                "refId": "B",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "dirty bytes delay",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 54,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_database_queue_length{type=\"requests_blocked_memory\"}) by (instance)",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_commitlog_queue_length",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "requests blocked due to dirty",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 55,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "irate(collectd_jhiccup_gauge[30s])",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_jhiccup_gauge",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "hiccups",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "editable": true,
+                        "error": false,
+                        "fill": 1,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 56,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "max(collectd_cpu_percent{type=\"wait\"}) by (instance)",
+                                "interval": "",
+                                "intervalFactor": 2,
+                                "legendFormat": "",
+                                "metric": "collectd_cpu_percent",
+                                "refId": "A",
+                                "step": 4
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "iowait",
+                        "tooltip": {
+                            "msResolution": true,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "percent",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "label": null,
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    }
+                ],
+                "title": "New row"
             }
         ],
         "time": {
@@ -2306,21 +3138,15 @@
             ]
         },
         "templating": {
-            "list": [
-
-            ]
+            "list": []
         },
         "annotations": {
-            "list": [
-
-            ]
+            "list": []
         },
-        "refresh": "5s",
+        "refresh": "10s",
         "schemaVersion": 12,
-        "version": 2,
-        "links": [
-
-        ],
+        "version": 0,
+        "links": [],
         "gnetId": null
     }
 }

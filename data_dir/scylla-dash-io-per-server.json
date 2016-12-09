@@ -1,7 +1,7 @@
 {
     "dashboard": {
       "id": null,
-      "title": "Scylla Per-Server Disk I/O",
+      "title": "Database per Node Disk I/O Metrics",
       "tags": [],
       "style": "dark",
       "timezone": "browser",
