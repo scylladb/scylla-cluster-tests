@@ -425,6 +425,7 @@ class BaseNode(object):
         wait.wait_for(_register_dash_io_per_server, step=10,
                       text='Waiting to register dash IO per server...')
 
+        self.log.info('Prometheus Web UI: http://%s:3000', self.public_ip_address)
         self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
 
     def _set_prometheus_paths(self):
