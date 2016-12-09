@@ -392,38 +392,23 @@ class BaseNode(object):
         self.remoter.run('sudo systemctl start grafana-server')
         self.remoter.run('sudo systemctl enable grafana-server.service')
 
-        def _register_data_source():
-            scylla_data_source_json = data_path.get_data_path('scylla-data-source.json')
-            result = process.run('curl -XPOST -i http://%s:3000/api/datasources --data-binary @%s -H "Content-Type: application/json"' %
-                                 (self.public_ip_address, scylla_data_source_json), ignore_status=True)
+        def _register_grafana_json(json_filename, url):
+            json_path = data_path.get_data_path(json_filename)
+            result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+                                 (url, json_path), ignore_status=True)
             return result.exit_status == 0
 
-        def _register_dash():
-            scylla_dash_json = data_path.get_data_path('scylla-dash.json')
-            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
-                                 (self.public_ip_address, scylla_dash_json), ignore_status=True)
-            return result.exit_status == 0
+        json_mapping = {'scylla-data-source.json': 'datasources',
+                        'scylla-dash.json': 'dashboards/db',
+                        'scylla-dash-per-server.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.json': 'dashboards/db',
+                        'scylla-dash-timeout-metrics.json': 'dashboards/db'}
 
-        def _register_dash_per_server():
-            scylla_dash_per_server_json = data_path.get_data_path('scylla-dash-per-server.json')
-            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
-                                 (self.public_ip_address, scylla_dash_per_server_json), ignore_status=True)
-            return result.exit_status == 0
-
-        def _register_dash_io_per_server():
-            scylla_dash_io_per_server_json = data_path.get_data_path('scylla-dash-io-per-server.json')
-            result = process.run('curl -XPOST -i http://%s:3000/api/dashboards/db --data-binary @%s -H "Content-Type: application/json"' %
-                                 (self.public_ip_address, scylla_dash_io_per_server_json), ignore_status=True)
-            return result.exit_status == 0
-
-        wait.wait_for(_register_data_source, step=10,
-                      text='Waiting to register data source...')
-        wait.wait_for(_register_dash, step=10,
-                      text='Waiting to register dash...')
-        wait.wait_for(_register_dash_per_server, step=10,
-                      text='Waiting to register dash per server...')
-        wait.wait_for(_register_dash_io_per_server, step=10,
-                      text='Waiting to register dash IO per server...')
+        for grafana_json in json_mapping:
+            url = 'http://%s:3000/api/%s' % (self.public_ip_address, json_mapping[grafana_json])
+            wait.wait_for(_register_grafana_json, step=10,
+                          text="Waiting to register 'data_dir/%s' on '%s'..." % (grafana_json, url),
+                          json_filename=grafana_json, url=url)
 
         self.log.info('Prometheus Web UI: http://%s:3000', self.public_ip_address)
         self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
