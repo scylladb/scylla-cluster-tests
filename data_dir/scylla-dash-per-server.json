@@ -1,7 +1,7 @@
 {
     "dashboard": {
         "id": null,
-        "title": "Scylla Per Server Metrics",
+        "title": "Database per Node Metrics",
         "tags": [
 
         ],
