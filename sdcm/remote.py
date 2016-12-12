@@ -242,9 +242,10 @@ def _scp_remote_escape(filename):
 
 
 def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
-                      key_file=None, connect_timeout=300, alive_interval=300):
+                      key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
     assert isinstance(connect_timeout, (int, long))
     base_command = path.find_command('ssh')
+    base_command += " " + extra_ssh_options
     base_command += (" -a -x %s -o StrictHostKeyChecking=no "
                      "-o UserKnownHostsFile=%s -o BatchMode=yes "
                      "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
@@ -259,7 +260,7 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
 class BaseRemote(object):
 
     def __init__(self, hostname, user="root", port=22, password="",
-                 key_file=None):
+                 key_file=None, wait_key_installed=0, extra_ssh_options=""):
         self.env = {}
         self.hostname = hostname
         self.ip = socket.getaddrinfo(self.hostname, None)[0][4][0]
@@ -272,8 +273,10 @@ class BaseRemote(object):
         self.master_ssh_job = None
         self.master_ssh_tempdir = None
         self.master_ssh_option = ''
+        self.extra_ssh_options = extra_ssh_options
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        time.sleep(wait_key_installed)
         self._check_install_key_required()
 
     def _check_install_key_required(self):
@@ -362,7 +365,8 @@ class BaseRemote(object):
         ssh_cmd = _make_ssh_command(user=self.user, port=self.port,
                                     opts=self.master_ssh_option,
                                     hosts_file=self.known_hosts_file,
-                                    key_file=self.key_file)
+                                    key_file=self.key_file,
+                                    extra_ssh_options=self.extra_ssh_options)
         if delete_dst:
             delete_flag = "--delete"
         else:
@@ -383,7 +387,8 @@ class BaseRemote(object):
         base_cmd = _make_ssh_command(user=self.user, port=self.port,
                                      key_file=self.key_file,
                                      opts=self.master_ssh_option,
-                                     hosts_file=self.known_hosts_file)
+                                     hosts_file=self.known_hosts_file,
+                                     extra_ssh_options=self.extra_ssh_options)
 
         return '%s %s "%s"' % (base_cmd, self.hostname,
                                astring.shell_escape(cmd))
@@ -500,7 +505,8 @@ class BaseRemote(object):
                                      opts=options,
                                      hosts_file=self.known_hosts_file,
                                      connect_timeout=connect_timeout,
-                                     alive_interval=alive_interval)
+                                     alive_interval=alive_interval,
+                                     extra_ssh_options=self.extra_ssh_options)
         return "%s %s" % (base_cmd, self.hostname)
 
     def run(self, command, timeout=None, ignore_status=False,
@@ -772,10 +778,12 @@ class BaseRemote(object):
 class Remote(BaseRemote):
 
     def __init__(self, hostname, user="root", port=22, password="",
-                 key_file=None):
+                 key_file=None, wait_key_installed=0, extra_ssh_options=""):
         super(Remote, self).__init__(hostname=hostname, user=user,
                                      port=port, password=password,
-                                     key_file=key_file)
+                                     key_file=key_file,
+                                     wait_key_installed=wait_key_installed,
+                                     extra_ssh_options=extra_ssh_options)
         self.run_quiet = self.run
 
     def ssh_command(self, connect_timeout=300, options='', alive_interval=300):
@@ -785,7 +793,8 @@ class Remote(BaseRemote):
                                      opts=options,
                                      hosts_file=self.known_hosts_file,
                                      connect_timeout=connect_timeout,
-                                     alive_interval=alive_interval)
+                                     alive_interval=alive_interval,
+                                     extra_ssh_options=self.extra_ssh_options)
         return "%s %s" % (base_cmd, self.hostname)
 
     def _run(self, cmd, timeout, verbose, ignore_status, connect_timeout,
