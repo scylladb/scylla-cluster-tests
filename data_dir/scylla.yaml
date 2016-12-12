@@ -113,14 +113,12 @@ databases: !mux
     cassandra:
         db_type: cassandra
         instance_type_db: 'm3.large'
-        # The monitoring infrastructure is very specific to cassandra
-        # So let's not spawn a monitor node
-        n_monitor_nodes: 0
+        # Spawn a monitor node
+        n_monitor_nodes: 1
     scylla:
         db_type: scylla
         # Let's use c3.large since we're using iotune
         # and we'll stress the DB nodes more thoroughly
         instance_type_db: 'c3.large'
-        # The monitoring infrastructure is very specific to cassandra
-        # So let's not spawn a monitor node
+        # Spawn a monitor node 
         n_monitor_nodes: 1
