@@ -674,17 +674,18 @@ WantedBy=multi-user.target
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
-    def get_cfstats(self):
+    def get_cfstats(self, tcpdump=False):
         def keyspace1_available():
             self.remoter.run('nodetool flush', ignore_status=True)
             res = self.remoter.run('nodetool cfstats keyspace1',
                                    ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
-        self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
-        tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
-                                          kwargs={'tcpdump_id': tcpdump_id})
-        tcpdump_thread.start()
+        if tcpdump:
+            self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
+            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
+                                              kwargs={'tcpdump_id': tcpdump_id})
+            tcpdump_thread.start()
         wait.wait_for(keyspace1_available, step=60,
                       text='Waiting until keyspace1 is available')
         try:
@@ -694,7 +695,8 @@ WantedBy=multi-user.target
                            'debugging info', tcpdump_id)
             raise
         finally:
-            self.remoter.run('sudo killall tcpdump', ignore_status=True)
+            if tcpdump:
+                self.remoter.run('sudo killall tcpdump', ignore_status=True)
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
@@ -1110,7 +1112,8 @@ class BaseScyllaCluster(object):
         :param threshold: threshold value for cfstats key. Example, 2432043080.
         :return: Whether all nodes reached that threshold or not.
         """
-        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        tcpdump = self.params.get('tcpdump')
+        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
         reached_threshold = True
         for value in cfstats:
             if value < threshold:
@@ -1925,7 +1928,8 @@ class AWSCluster(BaseCluster):
         :param threshold: threshold value for cfstats key. Example, 2432043080.
         :return: Whether all nodes reached that threshold or not.
         """
-        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        tcpdump = self.params.get('tcpdump')
+        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
         reached_threshold = True
         for value in cfstats:
             if value < threshold:
