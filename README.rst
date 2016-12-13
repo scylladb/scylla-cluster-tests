@@ -77,6 +77,9 @@ Example: Following the instructions in the link, after you download the repo fil
 Change enabled=1 in [avocado] to enabled=0, and enabled=0 in [avocado-lts] to enabled=1.
 Now you can install avocado LTS with the dnf command mentioned in the docs.
 
+If you are using a too recent fedora version for which there is no avocado lts release
+(>24) then replace $releasever by 24.
+
 Configure aws::
 
     aws configure
