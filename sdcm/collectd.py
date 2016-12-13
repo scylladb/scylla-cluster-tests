@@ -389,7 +389,7 @@ LoadPlugin processes
 
     def start_collectd_service(self):
         self.node.remoter.run('sudo systemctl enable collectd.service')
-        self.node.remoter.run('sudo systemctl start collectd.service')
+        self.node.remoter.run('sudo systemctl restart collectd.service')
 
     def collectd_exporter_setup(self):
         systemd_unit = """[Unit]
