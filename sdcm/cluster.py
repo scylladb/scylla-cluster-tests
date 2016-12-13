@@ -1200,8 +1200,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, cmd, timeout, output_dir, stress_num=1):
-        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + cmd + "|tee /tmp/cs_pipe"
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
+        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
