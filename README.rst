@@ -36,11 +36,15 @@ What's inside?
 Regular Setup
 -------------
 
+Install freetype and C++ environment.
+
+    sudo yum install freetype-devel gcc-c++
+
 Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib`` and ``aexpect``::
 
     sudo -H pip install boto3
     sudo -H pip install awscli
-    sudo -H pip install matplotlib
+    sudo -H pip install matplotlib==1.5.0
     sudo -H pip install aexpect
 
 Install avocado. Make sure you install the LTS version (36.X), as newer versions have API incompatibilities with scylla-cluster-tests.
