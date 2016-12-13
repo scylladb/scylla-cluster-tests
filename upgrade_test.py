@@ -37,6 +37,7 @@ class UpgradeTest(ClusterTester):
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
         """
         self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
+                                    loaders=self.loaders,
                                     monitoring_set=self.monitors)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
@@ -46,6 +47,7 @@ class UpgradeTest(ClusterTester):
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
         """
         self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
+                                    loaders=self.loaders,
                                     monitoring_set=self.monitors)
         self.db_cluster.start_nemesis(interval=10)
         self.db_cluster.stop_nemesis(timeout=None)
@@ -53,6 +55,7 @@ class UpgradeTest(ClusterTester):
         self.db_cluster.clean_nemesis()
 
         self.db_cluster.add_nemesis(nemesis=RollbackNemesis,
+                                    loaders=self.loaders,
                                     monitoring_set=self.monitors)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(stress_cmd=self.params.get('stress_cmd'),
