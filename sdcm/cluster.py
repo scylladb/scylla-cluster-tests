@@ -622,7 +622,7 @@ WantedBy=multi-user.target
 
     def db_up(self):
         try:
-            result = self.remoter.run('netstat -a | grep :9042',
+            result = self.remoter.run('netstat -l | grep :9042',
                                       verbose=False, ignore_status=True)
             return result.exit_status == 0
         except Exception as details:
@@ -631,7 +631,7 @@ WantedBy=multi-user.target
 
     def jmx_up(self):
         try:
-            result = self.remoter.run('netstat -a | grep :7199',
+            result = self.remoter.run('netstat -l | grep :7199',
                                       verbose=False, ignore_status=True)
             return result.exit_status == 0
         except Exception as details:
@@ -878,7 +878,7 @@ class LibvirtNode(BaseNode):
     # Remove after node setup is finished
     def db_up(self):
         try:
-            result = self.remoter.run('netstat -a | grep :9042',
+            result = self.remoter.run('netstat -l | grep :9042',
                                       verbose=False, ignore_status=True)
             return result.exit_status == 0
         except Exception as details:
