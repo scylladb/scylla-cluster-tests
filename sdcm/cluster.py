@@ -1196,13 +1196,15 @@ class BaseCluster(object):
     """
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, name=None):
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
+        if name is not None:
+            self.name = name
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
         self._node_index = 0
         # I wanted to avoid some parameter passing
@@ -2294,7 +2296,7 @@ class AWSCluster(BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, name=None):
         if credentials.type == 'generated':
             credential_key_name = credentials.key_pair_name
             credential_key_file = credentials.key_file
@@ -2324,7 +2326,7 @@ class AWSCluster(BaseCluster):
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
-                                         params=params)
+                                         params=params, name=name)
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
@@ -2586,7 +2588,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               name=name)
         self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
@@ -2741,13 +2744,17 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                  ec2_block_device_mappings=None,
                  user_prefix=None,
                  n_nodes=10,
-                 params=None):
+                 params=None,
+                 name=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
         shortid = str(cluster_uuid)[:8]
-        name = '%s-%s' % (cluster_prefix, shortid)
+        if name is None:
+            name = '%s-%s' % (cluster_prefix, shortid)
+        if params is not None and params.get('db_cluster_name') is not None:
+            name = params.get('db_cluster_name')
         user_data = ('--clustername %s '
                      '--totalnodes %s' % (name, n_nodes))
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
@@ -2850,6 +2857,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node_prefix = _prepend_user_prefix(user_prefix, 'cassandra-db-node')
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
+        if params is not None and params.get('db_cluster_name') is not None:
+            name = params.get('db_cluster_name')
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, n_nodes))
@@ -2867,7 +2876,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               name=name)
         self.collectd_setup = CassandraCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
