@@ -629,7 +629,7 @@ WantedBy=multi-user.target
         :rtype: int
         """
         try:
-            n_backtraces_cmd = 'sudo coredumpctl --no-legend 2>/dev/null'
+            n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>/dev/null'
             result = self.remoter.run(n_backtraces_cmd,
                                       verbose=False, ignore_status=True)
             return len(result.stdout.splitlines())
