@@ -721,6 +721,23 @@ WantedBy=multi-user.target
         wait.wait_for(func=self.db_up, step=60,
                       text=text)
 
+    def apt_not_running(self):
+        try:
+            result = self.remoter.run('sudo apt-get update',
+                                      verbose=False, ignore_status=True)
+            return result.exit_status == 0
+        except Exception as details:
+            self.log.error('Error apt is running in the background: %s', details)
+            return False
+
+
+    def wait_apt_not_running(self, verbose=True):
+        text = None
+        if verbose:
+            text = '%s: Waiting for apt not to run in the background' % self
+        wait.wait_for(func=self.apt_not_running, step=60,
+                      text=text)
+
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
@@ -2136,6 +2153,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         # is not thread safe
         for node in node_list:
             node.wait_ssh_up(verbose=verbose)
+            node.wait_apt_not_running()
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y collectd collectd-utils')
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
