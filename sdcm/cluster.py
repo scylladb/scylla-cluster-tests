@@ -1706,6 +1706,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
 
         # avoid using node.remoter in thread
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
         seed = node_list[0].public_ip_address
@@ -2019,6 +2020,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         start_time = time.time()
 
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
         for loader in node_list:
@@ -2133,6 +2135,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         # We cannot run this in a thread since our SSH connection
         # is not thread safe
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y collectd collectd-utils')
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
