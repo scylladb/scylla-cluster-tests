@@ -28,8 +28,9 @@ from .log import SDCMAdapter
 
 class Nemesis(object):
 
-    def __init__(self, cluster, monitoring_set, termination_event):
+    def __init__(self, cluster, loaders, monitoring_set, termination_event):
         self.cluster = cluster
+        self.loaders = loaders
         self.monitoring_set = monitoring_set
         self.target_node = None
         logger = logging.getLogger('avocado.test')
@@ -193,6 +194,7 @@ class Nemesis(object):
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
             targets = [n.public_ip_address for n in self.cluster.nodes]
+            targets += [n.public_ip_address for n in self.loaders.nodes]
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
