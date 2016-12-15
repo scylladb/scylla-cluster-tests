@@ -32,8 +32,8 @@ class GrowClusterMonkey(Nemesis):
     def disrupt(self):
         self._set_current_disruption('Add new node to %s' % self.cluster)
         new_nodes = self.cluster.add_nodes(count=1)
-        self.cluster.wait_for_init(node_list=new_nodes)
         self.reconfigure_monitoring()
+        self.cluster.wait_for_init(node_list=new_nodes)
 
 
 class GrowClusterTest(ClusterTester):
