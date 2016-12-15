@@ -2848,7 +2848,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             name = '%s-%s' % (cluster_prefix, shortid)
         if params is not None and params.get('db_cluster_name') is not None:
             name = params.get('db_cluster_name')
-        user_data = ('--clustername %s '
+        user_data = ('--clustername "%s" '
                      '--totalnodes %s' % (name, n_nodes))
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
@@ -2870,6 +2870,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
+        self.name = name
 
     def populate_db(self, node):
         node.remoter.run("sudo rm -rf /var/lib/scylla/*")
@@ -2893,7 +2894,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                 node_private_ips = [node.private_ip_address for node
                                     in self.nodes if node.is_seed]
                 seeds = ",".join(node_private_ips)
-                ec2_user_data = ('--clustername %s --bootstrap true '
+                ec2_user_data = ('--clustername "%s" --bootstrap true '
                                  '--totalnodes %s --seeds %s' % (self.name,
                                                                  count,
                                                                  seeds))
@@ -2968,7 +2969,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         if params is not None and params.get('db_cluster_name') is not None:
             name = params.get('db_cluster_name')
-        user_data = ('--clustername %s '
+        user_data = ('--clustername "%s" '
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, n_nodes))
 
@@ -3026,7 +3027,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = ('--clustername %s --bootstrap true '
+                ec2_user_data = ('--clustername "%s" --bootstrap true '
                                  '--totalnodes %s --seeds %s '
                                  '--version community '
                                  '--release 2.1.15' % (self.name,
