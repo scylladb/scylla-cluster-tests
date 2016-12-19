@@ -455,7 +455,7 @@ class BaseNode(object):
     def setup_grafana(self):
         self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
         self.remoter.run('sudo chown %s /tmp/grafana-noedit.ini' % self.remoter.user)
-        grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+        grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                             'grafana.ini')
         self.remoter.receive_files(src='/tmp/grafana-noedit.ini',
                                    dst=grafana_ini_dst_path)
@@ -1221,8 +1221,8 @@ class BaseScyllaCluster(object):
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
             node = self.nodes[0]
-            yaml_dst_path = os.path.join(tempfile.mkdtemp(
-                prefix='scylla-longevity'), 'scylla.yaml')
+            yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
+                                         'scylla.yaml')
             node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                        dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
@@ -1852,7 +1852,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         self.nemesis_threads = []
 
     def _node_setup(self, node, seed_address):
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                      'scylla.yaml')
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
@@ -2750,7 +2750,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
 
     def get_seed_nodes(self):
         node = self.nodes[0]
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='cassandra-longevity'), 'cassandra.yaml')
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct-cassandra'), 'cassandra.yaml')
         node.remoter.receive_files(src='/etc/cassandra/cassandra.yaml',
                                    dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
