@@ -28,6 +28,9 @@ from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
+from libcloud.compute.types import Provider
+from libcloud.compute.providers import get_driver
+
 from . import cluster
 from . import nemesis
 from .cluster import CassandraAWSCluster
@@ -40,6 +43,10 @@ from .cluster import RemoteCredentials
 from .cluster import UserRemoteCredentials
 from .cluster import ScyllaAWSCluster
 from .cluster import ScyllaLibvirtCluster
+from .cluster import ScyllaOpenStackCluster
+from .cluster import LoaderSetOpenStack
+from .cluster import MonitorSetOpenStack
+
 from .data_path import get_data_path
 
 try:
@@ -160,6 +167,80 @@ class ClusterTester(Test):
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
 
+    def get_cluster_openstack(self, loader_info, db_info, monitor_info):
+        if loader_info['n_nodes'] is None:
+            loader_info['n_nodes'] = self.params.get('n_loaders')
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.get('openstack_instance_type_loader')
+        if db_info['n_nodes'] is None:
+            db_info['n_nodes'] = self.params.get('n_db_nodes')
+        if db_info['type'] is None:
+            db_info['type'] = self.params.get('openstack_instance_type_db')
+        if monitor_info['n_nodes'] is None:
+            monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
+        if monitor_info['type'] is None:
+            monitor_info['type'] = self.params.get('openstack_instance_type_monitor')
+        user_prefix = self.params.get('user_prefix', None)
+        user = self.params.get('openstack_user', None)
+        password = self.params.get('openstack_password', None)
+        tenant = self.params.get('openstack_tenant', None)
+        auth_version = self.params.get('openstack_auth_version', None)
+        auth_url = self.params.get('openstack_auth_url', None)
+        service_type = self.params.get('openstack_service_type', None)
+        service_name = self.params.get('openstack_service_name', None)
+        service_region = self.params.get('openstack_service_region', None)
+        service_cls = get_driver(Provider.OPENSTACK)
+        service = service_cls(user, password,
+                              ex_force_auth_version=auth_version,
+                              ex_force_auth_url=auth_url,
+                              ex_force_service_type=service_type,
+                              ex_force_service_name=service_name,
+                              ex_force_service_region=service_region,
+                              ex_tenant_name=tenant)
+        user_credentials = self.params.get('user_credentials_path', None)
+        if user_credentials:
+            self.credentials = UserRemoteCredentials(key_file=user_credentials)
+        else:
+            self.credentials = RemoteCredentials(service=service,
+                                                 key_prefix='sct',
+                                                 user_prefix=user_prefix)
+
+        self.db_cluster = ScyllaOpenStackCluster(openstack_image=self.params.get('openstack_image'),
+                                                 openstack_image_username=self.params.get('openstack_image_username'),
+                                                 openstack_network=self.params.get('openstack_network'),
+                                                 openstack_instance_type=db_info['type'],
+                                                 service=service,
+                                                 credentials=self.credentials,
+                                                 user_prefix=user_prefix,
+                                                 n_nodes=db_info['n_nodes'],
+                                                 params=self.params)
+
+        scylla_repo = get_data_path('scylla.repo')
+        self.loaders = LoaderSetOpenStack(openstack_image=self.params.get('openstack_image'),
+                                          openstack_image_username=self.params.get('openstack_image_username'),
+                                          openstack_network=self.params.get('openstack_network'),
+                                          openstack_instance_type=loader_info['type'],
+                                          service=service,
+                                          credentials=self.credentials,
+                                          scylla_repo=scylla_repo,
+                                          user_prefix=user_prefix,
+                                          n_nodes=loader_info['n_nodes'],
+                                          params=self.params)
+
+        if monitor_info['n_nodes'] > 0:
+            self.monitors = MonitorSetOpenStack(openstack_image=self.params.get('openstack_image'),
+                                                openstack_image_username=self.params.get('openstack_image_username'),
+                                                openstack_network=self.params.get('openstack_network'),
+                                                openstack_instance_type=monitor_info['type'],
+                                                service=service,
+                                                credentials=self.credentials,
+                                                scylla_repo=scylla_repo,
+                                                user_prefix=user_prefix,
+                                                n_nodes=monitor_info['n_nodes'],
+                                                params=self.params)
+        else:
+            self.monitors = NoMonitorSet()
+
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
             loader_info['n_nodes'] = self.params.get('n_loaders')
@@ -181,7 +262,7 @@ class ClusterTester(Test):
             self.credentials = UserRemoteCredentials(key_file=user_credentials)
         else:
             self.credentials = RemoteCredentials(service=service,
-                                                 key_prefix='longevity-test',
+                                                 key_prefix='sct',
                                                  user_prefix=user_prefix)
 
         if self.params.get('db_type') == 'scylla':
@@ -340,6 +421,9 @@ class ClusterTester(Test):
         elif cluster_backend == 'libvirt':
             self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info,
                                      monitor_info=monitor_info)
+        elif cluster_backend == 'openstack':
+            self.get_cluster_openstack(loader_info=loader_info, db_info=db_info,
+                                       monitor_info=monitor_info)
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:

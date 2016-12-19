@@ -40,6 +40,9 @@ from avocado.utils import runtime as avocado_runtime
 from botocore.exceptions import WaiterError
 import boto3.session
 
+from libcloud.compute.types import Provider
+from libcloud.compute.providers import get_driver
+
 from .log import SDCMAdapter
 from .remote import Remote
 from . import data_path
@@ -61,6 +64,8 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
 
 CREDENTIALS = []
 EC2_INSTANCES = []
+OPENSTACK_INSTANCES = []
+OPENSTACK_SERVICE = None
 LIBVIRT_DOMAINS = []
 LIBVIRT_IMAGES = []
 LIBVIRT_URI = 'qemu:///system'
@@ -99,6 +104,30 @@ def clean_aws_instances(region_name, instance_ids):
         test_logger.error(str(details))
 
 
+def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):
+    service_cls = get_driver(Provider.OPENSTACK)
+    service = service_cls(user, password,
+                          ex_force_auth_version=auth_version,
+                          ex_force_auth_url=auth_url,
+                          ex_force_service_type=service_type,
+                          ex_force_service_name=service_name,
+                          ex_force_service_region=service_region,
+                          ex_tenant_name=tenant)
+    return service
+
+
+def clean_openstack_instance(user, password, auth_version, auth_url, service_type, service_name, service_region,
+                             tenant, instance_name):
+    try:
+        service = get_openstack_service(user, password, auth_version, auth_url, service_type, service_name,
+                                        service_region, tenant)
+        instance = [n for n in service.list_nodes() if n.name == instance_name][0]
+        service.destroy_node(instance)
+    except Exception as details:
+        test_logger = logging.getLogger('avocado.test')
+        test_logger.error(str(details))
+
+
 def clean_aws_credential(region_name, credential_key_name, credential_key_file):
     try:
         session = boto3.session.Session(region_name=region_name)
@@ -111,21 +140,44 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
         test_logger.error(str(details))
 
 
+def clean_openstack_credential(user, password, auth_version, auth_url, service_type, service_name, service_region,
+                               tenant, credential_key_name, credential_key_file):
+    try:
+        service = get_openstack_service(user, password, auth_version, auth_url, service_type, service_name,
+                                        service_region, tenant)
+        key_pair = service.get_key_pair(credential_key_name)
+        service.delete_key_pair(key_pair)
+        os.unlink(credential_key_file)
+    except Exception as details:
+        test_logger = logging.getLogger('avocado.test')
+        test_logger.error(str(details))
+
+
 def cleanup_instances(behavior='destroy'):
     global EC2_INSTANCES
+    global OPENSTACK_INSTANCES
+    global OPENSTACK_SERVICE
     global CREDENTIALS
     global LIBVIRT_DOMAINS
     global LIBVIRT_IMAGES
 
-    for instance in EC2_INSTANCES:
+    for ec2_instance in EC2_INSTANCES:
         if behavior == 'destroy':
-            instance.terminate()
+            ec2_instance.terminate()
         elif behavior == 'stop':
-            instance.stop()
+            ec2_instance.stop()
+
+    for openstack_instance in OPENSTACK_INSTANCES:
+        if behavior == 'destroy':
+            openstack_instance.destroy()
 
     for cred in CREDENTIALS:
         if behavior == 'destroy':
-            cred.destroy()
+            if hasattr(cred, 'destroy'):
+                cred.destroy()
+            else:
+                if OPENSTACK_SERVICE is not None:
+                    OPENSTACK_SERVICE.delete_key_pair(cred.key_pair_name)
 
     for domain_name in LIBVIRT_DOMAINS:
         clean_domain(domain_name)
@@ -185,9 +237,13 @@ class RemoteCredentials(object):
         self.type = 'generated'
         self.uuid = uuid.uuid4()
         self.shortid = str(self.uuid)[:8]
+        self.service = service
         key_prefix = _prepend_user_prefix(user_prefix, key_prefix)
         self.name = '%s-%s' % (key_prefix, self.shortid)
-        self.key_pair = service.create_key_pair(KeyName=self.name)
+        try:
+            self.key_pair = self.service.create_key_pair(KeyName=self.name)
+        except TypeError:
+            self.key_pair = self.service.create_key_pair(name=self.name)
         self.key_pair_name = self.key_pair.name
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '%s.pem' % self.name)
@@ -200,12 +256,20 @@ class RemoteCredentials(object):
         return "Key Pair %s -> %s" % (self.name, self.key_file)
 
     def write_key_file(self):
+        # key_material is the attribute for boto3
+        attr = 'key_material'
+        if hasattr(self.key_pair, 'private_key'):
+            # private_key is the attribute for libcloud
+            attr = 'private_key'
         with open(self.key_file, 'w') as key_file_obj:
-            key_file_obj.write(self.key_pair.key_material)
+            key_file_obj.write(getattr(self.key_pair, attr))
         os.chmod(self.key_file, 0o400)
 
     def destroy(self):
-        self.key_pair.delete()
+        if hasattr(self.key_pair, 'delete'):
+            self.key_pair.delete()
+        else:
+            self.service.delete_key_pair(self.key_pair)
         try:
             os.remove(self.key_file)
         except OSError:
@@ -565,7 +629,7 @@ WantedBy=multi-user.target
         :rtype: int
         """
         try:
-            n_backtraces_cmd = 'sudo coredumpctl --no-legend 2>/dev/null'
+            n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>/dev/null'
             result = self.remoter.run(n_backtraces_cmd,
                                       verbose=False, ignore_status=True)
             return len(result.stdout.splitlines())
@@ -749,6 +813,71 @@ WantedBy=multi-user.target
             text = '%s: Waiting for cassandra-stress' % self
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
+
+
+class OpenStackNode(BaseNode):
+
+    """
+    Wraps EC2.Instance, so that we can also control the instance through SSH.
+    """
+
+    def __init__(self, openstack_instance, openstack_service, credentials,
+                 node_prefix='node', node_index=1, openstack_image_username='root',
+                 base_logdir=None):
+        name = '%s-%s' % (node_prefix, node_index)
+        self._instance = openstack_instance
+        self._openstack_service = openstack_service
+        self._wait_private_ip()
+        ssh_login_info = {'hostname': self.public_ip_address,
+                          'user': openstack_image_username,
+                          'key_file': credentials.key_file,
+                          'wait_key_installed': 30,
+                          'extra_ssh_options': '-t'}
+        super(OpenStackNode, self).__init__(name=name,
+                                            ssh_login_info=ssh_login_info,
+                                            base_logdir=base_logdir)
+
+    @property
+    def public_ip_address(self):
+        return self._get_private_ip_address()
+
+    @property
+    def private_ip_address(self):
+        return self._get_private_ip_address()
+
+    def _get_public_ip_address(self):
+        public_ips, _ = self._refresh_instance_state()
+        if public_ips:
+            return public_ips[0]
+        else:
+            return None
+
+    def _get_private_ip_address(self):
+        _, private_ips = self._refresh_instance_state()
+        if private_ips:
+            return private_ips[0]
+        else:
+            return None
+
+    def _wait_private_ip(self):
+        _, private_ips = self._refresh_instance_state()
+        while not private_ips:
+            time.sleep(1)
+            _, private_ips = self._refresh_instance_state()
+
+    def _refresh_instance_state(self):
+        node_name = self._instance.name
+        instance = [n for n in self._openstack_service.list_nodes() if n.name == node_name][0]
+        self._instance = instance
+        ip_tuple = (instance.public_ips, instance.private_ips)
+        return ip_tuple
+
+    def restart(self):
+        self._instance.reboot()
+
+    def destroy(self):
+        self._instance.destroy()
+        self.log.info('Destroyed')
 
 
 class AWSNode(BaseNode):
@@ -1241,7 +1370,8 @@ class BaseLoaderSet(object):
             tag = 'TAG: loader_idx:%s-cpu_idx:%s' % (loader_idx, cpu_idx)
 
             self.log.debug('cassandra-stress log: %s', log_file_name)
-            loader_user = (self.params.get('libvirt_loader_image_user') or
+            loader_user = (self.params.get('openstack_image_username') or
+                           self.params.get('libvirt_loader_image_user') or
                            self.params.get('ami_loader_user'))
             dst_stress_script_dir = os.path.join('/home', loader_user)
             dst_stress_script = os.path.join(dst_stress_script_dir,
@@ -1788,6 +1918,10 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
             if db_node_address is not None:
                 node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
                                  db_node_address)
+
+            cs_exporter_setup = CassandraStressExporterSetup()
+            cs_exporter_setup.install(node)
+
             queue.put(node)
             queue.task_done()
 
@@ -1831,6 +1965,80 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
         self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
+
+
+class OpenStackCluster(BaseCluster):
+
+    """
+    Cluster of Node objects, started on OpenStack.
+    """
+
+    def __init__(self, openstack_image, openstack_network, service, credentials, cluster_uuid=None,
+                 openstack_instance_type='m1.small', openstack_image_username='root',
+                 cluster_prefix='cluster',
+                 node_prefix='node', n_nodes=10, params=None):
+        if credentials.type == 'generated':
+            credential_key_name = credentials.key_pair_name
+            credential_key_file = credentials.key_file
+            user = params.get('openstack_user', None)
+            password = params.get('openstack_password', None)
+            tenant = params.get('openstack_tenant', None)
+            auth_version = params.get('openstack_auth_version', None)
+            auth_url = params.get('openstack_auth_url', None)
+            service_type = params.get('openstack_service_type', None)
+            service_name = params.get('openstack_service_name', None)
+            service_region = params.get('openstack_service_region', None)
+            global OPENSTACK_SERVICE
+            if OPENSTACK_SERVICE is None:
+                OPENSTACK_SERVICE = service
+            if params.get('failure_post_behavior') == 'destroy':
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_openstack_credential,
+                                                               'args': (user,
+                                                                        password,
+                                                                        tenant,
+                                                                        auth_version,
+                                                                        auth_url,
+                                                                        service_type,
+                                                                        service_name,
+                                                                        service_region,
+                                                                        credential_key_name,
+                                                                        credential_key_file),
+                                                               'once': True})
+        global CREDENTIALS
+        CREDENTIALS.append(credentials)
+
+        self._openstack_image = openstack_image
+        self._openstack_network = openstack_network
+        self._openstack_service = service
+        self._credentials = credentials
+        self._openstack_instance_type = openstack_instance_type
+        self._openstack_image_username = openstack_image_username
+        super(OpenStackCluster, self).__init__(cluster_uuid=cluster_uuid,
+                                               cluster_prefix=cluster_prefix,
+                                               node_prefix=node_prefix,
+                                               n_nodes=n_nodes,
+                                               params=params)
+
+    def __str__(self):
+        return 'Cluster %s (Image: %s Type: %s)' % (self.name,
+                                                    self._openstack_image,
+                                                    self._openstack_instance_type)
+
+    def add_nodes(self, count, ec2_user_data=''):
+        size = [d for d in self._openstack_service.list_sizes() if d.name == self._openstack_instance_type][0]
+        image = self._openstack_service.get_image(self._openstack_image)
+        networks = [n for n in self._openstack_service.ex_list_networks() if n.name == self._openstack_network]
+        for node_index in range(self._node_index + 1, count + 1):
+            name = '%s-%s' % (self.node_prefix, node_index)
+            instance = self._openstack_service.create_node(name=name, image=image, size=size, networks=networks,
+                                                           ex_keyname=self._credentials.name)
+            OPENSTACK_INSTANCES.append(instance)
+            self.nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
+                                            credentials=self._credentials,
+                                            openstack_image_username=self._openstack_image_username,
+                                            node_prefix=self.node_prefix, node_index=node_index,
+                                            base_logdir=self.logdir))
+            self._node_index += 1
 
 
 class AWSCluster(BaseCluster):
@@ -1964,6 +2172,155 @@ class AWSCluster(BaseCluster):
         if size is None:
             size = int(self.params.get('space_node_threshold'))
         self.wait_cfstat_reached_threshold('Space used (total)', size)
+
+
+class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
+    def __init__(self, openstack_image, openstack_network, service, credentials,
+                 openstack_instance_type='m1.small',
+                 openstack_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        # We have to pass the cluster name in advance in user_data
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        super(ScyllaOpenStackCluster, self).__init__(openstack_image=openstack_image,
+                                                     openstack_network=openstack_network,
+                                                     openstack_instance_type=openstack_instance_type,
+                                                     openstack_image_username=openstack_image_username,
+                                                     service=service,
+                                                     credentials=credentials,
+                                                     cluster_prefix=cluster_prefix,
+                                                     node_prefix=node_prefix,
+                                                     n_nodes=n_nodes,
+                                                     params=params)
+        self.collectd_setup = ScyllaCollectdSetup()
+        self.nemesis = []
+        self.nemesis_threads = []
+        self.termination_event = threading.Event()
+        self.seed_nodes_private_ips = None
+        self.version = '2.1'
+
+    def add_nodes(self, count, ec2_user_data=''):
+        added_nodes = super(ScyllaOpenStackCluster, self).add_nodes(count=count,
+                                                                    ec2_user_data=ec2_user_data)
+        return added_nodes
+
+    def _node_setup(self, node, seed_address):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                     'scylla.yaml')
+        # Sometimes people might set up base images with
+        # previous versions of scylla installed (they shouldn't).
+        # But anyway, let's cover our bases as much as possible.
+        node.remoter.run('sudo yum remove -y scylla*')
+        node.remoter.run('sudo yum remove -y abrt')
+        # Let's re-create the yum database upon update
+        node.remoter.run('sudo yum clean all')
+        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum install -y rsync tcpdump screen wget')
+        yum_config_path = '/etc/yum.repos.d/scylla.repo'
+        node.remoter.run('sudo curl %s -o %s' %
+                         (self.params.get('scylla_repo'), yum_config_path))
+        node.remoter.run('sudo yum install -y scylla')
+        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                   dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+
+        # Set seeds
+        p = re.compile('seeds:.*')
+        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
+                                     scylla_yaml_contents)
+
+        # Set listen_address
+        p = re.compile('listen_address:.*')
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        # Set rpc_address
+        p = re.compile('rpc_address:.*')
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
+                                     scylla_yaml_contents)
+        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
+                                                            "cluster_name: '{0}'".format(self.name))
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
+        # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
+        node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
+        node.remoter.run('sudo cat /usr/lib/systemd/system/scylla-housekeeping.timer')
+        node.remoter.run('sudo systemctl daemon-reload')
+        node.remoter.run('sudo systemctl enable scylla-server.service')
+        node.remoter.run('sudo systemctl enable scylla-jmx.service')
+        node.restart()
+        node.wait_ssh_up()
+        node.wait_db_up()
+        node.wait_jmx_up()
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        """
+        Configure scylla.yaml on all cluster nodes.
+
+        We have to modify scylla.yaml on our own because we are not on AWS,
+        where there are auto config scripts in place.
+
+        :param node_list: List of nodes to watch for init.
+        :param verbose: Whether to print extra info while watching for init.
+        :return:
+        """
+        if node_list is None:
+            node_list = self.nodes
+
+        queue = Queue.Queue()
+
+        def node_setup(node, seed_address):
+            node.wait_ssh_up(verbose=verbose)
+            self._node_setup(node=node, seed_address=seed_address)
+            node.wait_db_up(verbose=verbose)
+            node.remoter.run('sudo yum install -y scylla-gdb',
+                             verbose=verbose, ignore_status=True)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        # avoid using node.remoter in thread
+        for node in node_list:
+            self.collectd_setup.install(node)
+
+        seed = node_list[0].public_ip_address
+        # If we setup all nodes in paralel, we might have troubles
+        # with nodes not able to contact the seed node.
+        # Let's setup the seed node first, then set up the others
+        node_setup(node_list[0], seed_address=seed)
+        for loader in node_list[1:]:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader, seed))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
+        self.update_db_binary(node_list)
+        self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def destroy(self):
+        self.stop_nemesis()
+        super(ScyllaOpenStackCluster, self).destroy()
 
 
 class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
@@ -2179,6 +2536,67 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
+class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
+
+    def __init__(self, openstack_image, openstack_network, service, credentials,
+                 openstack_instance_type='m1.small',
+                 openstack_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        super(LoaderSetOpenStack, self).__init__(openstack_image=openstack_image,
+                                                 openstack_network=openstack_network,
+                                                 openstack_instance_type=openstack_instance_type,
+                                                 openstack_image_username=openstack_image_username,
+                                                 service=service,
+                                                 credentials=credentials,
+                                                 cluster_prefix=cluster_prefix,
+                                                 node_prefix=node_prefix,
+                                                 n_nodes=n_nodes,
+                                                 params=params)
+        self.scylla_repo = scylla_repo
+
+    def wait_for_init(self, verbose=False, db_node_address=None):
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            self.log.info('Setup')
+            node.wait_ssh_up(verbose=verbose)
+            yum_config_path = '/etc/yum.repos.d/scylla.repo'
+            node.remoter.run('sudo curl %s -o %s' %
+                             (self.params.get('scylla_repo'), yum_config_path))
+            node.remoter.run('sudo yum install -y scylla-tools')
+            node.wait_cs_installed(verbose=verbose)
+            node.remoter.run('sudo yum install -y screen')
+            if db_node_address is not None:
+                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                                 db_node_address)
+
+            cs_exporter_setup = CassandraStressExporterSetup()
+            cs_exporter_setup.install(node)
+
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+
 class LoaderSetAWS(AWSCluster, BaseLoaderSet):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
@@ -2204,6 +2622,33 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                                            n_nodes=n_nodes,
                                            params=params)
         self.scylla_repo = scylla_repo
+
+
+class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
+
+    def __init__(self, openstack_image, openstack_network, service, credentials,
+                 openstack_instance_type='m1.small',
+                 openstack_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        super(MonitorSetOpenStack, self).__init__(openstack_image=openstack_image,
+                                                  openstack_network=openstack_network,
+                                                  openstack_instance_type=openstack_instance_type,
+                                                  openstack_image_username=openstack_image_username,
+                                                  service=service,
+                                                  credentials=credentials,
+                                                  cluster_prefix=cluster_prefix,
+                                                  node_prefix=node_prefix,
+                                                  n_nodes=n_nodes,
+                                                  params=params)
+        self.scylla_repo = scylla_repo
+
+    def destroy(self):
+        self.log.info('Destroy nodes')
+        self.download_monitor_data()
+        for node in self.nodes:
+            node.destroy()
 
 
 class MonitorSetAWS(AWSCluster, BaseMonitorSet):

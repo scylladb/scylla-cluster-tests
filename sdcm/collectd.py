@@ -39,6 +39,7 @@ class CollectdSetup(object):
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
             command = "sudo mv %s %s" % (tmp_path_remote, system_path_remote)
             self.node.remoter.run(command)
+            self.node.remoter.run('sudo sh -c "echo FQDNLookup   false >> /etc/collectd.conf"')
             self.start_collectd_service()
         finally:
             pass
@@ -56,6 +57,8 @@ class CollectdSetup(object):
     def install(self, node):
         self.node = node
 
+        self.node.remoter.run('sudo yum install -y epel-release')
+        self.node.remoter.run('sudo yum install -y collectd')
         self._setup_collectd()
         self._set_exporter_path()
         self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
@@ -388,6 +391,8 @@ LoadPlugin processes
         return "/etc/collectd.d/scylla.conf"
 
     def start_collectd_service(self):
+        # Disable SELinux to allow the unix socket plugin to work
+        self.node.remoter.run('sudo setenforce 0', ignore_status=True)
         self.node.remoter.run('sudo systemctl enable collectd.service')
         self.node.remoter.run('sudo systemctl restart collectd.service')
 
