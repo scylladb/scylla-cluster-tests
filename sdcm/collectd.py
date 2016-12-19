@@ -392,7 +392,7 @@ LoadPlugin processes
 
     def start_collectd_service(self):
         # Disable SELinux to allow the unix socket plugin to work
-        self.node.remoter.run('sudo setenforce 0')
+        self.node.remoter.run('sudo setenforce 0', ignore_status=True)
         self.node.remoter.run('sudo systemctl enable collectd.service')
         self.node.remoter.run('sudo systemctl restart collectd.service')
 
