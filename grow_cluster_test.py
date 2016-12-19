@@ -120,6 +120,7 @@ class GrowClusterTest(ClusterTester):
         self.log.info('Starting to grow cluster: %s' % str(start))
 
         self.db_cluster.add_nemesis(nemesis=GrowClusterMonkey,
+                                    loaders=self.loaders,
                                     monitoring_set=self.monitors)
         while len(self.db_cluster.nodes) < cluster_target_size:
             # Run GrowClusterMonkey to add one node at a time

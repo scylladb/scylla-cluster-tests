@@ -674,17 +674,18 @@ WantedBy=multi-user.target
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
-    def get_cfstats(self):
+    def get_cfstats(self, tcpdump=False):
         def keyspace1_available():
             self.remoter.run('nodetool flush', ignore_status=True)
             res = self.remoter.run('nodetool cfstats keyspace1',
                                    ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
-        self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
-        tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
-                                          kwargs={'tcpdump_id': tcpdump_id})
-        tcpdump_thread.start()
+        if tcpdump:
+            self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
+            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
+                                              kwargs={'tcpdump_id': tcpdump_id})
+            tcpdump_thread.start()
         wait.wait_for(keyspace1_available, step=60,
                       text='Waiting until keyspace1 is available')
         try:
@@ -694,7 +695,8 @@ WantedBy=multi-user.target
                            'debugging info', tcpdump_id)
             raise
         finally:
-            self.remoter.run('sudo killall tcpdump', ignore_status=True)
+            if tcpdump:
+                self.remoter.run('sudo killall tcpdump', ignore_status=True)
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
@@ -717,6 +719,21 @@ WantedBy=multi-user.target
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=self.db_up, step=60,
+                      text=text)
+
+    def apt_running(self):
+        try:
+            result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
+            return result.exit_status == 0
+        except Exception as details:
+            self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
+            return False
+
+    def wait_apt_not_running(self, verbose=True):
+        text = None
+        if verbose:
+            text = '%s: Waiting for apt to finish running in the background' % self
+        wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
     def wait_db_down(self, verbose=True):
@@ -1110,7 +1127,8 @@ class BaseScyllaCluster(object):
         :param threshold: threshold value for cfstats key. Example, 2432043080.
         :return: Whether all nodes reached that threshold or not.
         """
-        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        tcpdump = self.params.get('tcpdump')
+        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
         reached_threshold = True
         for value in cfstats:
             if value < threshold:
@@ -1130,8 +1148,9 @@ class BaseScyllaCluster(object):
             size = int(self.params.get('space_node_threshold'))
         self.wait_cfstat_reached_threshold('Space used (total)', size)
 
-    def add_nemesis(self, nemesis, monitoring_set):
+    def add_nemesis(self, nemesis, loaders, monitoring_set):
         self.nemesis.append(nemesis(cluster=self,
+                                    loaders=loaders,
                                     monitoring_set=monitoring_set,
                                     termination_event=self.termination_event))
 
@@ -1200,8 +1219,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, cmd, timeout, output_dir, stress_num=1):
-        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + cmd + "|tee /tmp/cs_pipe"
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
+        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
@@ -1702,6 +1721,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
 
         # avoid using node.remoter in thread
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
         seed = node_list[0].public_ip_address
@@ -1925,7 +1945,8 @@ class AWSCluster(BaseCluster):
         :param threshold: threshold value for cfstats key. Example, 2432043080.
         :return: Whether all nodes reached that threshold or not.
         """
-        cfstats = [node.get_cfstats()[key] for node in self.nodes]
+        tcpdump = self.params.get('tcpdump')
+        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
         reached_threshold = True
         for value in cfstats:
             if value < threshold:
@@ -2014,6 +2035,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         start_time = time.time()
 
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
         for loader in node_list:
@@ -2128,6 +2150,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         # We cannot run this in a thread since our SSH connection
         # is not thread safe
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
+            node.wait_apt_not_running()
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y collectd collectd-utils')
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
