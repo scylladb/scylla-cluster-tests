@@ -73,7 +73,6 @@ class PerformanceRegressionTest(ClusterTester):
     </result>
   </test>
 """ % (self.params.get('stress_modes'),
-            idx,
             result['loader_idx'],
             result['cpu_idx'],
             self.params.get('ami_id_db_scylla'),
