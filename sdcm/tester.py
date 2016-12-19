@@ -527,14 +527,15 @@ class ClusterTester(Test):
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1):
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
-                                              stress_num=stress_num)
+                                              stress_num=stress_num,
+                                              keyspace_num=keyspace_num)
 
     @clean_aws_resources
     def kill_stress_thread(self):
@@ -554,8 +555,8 @@ class ClusterTester(Test):
                       "nodes:\n%s" % "\n".join(errors))
 
     @clean_aws_resources
-    def get_stress_results(self, queue, stress_num=1):
-        return self.loaders.get_stress_results(queue, stress_num=stress_num)
+    def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
+        return self.loaders.get_stress_results(queue, stress_num=stress_num, keyspace_num=keyspace_num)
 
     def get_auth_provider(self, user, password):
         return PlainTextAuthProvider(username=user, password=password)

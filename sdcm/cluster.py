@@ -1432,8 +1432,9 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
-        stress_cmd = "mkfifo /tmp/cs_pipe_$1; cat /tmp/cs_pipe_$1|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe_$1; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1"
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1):
+        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$1 ")
+        stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
@@ -1441,7 +1442,7 @@ class BaseLoaderSet(object):
         stress_script.save()
         queue = Queue.Queue()
 
-        def node_run_stress(node, loader_idx, cpu_idx):
+        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx):
             try:
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
@@ -1451,7 +1452,7 @@ class BaseLoaderSet(object):
                                          (loader_idx, cpu_idx, uuid.uuid4()))
             # This tag will be output in the header of c-stress result,
             # we parse it to know the loader & cpu info in _parse_cs_summary().
-            tag = 'TAG: loader_idx:%s-cpu_idx:%s' % (loader_idx, cpu_idx)
+            tag = 'TAG: loader_idx:%s-cpu_idx:%s-keyspace_idx:%s' % (loader_idx, cpu_idx, keyspace_idx)
 
             self.log.debug('cassandra-stress log: %s', log_file_name)
             dst_stress_script_dir = os.path.join('/home', node.remoter.user)
@@ -1464,7 +1465,7 @@ class BaseLoaderSet(object):
                 node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
             else:
                 node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s %s' % (tag, node_cmd, cpu_idx)
+            node_cmd = 'echo %s; %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx)
 
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
@@ -1477,12 +1478,13 @@ class BaseLoaderSet(object):
 
         for loader_idx, loader in enumerate(self.nodes):
             for cpu_idx in range(stress_num):
-                setup_thread = threading.Thread(target=node_run_stress,
-                                                args=(loader, loader_idx,
-                                                      cpu_idx))
-                setup_thread.daemon = True
-                setup_thread.start()
-                time.sleep(30)
+                for ks_idx in range(keyspace_num):
+                    setup_thread = threading.Thread(target=node_run_stress,
+                                                    args=(loader, loader_idx,
+                                                          cpu_idx, ks_idx))
+                    setup_thread.daemon = True
+                    setup_thread.start()
+                    time.sleep(30)
 
         return queue
 
@@ -1521,9 +1523,10 @@ class BaseLoaderSet(object):
             line.strip()
             # Parse loader & cpu info
             if line.startswith('TAG:'):
-                ret = re.findall("TAG: loader_idx:(\d+)-cpu_idx:(\d+)", line)
+                ret = re.findall("TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
                 results['loader_idx'] = ret[0][0]
                 results['cpu_idx'] = ret[0][1]
+                results['keyspace_idx'] = ret[0][2]
 
             if line.startswith('Results:'):
                 enable_parse = True
@@ -1654,10 +1657,10 @@ class BaseLoaderSet(object):
 
         return errors
 
-    def get_stress_results(self, queue, stress_num=1):
+    def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
         results = []
         ret = []
-        while len(results) != len(self.nodes) * stress_num:
+        while len(results) != len(self.nodes) * stress_num * keyspace_num:
             try:
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
