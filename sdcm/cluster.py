@@ -454,7 +454,7 @@ class BaseNode(object):
 
     def setup_grafana(self):
         self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
-        self.remoter.run('sudo chown centos /tmp/grafana-noedit.ini')
+        self.remoter.run('sudo chown %s /tmp/grafana-noedit.ini' % self.remoter.user)
         grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                             'grafana.ini')
         self.remoter.receive_files(src='/tmp/grafana-noedit.ini',
@@ -523,8 +523,8 @@ class BaseNode(object):
                           self.prometheus_system_base_dir))
 
     def download_prometheus_data_dir(self):
-        self.remoter.run('sudo chown -R centos:centos %s' %
-                         self.prometheus_data_dir)
+        self.remoter.run('sudo chown -R %s:%s %s' %
+                         (self.remoter.user, self.remoter.user, self.prometheus_data_dir))
         dst = os.path.join(self.logdir, 'prometheus')
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
@@ -1454,10 +1454,7 @@ class BaseLoaderSet(object):
             tag = 'TAG: loader_idx:%s-cpu_idx:%s' % (loader_idx, cpu_idx)
 
             self.log.debug('cassandra-stress log: %s', log_file_name)
-            loader_user = (self.params.get('openstack_image_username') or
-                           self.params.get('libvirt_loader_image_user') or
-                           self.params.get('ami_loader_user'))
-            dst_stress_script_dir = os.path.join('/home', loader_user)
+            dst_stress_script_dir = os.path.join('/home', node.remoter.user)
             dst_stress_script = os.path.join(dst_stress_script_dir,
                                              os.path.basename(stress_script.path))
             node.remoter.send_files(stress_script.path, dst_stress_script_dir)
