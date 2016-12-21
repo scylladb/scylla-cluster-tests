@@ -435,8 +435,7 @@ TODO
 ----
 
 * Set up buildable HTML documentation, and a hosted version of it.
-* Writing more tests, improving the test API.
-* Allowing the use of more backends, such as libvirt vms, as an alternative to AWS.
+* Write more tests, improve test API (always in progress, I guess).
 
 Known issues
 ------------
