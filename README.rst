@@ -36,16 +36,19 @@ What's inside?
 Regular Setup
 -------------
 
-Install freetype and C++ environment.
+This guide was written with Red Hat based distributions (Fedora, RHEL and CentOS), and has been tested on recent Fedora and CentOS 7.
+
+Install freetype and C++ compilers and libraries::
 
     sudo yum install freetype-devel gcc-c++
 
-Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib`` and ``aexpect``::
+Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib``, ``aexpect`` and ``apache-libcloud``::
 
     sudo -H pip install boto3
     sudo -H pip install awscli
     sudo -H pip install matplotlib==1.5.0
     sudo -H pip install aexpect
+    sudo -H pip install apache-libcloud
 
 Install avocado. Make sure you install the LTS version (36.X), as newer versions have API incompatibilities with scylla-cluster-tests.
 
@@ -55,7 +58,7 @@ http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installi
 
 The detail here is to ensure you're installing the LTS version.
 
-Example: Following the instructions in the link, after you download the repo file for Fedora, (avocado-fedora.repo) edit it. Before modifying it, its contents are:
+Example: Following the instructions in the link, after you download the repo file for Fedora, (avocado-fedora.repo) edit it. Before modifying it, its contents are::
 
     [avocado]
     name=Avocado
@@ -75,10 +78,9 @@ Example: Following the instructions in the link, after you download the repo fil
     enabled=0
 
 Change enabled=1 in [avocado] to enabled=0, and enabled=0 in [avocado-lts] to enabled=1.
-Now you can install avocado LTS with the dnf command mentioned in the docs.
+Now you can install avocado LTS with the dnf/yum command mentioned in the docs.
 
-If you are using a too recent fedora version for which there is no avocado lts release
-(>24) then replace $releasever by 24.
+If you are using a very recent fedora version (example, 25) for which there is no avocado lts release (>24) then replace $releasever with 24 (or whatever $CURRENT_VERSION -1 is).
 
 Configure aws::
 
@@ -185,7 +187,7 @@ AWS - Amazon Web Services
 Change your current working directory to this test suite base directory,
 then run avocado. Example command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/your_config.yaml --filter-only /run/backends/aws/us_east_1 /run/databases/scylla --filter-out /run/backends/libvirt --open-browser
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/your_config.yaml --filter-only /run/backends/aws/us_east_1 /run/databases/scylla --filter-out /run/backends/libvirt /run/backends/openstack /run/backends/gce --open-browser
 
 This command line is to run the test method ``test_custom_time``, in
 the class ``Longevitytest``, that lies inside the file ``longevity_test.py``,
@@ -224,7 +226,7 @@ A throbber, that will spin until the test ends. This will hopefully evolve to::
 Libvirt
 -------
 
-In order to run tests based on libvirt, you'll need:
+In order to run tests using the libvirt backend, you'll need:
 
 1. One qcow2 base image with CentOS 7 installed. This image needs to have a user
    named 'centos', and this user needs to be configured to not require a password
@@ -239,24 +241,46 @@ In order to run tests based on libvirt, you'll need:
 
 With that said and done, you can run your test using the command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --open-browser
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/openstack /run/backends/gce --open-browser
 
-You'll see something like::
 
-    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
-    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
-    TESTS      : 1
-     (1/1) longevity_test.py:LongevityTest.test_custom_time : /
+OpenStack
+---------
 
-A throbber, that will spin until the test ends. This will hopefully evolve to::
+In order to run tests using the openstack backend, you'll need:
 
-    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
-    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
-    TESTS      : 1
-     (1/1) longevity_test.py:LongevityTest.test_custom_time : PASS (1083.19 s)
-    RESULTS    : PASS 1 | ERROR 0 | FAIL 0 | SKIP 0 | WARN 0 | INTERRUPT 0
-    JOB HTML   : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/html/results.html
-    TIME       : 1083.19 s
+1. A deployed OpenStack lab
+2. One CentOS 7 image. This image needs to have a user
+   named 'centos', and this user needs to be configured to not require a password
+   when running commands with sudo.
+
+3. `cp data_dir/scylla.yaml data_dir/your_config.yaml`
+
+4. Edit the configuration file (data_dir/your_config.yaml) to tweak values present
+   in the `openstack:` session of that file. One of the values you might want to
+   tweak is the scylla yum repository used to install scylla on the CentOS 7 image.
+
+With that said and done, you can run your test using the command line::
+
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/libvirt /run/backends/gce --open-browser
+
+GCE - Google Compute Engine
+---------------------------
+
+In order to run tests using the GCE backend, you'll need:
+
+1. A GCE account
+
+2. `cp data_dir/scylla.yaml data_dir/your_config.yaml`
+
+3. Edit the configuration file (data_dir/your_config.yaml) to tweak values present
+   in the `gce:` session of that file. One of the values you might want to
+   tweak is the scylla yum repository used to install scylla on the CentOS 7 image.
+
+With that said and done, you can run your test using the command line::
+
+    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/libvirt /run/backends/openstack --open-browser
+
 
 (Optional) Follow what the test is doing
 ----------------------------------------
@@ -411,8 +435,7 @@ TODO
 ----
 
 * Set up buildable HTML documentation, and a hosted version of it.
-* Writing more tests, improving the test API.
-* Allowing the use of more backends, such as libvirt vms, as an alternative to AWS.
+* Write more tests, improve test API (always in progress, I guess).
 
 Known issues
 ------------

@@ -33,19 +33,27 @@ from libcloud.compute.providers import get_driver
 
 from . import cluster
 from . import nemesis
+
 from .cluster import CassandraAWSCluster
 from .cluster import LoaderSetAWS
 from .cluster import LoaderSetLibvirt
+from .cluster import LoaderSetOpenStack
+from .cluster import LoaderSetGCE
+
 from .cluster import NoMonitorSet
 from .cluster import MonitorSetAWS
 from .cluster import MonitorSetLibvirt
+from .cluster import MonitorSetOpenStack
+from .cluster import MonitorSetGCE
+
 from .cluster import RemoteCredentials
 from .cluster import UserRemoteCredentials
+from .cluster import GCECredentials
+
 from .cluster import ScyllaAWSCluster
 from .cluster import ScyllaLibvirtCluster
 from .cluster import ScyllaOpenStackCluster
-from .cluster import LoaderSetOpenStack
-from .cluster import MonitorSetOpenStack
+from .cluster import ScyllaGCECluster
 
 from .data_path import get_data_path
 
@@ -241,6 +249,83 @@ class ClusterTester(Test):
         else:
             self.monitors = NoMonitorSet()
 
+    def get_cluster_gce(self, loader_info, db_info, monitor_info):
+        if loader_info['n_nodes'] is None:
+            loader_info['n_nodes'] = self.params.get('n_loaders')
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.get('gce_instance_type_loader')
+        if loader_info['disk_type'] is None:
+            loader_info['disk_type'] = self.params.get('gce_root_disk_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.get('gce_root_disk_size_loader')
+        if db_info['n_nodes'] is None:
+            db_info['n_nodes'] = self.params.get('n_db_nodes')
+        if db_info['type'] is None:
+            db_info['type'] = self.params.get('gce_instance_type_db')
+        if db_info['disk_type'] is None:
+            db_info['disk_type'] = self.params.get('gce_root_disk_type_db')
+        if db_info['disk_size'] is None:
+            db_info['disk_size'] = self.params.get('gce_root_disk_size_db')
+        if monitor_info['n_nodes'] is None:
+            monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
+        if monitor_info['type'] is None:
+            monitor_info['type'] = self.params.get('gce_instance_type_monitor')
+        if monitor_info['disk_type'] is None:
+            monitor_info['disk_type'] = self.params.get('gce_root_disk_type_monitor')
+        if monitor_info['disk_size'] is None:
+            monitor_info['disk_size'] = self.params.get('gce_root_disk_size_monitor')
+        user_prefix = self.params.get('user_prefix', None)
+        service_account_email = self.params.get('gce_service_account_email', None)
+        user_credentials = self.params.get('gce_user_credentials', None)
+        datacenter = self.params.get('gce_datacenter', None)
+        project = self.params.get('gce_project', None)
+        service_cls = get_driver(Provider.GCE)
+        service = service_cls(service_account_email, user_credentials, datacenter=datacenter, project=project)
+        user_credentials = self.params.get('user_credentials_path', None)
+        self.credentials = GCECredentials(key_file=user_credentials)
+
+        self.db_cluster = ScyllaGCECluster(gce_image=self.params.get('gce_image'),
+                                           gce_image_type=db_info['disk_type'],
+                                           gce_image_size=db_info['disk_size'],
+                                           gce_image_username=self.params.get('gce_image_username'),
+                                           gce_network=self.params.get('gce_network'),
+                                           gce_instance_type=db_info['type'],
+                                           service=service,
+                                           credentials=self.credentials,
+                                           user_prefix=user_prefix,
+                                           n_nodes=db_info['n_nodes'],
+                                           params=self.params)
+
+        scylla_repo = get_data_path('scylla.repo')
+        self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image'),
+                                    gce_image_type=loader_info['disk_type'],
+                                    gce_image_size=loader_info['disk_size'],
+                                    gce_image_username=self.params.get('gce_image_username'),
+                                    gce_network=self.params.get('gce_network'),
+                                    gce_instance_type=loader_info['type'],
+                                    service=service,
+                                    credentials=self.credentials,
+                                    scylla_repo=scylla_repo,
+                                    user_prefix=user_prefix,
+                                    n_nodes=loader_info['n_nodes'],
+                                    params=self.params)
+
+        if monitor_info['n_nodes'] > 0:
+            self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image'),
+                                          gce_image_type=monitor_info['disk_type'],
+                                          gce_image_size=monitor_info['disk_size'],
+                                          gce_image_username=self.params.get('gce_image_username'),
+                                          gce_network=self.params.get('gce_network'),
+                                          gce_instance_type=monitor_info['type'],
+                                          service=service,
+                                          credentials=self.credentials,
+                                          scylla_repo=scylla_repo,
+                                          user_prefix=user_prefix,
+                                          n_nodes=monitor_info['n_nodes'],
+                                          params=self.params)
+        else:
+            self.monitors = NoMonitorSet()
+
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
             loader_info['n_nodes'] = self.params.get('n_loaders')
@@ -401,14 +486,14 @@ class ClusterTester(Test):
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
         if loader_info is None:
-            loader_info = {'n_nodes': None, 'type': None,
+            loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None,
                            'device_mappings': None}
         if db_info is None:
-            db_info = {'n_nodes': None, 'type': None,
+            db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None,
                        'device_mappings': None}
 
         if monitor_info is None:
-            monitor_info = {'n_nodes': None, 'type': None,
+            monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None,
                             'device_mappings': None}
 
         cluster_backend = self.params.get('cluster_backend')
@@ -424,6 +509,9 @@ class ClusterTester(Test):
         elif cluster_backend == 'openstack':
             self.get_cluster_openstack(loader_info=loader_info, db_info=db_info,
                                        monitor_info=monitor_info)
+        elif cluster_backend == 'gce':
+            self.get_cluster_gce(loader_info=loader_info, db_info=db_info,
+                                 monitor_info=monitor_info)
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:

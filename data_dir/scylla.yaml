@@ -131,6 +131,39 @@ backends: !mux
         openstack_instance_type_monitor: 'm1.small'
         scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.4.repo'
 
+    gce: !mux
+        cluster_backend: 'gce'
+        # Put here the path to your user credentials (usually $HOME/.ssh/google_compute_engine). Generated using the gcloud utility
+        user_credentials_path: ''
+        # The json file is used for the library to auth against the GCE service. Generated using the gcloud utility
+        gce_user_credentials: '/path/to/credentials.json'
+        # Look for the service account in Compute Engine settings web page
+        gce_service_account_email: 'your-service-account@email.com'
+        # Look for the project ID in Compute Engine settings web page
+        gce_project: 'your-gce-project-id'
+        gce_image: 'centos-7-v20161129'
+        # Your e-mail user (if foo@yourcompany.com, foo is the user)
+        gce_image_username: 'your-gce-username'
+        #
+        # gce_root_disk_size_xx units: GB
+        # gce_root_disk_type: 'pd-standard' or 'pd-ssd' (far more expensive)
+        #
+        # DB instance and disk information
+        # For large data set tests, 1500 GB of pd-standard yield 180 MB/s, which seems like a good deal
+        gce_instance_type_db: 'n1-standard-2'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 200
+        # Loader instance and disk information
+        gce_instance_type_loader: 'n1-highcpu-4'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_root_disk_size_loader: 50
+        # Monitor instance and disk information
+        gce_instance_type_monitor: 'n1-standard-1'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.4.repo'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
 
 databases: !mux
     cassandra:

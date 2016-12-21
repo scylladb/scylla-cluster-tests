@@ -66,6 +66,8 @@ CREDENTIALS = []
 EC2_INSTANCES = []
 OPENSTACK_INSTANCES = []
 OPENSTACK_SERVICE = None
+GCE_INSTANCES = []
+GCE_SERVICE = None
 LIBVIRT_DOMAINS = []
 LIBVIRT_IMAGES = []
 LIBVIRT_URI = 'qemu:///system'
@@ -295,6 +297,24 @@ class UserRemoteCredentials(object):
         pass
 
 
+class GCECredentials(object):
+
+    def __init__(self, key_file):
+        self.type = 'user'
+        self.key_file = key_file
+        self.name = os.path.basename(self.key_file)
+        self.key_pair_name = self.name
+
+    def __str__(self):
+        return "Key Pair %s -> %s" % (self.name, self.key_file)
+
+    def write_key_file(self):
+        pass
+
+    def destroy(self):
+        pass
+
+
 class BaseNode(object):
 
     def __init__(self, name, ssh_login_info=None, base_logdir=None):
@@ -434,7 +454,7 @@ class BaseNode(object):
 
     def setup_grafana(self):
         self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
-        self.remoter.run('sudo chown centos /tmp/grafana-noedit.ini')
+        self.remoter.run('sudo chown %s /tmp/grafana-noedit.ini' % self.remoter.user)
         grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                             'grafana.ini')
         self.remoter.receive_files(src='/tmp/grafana-noedit.ini',
@@ -503,8 +523,8 @@ class BaseNode(object):
                           self.prometheus_system_base_dir))
 
     def download_prometheus_data_dir(self):
-        self.remoter.run('sudo chown -R centos:centos %s' %
-                         self.prometheus_data_dir)
+        self.remoter.run('sudo chown -R %s:%s %s' %
+                         (self.remoter.user, self.remoter.user, self.prometheus_data_dir))
         dst = os.path.join(self.logdir, 'prometheus')
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
@@ -868,6 +888,70 @@ class OpenStackNode(BaseNode):
     def _refresh_instance_state(self):
         node_name = self._instance.name
         instance = [n for n in self._openstack_service.list_nodes() if n.name == node_name][0]
+        self._instance = instance
+        ip_tuple = (instance.public_ips, instance.private_ips)
+        return ip_tuple
+
+    def restart(self):
+        self._instance.reboot()
+
+    def destroy(self):
+        self._instance.destroy()
+        self.log.info('Destroyed')
+
+
+class GCENode(BaseNode):
+
+    """
+    Wraps GCE instances, so that we can also control the instance through SSH.
+    """
+
+    def __init__(self, gce_instance, gce_service, credentials,
+                 node_prefix='node', node_index=1, gce_image_username='root',
+                 base_logdir=None):
+        name = '%s-%s' % (node_prefix, node_index)
+        self._instance = gce_instance
+        self._gce_service = gce_service
+        self._wait_public_ip()
+        ssh_login_info = {'hostname': self.public_ip_address,
+                          'user': gce_image_username,
+                          'key_file': credentials.key_file,
+                          'extra_ssh_options': '-t'}
+        super(GCENode, self).__init__(name=name,
+                                      ssh_login_info=ssh_login_info,
+                                      base_logdir=base_logdir)
+
+    @property
+    def public_ip_address(self):
+        return self._get_public_ip_address()
+
+    @property
+    def private_ip_address(self):
+        return self._get_private_ip_address()
+
+    def _get_public_ip_address(self):
+        public_ips, _ = self._refresh_instance_state()
+        if public_ips:
+            return public_ips[0]
+        else:
+            return None
+
+    def _get_private_ip_address(self):
+        _, private_ips = self._refresh_instance_state()
+        if private_ips:
+            return private_ips[0]
+        else:
+            return None
+
+    def _wait_public_ip(self):
+        public_ips, _ = self._refresh_instance_state()
+        while not public_ips:
+            time.sleep(1)
+            public_ips, _ = self._refresh_instance_state()
+
+    def _refresh_instance_state(self):
+        node_name = self._instance.name
+        instance = [n for n in self._gce_service.list_nodes() if n.name == node_name][0]
         self._instance = instance
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
@@ -1370,10 +1454,7 @@ class BaseLoaderSet(object):
             tag = 'TAG: loader_idx:%s-cpu_idx:%s' % (loader_idx, cpu_idx)
 
             self.log.debug('cassandra-stress log: %s', log_file_name)
-            loader_user = (self.params.get('openstack_image_username') or
-                           self.params.get('libvirt_loader_image_user') or
-                           self.params.get('ami_loader_user'))
-            dst_stress_script_dir = os.path.join('/home', loader_user)
+            dst_stress_script_dir = os.path.join('/home', node.remoter.user)
             dst_stress_script = os.path.join(dst_stress_script_dir,
                                              os.path.basename(stress_script.path))
             node.remoter.send_files(stress_script.path, dst_stress_script_dir)
@@ -2041,6 +2122,58 @@ class OpenStackCluster(BaseCluster):
             self._node_index += 1
 
 
+class GCECluster(BaseCluster):
+
+    """
+    Cluster of Node objects, started on GCE (Google Compute Engine).
+    """
+
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials, cluster_uuid=None,
+                 gce_instance_type='n1-standard-1', gce_image_username='root',
+                 cluster_prefix='cluster',
+                 node_prefix='node', n_nodes=10, params=None):
+
+        self._gce_image = gce_image
+        self._gce_image_type = gce_image_type
+        self._gce_image_size = gce_image_size
+        self._gce_network = gce_network
+        self._gce_service = service
+        self._credentials = credentials
+        self._gce_instance_type = gce_instance_type
+        self._gce_image_username = gce_image_username
+        super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
+                                         cluster_prefix=cluster_prefix,
+                                         node_prefix=node_prefix,
+                                         n_nodes=n_nodes,
+                                         params=params)
+
+    def __str__(self):
+        return 'GCE Cluster %s (Image: %s Disk: %s Size: %s GB Type: %s)' % (self.name,
+                                                                             self._gce_image,
+                                                                             self._gce_image_type,
+                                                                             self._gce_image_size,
+                                                                             self._gce_instance_type)
+
+    def add_nodes(self, count, ec2_user_data=''):
+        for node_index in range(self._node_index + 1, count + 1):
+            name = '%s-%s' % (self.node_prefix, node_index)
+            volume = self._gce_service.create_volume(name=name, size=self._gce_image_size, image=self._gce_image,
+                                                     ex_disk_type=self._gce_image_type)
+            self.log.info('Created volume %s', volume)
+            instance = self._gce_service.create_node(name=name, size=self._gce_instance_type, image=self._gce_image,
+                                                     ex_boot_disk=volume)
+            self.log.info('Created instance %s', instance)
+            GCE_INSTANCES.append(instance)
+            self.nodes.append(GCENode(gce_instance=instance,
+                                      gce_service=self._gce_service,
+                                      credentials=self._credentials,
+                                      gce_image_username=self._gce_image_username,
+                                      node_prefix=self.node_prefix,
+                                      node_index=node_index,
+                                      base_logdir=self.logdir))
+            self._node_index += 1
+
+
 class AWSCluster(BaseCluster):
 
     """
@@ -2323,6 +2456,158 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         super(ScyllaOpenStackCluster, self).destroy()
 
 
+class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
+
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+                 gce_instance_type='n1-standard-1',
+                 gce_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        # We have to pass the cluster name in advance in user_data
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
+                                               gce_image_type=gce_image_type,
+                                               gce_image_size=gce_image_size,
+                                               gce_network=gce_network,
+                                               gce_instance_type=gce_instance_type,
+                                               gce_image_username=gce_image_username,
+                                               service=service,
+                                               credentials=credentials,
+                                               cluster_prefix=cluster_prefix,
+                                               node_prefix=node_prefix,
+                                               n_nodes=n_nodes,
+                                               params=params)
+        self.collectd_setup = ScyllaCollectdSetup()
+        self.nemesis = []
+        self.nemesis_threads = []
+        self.termination_event = threading.Event()
+        self.seed_nodes_private_ips = None
+        self.version = '2.1'
+
+    def add_nodes(self, count, ec2_user_data=''):
+        added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
+                                                              ec2_user_data=ec2_user_data)
+        return added_nodes
+
+    def _node_setup(self, node, seed_address):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                     'scylla.yaml')
+        # Sometimes people might set up base images with
+        # previous versions of scylla installed (they shouldn't).
+        # But anyway, let's cover our bases as much as possible.
+        node.remoter.run('sudo yum remove -y scylla*')
+        node.remoter.run('sudo yum remove -y abrt')
+        # Let's re-create the yum database upon update
+        node.remoter.run('sudo yum clean all')
+        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+        yum_config_path = '/etc/yum.repos.d/scylla.repo'
+        node.remoter.run('sudo curl %s -o %s' %
+                         (self.params.get('scylla_repo'), yum_config_path))
+        node.remoter.run('sudo yum install -y scylla')
+        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+                                   dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+
+        # Set seeds
+        p = re.compile('seeds:.*')
+        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
+                                     scylla_yaml_contents)
+
+        # Set listen_address
+        p = re.compile('listen_address:.*')
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.private_ip_address),
+                                     scylla_yaml_contents)
+        # Set rpc_address
+        p = re.compile('rpc_address:.*')
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.private_ip_address),
+                                     scylla_yaml_contents)
+        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
+                                                            "cluster_name: '{0}'".format(self.name))
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
+        # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
+        node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
+        node.remoter.run('sudo cat /usr/lib/systemd/system/scylla-housekeeping.timer')
+        node.remoter.run('sudo systemctl daemon-reload')
+        node.remoter.run('sudo systemctl enable scylla-server.service')
+        node.remoter.run('sudo systemctl enable scylla-jmx.service')
+        node.restart()
+        node.wait_ssh_up()
+        node.wait_db_up()
+        node.wait_jmx_up()
+
+    def wait_for_init(self, node_list=None, verbose=False):
+        """
+        Configure scylla.yaml on all cluster nodes.
+
+        We have to modify scylla.yaml on our own because we are not on AWS,
+        where there are auto config scripts in place.
+
+        :param node_list: List of nodes to watch for init.
+        :param verbose: Whether to print extra info while watching for init.
+        :return:
+        """
+        if node_list is None:
+            node_list = self.nodes
+
+        queue = Queue.Queue()
+
+        def node_setup(node, seed_address):
+            node.wait_ssh_up(verbose=verbose)
+            self._node_setup(node=node, seed_address=seed_address)
+            node.wait_db_up(verbose=verbose)
+            node.remoter.run('sudo yum install -y scylla-gdb',
+                             verbose=verbose, ignore_status=True)
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        # avoid using node.remoter in thread
+        for node in node_list:
+            self.collectd_setup.install(node)
+
+        seed = node_list[0].private_ip_address
+        # If we setup all nodes in paralel, we might have troubles
+        # with nodes not able to contact the seed node.
+        # Let's setup the seed node first, then set up the others
+        node_setup(node_list[0], seed_address=seed)
+        for loader in node_list[1:]:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader, seed))
+            setup_thread.daemon = True
+            setup_thread.start()
+
+        results = []
+        while len(results) != len(node_list):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+                time_elapsed = time.time() - start_time
+                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
+                              len(results), len(node_list),
+                              int(time_elapsed))
+            except Queue.Empty:
+                pass
+
+        self.update_db_binary(node_list)
+        self.get_seed_nodes()
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def destroy(self):
+        self.stop_nemesis()
+        super(ScyllaGCECluster, self).destroy()
+
+
 class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
@@ -2597,6 +2882,69 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
+class LoaderSetGCE(GCECluster, BaseLoaderSet):
+
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+                 gce_instance_type='n1-standard-1',
+                 gce_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        super(LoaderSetGCE, self).__init__(gce_image=gce_image,
+                                           gce_network=gce_network,
+                                           gce_image_type=gce_image_type,
+                                           gce_image_size=gce_image_size,
+                                           gce_instance_type=gce_instance_type,
+                                           gce_image_username=gce_image_username,
+                                           service=service,
+                                           credentials=credentials,
+                                           cluster_prefix=cluster_prefix,
+                                           node_prefix=node_prefix,
+                                           n_nodes=n_nodes,
+                                           params=params)
+        self.scylla_repo = scylla_repo
+
+    def wait_for_init(self, verbose=False, db_node_address=None):
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            self.log.info('Setup')
+            node.wait_ssh_up(verbose=verbose)
+            yum_config_path = '/etc/yum.repos.d/scylla.repo'
+            node.remoter.run('sudo curl %s -o %s' %
+                             (self.params.get('scylla_repo'), yum_config_path))
+            node.remoter.run('sudo yum install -y scylla-tools')
+            node.wait_cs_installed(verbose=verbose)
+            node.remoter.run('sudo yum install -y screen')
+            if db_node_address is not None:
+                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                                 db_node_address)
+
+            cs_exporter_setup = CassandraStressExporterSetup()
+            cs_exporter_setup.install(node)
+
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        for loader in self.nodes:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(loader,))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        results = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+        time_elapsed = time.time() - start_time
+        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+
 class LoaderSetAWS(AWSCluster, BaseLoaderSet):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
@@ -2642,6 +2990,35 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
                                                   node_prefix=node_prefix,
                                                   n_nodes=n_nodes,
                                                   params=params)
+        self.scylla_repo = scylla_repo
+
+    def destroy(self):
+        self.log.info('Destroy nodes')
+        self.download_monitor_data()
+        for node in self.nodes:
+            node.destroy()
+
+
+class MonitorSetGCE(GCECluster, BaseMonitorSet):
+
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+                 gce_instance_type='n1-standard-1',
+                 gce_image_username='centos', scylla_repo=None,
+                 user_prefix=None, n_nodes=10, params=None):
+        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        super(MonitorSetGCE, self).__init__(gce_image=gce_image,
+                                            gce_image_type=gce_image_type,
+                                            gce_image_size=gce_image_size,
+                                            gce_network=gce_network,
+                                            gce_instance_type=gce_instance_type,
+                                            gce_image_username=gce_image_username,
+                                            service=service,
+                                            credentials=credentials,
+                                            cluster_prefix=cluster_prefix,
+                                            node_prefix=node_prefix,
+                                            n_nodes=n_nodes,
+                                            params=params)
         self.scylla_repo = scylla_repo
 
     def destroy(self):
