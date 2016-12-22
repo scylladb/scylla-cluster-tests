@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 
+import os
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -109,7 +110,8 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_single_result(single_result)
             test_xml += self.get_test_xml(single_result)
 
-        f = open('jenkins_perf_PerfPublisher.xml', 'w')
+        f = open(os.path.join(self.logdir,
+                              'jenkins_perf_PerfPublisher.xml'), 'w')
         content = """<report name="simple_regression_test report" categ="none">
 %s
 </report>""" % test_xml
