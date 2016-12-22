@@ -1433,7 +1433,7 @@ class BaseLoaderSet(object):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1):
-        stress_cmd = "mkfifo /tmp/cs_pipe; cat /tmp/cs_pipe|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe"
+        stress_cmd = "mkfifo /tmp/cs_pipe_$1; cat /tmp/cs_pipe_$1|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe_$1"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
@@ -1464,7 +1464,7 @@ class BaseLoaderSet(object):
                 node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
             else:
                 node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s' % (tag, node_cmd)
+            node_cmd = 'echo %s; %s %s' % (tag, node_cmd, cpu_idx)
 
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
