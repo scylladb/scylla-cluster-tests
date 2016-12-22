@@ -143,8 +143,8 @@ class PerformanceRegressionTest(ClusterTester):
                     loader.restart()
             else:
                 # run a workload
-                stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2)
-                results = self.get_stress_results(queue=stress_queue, stress_num=2)
+                stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2, keyspace_num=100)
+                results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=100)
 
         try:
             self.display_results(results)
