@@ -130,13 +130,18 @@ def clean_openstack_instance(user, password, auth_version, auth_url, service_typ
         test_logger.error(str(details))
 
 
+def remove_if_exists(file_path):
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+
 def clean_aws_credential(region_name, credential_key_name, credential_key_file):
     try:
         session = boto3.session.Session(region_name=region_name)
         service = session.resource('ec2')
         key_pair_info = service.KeyPair(credential_key_name)
         key_pair_info.delete()
-        os.unlink(credential_key_file)
+        remove_if_exists(credential_key_file)
     except Exception as details:
         test_logger = logging.getLogger('avocado.test')
         test_logger.error(str(details))
@@ -149,7 +154,7 @@ def clean_openstack_credential(user, password, auth_version, auth_url, service_t
                                         service_region, tenant)
         key_pair = service.get_key_pair(credential_key_name)
         service.delete_key_pair(key_pair)
-        os.unlink(credential_key_file)
+        remove_if_exists(credential_key_file)
     except Exception as details:
         test_logger = logging.getLogger('avocado.test')
         test_logger.error(str(details))
@@ -273,7 +278,7 @@ class RemoteCredentials(object):
         else:
             self.service.delete_key_pair(self.key_pair)
         try:
-            os.remove(self.key_file)
+            remove_if_exists(self.key_file)
         except OSError:
             pass
         self.log.info('Destroyed')
@@ -1132,7 +1137,7 @@ class LibvirtNode(BaseNode):
     def destroy(self):
         self._domain.destroy()
         self._domain.undefine()
-        os.remove(self._backing_image)
+        remove_if_exists(self._backing_image)
         self.log.info('Destroyed')
 
 
@@ -1789,7 +1794,7 @@ class LibvirtCluster(BaseCluster):
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': os.unlink,
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': remove_if_exists,
                                                                'args': (dst_image_path,),
                                                                'once': True})
             self.log.info('Copying %s -> %s',
