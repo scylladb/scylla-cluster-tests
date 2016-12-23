@@ -95,16 +95,16 @@ with os.fdopen(sys.stdin.fileno(), 'r', 1) as input:
         if time.time() - start_time < 1.0: # Skip existing lines
             continue
 
-        cols = line.split()
+        cols = [element.strip() for element in line.split(',')]
 
-        ops = float(cols[2].rstrip(','))
-        lat_mean = float(cols[5].rstrip(','))
-        lat_med = float(cols[6].rstrip(','))
-        lat_perc_95 = float(cols[7].rstrip(','))
-        lat_perc_99 = float(cols[8].rstrip(','))
-        lat_perc_999 = float(cols[9].rstrip(','))
-        lat_max = float(cols[10].rstrip(','))
-        errors = int(cols[13].rstrip(','))
+        ops = float(cols[2])
+        lat_mean = float(cols[5])
+        lat_med = float(cols[6])
+        lat_perc_95 = float(cols[7])
+        lat_perc_99 = float(cols[8])
+        lat_perc_999 = float(cols[9])
+        lat_max = float(cols[10])
+        errors = int(cols[13])
 
         pack = ValuePack()
         pack.add(plugin, plugin_instance, 'gauge', 'ops', ops)

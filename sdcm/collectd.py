@@ -57,8 +57,6 @@ class CollectdSetup(object):
     def install(self, node):
         self.node = node
 
-        self.node.remoter.run('sudo yum install -y epel-release')
-        self.node.remoter.run('sudo yum install -y collectd')
         self._setup_collectd()
         self._set_exporter_path()
         self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
@@ -423,3 +421,19 @@ WantedBy=multi-user.target
             self.node.remoter.run('sudo systemctl start collectd-exporter.service')
         finally:
             shutil.rmtree(tmp_dir_exporter)
+
+    def install(self, node):
+        self.node = node
+
+        self.node.remoter.run('sudo yum install -y epel-release')
+        self.node.remoter.run('sudo yum install -y collectd')
+        self._setup_collectd()
+        self._set_exporter_path()
+        self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
+                              (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
+                               self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
+        self.node.remoter.run('tar -xzvf %s/%s -C %s' %
+                              (self.collectd_exporter_system_base_dir,
+                               self.collectd_exporter_tarball,
+                               self.collectd_exporter_system_base_dir))
+        self.collectd_exporter_setup()
