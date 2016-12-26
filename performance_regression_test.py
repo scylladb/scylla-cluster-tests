@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 
+import os
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -43,7 +44,7 @@ class PerformanceRegressionTest(ClusterTester):
 
     def get_test_xml(self, result):
         test_content = """
-  <test name="simple_regression_test-stress_modes: (%s) Loader%s CPU%s" executed="yes">
+  <test name="simple_regression_test-stress_modes: (%s) Loader%s CPU%s Keyspace%s" executed="yes">
     <description>"simple regression test, ami_id: %s, scylla version:
     %s", stress_mode: %s, hardware: %s</description>
     <targets>
@@ -75,6 +76,7 @@ class PerformanceRegressionTest(ClusterTester):
 """ % (self.params.get('stress_modes'),
             result['loader_idx'],
             result['cpu_idx'],
+            result['keyspace_idx'],
             self.params.get('ami_id_db_scylla'),
             self.params.get('ami_id_db_scylla_desc'),
             self.params.get('stress_modes'),
@@ -109,7 +111,8 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_single_result(single_result)
             test_xml += self.get_test_xml(single_result)
 
-        f = open('jenkins_perf_PerfPublisher.xml', 'w')
+        f = open(os.path.join(self.logdir,
+                              'jenkins_perf_PerfPublisher.xml'), 'w')
         content = """<report name="simple_regression_test report" categ="none">
 %s
 </report>""" % test_xml
@@ -140,8 +143,8 @@ class PerformanceRegressionTest(ClusterTester):
                     loader.restart()
             else:
                 # run a workload
-                stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2)
-                results = self.get_stress_results(queue=stress_queue, stress_num=2)
+                stress_queue = self.run_stress_thread(stress_cmd=base_cmd % mode, stress_num=2, keyspace_num=100)
+                results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=100)
 
         try:
             self.display_results(results)
