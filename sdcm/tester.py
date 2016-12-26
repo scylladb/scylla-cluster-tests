@@ -720,6 +720,7 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
+        db_cluster_errors = self.db_cluster.get_node_database_errors()
         db_cluster_coredumps = None
         if self.db_cluster is not None:
             self.db_cluster.get_backtraces()
@@ -760,6 +761,15 @@ class ClusterTester(Test):
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
                       db_cluster_coredumps)
+
+        if db_cluster_errors:
+            self.log.error('Errors found on DB node logs:')
+            for node_errors in db_cluster_errors:
+                for node_name in node_errors:
+                    for (index, line) in node_errors[node_name]:
+                        self.log.error('%s: L%s -> %s',
+                                       node_name, index + 1, line.strip())
+            self.fail('Errors found on DB node logs (see test logs)')
 
     def tearDown(self):
         self.clean_resources()
