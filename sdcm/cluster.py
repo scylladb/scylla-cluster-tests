@@ -2597,10 +2597,6 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
-        # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
-        node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
-        node.remoter.run('sudo cat /usr/lib/systemd/system/scylla-housekeeping.timer')
-        node.remoter.run('sudo systemctl daemon-reload')
         node.remoter.run('sudo systemctl enable scylla-server.service')
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.restart()
