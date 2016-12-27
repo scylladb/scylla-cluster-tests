@@ -946,6 +946,33 @@ class GCENode(BaseNode):
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
 
+    def _instance_wait_safe(self, instance_method):
+        """
+        Wrapper around GCE instance methods that is safer to use.
+
+        Let's try a method, and if it fails, let's retry using an exponential
+        backoff algorithm, similar to what Amazon recommends for it's own
+        service [1].
+
+        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
+        """
+        threshold = 300
+        ok = False
+        retries = 0
+        max_retries = 9
+        while not ok and retries <= max_retries:
+            try:
+                return instance_method()
+            except Exception, details:
+                self.log.error('Call to method %s failed: %s',
+                               instance_method, details)
+                time.sleep(max((2 ** retries) * 2, threshold))
+                retries += 1
+
+        if not ok:
+            raise NodeError('GCE instance %s method call error after '
+                            'exponencial backoff wait' % self._instance.id)
+
     @property
     def public_ip_address(self):
         return self._get_public_ip_address()
@@ -976,16 +1003,16 @@ class GCENode(BaseNode):
 
     def _refresh_instance_state(self):
         node_name = self._instance.name
-        instance = [n for n in self._gce_service.list_nodes() if n.name == node_name][0]
+        instance = [n for n in self._instance_wait_safe(self._gce_service.list_nodes) if n.name == node_name][0]
         self._instance = instance
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
 
     def restart(self):
-        self._instance.reboot()
+        self._instance_wait_safe(self._instance.reboot)
 
     def destroy(self):
-        self._instance.destroy()
+        self._instance_wait_safe(self._instance.destroy)
         self.log.info('Destroyed')
 
 
