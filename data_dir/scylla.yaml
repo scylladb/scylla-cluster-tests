@@ -141,7 +141,7 @@ backends: !mux
         gce_service_account_email: 'your-service-account@email.com'
         # Look for the project ID in Compute Engine settings web page
         gce_project: 'your-gce-project-id'
-        gce_image: 'centos-7-v20161129'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
         # Your e-mail user (if foo@yourcompany.com, foo is the user)
         gce_image_username: 'your-gce-username'
         #
@@ -152,15 +152,18 @@ backends: !mux
         # For large data set tests, 1500 GB of pd-standard yield 180 MB/s, which seems like a good deal
         gce_instance_type_db: 'n1-standard-2'
         gce_root_disk_type_db: 'pd-ssd'
-        gce_root_disk_size_db: 200
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 1
         # Loader instance and disk information
         gce_instance_type_loader: 'n1-highcpu-4'
         gce_root_disk_type_loader: 'pd-standard'
         gce_root_disk_size_loader: 50
+        gce_n_local_ssd_disk_loader: 0
         # Monitor instance and disk information
         gce_instance_type_monitor: 'n1-standard-1'
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
         scylla_repo: 'http://downloads.scylladb.com/rpm/centos/scylla-1.4.repo'
         us_east_1:
           gce_datacenter: 'us-east1-b'
