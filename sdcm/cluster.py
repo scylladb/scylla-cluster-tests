@@ -2583,6 +2583,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
+        self._seed_node_rebooted = False
 
     def add_nodes(self, count, ec2_user_data=''):
         added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
@@ -2640,8 +2641,17 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo systemctl enable scylla-server.service')
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.remoter.run('sudo sync')
+
+        if node.private_ip_address != seed_address:
+            wait.wait_for(func=lambda: self._seed_node_rebooted is True,
+                          step=30,
+                          text='Wait for seed node to be up after reboot')
         node.restart()
         node.wait_ssh_up()
+        if node.private_ip_address == seed_address:
+            self.log.info('Seed node is up after reboot')
+            self._seed_node_rebooted = True
+
         self.log.info('io.conf right after reboot')
         node.remoter.run('sudo cat /etc/scylla.d/io.conf')
         node.wait_db_up()
@@ -2679,11 +2689,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             self.collectd_setup.install(node)
 
         seed = node_list[0].private_ip_address
-        # If we setup all nodes in paralel, we might have troubles
-        # with nodes not able to contact the seed node.
-        # Let's setup the seed node first, then set up the others
-        node_setup(node_list[0], seed_address=seed)
-        for loader in node_list[1:]:
+        for loader in node_list:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(loader, seed))
             setup_thread.daemon = True
