@@ -946,6 +946,33 @@ class GCENode(BaseNode):
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
 
+    def _instance_wait_safe(self, instance_method):
+        """
+        Wrapper around GCE instance methods that is safer to use.
+
+        Let's try a method, and if it fails, let's retry using an exponential
+        backoff algorithm, similar to what Amazon recommends for it's own
+        service [1].
+
+        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
+        """
+        threshold = 300
+        ok = False
+        retries = 0
+        max_retries = 9
+        while not ok and retries <= max_retries:
+            try:
+                return instance_method()
+            except Exception, details:
+                self.log.error('Call to method %s failed: %s',
+                               instance_method, details)
+                time.sleep(max((2 ** retries) * 2, threshold))
+                retries += 1
+
+        if not ok:
+            raise NodeError('GCE instance %s method call error after '
+                            'exponencial backoff wait' % self._instance.id)
+
     @property
     def public_ip_address(self):
         return self._get_public_ip_address()
@@ -976,16 +1003,16 @@ class GCENode(BaseNode):
 
     def _refresh_instance_state(self):
         node_name = self._instance.name
-        instance = [n for n in self._gce_service.list_nodes() if n.name == node_name][0]
+        instance = [n for n in self._instance_wait_safe(self._gce_service.list_nodes) if n.name == node_name][0]
         self._instance = instance
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
 
     def restart(self):
-        self._instance.reboot()
+        self._instance_wait_safe(self._instance.reboot)
 
     def destroy(self):
-        self._instance.destroy()
+        self._instance_wait_safe(self._instance.destroy)
         self.log.info('Destroyed')
 
 
@@ -2165,7 +2192,7 @@ class GCECluster(BaseCluster):
     """
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials, cluster_uuid=None,
-                 gce_instance_type='n1-standard-1', gce_image_username='root',
+                 gce_instance_type='n1-standard-1', gce_region_name='us-east1-b', gce_n_local_ssd=1, gce_image_username='root',
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
 
@@ -2177,6 +2204,8 @@ class GCECluster(BaseCluster):
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
+        self._gce_region_name = gce_region_name
+        self._gce_n_local_ssd = int(gce_n_local_ssd)
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -2184,20 +2213,54 @@ class GCECluster(BaseCluster):
                                          params=params)
 
     def __str__(self):
-        return 'GCE Cluster %s (Image: %s Disk: %s Size: %s GB Type: %s)' % (self.name,
-                                                                             self._gce_image,
-                                                                             self._gce_image_type,
-                                                                             self._gce_image_size,
-                                                                             self._gce_instance_type)
+        identifier = 'GCE Cluster %s | ' % self.name
+        identifier += 'Image: %s | ' % os.path.basename(self._gce_image)
+        identifier += 'Root Disk: %s %s GB | ' % (self._gce_image_type, self._gce_image_size)
+        if self._gce_n_local_ssd:
+            identifier += 'Local SSD: %s | ' % self._gce_n_local_ssd
+        identifier += 'Type: %s' % self._gce_instance_type
+        return identifier
+
+    def _get_disk_url(self, disk_type='pd-standard'):
+        project = self._gce_service.ex_get_project()
+        return "projects/%s/zones/%s/diskTypes/%s" % (project.name, self._gce_region_name, disk_type)
+
+    def _get_root_disk_struct(self, name, disk_type='pd-standard'):
+        device_name = '%s-root-%s' % (name, disk_type)
+        return {"type": "PERSISTENT",
+                "deviceName": device_name,
+                "initializeParams": {
+                    "diskName": device_name,
+                    "diskType": self._get_disk_url(disk_type),
+                    "diskSizeGb": self._gce_image_size,
+                    "sourceImage": self._gce_image
+                },
+                "boot": True,
+                "autoDelete": True}
+
+    def _get_scratch_disk_struct(self, name, index):
+        device_name = '%s-data-local-ssd-%s' % (name, index)
+        return {"type": "SCRATCH",
+                "deviceName": device_name,
+                "initializeParams": {
+                    "diskType": self._get_disk_url('local-ssd'),
+                },
+                "interface": 'NVME',
+                "autoDelete": True}
 
     def add_nodes(self, count, ec2_user_data=''):
         for node_index in range(self._node_index + 1, count + 1):
             name = '%s-%s' % (self.node_prefix, node_index)
-            volume = self._gce_service.create_volume(name=name, size=self._gce_image_size, image=self._gce_image,
-                                                     ex_disk_type=self._gce_image_type)
-            self.log.info('Created volume %s', volume)
-            instance = self._gce_service.create_node(name=name, size=self._gce_instance_type, image=self._gce_image,
-                                                     ex_boot_disk=volume)
+            gce_disk_struct = list()
+            gce_disk_struct.append(self._get_root_disk_struct(name=name,
+                                                              disk_type=self._gce_image_type))
+            for i in range(self._gce_n_local_ssd):
+                gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
+            self.log.info(gce_disk_struct)
+            instance = self._gce_service.create_node(name=name,
+                                                     size=self._gce_instance_type,
+                                                     image=self._gce_image,
+                                                     ex_disks_gce_struct=gce_disk_struct)
             self.log.info('Created instance %s', instance)
             GCE_INSTANCES.append(instance)
             self.nodes.append(GCENode(gce_instance=instance,
@@ -2495,7 +2558,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
 class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
-                 gce_instance_type='n1-standard-1',
+                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
         # We have to pass the cluster name in advance in user_data
@@ -2504,6 +2567,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
                                                gce_image_type=gce_image_type,
                                                gce_image_size=gce_image_size,
+                                               gce_n_local_ssd=gce_n_local_ssd,
                                                gce_network=gce_network,
                                                gce_instance_type=gce_instance_type,
                                                gce_image_username=gce_image_username,
@@ -2519,6 +2583,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
+        self._seed_node_rebooted = False
 
     def add_nodes(self, count, ec2_user_data=''):
         added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
@@ -2569,15 +2634,26 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
-        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
-        # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
-        node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
-        node.remoter.run('sudo cat /usr/lib/systemd/system/scylla-housekeeping.timer')
-        node.remoter.run('sudo systemctl daemon-reload')
+        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks `ls /dev/nvme0n*`')
+        node.remoter.run('sudo sync')
+        self.log.info('io.conf right after setup')
+        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
         node.remoter.run('sudo systemctl enable scylla-server.service')
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
+        node.remoter.run('sudo sync')
+
+        if node.private_ip_address != seed_address:
+            wait.wait_for(func=lambda: self._seed_node_rebooted is True,
+                          step=30,
+                          text='Wait for seed node to be up after reboot')
         node.restart()
         node.wait_ssh_up()
+        if node.private_ip_address == seed_address:
+            self.log.info('Seed node is up after reboot')
+            self._seed_node_rebooted = True
+
+        self.log.info('io.conf right after reboot')
+        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
         node.wait_db_up()
         node.wait_jmx_up()
 
@@ -2613,11 +2689,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             self.collectd_setup.install(node)
 
         seed = node_list[0].private_ip_address
-        # If we setup all nodes in paralel, we might have troubles
-        # with nodes not able to contact the seed node.
-        # Let's setup the seed node first, then set up the others
-        node_setup(node_list[0], seed_address=seed)
-        for loader in node_list[1:]:
+        for loader in node_list:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(loader, seed))
             setup_thread.daemon = True
@@ -2921,7 +2993,7 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
 class LoaderSetGCE(GCECluster, BaseLoaderSet):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
-                 gce_instance_type='n1-standard-1',
+                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
@@ -2930,6 +3002,7 @@ class LoaderSetGCE(GCECluster, BaseLoaderSet):
                                            gce_network=gce_network,
                                            gce_image_type=gce_image_type,
                                            gce_image_size=gce_image_size,
+                                           gce_n_local_ssd=gce_n_local_ssd,
                                            gce_instance_type=gce_instance_type,
                                            gce_image_username=gce_image_username,
                                            service=service,
@@ -3038,7 +3111,7 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
 class MonitorSetGCE(GCECluster, BaseMonitorSet):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
-                 gce_instance_type='n1-standard-1',
+                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
@@ -3046,6 +3119,7 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
         super(MonitorSetGCE, self).__init__(gce_image=gce_image,
                                             gce_image_type=gce_image_type,
                                             gce_image_size=gce_image_size,
+                                            gce_n_local_ssd=gce_n_local_ssd,
                                             gce_network=gce_network,
                                             gce_instance_type=gce_instance_type,
                                             gce_image_username=gce_image_username,
