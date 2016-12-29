@@ -1756,9 +1756,9 @@ class BaseMonitorSet(object):
 
         start_time = time.time()
 
-        for loader in self.nodes:
+        for node in self.nodes:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
             time.sleep(30)
@@ -2009,9 +2009,9 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
         node_setup(node_list[0], seed_address=seed)
-        for loader in node_list[1:]:
+        for node in node_list[1:]:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader, seed))
+                                            args=(node, seed))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2538,9 +2538,9 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
         node_setup(node_list[0], seed_address=seed)
-        for loader in node_list[1:]:
+        for node in node_list[1:]:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader, seed))
+                                            args=(node, seed))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2706,9 +2706,9 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             self.collectd_setup.install(node)
 
         seed = node_list[0].private_ip_address
-        for loader in node_list:
+        for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader, seed))
+                                            args=(node, seed))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2805,9 +2805,9 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
-        for loader in node_list:
+        for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2924,9 +2924,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
             self.collectd_setup.install(node)
 
-        for loader in node_list:
+        for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
 
