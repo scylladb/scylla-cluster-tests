@@ -730,9 +730,10 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
-        db_cluster_errors = self.db_cluster.get_node_database_errors()
+        db_cluster_errors = None
         db_cluster_coredumps = None
         if self.db_cluster is not None:
+            db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
