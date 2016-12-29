@@ -806,12 +806,31 @@ WantedBy=multi-user.target
         wait.wait_for(func=lambda: not self.jmx_up(), step=60,
                       text=text)
 
+    def _report_housekeeping_uuid(self, verbose=True):
+        """
+        report uuid of test db nodes to ScyllaDB
+        """
+        uuid_path = '/var/lib/scylla-housekeeping/housekeeping.uuid'
+        mark_path = '/var/lib/scylla-housekeeping/housekeeping.uuid.marked'
+        cmd = 'curl "https://i6a5h9l1kl.execute-api.us-east-1.amazonaws.com/prod/check_version?uu=%s&mark=scylla"'
+
+        uuid_result = self.remoter.run('test -e %s' % uuid_path,
+                                       ignore_status=True, verbose=verbose)
+        mark_result = self.remoter.run('test -e %s' % mark_path,
+                                       ignore_status=True, verbose=verbose)
+        if uuid_result.exit_status == 0 and mark_result.exit_status != 0:
+            result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
+            self.remoter.run(cmd % result.stdout.strip())
+            self.remoter.run('sudo -u scylla touch %s' % mark_path,
+                             verbose=verbose)
+
     def wait_db_up(self, verbose=True):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=self.db_up, step=60,
                       text=text)
+        self._report_housekeeping_uuid()
 
     def apt_running(self):
         try:
