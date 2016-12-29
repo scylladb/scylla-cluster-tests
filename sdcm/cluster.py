@@ -1538,7 +1538,7 @@ class BaseLoaderSet(object):
 
         for loader_idx, loader in enumerate(self.nodes):
             for cpu_idx in range(stress_num):
-                for ks_idx in range(keyspace_num):
+                for ks_idx in range(1, keyspace_num + 1):
                     setup_thread = threading.Thread(target=node_run_stress,
                                                     args=(loader, loader_idx,
                                                           cpu_idx, ks_idx))
