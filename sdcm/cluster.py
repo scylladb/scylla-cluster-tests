@@ -832,21 +832,6 @@ WantedBy=multi-user.target
                       text=text)
         self._report_housekeeping_uuid()
 
-    def apt_running(self):
-        try:
-            result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
-            return False
-
-    def wait_apt_not_running(self, verbose=True):
-        text = None
-        if verbose:
-            text = '%s: Waiting for apt to finish running in the background' % self
-        wait.wait_for(func=lambda: not self.apt_running(), step=60,
-                      text=text)
-
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
@@ -3055,7 +3040,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         # is not thread safe
         for node in node_list:
             node.wait_ssh_up(verbose=verbose)
-            node.wait_apt_not_running()
+            node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y collectd collectd-utils')
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
