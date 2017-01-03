@@ -455,6 +455,18 @@ class BaseNode(object):
                                    preserve_symlinks=preserve_symlinks,
                                    verbose=verbose)
 
+    def populate_postscript(self):
+        path = data_path.get_data_path("configure-cassandra-for-cluster-growth.sh")
+
+        if path == "":
+            return
+
+        dest = "/tmp/postscript.sh"
+
+        self.remoter.send_files(src=path, dst=dest)
+        self.remoter.run('sudo chmod +x %s' % dest)
+        self.remoter.run('sudo %s' % dest)
+
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
         self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
@@ -2312,6 +2324,7 @@ class AWSCluster(BaseCluster):
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
                                          params=params, name=name)
+        self.cassandra = False
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
@@ -2365,6 +2378,8 @@ class AWSCluster(BaseCluster):
 
         # Restart all nodes
         for node in self.nodes:
+            if self.cassandra:
+                node.populate_postscript()
             self.start_db(node)
 
         for node in self.nodes:
@@ -2803,6 +2818,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
         self.name = name
+        self.cassandra = False
 
     def populate_db(self, node):
         node.remoter.run("sudo rm -rf /var/lib/scylla/*")
@@ -2923,6 +2939,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
+        self.cassandra = True
 
     def populate_db(self, node):
         node.remoter.run("sudo rm -rf /var/lib/cassandra/*")
