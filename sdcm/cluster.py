@@ -2397,6 +2397,47 @@ class AWSCluster(BaseCluster):
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
+    def populate_db(self, node):
+        raise NotImplementedError
+
+    def stop_db(self, node):
+        raise NotImplementedError
+
+    def start_db(self, node):
+        raise NotImplementedError
+
+    def populate_db_with_ebs(self, ebs_ids):
+
+        # Shutdown all nodes
+        for node in self.nodes:
+            self.stop_db(node)
+
+        # for each node pick up an EBS and attach it
+        for node in self.nodes:
+            # attach the volume
+            ebs_id = ebs_ids.pop()
+            device = "/dev/xvdz"
+            node._instance.attach_volume(VolumeId=ebs_id, Device=device)
+
+            wait.wait_for(node.file_exists, step=60,
+                          text='Volume id %s not attached to VM' % ebs_id,
+                          file_path=device)
+
+            # mount populate then unmount
+            node.remoter.run("sudo mount %s /root" % device)
+            self.populate_db(node)
+            node.remoter.run("sudo umount /root")
+
+            # detach volume
+            node._instance.detach_volume(VolumeId=ebs_id, Device=device)
+
+        # Restart all nodes
+        for node in self.nodes:
+            self.start_db(node)
+
+        for node in self.nodes:
+            node.wait_db_up()
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -2830,6 +2871,22 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
+    def populate_db(self, node):
+        node.remoter.run("sudo rm -rf /var/lib/scylla/*")
+        node.remoter.run("sudo cp -a /root/* /var/lib/scylla/")
+        node.remoter.run("sudo chown -R scylla.scylla /var/lib/scylla")
+        node.remoter.run("sudo rm -rf /var/lib/scylla/commitlog/*")
+
+    def stop_db(self, node):
+        node.remoter.run("sudo systemctl stop scylla-server")
+        node.wait_db_down()
+
+    def start_db(self, node):
+        node.remoter.run("sudo systemctl start scylla-server")
+        # We need the seed node to be partially restarted before the other
+        # so they don't timeout.
+        time.sleep(45)
+
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
             if self.nodes:
@@ -2934,6 +2991,23 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
+
+    def populate_db(self, node):
+        node.remoter.run("sudo rm -rf /var/lib/cassandra/*")
+        node.remoter.run("sudo cp -a /root/* /var/lib/cassandra/")
+        node.remoter.run("sudo rm -rf /var/lib/cassandra/commitlog/*")
+        node.remoter.run("sudo mkdir /raid0/cassandra/logs")
+        node.remoter.run("sudo chmod -R 777 /raid0/cassandra")
+        node.remoter.run("sudo chown -R cassandra:cassandra /raid0/cassandra")
+
+    def stop_db(self, node):
+        # Use service since the Cassandra AMI is running on an old ubuntu
+        node.remoter.run("sudo service cassandra stop")
+        node.wait_db_down()
+
+    def start_db(self, node):
+        # Same remark.
+        node.remoter.run("sudo service cassandra start")
 
     def get_seed_nodes(self):
         node = self.nodes[0]
