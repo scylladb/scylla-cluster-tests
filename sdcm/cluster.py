@@ -1774,8 +1774,12 @@ class BaseMonitorSet(object):
 
     def download_monitor_data(self):
         for node in self.nodes:
-            node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
-            node.download_prometheus_data_dir()
+            try:
+                node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
+                node.download_prometheus_data_dir()
+            except Exception, details:
+                self.log.error('Error downloading prometheus data dir: %s',
+                               str(details))
 
 
 class NoMonitorSet(object):
