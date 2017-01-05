@@ -2623,6 +2623,12 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             scylla_yaml_contents = f.read()
 
         node_private_ip_address = node.private_ip_address
+        if not self.seed_nodes_private_ips:
+            self.seed_nodes_private_ips = [node_private_ip_address]
+            seed_address = node_private_ip_address
+        else:
+            seed_address = ','.join(self.seed_nodes_private_ips)
+
         # Set seeds
         p = re.compile('seeds:.*')
         scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
