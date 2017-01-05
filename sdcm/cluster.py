@@ -1004,7 +1004,7 @@ class GCENode(BaseNode):
 
     def _refresh_instance_state(self):
         node_name = self._instance.name
-        instance = [n for n in self._instance_wait_safe(self._gce_service.list_nodes) if n.name == node_name][0]
+        instance = self._instance_wait_safe(self._gce_service.ex_get_node, node_name)
         self._instance = instance
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
