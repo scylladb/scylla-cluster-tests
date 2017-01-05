@@ -344,6 +344,7 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
+        self.prometheus_data_dir = None
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -1776,7 +1777,8 @@ class BaseMonitorSet(object):
         for node in self.nodes:
             try:
                 node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
-                node.download_prometheus_data_dir()
+                if node.prometheus_data_dir:
+                    node.download_prometheus_data_dir()
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
