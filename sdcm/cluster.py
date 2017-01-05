@@ -947,7 +947,7 @@ class GCENode(BaseNode):
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
 
-    def _instance_wait_safe(self, instance_method):
+    def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
         Wrapper around GCE instance methods that is safer to use.
 
@@ -963,7 +963,7 @@ class GCENode(BaseNode):
         max_retries = 9
         while not ok and retries <= max_retries:
             try:
-                return instance_method()
+                return instance_method(*args, **kwargs)
             except Exception, details:
                 self.log.error('Call to method %s (retries: %s) failed: %s',
                                instance_method, retries, details)
@@ -1054,7 +1054,7 @@ class AWSNode(BaseNode):
     def private_ip_address(self):
         return self._instance.private_ip_address
 
-    def _instance_wait_safe(self, instance_method):
+    def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
         Wrapper around AWS instance waiters that is safer to use.
 
@@ -1072,7 +1072,7 @@ class AWSNode(BaseNode):
         max_retries = 9
         while not ok and retries <= max_retries:
             try:
-                instance_method()
+                instance_method(*args, **kwargs)
                 ok = True
             except WaiterError:
                 time.sleep(max((2 ** retries) * 2, threshold))
