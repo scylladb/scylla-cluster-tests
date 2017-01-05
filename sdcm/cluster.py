@@ -964,8 +964,8 @@ class GCENode(BaseNode):
             try:
                 return instance_method()
             except Exception, details:
-                self.log.error('Call to method %s failed: %s',
-                               instance_method, details)
+                self.log.error('Call to method %s (retries: %s) failed: %s',
+                               instance_method, retries, details)
                 time.sleep(max((2 ** retries) * 2, threshold))
                 retries += 1
 
