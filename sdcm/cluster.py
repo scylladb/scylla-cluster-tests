@@ -967,7 +967,7 @@ class GCENode(BaseNode):
             except Exception, details:
                 self.log.error('Call to method %s (retries: %s) failed: %s',
                                instance_method, retries, details)
-                time.sleep(max((2 ** retries) * 2, threshold))
+                time.sleep(min((2 ** retries) * 2, threshold))
                 retries += 1
 
         if not ok:
@@ -1075,7 +1075,7 @@ class AWSNode(BaseNode):
                 instance_method(*args, **kwargs)
                 ok = True
             except WaiterError:
-                time.sleep(max((2 ** retries) * 2, threshold))
+                time.sleep(min((2 ** retries) * 2, threshold))
                 retries += 1
 
         if not ok:
