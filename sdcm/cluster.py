@@ -344,6 +344,7 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
+        self.prometheus_data_dir = None
 
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -946,7 +947,7 @@ class GCENode(BaseNode):
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
 
-    def _instance_wait_safe(self, instance_method):
+    def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
         Wrapper around GCE instance methods that is safer to use.
 
@@ -962,11 +963,11 @@ class GCENode(BaseNode):
         max_retries = 9
         while not ok and retries <= max_retries:
             try:
-                return instance_method()
+                return instance_method(*args, **kwargs)
             except Exception, details:
-                self.log.error('Call to method %s failed: %s',
-                               instance_method, details)
-                time.sleep(max((2 ** retries) * 2, threshold))
+                self.log.error('Call to method %s (retries: %s) failed: %s',
+                               instance_method, retries, details)
+                time.sleep(min((2 ** retries) * 2, threshold))
                 retries += 1
 
         if not ok:
@@ -1003,7 +1004,7 @@ class GCENode(BaseNode):
 
     def _refresh_instance_state(self):
         node_name = self._instance.name
-        instance = [n for n in self._instance_wait_safe(self._gce_service.list_nodes) if n.name == node_name][0]
+        instance = self._instance_wait_safe(self._gce_service.ex_get_node, node_name)
         self._instance = instance
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
@@ -1053,7 +1054,7 @@ class AWSNode(BaseNode):
     def private_ip_address(self):
         return self._instance.private_ip_address
 
-    def _instance_wait_safe(self, instance_method):
+    def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
         Wrapper around AWS instance waiters that is safer to use.
 
@@ -1071,10 +1072,10 @@ class AWSNode(BaseNode):
         max_retries = 9
         while not ok and retries <= max_retries:
             try:
-                instance_method()
+                instance_method(*args, **kwargs)
                 ok = True
             except WaiterError:
-                time.sleep(max((2 ** retries) * 2, threshold))
+                time.sleep(min((2 ** retries) * 2, threshold))
                 retries += 1
 
         if not ok:
@@ -1776,7 +1777,8 @@ class BaseMonitorSet(object):
         for node in self.nodes:
             try:
                 node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
-                node.download_prometheus_data_dir()
+                if node.prometheus_data_dir:
+                    node.download_prometheus_data_dir()
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
@@ -2232,9 +2234,11 @@ class GCECluster(BaseCluster):
     def _get_root_disk_struct(self, name, disk_type='pd-standard'):
         device_name = '%s-root-%s' % (name, disk_type)
         return {"type": "PERSISTENT",
-                "deviceName": device_name,
+                # Comment deviceName and diskName to avoid `alreadyExists`
+                # error in creating multiple nodes by ex_create_multiple_nodes()
+                #"deviceName": device_name,
                 "initializeParams": {
-                    "diskName": device_name,
+                    #"diskName": device_name,
                     "diskType": self._get_disk_url(disk_type),
                     "diskSizeGb": self._gce_image_size,
                     "sourceImage": self._gce_image
@@ -2253,26 +2257,28 @@ class GCECluster(BaseCluster):
                 "autoDelete": True}
 
     def add_nodes(self, count, ec2_user_data=''):
-        for node_index in range(self._node_index + 1, count + 1):
-            name = '%s-%s' % (self.node_prefix, node_index)
-            gce_disk_struct = list()
-            gce_disk_struct.append(self._get_root_disk_struct(name=name,
-                                                              disk_type=self._gce_image_type))
-            for i in range(self._gce_n_local_ssd):
-                gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
-            self.log.info(gce_disk_struct)
-            instance = self._gce_service.create_node(name=name,
-                                                     size=self._gce_instance_type,
-                                                     image=self._gce_image,
-                                                     ex_disks_gce_struct=gce_disk_struct)
-            self.log.info('Created instance %s', instance)
+        name = "%s-idx" % self.node_prefix
+        gce_disk_struct = list()
+        gce_disk_struct.append(self._get_root_disk_struct(name=name,
+                                                          disk_type=self._gce_image_type))
+        for i in range(self._gce_n_local_ssd):
+            gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
+        self.log.info(gce_disk_struct)
+        instances = self._gce_service.ex_create_multiple_nodes(
+                          base_name=self.node_prefix,
+                          size=self._gce_instance_type,
+                          image=None,
+                          number=count,
+                          ex_disks_gce_struct=gce_disk_struct)
+        self.log.info('Created instances: %s', instances)
+        for node_index, instance in enumerate(instances):
             GCE_INSTANCES.append(instance)
             self.nodes.append(GCENode(gce_instance=instance,
                                       gce_service=self._gce_service,
                                       credentials=self._credentials,
                                       gce_image_username=self._gce_image_username,
                                       node_prefix=self.node_prefix,
-                                      node_index=node_index,
+                                      node_index=node_index + 1,
                                       base_logdir=self.logdir))
             self._node_index += 1
 
@@ -2616,6 +2622,13 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         with open(yaml_dst_path, 'r') as f:
             scylla_yaml_contents = f.read()
 
+        node_private_ip_address = node.private_ip_address
+        if not self.seed_nodes_private_ips:
+            self.seed_nodes_private_ips = [node_private_ip_address]
+            seed_address = node_private_ip_address
+        else:
+            seed_address = ','.join(self.seed_nodes_private_ips)
+
         # Set seeds
         p = re.compile('seeds:.*')
         scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
@@ -2623,11 +2636,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         # Set listen_address
         p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.private_ip_address),
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node_private_ip_address),
                                      scylla_yaml_contents)
         # Set rpc_address
         p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.private_ip_address),
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node_private_ip_address),
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
@@ -2646,7 +2659,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.remoter.run('sudo sync')
 
-        if node.private_ip_address != seed_address:
+        if node_private_ip_address != seed_address:
             wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                           step=30,
                           text='Wait for seed node to be up after reboot')
