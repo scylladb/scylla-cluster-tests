@@ -543,7 +543,7 @@ class BaseNode(object):
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
     def _write_prometheus_cfg(self, targets):
-        targets_list = ['%s:9103' % ip for ip in targets]
+        targets_list = ['%s:9103' % str(ip) for ip in targets]
         prometheus_cfg = """
 global:
   scrape_interval: 15s
