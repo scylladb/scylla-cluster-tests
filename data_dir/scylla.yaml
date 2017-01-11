@@ -35,6 +35,8 @@ space_node_threshold: 6442450944
 # for example for grow_cluster_test
 # db_cluster_name: 'Test Cluster - No AMI Parameters'
 prepopulate_ebs_ids: 'vol-048b3e724b7f6990f,vol-08c963ebdf37b2e1c,vol-024b835dd076a6d04'
+# Total time in hours the grow cluster test must take
+grow_cluster_timeout: 1
 
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
