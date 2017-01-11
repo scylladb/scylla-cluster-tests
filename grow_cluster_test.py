@@ -107,9 +107,10 @@ class GrowClusterTest(ClusterTester):
                 (duration, threads, population_size, ip))
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
-        # 60 minutes should be long enough for adding each node
+        # 24 * 60 minutes should be long enough for adding each node
+        # we may deal with large database for the benchmarks
         nodes_to_add = cluster_target_size - self._cluster_starting_size
-        duration = 60 * nodes_to_add
+        duration = 24 * 60 * nodes_to_add
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
         # Wait for cluster is filled with data
