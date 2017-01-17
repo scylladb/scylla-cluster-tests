@@ -1756,6 +1756,8 @@ class BaseLoaderSet(object):
 
 class BaseMonitorSet(object):
 
+    grafana_start_time = None
+
     def wait_for_init(self, targets, verbose=False):
         queue = Queue.Queue()
 
@@ -1769,6 +1771,10 @@ class BaseMonitorSet(object):
             node.setup_prometheus(targets=targets)
             node.install_grafana()
             node.setup_grafana()
+            # The time will be used in url of Grafana monitor,
+            # the data from this point to the end of test will
+            # be captured.
+            self.grafana_start_time = time.time()
             node.remoter.run('sudo yum install screen -y')
             queue.put(node)
             queue.task_done()
@@ -1791,6 +1797,32 @@ class BaseMonitorSet(object):
 
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+    def get_monitor_snapshot(self):
+        """
+        Take snapshot for grafana monitor in the end of test
+        """
+        phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
+        start_time = str(self.grafana_start_time).split('.')[0] + '000'
+
+        try:
+            process.run('wget "%s"' % phantomjs_url)
+            process.run('tar xvfj phantomjs-2.1.1-linux-x86_64.tar.bz2',
+                        verbose=False)
+            process.run("cd phantomjs-2.1.1-linux-x86_64 && "
+                        "sed -e 's/200);/10000);/' examples/rasterize.js > r.js",
+                        shell=True)
+            for n, node in enumerate(self.nodes):
+                grafana_url = "http://%s:3000/dashboard/db/scylla-per-server-metrics-1-6?from=%s&to=now" % (
+                              node.public_ip_address, start_time)
+                snapshot_path = os.path.join(self.logdir,
+                                             "grafana-snapshot-%s.png" % n)
+                process.run("cd phantomjs-2.1.1-linux-x86_64 && "
+                            "bin/phantomjs r.js \"%s\" \"%s\"" % (
+                             grafana_url, snapshot_path), shell=True)
+        except Exception, details:
+            self.log.error('Error taking monitor snapshot: %s',
+                           str(details))
 
     def download_monitor_data(self):
         for node in self.nodes:
@@ -2131,6 +2163,7 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
+        self.get_monitor_snapshot()
         self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
@@ -3139,6 +3172,7 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
+        self.get_monitor_snapshot()
         self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
@@ -3169,6 +3203,7 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
+        self.get_monitor_snapshot()
         self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
@@ -3202,6 +3237,7 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
+        self.get_monitor_snapshot()
         self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
