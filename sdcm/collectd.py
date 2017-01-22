@@ -65,7 +65,8 @@ class CollectdSetup(object):
         self.node.remoter.run('tar -xzvf %s/%s -C %s' %
                               (self.collectd_exporter_system_base_dir,
                                self.collectd_exporter_tarball,
-                               self.collectd_exporter_system_base_dir))
+                               self.collectd_exporter_system_base_dir),
+                              verbose=False)
         self.collectd_exporter_setup()
 
 
@@ -439,5 +440,6 @@ WantedBy=multi-user.target
         self.node.remoter.run('tar -xzvf %s/%s -C %s' %
                               (self.collectd_exporter_system_base_dir,
                                self.collectd_exporter_tarball,
-                               self.collectd_exporter_system_base_dir))
+                               self.collectd_exporter_system_base_dir),
+                              verbose=False)
         self.collectd_exporter_setup()

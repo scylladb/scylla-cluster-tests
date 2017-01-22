@@ -528,7 +528,7 @@ class BaseNode(object):
         self.remoter.run('tar -xzvf %s/%s -C %s' %
                          (self.prometheus_system_base_dir,
                           self.prometheus_tarball,
-                          self.prometheus_system_base_dir))
+                          self.prometheus_system_base_dir), verbose=False)
 
     def download_prometheus_data_dir(self):
         self.remoter.run('sudo chown -R %s:%s %s' %
