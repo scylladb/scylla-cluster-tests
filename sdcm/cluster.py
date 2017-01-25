@@ -544,6 +544,8 @@ class BaseNode(object):
 
     def _write_prometheus_cfg(self, targets):
         targets_list = ['%s:9103' % str(ip) for ip in targets]
+        scylla_targets_list = ['%s:9100' % str(ip) for ip in targets]
+        node_exporter_targets_list = ['%s:9180' % str(ip) for ip in targets]
         prometheus_cfg = """
 global:
   scrape_interval: 15s
@@ -552,10 +554,23 @@ global:
     monitor: 'scylla-monitor'
 
 scrape_configs:
-- job_name: scylla
+- job_name: orig-scylla
+  honor_labels: true
   static_configs:
   - targets: %s
-""" % targets_list
+
+scrape_configs:
+- job_name: scylla
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+- job_name: node_exporter
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+""" % (targets_list, scylla_targets_list, node_exporter_targets_list)
         tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
         tmp_path_prom = os.path.join(tmp_dir_prom,
                                      self.prometheus_custom_cfg_basename)
