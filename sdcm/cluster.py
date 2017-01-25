@@ -897,7 +897,7 @@ class OpenStackNode(BaseNode):
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
                           'wait_key_installed': 30,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir)
@@ -961,7 +961,7 @@ class GCENode(BaseNode):
         ssh_login_info = {'hostname': self.public_ip_address,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
