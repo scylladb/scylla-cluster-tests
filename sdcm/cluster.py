@@ -354,6 +354,10 @@ class BaseNode(object):
         self._database_error_patterns = ['std::bad_alloc']
         self.start_journal_thread()
         self.start_backtrace_thread()
+        # We should disable bootstrap when we create nodes to establish the cluster,
+        # if we want to add more nodes when the cluster already exists, then we should
+        # enable bootstrap. So addition means not the first set of node.
+        self.is_addition = False
 
     def file_exists(self, file_path):
         try:
@@ -2422,6 +2426,10 @@ class GCECluster(BaseCluster):
                                  base_logdir=self.logdir))
         self.log.info('added nodes: %s', nodes)
         self._node_index += len(nodes)
+        for i in nodes:
+            if len(self.nodes) > 0:
+                i.is_addition = True
+
         self.nodes += nodes
 
         return nodes
@@ -2788,6 +2796,21 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
+
+        if node.is_addition:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: True',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: True\n"
+        else:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: False',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
