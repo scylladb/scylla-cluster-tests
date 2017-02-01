@@ -494,6 +494,12 @@ class BaseNode(object):
                         'scylla-dash.json': 'dashboards/db',
                         'scylla-dash-per-server.json': 'dashboards/db',
                         'scylla-dash-io-per-server.json': 'dashboards/db',
+                        'scylla-dash.1.5.json': 'dashboards/db',
+                        'scylla-dash-per-server.1.5.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.1.5.json': 'dashboards/db',
+                        'scylla-dash.1.6.json': 'dashboards/db',
+                        'scylla-dash-per-server.1.6.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.1.6.json': 'dashboards/db',
                         'scylla-dash-timeout-metrics.json': 'dashboards/db'}
 
         for grafana_json in json_mapping:
@@ -528,7 +534,7 @@ class BaseNode(object):
         self.remoter.run('tar -xzvf %s/%s -C %s' %
                          (self.prometheus_system_base_dir,
                           self.prometheus_tarball,
-                          self.prometheus_system_base_dir))
+                          self.prometheus_system_base_dir), verbose=False)
 
     def download_prometheus_data_dir(self):
         self.remoter.run('sudo chown -R %s:%s %s' %
@@ -537,7 +543,9 @@ class BaseNode(object):
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
     def _write_prometheus_cfg(self, targets):
-        targets_list = ['%s:9103' % ip for ip in targets]
+        targets_list = ['%s:9103' % str(ip) for ip in targets]
+        scylla_targets_list = ['%s:9100' % str(ip) for ip in targets]
+        node_exporter_targets_list = ['%s:9180' % str(ip) for ip in targets]
         prometheus_cfg = """
 global:
   scrape_interval: 15s
@@ -546,10 +554,23 @@ global:
     monitor: 'scylla-monitor'
 
 scrape_configs:
-- job_name: scylla
+- job_name: orig-scylla
+  honor_labels: true
   static_configs:
   - targets: %s
-""" % targets_list
+
+scrape_configs:
+- job_name: scylla
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+- job_name: node_exporter
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+""" % (targets_list, scylla_targets_list, node_exporter_targets_list)
         tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
         tmp_path_prom = os.path.join(tmp_dir_prom,
                                      self.prometheus_custom_cfg_basename)
@@ -897,7 +918,7 @@ class OpenStackNode(BaseNode):
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
                           'wait_key_installed': 30,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir)
@@ -961,10 +982,15 @@ class GCENode(BaseNode):
         ssh_login_info = {'hostname': self.public_ip_address,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
+        if TEST_DURATION >= 24 * 60:
+            self.log.info('Test duration set to %s. '
+                          'Tagging node with "keep-alive"',
+                          TEST_DURATION)
+            self._gce_service.ex_set_node_tags(self._instance, ['keep-alive'])
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
