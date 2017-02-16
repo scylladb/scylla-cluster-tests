@@ -2396,21 +2396,29 @@ class GCECluster(BaseCluster):
         for i in range(self._gce_n_local_ssd):
             gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
         self.log.info(gce_disk_struct)
+        # Suffix of instances' name are always started from 000,
+        # so we try to create `exist_nodes_num + new_nodes_num`,
+        # it will only create `new_nodes_num` effective nodes.
+        # The purpose is reusing released namespace, and make
+        # the instances' name sequential.
         instances = self._gce_service.ex_create_multiple_nodes(
                           base_name=self.node_prefix,
                           size=self._gce_instance_type,
                           image=None,
-                          number=count,
+                          number=len(self.nodes) + count,
                           ex_disks_gce_struct=gce_disk_struct)
+        # Ignore non-effective nodes
+        instances = [i for i in instances if 'GCEFailedNode' not in str(i)]
+
         self.log.info('Created instances: %s', instances)
-        for node_index, instance in enumerate(instances):
+        for idx, instance in enumerate(instances):
             GCE_INSTANCES.append(instance)
             nodes.append(GCENode(gce_instance=instance,
                                  gce_service=self._gce_service,
                                  credentials=self._credentials,
                                  gce_image_username=self._gce_image_username,
                                  node_prefix=self.node_prefix,
-                                 node_index=node_index + 1,
+                                 node_index=self._node_index + idx + 1,
                                  base_logdir=self.logdir))
         self.log.info('added nodes: %s', nodes)
         self._node_index += len(nodes)
