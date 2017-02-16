@@ -2847,6 +2847,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         # avoid using node.remoter in thread
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
         seed = node_list[0].private_ip_address
