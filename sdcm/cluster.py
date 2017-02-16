@@ -2300,6 +2300,7 @@ class OpenStackCluster(BaseCluster):
                                                     self._openstack_instance_type)
 
     def add_nodes(self, count, ec2_user_data=''):
+        nodes = []
         size = [d for d in self._openstack_service.list_sizes() if d.name == self._openstack_instance_type][0]
         image = self._openstack_service.get_image(self._openstack_image)
         networks = [n for n in self._openstack_service.ex_list_networks() if n.name == self._openstack_network]
@@ -2308,12 +2309,17 @@ class OpenStackCluster(BaseCluster):
             instance = self._openstack_service.create_node(name=name, image=image, size=size, networks=networks,
                                                            ex_keyname=self._credentials.name)
             OPENSTACK_INSTANCES.append(instance)
-            self.nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
-                                            credentials=self._credentials,
-                                            openstack_image_username=self._openstack_image_username,
-                                            node_prefix=self.node_prefix, node_index=node_index,
-                                            base_logdir=self.logdir))
-            self._node_index += 1
+            nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
+                                       credentials=self._credentials,
+                                       openstack_image_username=self._openstack_image_username,
+                                       node_prefix=self.node_prefix, node_index=node_index,
+                                       base_logdir=self.logdir))
+
+        self.log.info('added nodes: %s', nodes)
+        self._node_index += len(nodes)
+        self.nodes += nodes
+
+        return nodes
 
 
 class GCECluster(BaseCluster):
@@ -2382,6 +2388,7 @@ class GCECluster(BaseCluster):
                 "autoDelete": True}
 
     def add_nodes(self, count, ec2_user_data=''):
+        nodes = []
         name = "%s-idx" % self.node_prefix
         gce_disk_struct = list()
         gce_disk_struct.append(self._get_root_disk_struct(name=name,
@@ -2398,14 +2405,18 @@ class GCECluster(BaseCluster):
         self.log.info('Created instances: %s', instances)
         for node_index, instance in enumerate(instances):
             GCE_INSTANCES.append(instance)
-            self.nodes.append(GCENode(gce_instance=instance,
-                                      gce_service=self._gce_service,
-                                      credentials=self._credentials,
-                                      gce_image_username=self._gce_image_username,
-                                      node_prefix=self.node_prefix,
-                                      node_index=node_index + 1,
-                                      base_logdir=self.logdir))
-            self._node_index += 1
+            nodes.append(GCENode(gce_instance=instance,
+                                 gce_service=self._gce_service,
+                                 credentials=self._credentials,
+                                 gce_image_username=self._gce_image_username,
+                                 node_prefix=self.node_prefix,
+                                 node_index=node_index + 1,
+                                 base_logdir=self.logdir))
+        self.log.info('added nodes: %s', nodes)
+        self._node_index += len(nodes)
+        self.nodes += nodes
+
+        return nodes
 
 
 class AWSCluster(BaseCluster):
