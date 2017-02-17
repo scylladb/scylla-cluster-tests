@@ -2685,7 +2685,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         for node in node_list:
             self.collectd_setup.install(node)
 
-        seed = node_list[0].public_ip_address
+        seed = self.nodes[0].private_ip_address
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
@@ -2879,7 +2879,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
-        seed = node_list[0].private_ip_address
+        seed = self.nodes[0].private_ip_address
         for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(node, seed))
