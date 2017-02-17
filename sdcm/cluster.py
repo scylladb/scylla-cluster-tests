@@ -75,6 +75,8 @@ DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
 TEST_DURATION = 60
+# max limit of coredump file can be uploaded(5 GB)
+COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 
 
 def set_duration(duration):
@@ -503,6 +505,12 @@ class BaseNode(object):
                         'scylla-dash.json': 'dashboards/db',
                         'scylla-dash-per-server.json': 'dashboards/db',
                         'scylla-dash-io-per-server.json': 'dashboards/db',
+                        'scylla-dash.1.5.json': 'dashboards/db',
+                        'scylla-dash-per-server.1.5.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.1.5.json': 'dashboards/db',
+                        'scylla-dash.1.6.json': 'dashboards/db',
+                        'scylla-dash-per-server.1.6.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.1.6.json': 'dashboards/db',
                         'scylla-dash-timeout-metrics.json': 'dashboards/db'}
 
         for grafana_json in json_mapping:
@@ -537,7 +545,7 @@ class BaseNode(object):
         self.remoter.run('tar -xzvf %s/%s -C %s' %
                          (self.prometheus_system_base_dir,
                           self.prometheus_tarball,
-                          self.prometheus_system_base_dir))
+                          self.prometheus_system_base_dir), verbose=False)
 
     def download_prometheus_data_dir(self):
         self.remoter.run('sudo chown -R %s:%s %s' %
@@ -546,7 +554,9 @@ class BaseNode(object):
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
     def _write_prometheus_cfg(self, targets):
-        targets_list = ['%s:9103' % ip for ip in targets]
+        targets_list = ['%s:9103' % str(ip) for ip in targets]
+        scylla_targets_list = ['%s:9100' % str(ip) for ip in targets]
+        node_exporter_targets_list = ['%s:9180' % str(ip) for ip in targets]
         prometheus_cfg = """
 global:
   scrape_interval: 15s
@@ -555,10 +565,23 @@ global:
     monitor: 'scylla-monitor'
 
 scrape_configs:
-- job_name: scylla
+- job_name: orig-scylla
+  honor_labels: true
   static_configs:
   - targets: %s
-""" % targets_list
+
+scrape_configs:
+- job_name: scylla
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+- job_name: node_exporter
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+""" % (targets_list, scylla_targets_list, node_exporter_targets_list)
         tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
         tmp_path_prom = os.path.join(tmp_dir_prom,
                                      self.prometheus_custom_cfg_basename)
@@ -629,6 +652,44 @@ WantedBy=multi-user.target
             self.log.error('Error retrieving core dump backtraces : %s',
                            details)
 
+    def _upload_coredump(self, coredump):
+        base_upload_url = 'scylladb-users-upload.s3.amazonaws.com/%s/%s'
+        coredump_id = os.path.basename(coredump)[:-3]
+        upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
+        self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
+        self.remoter.run("sudo curl --request PUT --upload-file "
+                         "'%s' '%s'" % (coredump, upload_url))
+        self.log.info("To download it, you may use "
+                      "'curl --user-agent [user-agent] %s > %s'",
+                      upload_url, os.path.basename(coredump))
+
+    def _get_coredump_size(self, coredump):
+        try:
+            res = self.remoter.run('stat -c %s {}'.format(coredump))
+            return int(res.stdout.strip())
+        except Exception as ex:
+            self.log.error('Failed getting coredump file size: %s', ex)
+        return None
+
+    def _split_coredump(self, coredump):
+        core_files = []
+        try:
+            self.remoter.run('sudo yum install -y pigz')
+            self.remoter.run('sudo pigz --fast {}'.format(coredump))
+            file_name = '{}.gz'.format(coredump)
+            core_files.append(file_name)
+            file_size = self._get_coredump_size(file_name)
+            if file_size and file_size > COREDUMP_MAX_SIZE:
+                cnt = file_size / COREDUMP_MAX_SIZE
+                cnt += 1 if file_size % COREDUMP_MAX_SIZE > 0 else cnt
+                self.log.debug('Splitting coredump to {} files'.format(cnt))
+                res = self.remoter.run('sudo split -n {} {} {}.;ls {}.*'.format(
+                    cnt, file_name, file_name, file_name))
+                core_files = [f.strip() for f in res.stdout.split()]
+        except Exception as ex:
+            self.log.error('Failed splitting coredump file: %s', ex)
+        return core_files or [coredump]
+
     def _notify_backtrace(self, last):
         """
         Notify coredump backtraces to test log and coredump.log file.
@@ -638,21 +699,25 @@ WantedBy=multi-user.target
         result = self._get_coredump_backtraces(last=last)
         log_file = os.path.join(self.logdir, 'coredump.log')
         output = result.stdout + result.stderr
-        base_upload_url = 'scylladb-users-upload.s3.amazonaws.com/%s/%s'
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
                 coredump = line.split()[-1]
-                coredump_id = os.path.basename(coredump)[:-3]
-                upload_url = base_upload_url % (coredump_id,
-                                                os.path.basename(coredump))
-                self.log.info('Uploading coredump %s to %s' %
-                              (coredump, upload_url))
-                self.remoter.run("sudo curl --request PUT --upload-file "
-                                 "'%s' '%s'" % (coredump, upload_url))
-                self.log.info("To download it, you may use "
-                              "'curl --user-agent [user-agent] %s > %s'",
-                              upload_url, os.path.basename(coredump))
+                self.log.debug('Found coredump file: {}'.format(coredump))
+                file_size = self._get_coredump_size(coredump)
+                if file_size and file_size > COREDUMP_MAX_SIZE:
+                    coredump_files = self._split_coredump(coredump)
+                else:
+                    coredump_files = [coredump]
+                for f in coredump_files:
+                    self._upload_coredump(f)
+                if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
+                    base_name = os.path.basename(coredump)
+                    if len(coredump_files) > 1:
+                        self.log.info("To join coredump pieces, you may use: "
+                                      "'cat {}.gz.* > {}.gz'".format(base_name, base_name))
+                    self.log.info("To decompress you may use: 'pigz --fast {}.gz'".format(base_name))
+
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
         for line in output.splitlines():
@@ -891,7 +956,7 @@ class OpenStackNode(BaseNode):
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
                           'wait_key_installed': 30,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir)
@@ -955,10 +1020,15 @@ class GCENode(BaseNode):
         ssh_login_info = {'hostname': self.public_ip_address,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
-                          'extra_ssh_options': '-t'}
+                          'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir)
+        if TEST_DURATION >= 24 * 60:
+            self.log.info('Test duration set to %s. '
+                          'Tagging node with "keep-alive"',
+                          TEST_DURATION)
+            self._gce_service.ex_set_node_tags(self._instance, ['keep-alive'])
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
