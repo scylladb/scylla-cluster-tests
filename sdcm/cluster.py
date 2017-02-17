@@ -2774,12 +2774,18 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         with open(yaml_dst_path, 'r') as f:
             scylla_yaml_contents = f.read()
 
-        node_private_ip_address = node.private_ip_address
-        if not self.seed_nodes_private_ips:
-            self.seed_nodes_private_ips = [node_private_ip_address]
-            seed_address = node_private_ip_address
-        else:
-            seed_address = ','.join(self.seed_nodes_private_ips)
+        # Fixme: there is some code that assume the first node as seed,
+        # so we can't choose the fast one as seed, let's disable the code.
+        # The gce instances are created in parallel right now, this
+        # optimization is also not necessary
+        # https://github.com/scylladb/scylla-cluster-tests/issues/241
+        #
+        # node_private_ip_address = node.private_ip_address
+        # if not self.seed_nodes_private_ips:
+        #     self.seed_nodes_private_ips = [node_private_ip_address]
+        #     seed_address = node_private_ip_address
+        # else:
+        #     seed_address = ','.join(self.seed_nodes_private_ips)
 
         # Set seeds
         p = re.compile('seeds:.*')
@@ -2788,11 +2794,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         # Set listen_address
         p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node_private_ip_address),
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.private_ip_address),
                                      scylla_yaml_contents)
         # Set rpc_address
         p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node_private_ip_address),
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.private_ip_address),
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
@@ -2826,7 +2832,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.remoter.run('sudo sync')
 
-        if node_private_ip_address != seed_address:
+        if node.private_ip_address != seed_address:
             wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                           step=30,
                           text='Wait for seed node to be up after reboot')
