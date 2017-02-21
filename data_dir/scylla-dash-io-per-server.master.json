@@ -1,9 +1,9 @@
 {
     "dashboard": {
         "id": null,
-        "title": "Scylla Per Server Metrics 1.5",
+        "title": "Scylla Per-Server Disk I/O master",
         "tags": [
-            "1.5"
+            "master"
         ],
         "style": "dark",
         "timezone": "browser",
@@ -103,7 +103,7 @@
                                 "intervalFactor": 1,
                                 "legendFormat": "",
                                 "refId": "A",
-                                "step": 1
+                                "step": 240
                             }
                         ],
                         "thresholds": "",
@@ -180,10 +180,10 @@
                         },
                         "targets": [
                             {
-                                "expr": "count(up{job=\"scylla\"})-count(seastar_memory{metric=\"free\",shard=\"0\",type=\"total_operations\"})",
+                                "expr": "count(up{job=\"scylla\"})-count(scylla_memory_free_operations{shard=\"0\"})",
                                 "intervalFactor": 1,
                                 "refId": "A",
-                                "step": 1
+                                "step": 120
                             }
                         ],
                         "thresholds": "1,2",
@@ -264,10 +264,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(seastar_transport{type=\"total_requests\", metric=\"requests_served\"}[30s])) + sum(irate(seastar_thrift{type=\"total_requests\", metric=\"served\"}[30s]))",
+                                "expr": "sum(irate(scylla_transport_requests_served{}[30s])) + sum(irate(scylla_thrift_served{}[30s]))",
                                 "intervalFactor": 1,
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
@@ -317,7 +317,7 @@
                         "span": 2,
                         "starred": false,
                         "tags": [
-                            "1.5"
+                            "master"
                         ],
                         "title": "Dashboards",
                         "type": "dashlist"
@@ -376,10 +376,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "avg(seastar_reactor{type=\"gauge\", metric=\"load\"} ) by (instance)",
+                                "expr": "avg(scylla_reactor_utilization{} ) by (instance)",
                                 "intervalFactor": 1,
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
@@ -457,11 +457,11 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(seastar_transport{type=\"total_requests\", metric=\"requests_served\"}[30s])) by (instance) + sum(irate(seastar_thrift{type=\"total_requests\", metric=\"served\"}[30s])) by (instance)",
+                                "expr": "sum(irate(scylla_transport_requests_served{}[30s])) by (instance) + sum(irate(scylla_thrift_served{}[30s])) by (instance)",
                                 "intervalFactor": 1,
                                 "metric": "",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
@@ -532,22 +532,18 @@
                                 "intervalFactor": 1,
                                 "metric": "",
                                 "refId": "A",
-                                "step": 1
+                                "step": 7200
                             },
                             {
                                 "expr": "(sum(node_filesystem_size{mountpoint=\"/var/lib/scylla\"})-sum(node_filesystem_avail{mountpoint=\"/var/lib/scylla\"}))/1000000000",
                                 "intervalFactor": 1,
                                 "refId": "B",
-                                "step": 1
+                                "step": 7200
                             }
                         ],
                         "title": "Total Storage",
                         "type": "grafana-piechart-panel",
-                        "valueName": "current",
-                        "combine": {
-                            "threshold": 0,
-                            "label": "Others"
-                        }
+                        "valueName": "current"
                     }
                 ],
                 "title": "New row"
@@ -558,1690 +554,16 @@
                 "height": "25px",
                 "panels": [
                     {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Reads and Writes</h1>",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Disk Activity</h1>",
                         "editable": true,
                         "error": false,
-                        "height": "30",
-                        "id": 8,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 6,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    },
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Timeouts and Errors</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 35,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 6,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "200px",
-                "panels": [
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 14,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_storage_proxy{type=\"queue_length\", metric=\"foreground writes\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Foreground Writes per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 15,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_storage_proxy{type=\"queue_length\", metric=\"reads\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "metric": "",
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Foreground Reads per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 5,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_storage_proxy{type=\"total_operations\", metric=\"write timeouts\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Write Timeouts per Second per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 6,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_storage_proxy{type=\"total_operations\", metric=\"write unavailable\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Write Unavailable per Second per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "200px",
-                "panels": [
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 11,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_storage_proxy{type=\"queue_length\", metric=\"background writes\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Background Writes per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 10,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_storage_proxy{type=\"queue_length\", metric=\"background reads\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 4
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Background Reads per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 7,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_storage_proxy{type=\"total_operations\", metric=\"read timeouts\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Read Timeouts per Second per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 4,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_storage_proxy{type=\"total_operations\", metric=\"read unavailable\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "metric": "",
-                                "refId": "A",
-                                "step": 4
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Read Unavailable per Second per Server",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "250px",
-                "panels": [
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Replica</h1>",
-                        "editable": true,
-                        "error": false,
-                        "height": "30",
-                        "id": 57,
+                        "id": 28,
                         "isNew": true,
                         "links": [
 
                         ],
                         "mode": "html",
                         "span": 12,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 60,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 6,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"total_reads\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Reads",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "rps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 59,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 6,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"total_writes\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "metric": "",
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "wps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 61,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_database{type=\"queue_length\", metric=\"active_reads\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Active sstable reads",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "none",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 62,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_database{type=\"queue_length\", metric=\"queued_reads\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Queued sstable reads",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "none",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 63,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_database{type=\"queue_length\", metric=\"requests_blocked_memory\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes currently blocked on dirty",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "none",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 64,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(seastar_commitlog{type=\"queue_length\", metric=\"pending_allocations\"}) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes currently blocked on commitlog",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "none",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "content": "",
-                        "editable": true,
-                        "error": false,
-                        "id": 71,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "markdown",
-                        "span": 3,
-                        "title": "",
-                        "type": "text",
-                        "transparent": true
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 74,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"total_reads_failed\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Reads failed",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "rps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 67,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"requests_blocked_memory\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes blocked on dirty",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "wps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 68,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_commitlog{type=\"total_operations\", metric=\"requests_blocked_memory\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes blocked on commitlog",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "wps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "content": "",
-                        "editable": true,
-                        "error": false,
-                        "id": 73,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "markdown",
-                        "span": 3,
-                        "title": "",
-                        "type": "text",
-                        "transparent": true
-                    },
-                    {
-                        "content": "",
-                        "editable": true,
-                        "error": false,
-                        "id": 69,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "markdown",
-                        "span": 3,
-                        "title": "",
-                        "type": "text",
-                        "transparent": true
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 70,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"total_writes_failed\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes failed",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "wps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 1,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 72,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "null",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_database{type=\"total_operations\", metric=\"total_writes_timedout\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Writes timed out",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "wps",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "25px",
-                "panels": [
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Disk $monitor_disk</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 21,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 6,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    },
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Cache</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 18,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 6,
                         "style": {
 
                         },
@@ -2296,7 +618,7 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 6,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
@@ -2306,7 +628,7 @@
                                 "legendFormat": "",
                                 "metric": "",
                                 "refId": "A",
-                                "step": 1
+                                "step": 20
                             }
                         ],
                         "timeFrom": null,
@@ -2378,7 +700,7 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 6,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
@@ -2386,172 +708,12 @@
                                 "expr": "irate(node_disk_reads_completed{device=\"$monitor_disk\"}[30s])",
                                 "intervalFactor": 1,
                                 "refId": "A",
-                                "step": 1
+                                "step": 20
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
                         "title": "Disk Reads per Server per Second",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 16,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"hits\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Hits",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 17,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"misses\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Misses",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -2626,7 +788,7 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 6,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
@@ -2635,7 +797,7 @@
                                 "intervalFactor": 1,
                                 "metric": "",
                                 "refId": "A",
-                                "step": 1
+                                "step": 20
                             }
                         ],
                         "timeFrom": null,
@@ -2707,7 +869,7 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 6,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
@@ -2715,7 +877,7 @@
                                 "expr": "irate(node_disk_bytes_read{device=\"$monitor_disk\"}[30s])",
                                 "intervalFactor": 1,
                                 "refId": "A",
-                                "step": 1
+                                "step": 20
                             }
                         ],
                         "timeFrom": null,
@@ -2747,363 +909,48 @@
                                 "show": true
                             }
                         ]
-                    },
+                    }
+                ],
+                "title": "New row"
+            },
+            {
+                "collapse": false,
+                "editable": true,
+                "height": "25px",
+                "panels": [
                     {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">I/O Queue</h1>",
                         "editable": true,
                         "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 45,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"insertions\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Insertions",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 48,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"evictions\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Evictions",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "content": "&nbsp;",
-                        "editable": true,
-                        "error": false,
-                        "id": 55,
+                        "id": 42,
                         "isNew": true,
                         "links": [
 
                         ],
                         "mode": "html",
-                        "span": 6,
+                        "span": 12,
+                        "style": {
+
+                        },
                         "title": "",
                         "transparent": true,
                         "type": "text"
-                    },
+                    }
+                ],
+                "title": "New row"
+            },
+            {
+                "collapse": false,
+                "editable": true,
+                "height": "250px",
+                "panels": [
                     {
                         "aliasColors": {
 
                         },
                         "bars": false,
                         "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 53,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"merges\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Merges",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 54,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 3,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "sum(irate(seastar_cache{type=\"total_operations\", metric=\"removals\"}[30s])) by (instance)",
-                                "intervalFactor": 1,
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Cache Removals",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    },
-                    {
-                        "content": "&nbsp;",
-                        "editable": true,
-                        "error": false,
-                        "id": 52,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 6,
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    },
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3137,20 +984,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(seastar_cache{type=\"objects\", metric=\"partitions\"}) by (instance)",
+                                "expr": "1000000*max(scylla_io_queue_compaction_delay{}) by (instance)",
                                 "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Cache Partitions",
+                        "title": "Compactions I/O Queue delay",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3163,7 +1011,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "µs",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -3184,6 +1032,89 @@
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 45,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_compaction_total_bytes{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Compactions I/O Queue bandwidth",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "Bps",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3217,20 +1148,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 3,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(seastar_cache{type=\"bytes\", metric=\"total\"}) by (instance)",
+                                "expr": "sum(irate(scylla_io_queue_compaction_total_operations{}[30s])) by (instance)",
                                 "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Cache Total Bytes",
+                        "title": "Compactions I/O Queue IOPS",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3243,7 +1175,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "bytes",
+                                "format": "iops",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -3257,47 +1189,178 @@
                                 "show": true
                             }
                         ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "25px",
-                "panels": [
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Memory</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 51,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 12,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "250px",
-                "panels": [
+                    },
                     {
                         "aliasColors": {
 
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 47,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "1000000*max(scylla_io_queue_query_delay{}) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Query I/O Queue delay",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 48,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_query_total_bytes{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Query I/O Queue bandwidth",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "Bps",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3331,20 +1394,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 6,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(seastar_lsa{type=\"bytes\", metric=\"total_space\"}) by (instance)",
+                                "expr": "sum(irate(scylla_io_queue_query_total_operations{}[30s])) by (instance)",
                                 "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "LSA total memory",
+                        "title": "Query I/O Queue IOPS",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3357,7 +1421,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "bytes",
+                                "format": "iops",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -3378,6 +1442,7 @@
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3385,7 +1450,8 @@
                             "threshold1": null,
                             "threshold1Color": "rgba(216, 200, 27, 0.27)",
                             "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)",
+                            "thresholdLine": false
                         },
                         "id": 50,
                         "isNew": true,
@@ -3411,20 +1477,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 6,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(seastar_lsa{type=\"bytes\", metric=\"non_lsa_used_space\"}) by (instance)",
+                                "expr": "1000000*max(scylla_io_queue_commitlog_delay{}) by (instance)",
                                 "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Non-LSA used memory",
+                        "title": "Commitlog I/O Queue delay",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3437,122 +1504,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "bytes",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "25px",
-                "panels": [
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Network $monitor_network_interface</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 28,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 12,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "250px",
-                "panels": [
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 24,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 6,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "irate(node_network_receive_packets{device=\"$monitor_network_interface\"}[30s])",
-                                "intervalFactor": 1,
-                                "metric": "",
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Interface Rx Packets",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
+                                "format": "µs",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -3573,6 +1525,7 @@
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3582,7 +1535,7 @@
                             "threshold2": null,
                             "threshold2Color": "rgba(234, 112, 112, 0.22)"
                         },
-                        "id": 25,
+                        "id": 51,
                         "isNew": true,
                         "legend": {
                             "avg": false,
@@ -3606,110 +1559,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 6,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(node_network_transmit_packets{device=\"$monitor_network_interface\"}[30s])",
+                                "expr": "sum(irate(scylla_io_queue_commitlog_total_bytes{}[30s])) by (instance)",
                                 "intervalFactor": 1,
-                                "metric": "",
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Interface Tx Packets",
-                        "tooltip": {
-                            "msResolution": false,
-                            "shared": true,
-                            "sort": 0,
-                            "value_type": "cumulative"
-                        },
-                        "type": "graph",
-                        "xaxis": {
-                            "show": true
-                        },
-                        "yaxes": [
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": 0,
-                                "show": true
-                            },
-                            {
-                                "format": "short",
-                                "logBase": 1,
-                                "max": null,
-                                "min": null,
-                                "show": true
-                            }
-                        ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "250px",
-                "panels": [
-                    {
-                        "aliasColors": {
-
-                        },
-                        "bars": false,
-                        "datasource": "prometheus",
-                        "editable": true,
-                        "error": false,
-                        "fill": 0,
-                        "grid": {
-                            "threshold1": null,
-                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
-                            "threshold2": null,
-                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
-                        },
-                        "id": 26,
-                        "isNew": true,
-                        "legend": {
-                            "avg": false,
-                            "current": false,
-                            "max": false,
-                            "min": false,
-                            "show": false,
-                            "total": false,
-                            "values": false
-                        },
-                        "lines": true,
-                        "linewidth": 2,
-                        "links": [
-
-                        ],
-                        "nullPointMode": "connected",
-                        "percentage": false,
-                        "pointradius": 5,
-                        "points": false,
-                        "renderer": "flot",
-                        "seriesOverrides": [
-
-                        ],
-                        "span": 6,
-                        "stack": false,
-                        "steppedLine": false,
-                        "targets": [
-                            {
-                                "expr": "irate(node_network_receive_bytes{device=\"$monitor_network_interface\"}[30s])",
-                                "intervalFactor": 1,
-                                "metric": "",
-                                "refId": "A",
-                                "step": 1
-                            }
-                        ],
-                        "timeFrom": null,
-                        "timeShift": null,
-                        "title": "Interface Rx Bps",
+                        "title": "Commitlog I/O Queue bandwidth",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3743,6 +1607,7 @@
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3752,7 +1617,7 @@
                             "threshold2": null,
                             "threshold2Color": "rgba(234, 112, 112, 0.22)"
                         },
-                        "id": 27,
+                        "id": 52,
                         "isNew": true,
                         "legend": {
                             "avg": false,
@@ -3776,21 +1641,185 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 6,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(node_network_transmit_bytes{device=\"$monitor_network_interface\"}[30s])",
+                                "expr": "sum(irate(scylla_io_queue_commitlog_total_operations{}[30s])) by (instance)",
                                 "intervalFactor": 1,
-                                "metric": "",
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Interface Tx Bps",
+                        "title": "Commitlog I/O Queue IOPS",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "iops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 53,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "1000000*max(scylla_io_queue_memtable_flush_delay{}) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Memtable Flush I/O Queue delay",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 54,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_memtable_flush_total_bytes{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Memtable Flush I/O Queue bandwidth",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3817,47 +1846,14 @@
                                 "show": true
                             }
                         ]
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "25px",
-                "panels": [
-                    {
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Compaction</h1>",
-                        "editable": true,
-                        "error": false,
-                        "id": 42,
-                        "isNew": true,
-                        "links": [
-
-                        ],
-                        "mode": "html",
-                        "span": 12,
-                        "style": {
-
-                        },
-                        "title": "",
-                        "transparent": true,
-                        "type": "text"
-                    }
-                ],
-                "title": "New row"
-            },
-            {
-                "collapse": false,
-                "editable": true,
-                "height": "250px",
-                "panels": [
+                    },
                     {
                         "aliasColors": {
 
                         },
                         "bars": false,
                         "datasource": "prometheus",
+                        "decimals": 0,
                         "editable": true,
                         "error": false,
                         "fill": 0,
@@ -3867,7 +1863,7 @@
                             "threshold2": null,
                             "threshold2Color": "rgba(234, 112, 112, 0.22)"
                         },
-                        "id": 43,
+                        "id": 55,
                         "isNew": true,
                         "legend": {
                             "avg": false,
@@ -3891,21 +1887,21 @@
                         "seriesOverrides": [
 
                         ],
-                        "span": 12,
+                        "span": 4,
                         "stack": false,
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(seastar_compaction_manager{type=\"objects\"}) by (instance)",
+                                "expr": "sum(irate(scylla_io_queue_memtable_flush_total_operations{}[30s])) by (instance)",
                                 "intervalFactor": 1,
-                                "metric": "",
+                                "metric": "seastar_io_queue_delay",
                                 "refId": "A",
-                                "step": 1
+                                "step": 30
                             }
                         ],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "Running Compactions",
+                        "title": "Memtable Flush I/O Queue IOPS",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -3918,7 +1914,499 @@
                         },
                         "yaxes": [
                             {
+                                "format": "iops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
                                 "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 56,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "1000000*max(scylla_io_queue_delay_streaming_read{}) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Reads I/O Queue delay",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 57,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_derive_streaming_read{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Reads I/O Queue bandwidth",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "Bps",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 58,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_total_operations_streaming_read{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Reads I/O Queue IOPS",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "iops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 59,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "1000000*max(scylla_io_queue_delay_streaming_write{}) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Writes I/O Queue delay",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "µs",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 60,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_derive_streaming_write{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Writes I/O Queue bandwidth",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "Bps",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    },
+                    {
+                        "aliasColors": {
+
+                        },
+                        "bars": false,
+                        "datasource": "prometheus",
+                        "decimals": 0,
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {
+                            "threshold1": null,
+                            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+                            "threshold2": null,
+                            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+                        },
+                        "id": 61,
+                        "isNew": true,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [
+
+                        ],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 5,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [
+
+                        ],
+                        "span": 4,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                                "expr": "sum(irate(scylla_io_queue_total_operations_streaming_write{}[30s])) by (instance)",
+                                "intervalFactor": 1,
+                                "metric": "seastar_io_queue_delay",
+                                "refId": "A",
+                                "step": 30
+                            }
+                        ],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Streaming Writes I/O Queue IOPS",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "show": true
+                        },
+                        "yaxes": [
+                            {
+                                "format": "iops",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -3938,7 +2426,7 @@
             }
         ],
         "time": {
-            "from": "now-30m",
+            "from": "now-3h",
             "to": "now"
         },
         "timepicker": {
@@ -3985,23 +2473,6 @@
 
                     },
                     "query": "node_disk_bytes_read"
-                },
-                {
-                    "type": "query",
-                    "datasource": "prometheus",
-                    "refresh": 1,
-                    "name": "monitor_network_interface",
-                    "hide": 0,
-                    "options": [
-
-                    ],
-                    "includeAll": false,
-                    "multi": false,
-                    "regex": "/.*device=\"([^\\\"]*)\".*/",
-                    "current": {
-
-                    },
-                    "query": "node_network_receive_packets"
                 }
             ]
         },
@@ -4012,7 +2483,7 @@
         },
         "refresh": "30s",
         "schemaVersion": 12,
-        "version": 5,
+        "version": 0,
         "links": [
 
         ],

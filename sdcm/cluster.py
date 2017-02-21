@@ -502,6 +502,9 @@ class BaseNode(object):
                         'scylla-dash.1.6.json': 'dashboards/db',
                         'scylla-dash-per-server.1.6.json': 'dashboards/db',
                         'scylla-dash-io-per-server.1.6.json': 'dashboards/db',
+                        'scylla-dash.master.json': 'dashboards/db',
+                        'scylla-dash-per-server.master.json': 'dashboards/db',
+                        'scylla-dash-io-per-server.master.json': 'dashboards/db',
                         'scylla-dash-timeout-metrics.json': 'dashboards/db'}
 
         for grafana_json in json_mapping:
