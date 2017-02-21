@@ -457,6 +457,15 @@ class BaseNode(object):
                                    preserve_symlinks=preserve_symlinks,
                                    verbose=verbose)
 
+    def populate_postscript(self):
+        path = data_path.get_data_path("configure-cassandra-for-cluster-growth.sh")
+
+        dest = "/tmp/postscript.sh"
+
+        self.remoter.send_files(src=path, dst=dest)
+        self.remoter.run('sudo chmod +x %s' % dest)
+        self.remoter.run('sudo %s' % dest)
+
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
         self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
@@ -900,21 +909,6 @@ WantedBy=multi-user.target
                       text=text)
         self._report_housekeeping_uuid()
 
-    def apt_running(self):
-        try:
-            result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
-            return False
-
-    def wait_apt_not_running(self, verbose=True):
-        text = None
-        if verbose:
-            text = '%s: Waiting for apt to finish running in the background' % self
-        wait.wait_for(func=lambda: not self.apt_running(), step=60,
-                      text=text)
-
     def wait_db_down(self, verbose=True):
         text = None
         if verbose:
@@ -1288,13 +1282,15 @@ class BaseCluster(object):
     """
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, name=None):
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
+        if name is not None:
+            self.name = name
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
         self._node_index = 0
         # I wanted to avoid some parameter passing
@@ -2419,7 +2415,7 @@ class AWSCluster(BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, name=None):
         if credentials.type == 'generated':
             credential_key_name = credentials.key_pair_name
             credential_key_file = credentials.key_file
@@ -2449,7 +2445,8 @@ class AWSCluster(BaseCluster):
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
-                                         params=params)
+                                         params=params, name=name)
+        self.cassandra = False
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
@@ -2467,6 +2464,49 @@ class AWSCluster(BaseCluster):
         with open(private_ip_file_path, 'w') as private_ip_file:
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
+
+    def populate_db(self, node):
+        raise NotImplementedError
+
+    def stop_db(self, node):
+        raise NotImplementedError
+
+    def start_db(self, node):
+        raise NotImplementedError
+
+    def populate_db_with_ebs(self, ebs_ids):
+
+        # Shutdown all nodes
+        for node in self.nodes:
+            self.stop_db(node)
+
+        # for each node pick up an EBS and attach it
+        for node in self.nodes:
+            # attach the volume
+            ebs_id = ebs_ids.pop()
+            device = "/dev/xvdz"
+            node._instance.attach_volume(VolumeId=ebs_id, Device=device)
+
+            wait.wait_for(node.file_exists, step=60,
+                          text='Volume id %s not attached to VM' % ebs_id,
+                          file_path=device)
+
+            # mount populate then unmount
+            node.remoter.run("sudo mount %s /root" % device)
+            self.populate_db(node)
+            node.remoter.run("sudo umount /root")
+
+            # detach volume
+            node._instance.detach_volume(VolumeId=ebs_id, Device=device)
+
+        # Restart all nodes
+        for node in self.nodes:
+            if self.cassandra:
+                node.populate_postscript()
+            self.start_db(node)
+
+        for node in self.nodes:
+            node.wait_db_up()
 
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
@@ -2711,7 +2751,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               name=name)
         self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
@@ -2866,14 +2907,18 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                  ec2_block_device_mappings=None,
                  user_prefix=None,
                  n_nodes=10,
-                 params=None):
+                 params=None,
+                 name=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
         shortid = str(cluster_uuid)[:8]
-        name = '%s-%s' % (cluster_prefix, shortid)
-        user_data = ('--clustername %s '
+        if name is None:
+            name = '%s-%s' % (cluster_prefix, shortid)
+        if params is not None and params.get('db_cluster_name') is not None:
+            name = params.get('db_cluster_name')
+        user_data = ('--clustername "%s" '
                      '--totalnodes %s' % (name, n_nodes))
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
@@ -2895,6 +2940,24 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
+        self.name = name
+        self.cassandra = False
+
+    def populate_db(self, node):
+        node.remoter.run("sudo rm -rf /var/lib/scylla/*")
+        node.remoter.run("sudo cp -a /root/* /var/lib/scylla/")
+        node.remoter.run("sudo chown -R scylla.scylla /var/lib/scylla")
+        node.remoter.run("sudo rm -rf /var/lib/scylla/commitlog/*")
+
+    def stop_db(self, node):
+        node.remoter.run("sudo systemctl stop scylla-server")
+        node.wait_db_down()
+
+    def start_db(self, node):
+        node.remoter.run("sudo systemctl start scylla-server")
+        # We need the seed node to be partially restarted before the other
+        # so they don't timeout.
+        time.sleep(45)
 
     def add_nodes(self, count, ec2_user_data=''):
         if not ec2_user_data:
@@ -2902,7 +2965,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                 node_private_ips = [node.private_ip_address for node
                                     in self.nodes if node.is_seed]
                 seeds = ",".join(node_private_ips)
-                ec2_user_data = ('--clustername %s --bootstrap true '
+                ec2_user_data = ('--clustername "%s" --bootstrap true '
                                  '--totalnodes %s --seeds %s' % (self.name,
                                                                  count,
                                                                  seeds))
@@ -2975,7 +3038,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node_prefix = _prepend_user_prefix(user_prefix, 'cassandra-db-node')
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
-        user_data = ('--clustername %s '
+        if params is not None and params.get('db_cluster_name') is not None:
+            name = params.get('db_cluster_name')
+        user_data = ('--clustername "%s" '
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, n_nodes))
 
@@ -2992,11 +3057,30 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               name=name)
         self.collectd_setup = CassandraCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
+        self.cassandra = True
+
+    def populate_db(self, node):
+        node.remoter.run("sudo rm -rf /var/lib/cassandra/*")
+        node.remoter.run("sudo cp -a /root/* /var/lib/cassandra/")
+        node.remoter.run("sudo rm -rf /var/lib/cassandra/commitlog/*")
+        node.remoter.run("sudo mkdir /raid0/cassandra/logs")
+        node.remoter.run("sudo chmod -R 777 /raid0/cassandra")
+        node.remoter.run("sudo chown -R cassandra:cassandra /raid0/cassandra")
+
+    def stop_db(self, node):
+        # Use service since the Cassandra AMI is running on an old ubuntu
+        node.remoter.run("sudo service cassandra stop")
+        node.wait_db_down()
+
+    def start_db(self, node):
+        # Same remark.
+        node.remoter.run("sudo service cassandra start")
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -3015,7 +3099,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = ('--clustername %s --bootstrap true '
+                ec2_user_data = ('--clustername "%s" --bootstrap true '
                                  '--totalnodes %s --seeds %s '
                                  '--version community '
                                  '--release 2.1.15' % (self.name,
@@ -3043,7 +3127,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         # is not thread safe
         for node in node_list:
             node.wait_ssh_up(verbose=verbose)
-            node.wait_apt_not_running()
+            node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y collectd collectd-utils')
             node.remoter.run('sudo apt-get install -y openjdk-6-jdk')

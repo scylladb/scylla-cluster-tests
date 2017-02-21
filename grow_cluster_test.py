@@ -32,8 +32,8 @@ class GrowClusterMonkey(Nemesis):
     def disrupt(self):
         self._set_current_disruption('Add new node to %s' % self.cluster)
         new_nodes = self.cluster.add_nodes(count=1)
-        self.cluster.wait_for_init(node_list=new_nodes)
         self.reconfigure_monitoring()
+        self.cluster.wait_for_init(node_list=new_nodes)
 
 
 class GrowClusterTest(ClusterTester):
@@ -107,9 +107,8 @@ class GrowClusterTest(ClusterTester):
                 (duration, threads, population_size, ip))
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
-        # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
-        duration = 60 * nodes_to_add
+        duration = self.params.get('grow_cluster_timeout') * 60 * nodes_to_add
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
         # Wait for cluster is filled with data
@@ -182,6 +181,28 @@ class GrowClusterTest(ClusterTester):
         """
         self.grow_cluster(cluster_target_size=4,
                           stress_cmd=self.get_stress_cmd_profile())
+
+    def get_benchmark_stress_cmd(self):
+        """
+        Get a cassandra stress cmd string suitable for bencharmking grow cluster purposes.
+
+        :return: Cassandra stress string
+        :rtype: basestring
+        """
+        ip = self.db_cluster.get_node_private_ips()[0]
+        return ("cassandra-stress write cl=QUORUM duration=24000m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(10240) n=FIXED(1)' -pop seq=1..10000000 -node %s" % ip)
+
+    def test_cassandra_growth_benchmark(self):
+        """
+        Benchmark cluster growth
+        """
+
+        ebs_ids = self.params.get('prepopulate_ebs_ids').split(',')
+
+        self.db_cluster.populate_db_with_ebs(ebs_ids)
+
+        self.grow_cluster(cluster_target_size=6,
+                          stress_cmd=self.get_benchmark_stress_cmd())
 
 if __name__ == '__main__':
     main()

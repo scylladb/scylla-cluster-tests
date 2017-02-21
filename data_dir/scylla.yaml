@@ -31,6 +31,12 @@ failure_post_behavior: destroy
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
 space_node_threshold: 6442450944
+# Use this when using database prepopulation
+# for example for grow_cluster_test
+# db_cluster_name: 'Test Cluster - No AMI Parameters'
+prepopulate_ebs_ids: 'vol-048b3e724b7f6990f,vol-08c963ebdf37b2e1c,vol-024b835dd076a6d04'
+# Total time in hours the grow cluster test must take
+grow_cluster_timeout: 1
 
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
@@ -76,9 +82,9 @@ backends: !mux
             region_name: 'us-west-1'
             security_group_ids: 'sg-dcd785b9'
             subnet_id: 'subnet-10a04c75'
-            ami_id_db_scylla: 'ami-19eca679'
+            ami_id_db_scylla: 'ami-d8c397b8'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-19eca679'
+            ami_id_loader: 'ami-d8c397b8'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3cf7c979'
             ami_db_cassandra_user: 'ubuntu'
@@ -89,9 +95,9 @@ backends: !mux
             region_name: 'us-west-2'
             security_group_ids: 'sg-81703ae4'
             subnet_id: 'subnet-5207ee37'
-            ami_id_db_scylla: 'ami-ec3e9e8c'
+            ami_id_db_scylla: 'ami-5b812f3b'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-ec3e9e8c'
+            ami_id_loader: 'ami-5b812f3b'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-1cff962c'
             ami_db_cassandra_user: 'ubuntu'
@@ -102,9 +108,9 @@ backends: !mux
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
-            ami_id_db_scylla: 'ami-79d3f06e'
+            ami_id_db_scylla: 'ami-2969563e'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-79d3f06e'
+            ami_id_loader: 'ami-2969563e'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
