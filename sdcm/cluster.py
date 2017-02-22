@@ -354,6 +354,10 @@ class BaseNode(object):
         self._database_error_patterns = ['std::bad_alloc']
         self.start_journal_thread()
         self.start_backtrace_thread()
+        # We should disable bootstrap when we create nodes to establish the cluster,
+        # if we want to add more nodes when the cluster already exists, then we should
+        # enable bootstrap. So addition means not the first set of node.
+        self.is_addition = False
 
     def file_exists(self, file_path):
         try:
@@ -2300,6 +2304,7 @@ class OpenStackCluster(BaseCluster):
                                                     self._openstack_instance_type)
 
     def add_nodes(self, count, ec2_user_data=''):
+        nodes = []
         size = [d for d in self._openstack_service.list_sizes() if d.name == self._openstack_instance_type][0]
         image = self._openstack_service.get_image(self._openstack_image)
         networks = [n for n in self._openstack_service.ex_list_networks() if n.name == self._openstack_network]
@@ -2308,12 +2313,17 @@ class OpenStackCluster(BaseCluster):
             instance = self._openstack_service.create_node(name=name, image=image, size=size, networks=networks,
                                                            ex_keyname=self._credentials.name)
             OPENSTACK_INSTANCES.append(instance)
-            self.nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
-                                            credentials=self._credentials,
-                                            openstack_image_username=self._openstack_image_username,
-                                            node_prefix=self.node_prefix, node_index=node_index,
-                                            base_logdir=self.logdir))
-            self._node_index += 1
+            nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
+                                       credentials=self._credentials,
+                                       openstack_image_username=self._openstack_image_username,
+                                       node_prefix=self.node_prefix, node_index=node_index,
+                                       base_logdir=self.logdir))
+
+        self.log.info('added nodes: %s', nodes)
+        self._node_index += len(nodes)
+        self.nodes += nodes
+
+        return nodes
 
 
 class GCECluster(BaseCluster):
@@ -2382,6 +2392,7 @@ class GCECluster(BaseCluster):
                 "autoDelete": True}
 
     def add_nodes(self, count, ec2_user_data=''):
+        nodes = []
         name = "%s-idx" % self.node_prefix
         gce_disk_struct = list()
         gce_disk_struct.append(self._get_root_disk_struct(name=name,
@@ -2389,23 +2400,39 @@ class GCECluster(BaseCluster):
         for i in range(self._gce_n_local_ssd):
             gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
         self.log.info(gce_disk_struct)
+        # Suffix of instances' name are always started from 000,
+        # so we try to create `exist_nodes_num + new_nodes_num`,
+        # it will only create `new_nodes_num` effective nodes.
+        # The purpose is reusing released namespace, and make
+        # the instances' name sequential.
         instances = self._gce_service.ex_create_multiple_nodes(
                           base_name=self.node_prefix,
                           size=self._gce_instance_type,
                           image=None,
-                          number=count,
+                          number=len(self.nodes) + count,
                           ex_disks_gce_struct=gce_disk_struct)
+        # Ignore non-effective nodes
+        instances = [i for i in instances if 'GCEFailedNode' not in str(i)]
+
         self.log.info('Created instances: %s', instances)
-        for node_index, instance in enumerate(instances):
+        for idx, instance in enumerate(instances):
             GCE_INSTANCES.append(instance)
-            self.nodes.append(GCENode(gce_instance=instance,
-                                      gce_service=self._gce_service,
-                                      credentials=self._credentials,
-                                      gce_image_username=self._gce_image_username,
-                                      node_prefix=self.node_prefix,
-                                      node_index=node_index + 1,
-                                      base_logdir=self.logdir))
-            self._node_index += 1
+            nodes.append(GCENode(gce_instance=instance,
+                                 gce_service=self._gce_service,
+                                 credentials=self._credentials,
+                                 gce_image_username=self._gce_image_username,
+                                 node_prefix=self.node_prefix,
+                                 node_index=self._node_index + idx + 1,
+                                 base_logdir=self.logdir))
+        self.log.info('added nodes: %s', nodes)
+        self._node_index += len(nodes)
+        for i in nodes:
+            if len(self.nodes) > 0:
+                i.is_addition = True
+
+        self.nodes += nodes
+
+        return nodes
 
 
 class AWSCluster(BaseCluster):
@@ -2658,7 +2685,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         for node in node_list:
             self.collectd_setup.install(node)
 
-        seed = node_list[0].public_ip_address
+        seed = self.nodes[0].private_ip_address
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
@@ -2747,12 +2774,18 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         with open(yaml_dst_path, 'r') as f:
             scylla_yaml_contents = f.read()
 
-        node_private_ip_address = node.private_ip_address
-        if not self.seed_nodes_private_ips:
-            self.seed_nodes_private_ips = [node_private_ip_address]
-            seed_address = node_private_ip_address
-        else:
-            seed_address = ','.join(self.seed_nodes_private_ips)
+        # Fixme: there is some code that assume the first node as seed,
+        # so we can't choose the fast one as seed, let's disable the code.
+        # The gce instances are created in parallel right now, this
+        # optimization is also not necessary
+        # https://github.com/scylladb/scylla-cluster-tests/issues/241
+        #
+        # node_private_ip_address = node.private_ip_address
+        # if not self.seed_nodes_private_ips:
+        #     self.seed_nodes_private_ips = [node_private_ip_address]
+        #     seed_address = node_private_ip_address
+        # else:
+        #     seed_address = ','.join(self.seed_nodes_private_ips)
 
         # Set seeds
         p = re.compile('seeds:.*')
@@ -2761,14 +2794,29 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         # Set listen_address
         p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node_private_ip_address),
+        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.private_ip_address),
                                      scylla_yaml_contents)
         # Set rpc_address
         p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node_private_ip_address),
+        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.private_ip_address),
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
+
+        if node.is_addition:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: True',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: True\n"
+        else:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: False',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -2784,7 +2832,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.remoter.run('sudo sync')
 
-        if node_private_ip_address != seed_address:
+        if node.private_ip_address != seed_address:
             wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                           step=30,
                           text='Wait for seed node to be up after reboot')
@@ -2828,9 +2876,10 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         # avoid using node.remoter in thread
         for node in node_list:
+            node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
-        seed = node_list[0].private_ip_address
+        seed = self.nodes[0].private_ip_address
         for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(node, seed))
