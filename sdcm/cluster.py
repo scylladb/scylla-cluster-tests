@@ -976,7 +976,7 @@ class OpenStackNode(BaseNode):
 
     @property
     def public_ip_address(self):
-        return self._get_private_ip_address()
+        return self._get_public_ip_address()
 
     @property
     def private_ip_address(self):
