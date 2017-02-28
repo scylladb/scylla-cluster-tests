@@ -3,6 +3,7 @@ import sys
 
 import requests
 
+
 def upload_stats_es(metrics, test_name):
     stats_to_add = {}
 
@@ -49,7 +50,7 @@ def upload_stats_es(metrics, test_name):
 
 
 def main():
-    assert len(sys.argv[1:]) >0, 'list of tests is required\n' \
+    assert len(sys.argv[1:]) > 0, 'list of tests is required\n' \
                                  'for example:' \
                                  'python upload_stats_in_ES.py test_read test_write'
 
