@@ -14,9 +14,11 @@
 # Copyright (c) 2016 ScyllaDB
 
 
+import datetime
+import json
 import os
-from avocado import main
 
+from avocado import main
 from sdcm.tester import ClusterTester
 
 
@@ -42,9 +44,9 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['Total partitions'],
                                           result['Total errors']))
 
-    def get_test_xml(self, result):
+    def get_test_xml(self, result, test_name='simple_regression_test'):
         test_content = """
-  <test name="simple_regression_test-stress_modes: (%s) Loader%s CPU%s Keyspace%s" executed="yes">
+  <test name="%s-stress_modes: (%s) Loader%s CPU%s Keyspace%s" executed="yes">
     <description>"simple regression test, ami_id: %s, scylla version:
     %s", stress_mode: %s, hardware: %s</description>
     <targets>
@@ -73,7 +75,8 @@ class PerformanceRegressionTest(ClusterTester):
       </metrics>
     </result>
   </test>
-""" % (self.params.get('stress_modes'),
+""" % (test_name,
+            self.params.get('stress_modes'),
             result['loader_idx'],
             result['cpu_idx'],
             result['keyspace_idx'],
@@ -99,7 +102,20 @@ class PerformanceRegressionTest(ClusterTester):
 
         return test_content
 
-    def display_results(self, results):
+    def generate_stats_json(self, results, test_name):
+        metrics = {}
+        for p in self.params.iteritems():
+            metrics[p[1]] = p[2]
+
+        metrics['test_name'] = test_name
+        metrics['stats'] = results
+
+        metrics['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        with open('jenkins_%s.json' % test_name, 'w') as fp:
+            json.dump(metrics, fp, indent=4)
+
+    def display_results(self, results, test_name='simple_regression_test'):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
                                           'row-rate', 'latency-mean',
                                           'latency-median', 'l-94th-pct',
@@ -109,13 +125,13 @@ class PerformanceRegressionTest(ClusterTester):
         test_xml = ""
         for single_result in results:
             self.display_single_result(single_result)
-            test_xml += self.get_test_xml(single_result)
+            test_xml += self.get_test_xml(single_result, test_name=test_name)
 
         f = open(os.path.join(self.logdir,
                               'jenkins_perf_PerfPublisher.xml'), 'w')
-        content = """<report name="simple_regression_test report" categ="none">
+        content = """<report name="%s report" categ="none">
 %s
-</report>""" % test_xml
+</report>""" % (test_name, test_xml)
 
         f.write(content)
         f.close()
@@ -150,6 +166,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
+        self.generate_stats_json(results, test_name='test_simple_regression')
 
     def test_read(self):
         """
@@ -178,6 +195,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
+        self.generate_stats_json(results, test_name='test_read')
 
     def test_mixed(self):
         """
@@ -207,6 +225,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
+        self.generate_stats_json(results, test_name='test_mixed')
 
 if __name__ == '__main__':
     main()
