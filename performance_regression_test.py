@@ -126,7 +126,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         metrics['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        test_name_file = metrics['test_name'].replace(':', '__').replace('.','_')
+        test_name_file = metrics['test_name'].replace(':', '__').replace('.', '_')
 
         with open('jenkins_%s.json' % test_name_file, 'w') as fp:
             json.dump(metrics, fp, indent=4)
