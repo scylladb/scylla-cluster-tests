@@ -17,6 +17,9 @@
 import datetime
 import json
 import os
+import re
+
+import requests
 
 from avocado import main
 from sdcm.tester import ClusterTester
@@ -102,18 +105,33 @@ class PerformanceRegressionTest(ClusterTester):
 
         return test_content
 
-    def generate_stats_json(self, results, test_name):
+    def generate_stats_json(self, results, cmds=[]):
         metrics = {}
+
         for p in self.params.iteritems():
             metrics[p[1]] = p[2]
 
-        metrics['test_name'] = test_name
+        # we use cmds
+        del metrics['stress_cmd']
+        for cmd in cmds:
+            metrics = self.add_stress_cmd_params(metrics, cmd)
+            metrics = self.add_stress_cmd_params(metrics, cmd)
+
+        metrics['test_name'] = self.params.id.name
         metrics['stats'] = results
+
+        if 'es_password' in metrics:
+            # hide ES password
+            metrics['es_password'] = '******'
 
         metrics['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        with open('jenkins_%s.json' % test_name, 'w') as fp:
+        test_name_file = metrics['test_name'].replace(':', '__').replace('.','_')
+
+        with open('jenkins_%s.json' % test_name_file, 'w') as fp:
             json.dump(metrics, fp, indent=4)
+
+        self.upload_stats_es(metrics, test_name=test_name_file)
 
     def display_results(self, results, test_name='simple_regression_test'):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
@@ -135,6 +153,98 @@ class PerformanceRegressionTest(ClusterTester):
 
         f.write(content)
         f.close()
+
+    def add_stress_cmd_params(self, result, cmd):
+        cmd = cmd.strip()
+        cmd = cmd.strip().split('cassandra-stress')[1].strip()
+        if cmd.split(' ')[0] in ['read', 'write', 'mixed']:
+            section = 'cassandra-stress ' + cmd.split(' ')[0]
+            result[section] = {}
+            # cmd = ' '.join(cmd.split(' ')[1:]).strip()
+            # result[section]['no-warmup'] = False
+            if cmd.startswith('no-warmup'):
+                result[section]['no-warmup'] = True
+                # cmd = cmd.strip('no-warmup')[1:].strip()
+
+            match = re.search('(cl\s?=\s?\w+)', cmd)
+            if match:
+                result[section]['cl'] = match.group(0).split('=')[1].strip()
+
+            match = re.search('(duration\s?=\s?\W+)', cmd)
+            if match:
+                result[section]['duration'] = match.group(0).split('=')[1].strip()
+
+            match = re.search('( n\s?=\s?\W+)', cmd)
+            if match:
+                result[section]['n'] = match.group(0).split('=')[1].strip()
+
+            for temp in cmd.split(' -')[1:]:
+                k = temp.split()[0]
+                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
+                if match:
+                    result[section][k] = match.group(2).strip()
+        return result
+
+    def upload_stats_es(self, metrics, test_name):
+        """
+        custom date format is used in ES
+        curl -XPUT 'https://USER:PASSWORD@HOST_NAME:9243/performanceregressiontest' -H 'Content-Type:application/json' -d'{
+           "mappings":{
+              "performanceregressiontest":{
+                 "properties":{
+                    "time_completed":{
+                       "type":"date",
+                       "format":"yyyy-MM-dd HH:mm"
+                    }
+                 }
+              }
+           }
+        }
+        """
+        stats_to_add = {}
+
+        for key in metrics['stats'][0].keys():
+            summary = 0
+            for stat in metrics['stats']:
+                try:
+                    summary += float(stat[key])
+                except:
+                    stats_to_add[key] = stat[key]
+            if summary != summary:
+                stats_to_add[key] = None
+            elif key not in stats_to_add:
+                stats_to_add[key] = round(summary / len(metrics['stats']), 1)
+
+        result = {}
+        for k, v in metrics.iteritems():
+            if k == 'stats':
+                continue
+            value = v
+            try:
+                value = int(v)
+            except:
+                try:
+                    value = float(v)
+                except:
+                    pass
+
+            result[k] = value
+
+        result.update(stats_to_add)
+
+        with open('jenkins_%s_summary.json' % test_name, 'w') as fp:
+            json.dump(result, fp, indent=4)
+
+        self.log.info(json.dumps(result, indent=4))
+        if self.params.get('es_url'):
+            url = '%s/performanceregressiontest/%s/%s_%s?pretty' % \
+                  (self.params.get('es_url'), result['test_name'],
+                   result['ami_id_db_scylla_desc'], result['time_completed'])
+
+            headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+            r = requests.post(url, data=open('jenkins_%s_summary.json' % test_name, 'rb'), headers=headers,
+                              auth=(self.params.get('es_user'), self.params.get('es_password')))
+            self.log.info(r.content)
 
     def test_simple_regression(self):
         """
@@ -166,7 +276,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
-        self.generate_stats_json(results, test_name='test_simple_regression')
+        self.generate_stats_json(results, [base_cmd])
 
     def test_read(self):
         """
@@ -195,7 +305,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
-        self.generate_stats_json(results, test_name='test_read')
+        self.generate_stats_json(results, [base_cmd_w, base_cmd_r])
 
     def test_mixed(self):
         """
@@ -225,7 +335,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.display_results(results)
         except:
             pass
-        self.generate_stats_json(results, test_name='test_mixed')
+        self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
 
 if __name__ == '__main__':
     main()
