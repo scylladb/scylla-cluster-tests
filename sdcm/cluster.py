@@ -965,7 +965,7 @@ class OpenStackNode(BaseNode):
         self._instance = openstack_instance
         self._openstack_service = openstack_service
         self._wait_private_ip()
-        ssh_login_info = {'hostname': self.public_ip_address,
+        ssh_login_info = {'hostname': self.private_ip_address,
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
                           'wait_key_installed': 30,
@@ -976,7 +976,7 @@ class OpenStackNode(BaseNode):
 
     @property
     def public_ip_address(self):
-        return self._get_private_ip_address()
+        return self._get_public_ip_address()
 
     @property
     def private_ip_address(self):
@@ -1030,7 +1030,7 @@ class GCENode(BaseNode):
         self._instance = gce_instance
         self._gce_service = gce_service
         self._wait_public_ip()
-        ssh_login_info = {'hostname': self.public_ip_address,
+        ssh_login_info = {'hostname': self.private_ip_address,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
@@ -1129,7 +1129,7 @@ class AWSNode(BaseNode):
         self._wait_public_ip()
         self._ec2.create_tags(Resources=[self._instance.id],
                               Tags=[{'Key': 'Name', 'Value': name}])
-        ssh_login_info = {'hostname': self._instance.public_ip_address,
+        ssh_login_info = {'hostname': self._instance.private_ip_address,
                           'user': ami_username,
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
