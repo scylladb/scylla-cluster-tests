@@ -125,9 +125,6 @@ class PerformanceRegressionTest(ClusterTester):
 
         test_name_file = metrics['test_name'].replace(':', '__').replace('.', '_')
 
-        with open('jenkins_%s.json' % test_name_file, 'w') as fp:
-            json.dump(metrics, fp, indent=4)
-
         self.upload_stats_es(metrics, test_name=test_name_file)
 
     def display_results(self, results, test_name=''):
@@ -152,6 +149,7 @@ class PerformanceRegressionTest(ClusterTester):
         f.close()
 
     def add_stress_cmd_params(self, result, cmd):
+        # parsing stress command and return dict with params
         cmd = cmd.strip()
         cmd = cmd.strip().split('cassandra-stress')[1].strip()
         if cmd.split(' ')[0] in ['read', 'write', 'mixed']:
@@ -205,24 +203,25 @@ class PerformanceRegressionTest(ClusterTester):
            }
         }
         """
-        stats_to_add = {}
+        result = {}
+        average_stats = {}
 
+        # calculate average stats
         for key in metrics['stats'][0].keys():
             summary = 0
             for stat in metrics['stats']:
                 try:
                     summary += float(stat[key])
                 except:
-                    stats_to_add[key] = stat[key]
+                    average_stats[key] = stat[key]
             if summary != summary:
-                stats_to_add[key] = None
-            elif key not in stats_to_add:
-                stats_to_add[key] = round(summary / len(metrics['stats']), 1)
+                average_stats[key] = None
+            elif key not in average_stats:
+                average_stats[key] = round(summary / len(metrics['stats']), 1)
+        result['stats_average'] = average_stats
 
-        result = {}
         for k, v in metrics.iteritems():
-            if k == 'stats':
-                continue
+            # trying to convert str values into int/float
             value = v
             try:
                 value = int(v)
@@ -234,14 +233,12 @@ class PerformanceRegressionTest(ClusterTester):
 
             result[k] = value
 
-        result.update(stats_to_add)
-
         with open('jenkins_%s_summary.json' % test_name, 'w') as fp:
             json.dump(result, fp, indent=4)
 
         self.log.info(json.dumps(result, indent=4))
         if self.params.get('es_url'):
-            url = '%s/performanceregressiontest/%s/%s_%s?pretty' % \
+            url = '%s/performanceregression/%s/%s_%s?pretty' % \
                   (self.params.get('es_url'), result['test_name'],
                    result['ami_id_db_scylla_desc'], result['time_completed'])
 
