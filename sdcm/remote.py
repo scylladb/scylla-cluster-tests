@@ -375,7 +375,7 @@ class BaseRemote(object):
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=100000 --rsh='%s' -az %s %s"
+        command = "rsync %s %s --timeout=300 --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
 
