@@ -399,10 +399,13 @@ class BaseRemote(object):
         appropriate scp command for encoding it. Remote paths must be
         pre-encoded.
         """
+        key_option = ''
+        if self.key_file:
+            key_option = '-i %s' % self.key_file
         command = ("scp -rq %s -o StrictHostKeyChecking=no "
-                   "-o UserKnownHostsFile=%s -P %d %s '%s'")
+                   "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
         return command % (self.master_ssh_option, self.known_hosts_file,
-                          self.port, " ".join(src), dst)
+                          self.port, key_option, " ".join(src), dst)
 
     def _make_rsync_compatible_globs(self, pth, is_local):
         """
