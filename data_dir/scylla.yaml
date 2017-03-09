@@ -4,8 +4,6 @@ test_duration: 60
 # cassandra-stress command. You can specify everything but the -node parameter,
 # which is going to be provided by the test suite infrastructure
 stress_cmd: cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
-# cassandra-stress mode series
-stress_modes: 'write read restart mixed'
 # tcpdump to try to capture nodetool API
 tcpdump: false
 # Number of database nodes
