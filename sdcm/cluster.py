@@ -587,7 +587,8 @@ scrape_configs:
             tmp_cfg_prom.write(prometheus_cfg)
         try:
             self.remoter.send_files(src=tmp_path_prom,
-                                    dst=self.prometheus_custom_cfg_path)
+                                    dst=self.prometheus_custom_cfg_path,
+                                    verbose=True)
         finally:
             shutil.rmtree(tmp_dir_prom)
 
