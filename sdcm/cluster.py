@@ -1041,7 +1041,8 @@ class GCENode(BaseNode):
             self.log.info('Test duration set to %s. '
                           'Tagging node with "keep-alive"',
                           TEST_DURATION)
-            self._gce_service.ex_set_node_tags(self._instance, ['keep-alive'])
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
