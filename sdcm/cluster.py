@@ -589,7 +589,8 @@ scrape_configs:
         try:
             self.remoter.send_files(src=tmp_path_prom,
                                     dst=self.prometheus_custom_cfg_path,
-                                    verbose=True)
+                                    verbose=True,
+                                    ssh_timeout=60)
         finally:
             shutil.rmtree(tmp_dir_prom)
 
