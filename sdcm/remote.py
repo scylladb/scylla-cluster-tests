@@ -570,6 +570,8 @@ class BaseRemote(object):
                 try_scp = False
             except process.CmdError, e:
                 self.log.warning("Trying scp, rsync failed: %s", e)
+                # Make sure master ssh available
+                self.start_master_ssh()
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -642,6 +644,8 @@ class BaseRemote(object):
                 try_scp = False
             except process.CmdError, details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
+                # Make sure master ssh available
+                self.start_master_ssh()
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
