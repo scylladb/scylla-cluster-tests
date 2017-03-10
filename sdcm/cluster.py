@@ -45,6 +45,7 @@ from libcloud.compute.providers import get_driver
 
 from .log import SDCMAdapter
 from .remote import Remote
+from .remote import disable_master_ssh
 from . import data_path
 from . import wait
 
@@ -82,6 +83,8 @@ COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 def set_duration(duration):
     global TEST_DURATION
     TEST_DURATION = duration
+    if TEST_DURATION >= 3 * 60:
+        disable_master_ssh()
 
 
 def set_libvirt_uri(libvirt_uri):

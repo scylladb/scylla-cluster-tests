@@ -257,6 +257,11 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
                            alive_interval, user, port)
 
 
+def disable_master_ssh():
+    global ENABLE_MASTER_SSH
+    ENABLE_MASTER_SSH = False
+
+
 class BaseRemote(object):
 
     def __init__(self, hostname, user="root", port=22, password="",
