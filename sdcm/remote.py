@@ -393,7 +393,7 @@ class BaseRemote(object):
         return '%s %s "%s"' % (base_cmd, self.hostname,
                                astring.shell_escape(cmd))
 
-    def _make_scp_cmd(self, src, dst):
+    def _make_scp_cmd(self, src, dst, connect_timeout=300, alive_interval=300):
         """
         Given a list of source paths and a destination path, produces the
         appropriate scp command for encoding it. Remote paths must be
@@ -402,9 +402,11 @@ class BaseRemote(object):
         key_option = ''
         if self.key_file:
             key_option = '-i %s' % os.path.expanduser(self.key_file)
-        command = ("scp -rq %s -o StrictHostKeyChecking=no "
+        command = ("scp -r %s -o StrictHostKeyChecking=no -o BatchMode=yes "
+                   "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
                    "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
-        return command % (self.master_ssh_option, self.known_hosts_file,
+        return command % (self.master_ssh_option, connect_timeout,
+                          alive_interval, self.known_hosts_file,
                           self.port, key_option, " ".join(src), dst)
 
     def _make_rsync_compatible_globs(self, pth, is_local):
