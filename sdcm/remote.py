@@ -521,7 +521,7 @@ class BaseRemote(object):
 
     def receive_files(self, src, dst, delete_dst=False,
                       preserve_perm=True, preserve_symlinks=False,
-                      verbose=False):
+                      verbose=False, ssh_timeout=None):
         """
         Copy files from the remote host to a local path.
 
@@ -546,6 +546,7 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
+        :param ssh_timeout: Timeout is used for ssh_run()
 
         :raises: process.CmdError if the remote copy command failed.
         """
@@ -566,7 +567,7 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, e:
                 self.log.warning("Trying scp, rsync failed: %s", e)
@@ -587,7 +588,7 @@ class BaseRemote(object):
                 local_dest = astring.shell_escape(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -597,7 +598,7 @@ class BaseRemote(object):
             self._set_umask_perms(dst)
 
     def send_files(self, src, dst, delete_dst=False,
-                   preserve_symlinks=False, verbose=False):
+                   preserve_symlinks=False, verbose=False, ssh_timeout=None):
         """
         Copy files from a local path to the remote host.
 
@@ -620,6 +621,7 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
+        :param ssh_timeout: Timeout is used for ssh_run()
 
         :raises: process.CmdError if the remote copy command failed
         """
@@ -640,7 +642,7 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
@@ -685,7 +687,7 @@ class BaseRemote(object):
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
 
     def _ssh_ping(self, timeout=30):
         try:
