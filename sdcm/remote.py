@@ -756,7 +756,7 @@ class BaseRemote(object):
                 self._cleanup_master_ssh()
 
         # Start a new master SSH connection.
-        if self.master_ssh_job is None:
+        if self.master_ssh_job is None and self.master_ssh_tempdir is None:
             # Create a shared socket in a temp location.
             self.master_ssh_tempdir = tempfile.mkdtemp(prefix='ssh-master')
             self.master_ssh_option = ("-o ControlPath=%s/socket" %
