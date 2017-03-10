@@ -352,6 +352,7 @@ class BaseNode(object):
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc']
+        self.wait_ssh_up(verbose=False)
         self.start_journal_thread()
         self.start_backtrace_thread()
         # We should disable bootstrap when we create nodes to establish the cluster,
