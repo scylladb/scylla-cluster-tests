@@ -251,7 +251,7 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
                      "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
                      "-l %s -p %d")
     if key_file is not None:
-        base_command += ' -i %s' % key_file
+        base_command += ' -i %s' % os.path.expanduser(key_file)
     assert connect_timeout > 0  # can't disable the timeout
     return base_command % (opts, hosts_file, connect_timeout,
                            alive_interval, user, port)
@@ -401,7 +401,7 @@ class BaseRemote(object):
         """
         key_option = ''
         if self.key_file:
-            key_option = '-i %s' % self.key_file
+            key_option = '-i %s' % os.path.expanduser(self.key_file)
         command = ("scp -rq %s -o StrictHostKeyChecking=no "
                    "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
         return command % (self.master_ssh_option, self.known_hosts_file,
