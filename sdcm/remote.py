@@ -521,7 +521,7 @@ class BaseRemote(object):
 
     def receive_files(self, src, dst, delete_dst=False,
                       preserve_perm=True, preserve_symlinks=False,
-                      verbose=False, ssh_timeout=None):
+                      verbose=False, ssh_timeout=300):
         """
         Copy files from the remote host to a local path.
 
