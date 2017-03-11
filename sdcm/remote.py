@@ -371,7 +371,7 @@ class BaseRemote(object):
                                     opts=self.master_ssh_option,
                                     hosts_file=self.known_hosts_file,
                                     key_file=self.key_file,
-                                    extra_ssh_options=self.extra_ssh_options)
+                                    extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'))
         if delete_dst:
             delete_flag = "--delete"
         else:
