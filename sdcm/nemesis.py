@@ -19,6 +19,7 @@ import inspect
 import logging
 import random
 import time
+import datetime
 
 from avocado.utils import process
 
@@ -157,6 +158,7 @@ class Nemesis(object):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
     def _set_current_disruption(self, label):
+        self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
         self.log.info(label)
 
@@ -256,8 +258,8 @@ def log_time_elapsed(method):
     :return: Wrapped method.
     """
     def wrapper(*args, **kwargs):
-        args[0].log.debug('Start -> %s', args[0].current_disruption)
         start_time = time.time()
+        args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
         result = None
         try:
             result = method(*args, **kwargs)

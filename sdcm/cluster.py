@@ -45,6 +45,7 @@ from libcloud.compute.providers import get_driver
 
 from .log import SDCMAdapter
 from .remote import Remote
+from .remote import disable_master_ssh
 from . import data_path
 from . import wait
 
@@ -82,6 +83,8 @@ COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 def set_duration(duration):
     global TEST_DURATION
     TEST_DURATION = duration
+    if TEST_DURATION >= 3 * 60:
+        disable_master_ssh()
 
 
 def set_libvirt_uri(libvirt_uri):
@@ -352,6 +355,7 @@ class BaseNode(object):
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc']
+        self.wait_ssh_up(verbose=False)
         self.start_journal_thread()
         self.start_backtrace_thread()
         # We should disable bootstrap when we create nodes to establish the cluster,
@@ -587,7 +591,9 @@ scrape_configs:
             tmp_cfg_prom.write(prometheus_cfg)
         try:
             self.remoter.send_files(src=tmp_path_prom,
-                                    dst=self.prometheus_custom_cfg_path)
+                                    dst=self.prometheus_custom_cfg_path,
+                                    verbose=True,
+                                    ssh_timeout=60)
         finally:
             shutil.rmtree(tmp_dir_prom)
 

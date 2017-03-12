@@ -251,10 +251,15 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
                      "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
                      "-l %s -p %d")
     if key_file is not None:
-        base_command += ' -i %s' % key_file
+        base_command += ' -i %s' % os.path.expanduser(key_file)
     assert connect_timeout > 0  # can't disable the timeout
     return base_command % (opts, hosts_file, connect_timeout,
                            alive_interval, user, port)
+
+
+def disable_master_ssh():
+    global ENABLE_MASTER_SSH
+    ENABLE_MASTER_SSH = False
 
 
 class BaseRemote(object):
@@ -366,7 +371,7 @@ class BaseRemote(object):
                                     opts=self.master_ssh_option,
                                     hosts_file=self.known_hosts_file,
                                     key_file=self.key_file,
-                                    extra_ssh_options=self.extra_ssh_options)
+                                    extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'))
         if delete_dst:
             delete_flag = "--delete"
         else:
@@ -375,7 +380,7 @@ class BaseRemote(object):
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=100000 --rsh='%s' -az %s %s"
+        command = "rsync %s %s --timeout=300 --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
 
@@ -393,16 +398,21 @@ class BaseRemote(object):
         return '%s %s "%s"' % (base_cmd, self.hostname,
                                astring.shell_escape(cmd))
 
-    def _make_scp_cmd(self, src, dst):
+    def _make_scp_cmd(self, src, dst, connect_timeout=300, alive_interval=300):
         """
         Given a list of source paths and a destination path, produces the
         appropriate scp command for encoding it. Remote paths must be
         pre-encoded.
         """
-        command = ("scp -rq %s -o StrictHostKeyChecking=no "
-                   "-o UserKnownHostsFile=%s -P %d %s '%s'")
-        return command % (self.master_ssh_option, self.known_hosts_file,
-                          self.port, " ".join(src), dst)
+        key_option = ''
+        if self.key_file:
+            key_option = '-i %s' % os.path.expanduser(self.key_file)
+        command = ("scp -r %s -o StrictHostKeyChecking=no -o BatchMode=yes "
+                   "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
+                   "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
+        return command % (self.master_ssh_option, connect_timeout,
+                          alive_interval, self.known_hosts_file,
+                          self.port, key_option, " ".join(src), dst)
 
     def _make_rsync_compatible_globs(self, pth, is_local):
         """
@@ -516,7 +526,7 @@ class BaseRemote(object):
 
     def receive_files(self, src, dst, delete_dst=False,
                       preserve_perm=True, preserve_symlinks=False,
-                      verbose=False):
+                      verbose=False, ssh_timeout=300):
         """
         Copy files from the remote host to a local path.
 
@@ -541,6 +551,7 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
+        :param ssh_timeout: Timeout is used for ssh_run()
 
         :raises: process.CmdError if the remote copy command failed.
         """
@@ -561,10 +572,12 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, e:
                 self.log.warning("Trying scp, rsync failed: %s", e)
+                # Make sure master ssh available
+                self.start_master_ssh()
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -580,7 +593,7 @@ class BaseRemote(object):
                 local_dest = astring.shell_escape(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -590,7 +603,7 @@ class BaseRemote(object):
             self._set_umask_perms(dst)
 
     def send_files(self, src, dst, delete_dst=False,
-                   preserve_symlinks=False, verbose=False):
+                   preserve_symlinks=False, verbose=False, ssh_timeout=None):
         """
         Copy files from a local path to the remote host.
 
@@ -613,6 +626,7 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
+        :param ssh_timeout: Timeout is used for ssh_run()
 
         :raises: process.CmdError if the remote copy command failed
         """
@@ -633,10 +647,12 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
+                # Make sure master ssh available
+                self.start_master_ssh()
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -676,7 +692,7 @@ class BaseRemote(object):
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose)
+                        verbose=verbose, timeout=ssh_timeout)
 
     def _ssh_ping(self, timeout=30):
         try:
@@ -753,7 +769,7 @@ class BaseRemote(object):
                 self._cleanup_master_ssh()
 
         # Start a new master SSH connection.
-        if self.master_ssh_job is None:
+        if self.master_ssh_job is None and self.master_ssh_tempdir is None:
             # Create a shared socket in a temp location.
             self.master_ssh_tempdir = tempfile.mkdtemp(prefix='ssh-master')
             self.master_ssh_option = ("-o ControlPath=%s/socket" %
