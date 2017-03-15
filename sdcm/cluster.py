@@ -1032,6 +1032,7 @@ class OpenStackNode(BaseNode):
 
     def destroy(self):
         self._instance.destroy()
+        self.stop_task_threads()
         self.log.info('Destroyed')
 
 
@@ -1129,6 +1130,7 @@ class GCENode(BaseNode):
 
     def destroy(self):
         self._instance_wait_safe(self._instance.destroy)
+        self.stop_task_threads()
         self.log.info('Destroyed')
 
 
@@ -1217,6 +1219,7 @@ class AWSNode(BaseNode):
         self._instance.terminate()
         global EC2_INSTANCES
         EC2_INSTANCES.remove(self._instance)
+        self.stop_task_threads()
         self.log.info('Destroyed')
 
 
@@ -1301,6 +1304,7 @@ class LibvirtNode(BaseNode):
         self._domain.destroy()
         self._domain.undefine()
         remove_if_exists(self._backing_image)
+        self.stop_task_threads()
         self.log.info('Destroyed')
 
 
