@@ -327,7 +327,7 @@ class GCECredentials(object):
 
 class BaseNode(object):
 
-    def __init__(self, name, ssh_login_info=None, base_logdir=None):
+    def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None):
         self.name = name
         self.is_seed = None
         try:
@@ -357,7 +357,8 @@ class BaseNode(object):
         self._database_error_patterns = ['std::bad_alloc']
         self.wait_ssh_up(verbose=False)
         self.termination_event = threading.Event()
-        self.start_journal_thread()
+        if node_prefix is not None and 'db-node' in node_prefix:
+            self.start_journal_thread()
         self.start_backtrace_thread()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -990,7 +991,8 @@ class OpenStackNode(BaseNode):
                           'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
                                             ssh_login_info=ssh_login_info,
-                                            base_logdir=base_logdir)
+                                            base_logdir=base_logdir,
+                                            node_prefix=node_prefix)
 
     @property
     def public_ip_address(self):
@@ -1055,7 +1057,8 @@ class GCENode(BaseNode):
                           'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
-                                      base_logdir=base_logdir)
+                                      base_logdir=base_logdir,
+                                      node_prefix=node_prefix)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with "keep-alive"',
@@ -1155,7 +1158,8 @@ class AWSNode(BaseNode):
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
-                                      base_logdir=base_logdir)
+                                      base_logdir=base_logdir,
+                                      node_prefix=node_prefix)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
@@ -1242,7 +1246,8 @@ class LibvirtNode(BaseNode):
                           'password': domain_password}
         super(LibvirtNode, self).__init__(name=name,
                                           ssh_login_info=ssh_login_info,
-                                          base_logdir=base_logdir)
+                                          base_logdir=base_logdir,
+                                          node_prefix=node_prefix)
 
     def _get_public_ip_address(self):
         desc = etree.fromstring(self._domain.XMLDesc(0))
