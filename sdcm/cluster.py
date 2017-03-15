@@ -356,6 +356,7 @@ class BaseNode(object):
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc']
         self.wait_ssh_up(verbose=False)
+        self.termination_event = threading.Event()
         self.start_journal_thread()
         self.start_backtrace_thread()
         # We should disable bootstrap when we create nodes to establish the cluster,
@@ -632,6 +633,8 @@ WantedBy=multi-user.target
 
     def journal_thread(self):
         while True:
+            if self.termination_event.isSet():
+                break
             self.wait_ssh_up(verbose=False)
             self.retrieve_journal()
 
@@ -762,6 +765,8 @@ WantedBy=multi-user.target
         Keep reporting new coredumps found, every 30 seconds.
         """
         while True:
+            if self.termination_event.isSet():
+                break
             self.get_backtraces()
             time.sleep(30)
 
@@ -777,6 +782,13 @@ WantedBy=multi-user.target
 
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
+
+    def stop_task_threads(self, timeout=10):
+        self.termination_event.set()
+        if self._backtrace_thread:
+            self._backtrace_thread.join(timeout)
+        if self._journal_thread:
+            self._journal_thread.join(timeout)
 
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
