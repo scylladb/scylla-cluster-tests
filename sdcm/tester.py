@@ -143,6 +143,10 @@ class ClusterTester(Test):
                                             job=job, runner_queue=runner_queue)
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
+        ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
+        self.log.debug("IP used for SSH connections is '%s'",
+                       ip_ssh_connections)
+        cluster.set_ip_ssh_connections(ip_ssh_connections)
         self.log.debug("Behavior on failure/post test is '%s'",
                        self._failure_post_behavior)
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
