@@ -39,6 +39,9 @@ LOG = process.log
 STDOUT_LOG = process.stdout_log
 STDERR_LOG = process.stderr_log
 
+# list of running SSHSubProcess
+splist = []
+
 
 class SSHTimeout(Exception):
 
@@ -205,11 +208,16 @@ class SSHSubProcess(process.SubProcess):
 def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
             allow_output_check='all', shell=False, env=None,
             extra_text=None, log_file=None, watch_stdout_pattern=None):
+    global splist
     sp = SSHSubProcess(cmd=cmd, verbose=verbose,
                        allow_output_check=allow_output_check, shell=shell,
                        env=env, extra_text=extra_text, log_file=log_file,
                        watch_stdout_pattern=watch_stdout_pattern)
+
+    splist.append(sp)
     cmd_result = sp.run(timeout=timeout)
+    splist.remove(sp)
+
     fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
     if fail_condition and not ignore_status:
         raise process.CmdError(cmd, sp.result)
@@ -721,6 +729,9 @@ class BaseRemote(object):
             return True
 
     def close(self):
+        global splist
+        for sp in splist:
+            sp.kill()
         self._cleanup_master_ssh()
         os.remove(self.known_hosts_file)
 
