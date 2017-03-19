@@ -784,6 +784,7 @@ WantedBy=multi-user.target
         raise NotImplementedError('Derived classes must implement restart')
 
     def stop_task_threads(self, timeout=10):
+        del(self.remoter)
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
