@@ -78,6 +78,12 @@ DEFAULT_USER_PREFIX = getpass.getuser()
 TEST_DURATION = 60
 # max limit of coredump file can be uploaded(5 GB)
 COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
+IP_SSH_CONNECTIONS = 'public'
+
+
+def set_ip_ssh_connections(ip_type):
+    global IP_SSH_CONNECTIONS
+    IP_SSH_CONNECTIONS = ip_type
 
 
 def set_duration(duration):
@@ -362,6 +368,8 @@ class BaseNode(object):
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap. So addition means not the first set of node.
         self.is_addition = False
+        self._ssh_ip_mapping = {'public': self.public_ip_address,
+                                'private': self.private_ip_address}
 
     def file_exists(self, file_path):
         try:
@@ -971,7 +979,7 @@ class OpenStackNode(BaseNode):
         self._instance = openstack_instance
         self._openstack_service = openstack_service
         self._wait_private_ip()
-        ssh_login_info = {'hostname': self.public_ip_address,
+        ssh_login_info = {'hostname': self._ssh_ip_mapping[IP_SSH_CONNECTIONS],
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
                           'wait_key_installed': 30,
@@ -1036,7 +1044,7 @@ class GCENode(BaseNode):
         self._instance = gce_instance
         self._gce_service = gce_service
         self._wait_public_ip()
-        ssh_login_info = {'hostname': self.public_ip_address,
+        ssh_login_info = {'hostname': self._ssh_ip_mapping[IP_SSH_CONNECTIONS],
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
@@ -1136,7 +1144,7 @@ class AWSNode(BaseNode):
         self._wait_public_ip()
         self._ec2.create_tags(Resources=[self._instance.id],
                               Tags=[{'Key': 'Name', 'Value': name}])
-        ssh_login_info = {'hostname': self._instance.public_ip_address,
+        ssh_login_info = {'hostname': self._ssh_ip_mapping[IP_SSH_CONNECTIONS],
                           'user': ami_username,
                           'key_file': credentials.key_file}
         super(AWSNode, self).__init__(name=name,
@@ -1222,7 +1230,7 @@ class LibvirtNode(BaseNode):
         self._hypervisor = hypervisor
         wait.wait_for(self._domain.isActive)
         self._wait_public_ip()
-        ssh_login_info = {'hostname': self.public_ip_address,
+        ssh_login_info = {'hostname': self._ssh_ip_mapping[IP_SSH_CONNECTIONS],
                           'user': domain_username,
                           'password': domain_password}
         super(LibvirtNode, self).__init__(name=name,
