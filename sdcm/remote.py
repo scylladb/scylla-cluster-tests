@@ -204,6 +204,10 @@ class SSHSubProcess(process.SubProcess):
                 if lock is not None:
                     lock.release()
 
+    def close_file_handler(self):
+        if self._file_handler:
+            self._file_handler.close()
+
 
 def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
             allow_output_check='all', shell=False, env=None,
@@ -216,6 +220,7 @@ def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
 
     splist.append(sp)
     cmd_result = sp.run(timeout=timeout)
+    sp.close_file_handler()
     splist.remove(sp)
 
     fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
