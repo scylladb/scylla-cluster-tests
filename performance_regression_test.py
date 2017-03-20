@@ -14,9 +14,14 @@
 # Copyright (c) 2016 ScyllaDB
 
 
+import datetime
+import json
 import os
-from avocado import main
+import re
 
+import requests
+
+from avocado import main
 from sdcm.tester import ClusterTester
 
 
@@ -42,10 +47,10 @@ class PerformanceRegressionTest(ClusterTester):
                                           result['Total partitions'],
                                           result['Total errors']))
 
-    def get_test_xml(self, result):
+    def get_test_xml(self, result, test_name=''):
         test_content = """
-  <test name="simple_regression_test: Loader%s CPU%s Keyspace%s" executed="yes">
-    <description>"simple regression test, ami_id: %s, scylla version:
+  <test name="%s: (%s) Loader%s CPU%s Keyspace%s" executed="yes">
+    <description>"%s test, ami_id: %s, scylla version:
     %s", hardware: %s</description>
     <targets>
       <target threaded="yes">target-ami_id-%s</target>
@@ -72,9 +77,11 @@ class PerformanceRegressionTest(ClusterTester):
       </metrics>
     </result>
   </test>
-""" % (result['loader_idx'],
+""" % (test_name, result['loader_idx'],
+            result['loader_idx'],
             result['cpu_idx'],
             result['keyspace_idx'],
+            test_name,
             self.params.get('ami_id_db_scylla'),
             self.params.get('ami_id_db_scylla_desc'),
             self.params.get('instance_type_db'),
@@ -95,7 +102,32 @@ class PerformanceRegressionTest(ClusterTester):
 
         return test_content
 
-    def display_results(self, results):
+    def generate_stats_json(self, results, cmds=[]):
+        metrics = {}
+
+        for p in self.params.iteritems():
+            metrics[p[1]] = p[2]
+
+        # we use cmds
+        del metrics['stress_cmd']
+        for cmd in cmds:
+            metrics = self.add_stress_cmd_params(metrics, cmd)
+            metrics = self.add_stress_cmd_params(metrics, cmd)
+
+        metrics['test_name'] = self.params.id.name
+        metrics['stats'] = results
+
+        if 'es_password' in metrics:
+            # hide ES password
+            metrics['es_password'] = '******'
+
+        metrics['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        test_name_file = metrics['test_name'].replace(':', '__').replace('.', '_')
+
+        self.upload_stats_es(metrics, test_name=test_name_file)
+
+    def display_results(self, results, test_name=''):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
                                           'row-rate', 'latency-mean',
                                           'latency-median', 'l-94th-pct',
@@ -105,16 +137,115 @@ class PerformanceRegressionTest(ClusterTester):
         test_xml = ""
         for single_result in results:
             self.display_single_result(single_result)
-            test_xml += self.get_test_xml(single_result)
+            test_xml += self.get_test_xml(single_result, test_name=test_name)
 
         f = open(os.path.join(self.logdir,
                               'jenkins_perf_PerfPublisher.xml'), 'w')
-        content = """<report name="simple_regression_test report" categ="none">
+        content = """<report name="%s report" categ="none">
 %s
-</report>""" % test_xml
+</report>""" % (test_name, test_xml)
 
         f.write(content)
         f.close()
+
+    def add_stress_cmd_params(self, result, cmd):
+        # parsing stress command and return dict with params
+        cmd = cmd.strip()
+        cmd = cmd.strip().split('cassandra-stress')[1].strip()
+        if cmd.split(' ')[0] in ['read', 'write', 'mixed']:
+            section = 'cassandra-stress ' + cmd.split(' ')[0]
+            result[section] = {}
+            if cmd.startswith('no-warmup'):
+                result[section]['no-warmup'] = True
+
+            match = re.search('(cl\s?=\s?\w+)', cmd)
+            if match:
+                result[section]['cl'] = match.group(0).split('=')[1].strip()
+
+            match = re.search('(duration\s?=\s?\W+)', cmd)
+            if match:
+                result[section]['duration'] = match.group(0).split('=')[1].strip()
+
+            match = re.search('( n\s?=\s?\W+)', cmd)
+            if match:
+                result[section]['n'] = match.group(0).split('=')[1].strip()
+
+            for temp in cmd.split(' -')[1:]:
+                k = temp.split()[0]
+                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
+                if match:
+                    result[section][k] = match.group(2).strip()
+            if 'rate' in result[section]:
+                # split rate section on separate items
+                if 'threads' in result[section]['rate']:
+                    result[section]['rate threads'] = re.search('(threads\s?=\s?(\w+))', result[section]['rate']).group(2)
+                elif 'throttle' in result[section]['rate']:
+                    result[section]['throttle threads'] = re.search('(throttle\s?=\s?(\w+))', result[section]['rate']).group(2)
+                elif 'fixed' in result[section]['rate']:
+                    result[section]['fixed threads'] = re.search('(fixed\s?=\s?(\w+))', result[section]['rate']).group(2)
+                del result[section]['rate']
+
+        return result
+
+    def upload_stats_es(self, metrics, test_name):
+        """
+        custom date format is used in ES
+        curl -XPUT 'https://USER:PASSWORD@HOST_NAME:9243/performanceregressiontest' -H 'Content-Type:application/json' -d'{
+           "mappings":{
+              "performanceregressiontest":{
+                 "properties":{
+                    "time_completed":{
+                       "type":"date",
+                       "format":"yyyy-MM-dd HH:mm"
+                    }
+                 }
+              }
+           }
+        }
+        """
+        result = {}
+        average_stats = {}
+
+        # calculate average stats
+        for key in metrics['stats'][0].keys():
+            summary = 0
+            for stat in metrics['stats']:
+                try:
+                    summary += float(stat[key])
+                except:
+                    average_stats[key] = stat[key]
+            if summary != summary:
+                average_stats[key] = None
+            elif key not in average_stats:
+                average_stats[key] = round(summary / len(metrics['stats']), 1)
+        result['stats_average'] = average_stats
+
+        for k, v in metrics.iteritems():
+            # trying to convert str values into int/float
+            value = v
+            try:
+                value = int(v)
+            except:
+                try:
+                    value = float(v)
+                except:
+                    pass
+
+            result[k] = value
+
+        with open('jenkins_%s_summary.json' % test_name, 'w') as fp:
+            json.dump(result, fp, indent=4)
+
+        self.log.info(json.dumps(result, indent=4))
+        if self.params.get('es_url'):
+            url = '%s/performanceregression/%s/%s_%s?pretty' % \
+                  (self.params.get('es_url'), result['test_name'],
+                   result['ami_id_db_scylla_desc'], result['time_completed'])
+
+            headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+            r = requests.post(url, data=open('jenkins_%s_summary.json' % test_name, 'rb'), headers=headers,
+                              auth=(self.params.get('es_user'), self.params.get('es_password')))
+            self.log.info(r.content)
 
     def test_write(self):
         """
@@ -133,9 +264,10 @@ class PerformanceRegressionTest(ClusterTester):
         results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=100)
 
         try:
-            self.display_results(results)
+            self.display_results(results, test_name='test_write')
         except:
             pass
+        self.generate_stats_json(results, [base_cmd_w])
 
     def test_read(self):
         """
@@ -161,9 +293,10 @@ class PerformanceRegressionTest(ClusterTester):
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
         try:
-            self.display_results(results)
+            self.display_results(results, test_name='test_read')
         except:
             pass
+        self.generate_stats_json(results, [base_cmd_w, base_cmd_r])
 
     def test_mixed(self):
         """
@@ -190,9 +323,10 @@ class PerformanceRegressionTest(ClusterTester):
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
         try:
-            self.display_results(results)
+            self.display_results(results, test_name='test_mixed')
         except:
             pass
+        self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
 
 if __name__ == '__main__':
     main()
