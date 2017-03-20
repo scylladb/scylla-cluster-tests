@@ -55,8 +55,8 @@ class QueryLimitsTest(ClusterTester):
                             monitor_info=monitor_info)
         self.loaders.wait_for_init()
         self.db_cluster.wait_for_init()
-        nodes_monitored = [node.public_ip_address for node in self.db_cluster.nodes]
-        nodes_monitored += [node.public_ip_address for node in self.loaders.nodes]
+        nodes_monitored = [node.private_ip_address for node in self.db_cluster.nodes]
+        nodes_monitored += [node.private_ip_address for node in self.loaders.nodes]
         self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
