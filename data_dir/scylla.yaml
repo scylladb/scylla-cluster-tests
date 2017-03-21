@@ -29,7 +29,12 @@ failure_post_behavior: destroy
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
 space_node_threshold: 6442450944
-
+# Type of IP used to connect to machine instances.
+# This depends on whether you are running your tests from a machine inside
+# your cloud provider, where it makes sense to use 'private', or outside (use 'public')
+# Default: Use public IPs to connect to instances (public)
+# Use private IPs to connect to instances (private)
+ip_ssh_connections: 'public'
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
 # without making a new ami.
