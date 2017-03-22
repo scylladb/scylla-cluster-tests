@@ -48,5 +48,35 @@ class BuildClusterTest(ClusterTester):
             self.log.info('Grafana Web UI: http://%s:3000',
                           self.monitors.nodes[0].public_ip_address)
 
+    def test_use_public_dns_names(self):
+        """
+        Build a Scylla cluster with params defined in data_dir/scylla.yaml
+        Stop cluster.
+        Replace IPs for seeds, listen_address & broadcast_rpc_address on public dns names
+        The cluster works properly.
+        """
+        self.log.info('DB cluster is: %s', self.db_cluster)
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.remoter.run('sudo systemctl stop scylla-jmx.service')
+            node.wait_db_down()
+
+        addresses= {}
+        for node in self.db_cluster.nodes:
+            addresses[node.private_ip_address]=node._instance.public_dns_name
+
+        for node in self.db_cluster.nodes:
+            for private_ip, public_dns in addresses.iteritems():
+                # replace IPs on public dns names
+                node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.
+                                 format(private_ip, public_dns))
+
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo systemctl start scylla-server.service')
+            node.remoter.run('sudo systemctl start scylla-jmx.service')
+            node.wait_db_up()
+            node.wait_jmx_up()
+
+
 if __name__ == '__main__':
     main()
