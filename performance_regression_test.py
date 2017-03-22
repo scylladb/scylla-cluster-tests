@@ -108,11 +108,23 @@ class PerformanceRegressionTest(ClusterTester):
         for p in self.params.iteritems():
             metrics[p[1]] = p[2]
 
-        # we use cmds
+        versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla')\
+            .stdout.split('\n')
+        versions = {}
+        for line in versions_output:
+            for package in ['scylla-jmx', 'scylla-server', 'scylla-tools']:
+                match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
+                if match:
+                    versions[package] = {'version': match.group(2), 'date': match.group(4), 'commit_id': match.group(5)}
+
+        metrics['versions'] = versions
+
+        # we use cmds. the last on is a stress, others are presetup
         del metrics['stress_cmd']
-        for cmd in cmds:
-            metrics = self.add_stress_cmd_params(metrics, cmd)
-            metrics = self.add_stress_cmd_params(metrics, cmd)
+        metrics = self.add_stress_cmd_params(metrics, cmds[-1])
+        for i in xrange(len(cmds) - 1):
+            # we can have multiples preloads
+            metrics = self.add_stress_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
 
         metrics['test_name'] = self.params.id.name
         metrics['stats'] = results
@@ -148,14 +160,14 @@ class PerformanceRegressionTest(ClusterTester):
         f.write(content)
         f.close()
 
-    def add_stress_cmd_params(self, result, cmd):
+    def add_stress_cmd_params(self, result, cmd, prefix=''):
         # parsing stress command and return dict with params
-        cmd = cmd.strip()
         cmd = cmd.strip().split('cassandra-stress')[1].strip()
         if cmd.split(' ')[0] in ['read', 'write', 'mixed']:
-            section = 'cassandra-stress ' + cmd.split(' ')[0]
+            section = '{0}cassandra-stress'.format(prefix)
             result[section] = {}
-            if cmd.startswith('no-warmup'):
+            result[section]['command'] = cmd.split(' ')[0]
+            if 'no-warmup' in cmd:
                 result[section]['no-warmup'] = True
 
             match = re.search('(cl\s?=\s?\w+)', cmd)

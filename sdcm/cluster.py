@@ -1508,7 +1508,7 @@ class BaseScyllaCluster(object):
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
             # update *developmen* packages
-            node.remoter.run('sudo rpm -UvhR /tmp/scylla/*development*')
+            node.remoter.run('sudo rpm -UvhR /tmp/scylla/*development* | true')
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('yum list installed | grep scylla')
