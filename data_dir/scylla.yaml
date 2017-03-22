@@ -46,13 +46,6 @@ update_db_binary: ''
 # update_db_packages: $path_of_folder_with_packages
 update_db_packages: ''
 
-
-update_db_packages: '/tmp/new_binary/'
-
-
-update_db_packages: '/tmp/new_binary/'
-
-
 backends: !mux
     libvirt: !mux
         cluster_backend: 'libvirt'
