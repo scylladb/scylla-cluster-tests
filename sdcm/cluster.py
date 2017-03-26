@@ -1533,16 +1533,24 @@ class BaseScyllaCluster(object):
 
         start_time = time.time()
 
-        # First, stop *all* non seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
-        # First, stop *all* seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
-        # Then, update bin only on requested nodes
-        self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
-        # Start all seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
-        # Start all non seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
+        if len(node_list) == 1:
+            # Stop only new nodes
+            self.run_func_parallel(func=stop_scylla, node_list=node_list)
+            # Then, update packages only on requested node
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            # Start new nodes
+            self.run_func_parallel(func=start_scylla, node_list=node_list)
+        else:
+            # First, stop *all* non seed nodes
+            self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
+            # First, stop *all* seed nodes
+            self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
+            # Then, update packages only on requested nodes
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            # Start all seed nodes
+            self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
+            # Start all non seed nodes
+            self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
