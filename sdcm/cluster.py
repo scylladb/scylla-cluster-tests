@@ -1508,7 +1508,7 @@ class BaseScyllaCluster(object):
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
             # update *developmen* packages
-            node.remoter.run('sudo rpm -UvhR /tmp/scylla/*development* | true')
+            node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development* | true')
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('yum list installed | grep scylla')
@@ -1525,8 +1525,13 @@ class BaseScyllaCluster(object):
 
         def start_scylla(node, queue):
             node.wait_db_down()
-            node.remoter.run('sudo systemctl start scylla-server.service')
-            node.remoter.run('sudo systemctl start scylla-jmx.service')
+            try:
+                node.remoter.run('sudo systemctl start scylla-server.service')
+                node.remoter.run('sudo systemctl start scylla-jmx.service')
+            except Exception as e:
+                node.remoter.run('sudo systemctl status scylla-server.service | true')
+                node.remoter.run('sudo systemctl status scylla-jmx.service | true')
+                print e
             node.wait_db_up()
             queue.put(node)
             queue.task_done()
