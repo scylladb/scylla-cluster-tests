@@ -40,6 +40,11 @@ ip_ssh_connections: 'public'
 # without making a new ami.
 # update_db_binary: $path_of_the_new_scylla_binary
 update_db_binary: ''
+# The new db packages will be uploaded to db instance to update the one
+# provided by the ami. This is useful to test out a new scylla version
+# without making a new ami via rpm package updates.
+# update_db_packages: $path_of_folder_with_packages
+update_db_packages: ''
 
 backends: !mux
     libvirt: !mux

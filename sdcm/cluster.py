@@ -1494,6 +1494,72 @@ class BaseScyllaCluster(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))
 
+    def _update_db_packages(self, new_scylla_bin, node_list):
+        self.log.debug('User requested to update DB packages...')
+
+        seed_nodes = self.get_seed_nodes()
+        non_seed_nodes = [n for n in self.nodes if not n.is_seed]
+
+        def update_scylla_packages(node, queue):
+            node.log.info('Updating DB binary')
+            node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
+            node.remoter.run('sudo yum update -y')
+            node.remoter.run('sudo yum install python34-PyYAML -y')
+            # replace the packages
+            node.remoter.run('yum list installed | grep scylla')
+            # update *developmen* packages
+            node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development* | true')
+            # and all the rest
+            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
+            node.remoter.run('yum list installed | grep scylla')
+            queue.put(node)
+            queue.task_done()
+
+        def stop_scylla(node, queue):
+            node.wait_db_up()
+            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.remoter.run('sudo systemctl stop scylla-jmx.service')
+            node.wait_db_down()
+            queue.put(node)
+            queue.task_done()
+
+        def start_scylla(node, queue):
+            node.wait_db_down()
+            try:
+                node.remoter.run('sudo systemctl start scylla-server.service')
+                node.remoter.run('sudo systemctl start scylla-jmx.service')
+            except Exception as e:
+                node.remoter.run('sudo systemctl status scylla-server.service | true')
+                node.remoter.run('sudo systemctl status scylla-jmx.service | true')
+                print e
+            node.wait_db_up()
+            queue.put(node)
+            queue.task_done()
+
+        start_time = time.time()
+
+        if len(node_list) == 1:
+            # Stop only new nodes
+            self.run_func_parallel(func=stop_scylla, node_list=node_list)
+            # Then, update packages only on requested node
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            # Start new nodes
+            self.run_func_parallel(func=start_scylla, node_list=node_list)
+        else:
+            # First, stop *all* non seed nodes
+            self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
+            # First, stop *all* seed nodes
+            self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
+            # Then, update packages only on requested nodes
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            # Start all seed nodes
+            self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
+            # Start all non seed nodes
+            self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
+
+        time_elapsed = time.time() - start_time
+        self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
+
     def update_db_binary(self, node_list=None):
         if node_list is None:
             node_list = self.nodes
@@ -1501,6 +1567,13 @@ class BaseScyllaCluster(object):
         new_scylla_bin = self.params.get('update_db_binary')
         if new_scylla_bin:
             self._update_db_binary(new_scylla_bin, node_list)
+
+    def update_db_packages(self, node_list=None):
+        new_scylla_bin = self.params.get('update_db_packages')
+        if new_scylla_bin:
+            if node_list is None:
+                node_list = self.nodes
+            self._update_db_packages(new_scylla_bin, node_list)
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
@@ -3036,6 +3109,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                 pass
 
         self.update_db_binary(node_list)
+        self.update_db_packages(node_list)
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
