@@ -48,5 +48,52 @@ class BuildClusterTest(ClusterTester):
             self.log.info('Grafana Web UI: http://%s:3000',
                           self.monitors.nodes[0].public_ip_address)
 
+    def test_use_public_dns_names(self):
+        """
+        Build a Scylla cluster with params defined in data_dir/scylla.yaml
+        Stop cluster.
+        Replace IPs for seeds, listen_address & broadcast_rpc_address on public dns names
+        The cluster works properly.
+        """
+        if self.params.get('cluster_backend') != 'aws':
+            self.log.error("Test supports only AWS instances")
+            return
+
+        self.log.info('DB cluster is: %s', self.db_cluster)
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.remoter.run('sudo systemctl stop scylla-jmx.service')
+            node.wait_db_down()
+
+        addresses = {}
+        for node in self.db_cluster.nodes:
+            if hasattr(node._instance, 'public_dns_name'):
+                addresses[node.private_ip_address] = node._instance.public_dns_name
+            else:
+                self.log.error("Node instance doesn't have public dns name. "
+                               "Please check AMI!")
+
+        for node in self.db_cluster.nodes:
+            for private_ip, public_dns in addresses.iteritems():
+                # replace IPs on public dns names
+                node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.
+                                 format(private_ip, public_dns))
+
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo systemctl start scylla-server.service')
+            node.remoter.run('sudo systemctl start scylla-jmx.service')
+            node.wait_db_up()
+            node.wait_jmx_up()
+
+        base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM duration=5m "
+                      "-schema 'replication(factor=3)' -port jmx=6868 "
+                      "-mode cql3 native -rate threads=10 -errors ignore "
+                      "-pop seq=1..1000000")
+
+        # run a workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, keyspace_num=10)
+        self.get_stress_results(queue=stress_queue, stress_num=1, keyspace_num=10)
+
+
 if __name__ == '__main__':
     main()
