@@ -2522,8 +2522,10 @@ class GCECluster(BaseCluster):
                           image=None,
                           number=len(self.nodes) + count,
                           ex_disks_gce_struct=gce_disk_struct)
+        all_instances = instances
         # Ignore non-effective nodes
         instances = [i for i in instances if 'GCEFailedNode' not in str(i)]
+        assert len(instances) == count, 'Fail to create {} instances, debug: {}'.format(count, all_instances)
 
         self.log.info('Created instances: %s', instances)
         for idx, instance in enumerate(instances):
