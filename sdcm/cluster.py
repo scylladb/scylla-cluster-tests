@@ -2530,13 +2530,18 @@ class GCECluster(BaseCluster):
         self.log.info('Created instances: %s', instances)
         for idx, instance in enumerate(instances):
             GCE_INSTANCES.append(instance)
-            nodes.append(GCENode(gce_instance=instance,
-                                 gce_service=self._gce_service,
-                                 credentials=self._credentials,
-                                 gce_image_username=self._gce_image_username,
-                                 node_prefix=self.node_prefix,
-                                 node_index=self._node_index + idx + 1,
-                                 base_logdir=self.logdir))
+            try:
+                n = GCENode(gce_instance=instance,
+                            gce_service=self._gce_service,
+                            credentials=self._credentials,
+                            gce_image_username=self._gce_image_username,
+                            node_prefix=self.node_prefix,
+                            node_index=self._node_index + idx + 1,
+                            base_logdir=self.logdir)
+                nodes.append(n)
+            except:
+                self._instance_wait_safe(instance.destroy)
+
         self.log.info('added nodes: %s', nodes)
         self._node_index += len(nodes)
         for i in nodes:
