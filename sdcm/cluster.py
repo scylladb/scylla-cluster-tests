@@ -1356,10 +1356,6 @@ class BaseCluster(object):
         self.nemesis = []
         self.params = params
         self.add_nodes(n_nodes)
-        for node in self.nodes:
-            status = node.remoter.run('sudo systemctl status scylla-server.service', ignore_status=True)
-            if 'Active: inactive (dead)' in status.stdout:
-                self.fail("some nodes failed to start")
         self.coredumps = dict()
 
     def send_file(self, src, dst, verbose=False):
