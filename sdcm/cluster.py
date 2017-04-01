@@ -365,7 +365,6 @@ class BaseNode(object):
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc']
-        self.wait_ssh_up(verbose=False)
         self.termination_event = threading.Event()
         if node_prefix is not None and 'db-node' in node_prefix:
             self.start_journal_thread()
