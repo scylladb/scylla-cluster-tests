@@ -689,7 +689,13 @@ WantedBy=multi-user.target
             self.log.error('Failed getting coredump file size: %s', ex)
         return None
 
-    def _split_coredump(self, coredump):
+    def _try_split_coredump(self, coredump):
+        """
+        Compress coredump file, try to split the compressed file if it's too big
+
+        :param coredump: coredump file path
+        :return: coredump files list
+        """
         core_files = []
         try:
             self.remoter.run('sudo yum install -y pigz')
@@ -722,11 +728,7 @@ WantedBy=multi-user.target
             if line.startswith('Coredump:'):
                 coredump = line.split()[-1]
                 self.log.debug('Found coredump file: {}'.format(coredump))
-                file_size = self._get_coredump_size(coredump)
-                if file_size and file_size > COREDUMP_MAX_SIZE:
-                    coredump_files = self._split_coredump(coredump)
-                else:
-                    coredump_files = [coredump]
+                coredump_files = self._try_split_coredump(coredump)
                 for f in coredump_files:
                     self._upload_coredump(f)
                 if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
