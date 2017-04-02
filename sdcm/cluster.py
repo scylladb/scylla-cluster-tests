@@ -26,6 +26,7 @@ import yaml
 import matplotlib
 import subprocess
 import shutil
+import glob
 import xml.etree.cElementTree as etree
 
 # Force matplotlib to not use any Xwindows backend.
@@ -513,19 +514,14 @@ class BaseNode(object):
             return result.exit_status == 0
 
         json_mapping = {'scylla-data-source.json': 'datasources',
-                        'scylla-dash.json': 'dashboards/db',
-                        'scylla-dash-per-server.json': 'dashboards/db',
-                        'scylla-dash-io-per-server.json': 'dashboards/db',
-                        'scylla-dash.1.5.json': 'dashboards/db',
-                        'scylla-dash-per-server.1.5.json': 'dashboards/db',
-                        'scylla-dash-io-per-server.1.5.json': 'dashboards/db',
-                        'scylla-dash.1.6.json': 'dashboards/db',
-                        'scylla-dash-per-server.1.6.json': 'dashboards/db',
-                        'scylla-dash-io-per-server.1.6.json': 'dashboards/db',
-                        'scylla-dash.master.json': 'dashboards/db',
-                        'scylla-dash-per-server.master.json': 'dashboards/db',
-                        'scylla-dash-io-per-server.master.json': 'dashboards/db',
                         'scylla-dash-timeout-metrics.json': 'dashboards/db'}
+
+        process.run('sudo yum install git -y')
+        process.run('rm -rf scylla-grafana-monitoring/')
+        process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
+        process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
+        for i in glob.glob('data_dir/grafana/*.json'):
+            json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
 
         for grafana_json in json_mapping:
             url = 'http://%s:3000/api/%s' % (self.public_ip_address, json_mapping[grafana_json])
