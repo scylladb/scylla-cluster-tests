@@ -150,7 +150,7 @@ class Nemesis(object):
 
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('/tmp/break_scylla.sh')
+        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')
 
         self._kill_scylla_daemon()
 
