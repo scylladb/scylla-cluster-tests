@@ -366,7 +366,6 @@ class BaseNode(object):
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc']
-        self.wait_ssh_up(verbose=False)
         self.termination_event = threading.Event()
         if node_prefix is not None and 'db-node' in node_prefix:
             self.start_journal_thread()
@@ -2479,10 +2478,9 @@ class GCECluster(BaseCluster):
     def _get_root_disk_struct(self, name, disk_type='pd-standard'):
         device_name = '%s-root-%s' % (name, disk_type)
         return {"type": "PERSISTENT",
-                # Comment deviceName and diskName to avoid `alreadyExists`
-                # error in creating multiple nodes by ex_create_multiple_nodes()
-                #"deviceName": device_name,
+                "deviceName": device_name,
                 "initializeParams": {
+                    # diskName parameter has a limit of 62 chars, comment it to use system allocated name
                     #"diskName": device_name,
                     "diskType": self._get_disk_url(disk_type),
                     "diskSizeGb": self._gce_image_size,
@@ -2503,44 +2501,39 @@ class GCECluster(BaseCluster):
 
     def add_nodes(self, count, ec2_user_data=''):
         nodes = []
-        name = "%s-idx" % self.node_prefix
-        gce_disk_struct = list()
-        gce_disk_struct.append(self._get_root_disk_struct(name=name,
-                                                          disk_type=self._gce_image_type))
-        for i in range(self._gce_n_local_ssd):
-            gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
-        self.log.info(gce_disk_struct)
-        # Suffix of instances' name are always started from 000,
-        # so we try to create `exist_nodes_num + new_nodes_num`,
-        # it will only create `new_nodes_num` effective nodes.
-        # The purpose is reusing released namespace, and make
-        # the instances' name sequential.
-        instances = self._gce_service.ex_create_multiple_nodes(
-                          base_name=self.node_prefix,
-                          size=self._gce_instance_type,
-                          image=None,
-                          number=len(self.nodes) + count,
-                          ex_disks_gce_struct=gce_disk_struct)
-        # Ignore non-effective nodes
-        instances = [i for i in instances if 'GCEFailedNode' not in str(i)]
-
-        self.log.info('Created instances: %s', instances)
-        for idx, instance in enumerate(instances):
+        for node_index in range(self._node_index + 1, self._node_index + count + 1):
+            name = "%s-%s" % (self.node_prefix, node_index)
+            gce_disk_struct = list()
+            gce_disk_struct.append(self._get_root_disk_struct(name=name,
+                                                              disk_type=self._gce_image_type))
+            for i in range(self._gce_n_local_ssd):
+                gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
+            self.log.info(gce_disk_struct)
+            instance = self._gce_service.create_node(name=name,
+                                                     size=self._gce_instance_type,
+                                                     image=self._gce_image,
+                                                     ex_disks_gce_struct=gce_disk_struct)
+            self.log.info('Created instance %s', instance)
             GCE_INSTANCES.append(instance)
-            nodes.append(GCENode(gce_instance=instance,
-                                 gce_service=self._gce_service,
-                                 credentials=self._credentials,
-                                 gce_image_username=self._gce_image_username,
-                                 node_prefix=self.node_prefix,
-                                 node_index=self._node_index + idx + 1,
-                                 base_logdir=self.logdir))
-        self.log.info('added nodes: %s', nodes)
-        self._node_index += len(nodes)
-        for i in nodes:
-            if len(self.nodes) > 0:
-                i.is_addition = True
+            try:
+                n = GCENode(gce_instance=instance,
+                            gce_service=self._gce_service,
+                            credentials=self._credentials,
+                            gce_image_username=self._gce_image_username,
+                            node_prefix=self.node_prefix,
+                            node_index=self._node_index,
+                            base_logdir=self.logdir)
+                nodes.append(n)
+            except:
+                self._instance_wait_safe(instance.destroy)
 
-        self.nodes += nodes
+            self._node_index += 1
+            self.nodes += [n]
+            if len(self.nodes) - len(nodes) > 0:
+                n.is_addition = True
+
+        assert len(nodes) == count, 'Fail to create {} instances'.format(count)
+        self.log.info('added nodes: %s', nodes)
 
         return nodes
 
