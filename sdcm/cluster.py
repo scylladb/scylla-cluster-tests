@@ -1498,7 +1498,7 @@ class BaseScyllaCluster(object):
         non_seed_nodes = [n for n in self.nodes if not n.is_seed]
 
         def update_scylla_packages(node, queue):
-            node.log.info('Updating DB binary')
+            node.log.info('Updating DB packages')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
             node.remoter.run('sudo yum update -y')
             node.remoter.run('sudo yum install python34-PyYAML -y')
@@ -3001,6 +3001,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                 pass
 
         self.update_db_binary(node_list)
+        self.update_db_packages(node_list)
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
