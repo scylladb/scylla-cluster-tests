@@ -24,6 +24,7 @@ import time
 import uuid
 import yaml
 import matplotlib
+import platform
 import subprocess
 import shutil
 import glob
@@ -515,7 +516,10 @@ class BaseNode(object):
         json_mapping = {'scylla-data-source.json': 'datasources',
                         'scylla-dash-timeout-metrics.json': 'dashboards/db'}
 
-        process.run('sudo yum install git -y')
+        if platform.linux_distribution()[0].lower() == 'ubuntu':
+            process.run('sudo apt-get --assume-yes install git')
+        else:
+            process.run('sudo yum install git -y')
         process.run('rm -rf scylla-grafana-monitoring/')
         process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
         process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
