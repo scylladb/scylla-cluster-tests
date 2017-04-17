@@ -1103,7 +1103,7 @@ class GCENode(BaseNode):
 
         if not ok:
             raise NodeError('GCE instance %s method call error after '
-                            'exponencial backoff wait' % self._instance.id)
+                            'exponential backoff wait' % self._instance.id)
 
     @property
     def public_ip_address(self):
@@ -1504,7 +1504,7 @@ class BaseScyllaCluster(object):
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB binary')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
-            node.remoter.run('sudo yum update -y')
+            node.remoter.run('sudo yum update -y --skip-broken')
             node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
