@@ -36,10 +36,55 @@ class LongevityTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     loaders=self.loaders,
                                     monitoring_set=self.monitors)
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
+        stress_queue = list()
+        for cmd in ('stress_cmd', 'stress_cmd_1'):
+            stress_cmd = self.params.get(cmd)
+            if stress_cmd:
+                if 'counter_' in stress_cmd:
+                    self._create_counter_table()
+                self.log.debug('stress cmd: {}'.format(stress_cmd))
+                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
+
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        self.verify_stress_thread(queue=stress_queue)
+
+        for stress in stress_queue:
+            self.verify_stress_thread(queue=stress)
+
+    def _create_counter_table(self):
+        """
+        workaround for the issue https://github.com/scylladb/scylla-tools-java/issues/32
+        remove when resolved
+        """
+        node = self.db_cluster.nodes[0]
+        session = self.cql_connection_patient(node)
+        session.execute("""
+            CREATE KEYSPACE IF NOT EXISTS keyspace1
+            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '2'} AND durable_writes = true;
+        """)
+        session.execute("""
+            CREATE TABLE IF NOT EXISTS keyspace1.counter1 (
+                key blob PRIMARY KEY,
+                "C0" counter,
+                "C1" counter,
+                "C2" counter,
+                "C3" counter,
+                "C4" counter
+            ) WITH COMPACT STORAGE
+                AND bloom_filter_fp_chance = 0.01
+                AND caching = '{"keys":"ALL","rows_per_partition":"ALL"}'
+                AND comment = ''
+                AND compaction = {'class': 'SizeTieredCompactionStrategy'}
+                AND compression = {}
+                AND dclocal_read_repair_chance = 0.1
+                AND default_time_to_live = 0
+                AND gc_grace_seconds = 864000
+                AND max_index_interval = 2048
+                AND memtable_flush_period_in_ms = 0
+                AND min_index_interval = 128
+                AND read_repair_chance = 0.0
+                AND speculative_retry = '99.0PERCENTILE';
+        """)
 
 
 if __name__ == '__main__':
