@@ -19,6 +19,7 @@ import json
 import os
 import re
 
+import platform
 import requests
 import subprocess
 
@@ -141,7 +142,14 @@ class PerformanceRegressionTest(ClusterTester):
             # hide ES password
             metrics['setup_details']['es_password'] = '******'
 
+        new_scylla_packages = self.params.get('update_db_packages')
+        if new_scylla_packages and os.listdir(new_scylla_packages):
+            metrics['setup_details']['packages_updated'] = True
+        else:
+            metrics['setup_details']['packages_updated'] = False
+
         metrics['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        metrics['test_details']['start_host'] = platform.node()
 
         test_name_file = metrics['test_details']['test_name'].replace(':', '__').replace('.', '_')
 
