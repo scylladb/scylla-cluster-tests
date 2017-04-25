@@ -108,9 +108,9 @@ class PerformanceRegressionTest(ClusterTester):
         metrics = {'test_details': {}, 'setup_details': {}, 'versions': {}, 'results': {}}
 
         for p in self.params.iteritems():
-            if p[1] in ['stress_modes', 'test_duration']:
+            if p[1] in ['test_duration']:
                 metrics['test_details'][p[1]] = p[2]
-            elif p[1] in ['stress_cmd']:
+            elif p[1] in ['stress_cmd', 'stress_modes']:
                 continue
             else:
                 metrics['setup_details'][p[1]] = p[2]
@@ -127,7 +127,6 @@ class PerformanceRegressionTest(ClusterTester):
         metrics['versions'] = versions
 
         # we use cmds. the last on is a stress, others are presetup
-        # del metrics['stress_cmd']
         metrics = self.add_stress_cmd_params(metrics, cmds[-1])
         for i in xrange(len(cmds) - 1):
             # we can have multiples preloads
