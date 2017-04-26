@@ -1,6 +1,9 @@
 <application>
   <component name="DiffSettings">
     <option name="PLACES_MAP">
+      <entry key="CommitDialog">
+        <PlaceSettings />
+      </entry>
       <entry key="Default">
         <PlaceSettings />
       </entry>
