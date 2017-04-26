@@ -1660,6 +1660,10 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
         self.log.debug('Stop nemesis end')
 
+    def _experimental(self):
+        experimental = self.params.get('experimental')
+        return True if experimental and experimental.lower() == 'true' else False
+
 
 class BaseLoaderSet(object):
 
@@ -1704,7 +1708,9 @@ class BaseLoaderSet(object):
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1):
         stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
-        stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " + stress_cmd + "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
+        stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
+                     stress_cmd +\
+                     "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
         # We'll save a script with the last c-s command executed on loaders
         stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                content='%s\n' % stress_cmd)
@@ -2198,6 +2204,9 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
+
+        if self._experimental():
+            scylla_yaml_contents += "\nexperimental: true\n"
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -2743,6 +2752,9 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
 
+        if self._experimental():
+            scylla_yaml_contents += "\nexperimental: true\n"
+
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
 
@@ -2925,6 +2937,9 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             else:
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
+        if self._experimental():
+            scylla_yaml_contents += "\nexperimental: true\n"
+
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
 
@@ -3067,6 +3082,22 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                                                               ec2_user_data=ec2_user_data)
         return added_nodes
 
+    def _node_setup(self, node):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+        node.remoter.receive_files(src='/etc/scylla/scylla.yaml', dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+        scylla_yaml_contents += "\nexperimental: true\n"
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo systemctl restart scylla-server.service')
+
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
             node_list = self.nodes
@@ -3075,6 +3106,8 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
         def node_setup(node):
             node.wait_ssh_up(verbose=verbose)
+            if self._experimental():
+                self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y scylla-gdb',
                              verbose=verbose, ignore_status=True)

@@ -19,6 +19,7 @@ import json
 import os
 import re
 
+import platform
 import requests
 import subprocess
 
@@ -107,9 +108,9 @@ class PerformanceRegressionTest(ClusterTester):
         metrics = {'test_details': {}, 'setup_details': {}, 'versions': {}, 'results': {}}
 
         for p in self.params.iteritems():
-            if p[1] in ['stress_modes', 'test_duration']:
+            if p[1] in ['test_duration']:
                 metrics['test_details'][p[1]] = p[2]
-            elif p[1] in ['stress_cmd']:
+            elif p[1] in ['stress_cmd', 'stress_modes']:
                 continue
             else:
                 metrics['setup_details'][p[1]] = p[2]
@@ -126,7 +127,6 @@ class PerformanceRegressionTest(ClusterTester):
         metrics['versions'] = versions
 
         # we use cmds. the last on is a stress, others are presetup
-        # del metrics['stress_cmd']
         metrics = self.add_stress_cmd_params(metrics, cmds[-1])
         for i in xrange(len(cmds) - 1):
             # we can have multiples preloads
@@ -141,7 +141,14 @@ class PerformanceRegressionTest(ClusterTester):
             # hide ES password
             metrics['setup_details']['es_password'] = '******'
 
+        new_scylla_packages = self.params.get('update_db_packages')
+        if new_scylla_packages and os.listdir(new_scylla_packages):
+            metrics['setup_details']['packages_updated'] = True
+        else:
+            metrics['setup_details']['packages_updated'] = False
+
         metrics['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        metrics['test_details']['start_host'] = platform.node()
 
         test_name_file = metrics['test_details']['test_name'].replace(':', '__').replace('.', '_')
 
