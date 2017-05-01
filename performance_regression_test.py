@@ -107,12 +107,22 @@ class PerformanceRegressionTest(ClusterTester):
     def generate_stats_json(self, results, cmds=[]):
         metrics = {'test_details': {}, 'setup_details': {}, 'versions': {}, 'results': {}}
 
+        is_gce = False
+        for p in self.params.iteritems():
+            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
+                is_gce = True
         for p in self.params.iteritems():
             if p[1] in ['test_duration']:
                 metrics['test_details'][p[1]] = p[2]
             elif p[1] in ['stress_cmd', 'stress_modes']:
                 continue
             else:
+                if is_gce and (p[0], p[1]) in \
+                        [('/run', 'instance_type_loader'),
+                         ('/run', 'instance_type_monitor'),
+                         ('/run/databases/scylla', 'instance_type_db')]:
+                    # exclude these params from gce run
+                    continue
                 metrics['setup_details'][p[1]] = p[2]
 
         versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla')\
