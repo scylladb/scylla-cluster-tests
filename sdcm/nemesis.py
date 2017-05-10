@@ -178,14 +178,6 @@ class Nemesis(object):
         self._set_current_disruption('Drainer %s' % self.target_node)
         drain_cmd = 'nodetool -h localhost drain'
         result = self._run_nodetool(drain_cmd, self.target_node)
-        for node in self.cluster.nodes:
-            if node == self.target_node:
-                self.log.info('Status for target %s: %s', node,
-                              self._run_nodetool('nodetool status', node))
-            else:
-                self.log.info('Status for regular %s: %s', node,
-                              self._run_nodetool('nodetool status', node))
-
         if result is not None:
             self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
             self.target_node.wait_db_down()
@@ -250,14 +242,27 @@ class Nemesis(object):
         self._run_nodetool(rebuild_cmd, self.target_node)
 
 
-def log_time_elapsed(method):
+def log_time_elapsed_and_status(method):
     """
     Log time elapsed for method to run
 
     :param method: Remote method to wrap.
     :return: Wrapped method.
     """
+    def print_nodetool_status(self):
+        for node in self.cluster.nodes:
+            try:
+                if node == self.target_node:
+                    self.log.info('Status for target %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+                else:
+                    self.log.info('Status for regular %s: %s', node,
+                              self._run_nodetool('nodetool status', node))
+            except:
+                self.log.info('unable to get nodetool status from: %s' % node)
+
     def wrapper(*args, **kwargs):
+        print_nodetool_status(args[0])
         start_time = time.time()
         args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
         result = None
@@ -274,62 +279,63 @@ def log_time_elapsed(method):
                                           'start': int(start_time),
                                           'end': int(end_time), 'duration': time_elapsed})
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
+            print_nodetool_status(args[0])
             return result
     return wrapper
 
 
 class NoOpMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         time.sleep(300)
 
 
 class StopWaitStartMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_stop_wait_start_scylla_server(600)
 
 
 class StopStartMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_stop_start_scylla_server()
 
 
 class DrainerMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_drain()
 
 
 class CorruptThenRepairMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_destroy_data_then_repair()
 
 
 class CorruptThenRebuildMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_destroy_data_then_rebuild()
 
 
 class DecommissionMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=True)
 
 
 class ChaosMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method()
 
@@ -359,7 +365,7 @@ class UpgradeNemesis(Nemesis):
         if orig_ver == new_ver:
             self.log.error('scylla-server version isn\'t changed')
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.log.info('Upgrade Nemesis begin')
         # get the number of nodes
@@ -401,7 +407,7 @@ class RollbackNemesis(Nemesis):
         if orig_ver == new_ver:
             raise ValueError('scylla-server version isn\'t changed')
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.log.info('Rollback Nemesis begin')
         # get the number of nodes
