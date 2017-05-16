@@ -145,6 +145,11 @@ class PerformanceRegressionTest(ClusterTester):
         metrics['test_details']['test_name'] = self.params.id.name
         metrics['test_details']['sct_git_commit'] = \
             subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+
+        if os.environ['JOB_NAME']:
+            metrics['test_details']['job_name'] = os.environ['JOB_NAME']
+            metrics['test_details']['job_url'] = os.environ['BUILD_URL']
+
         metrics['results']['stats'] = results
 
         if 'es_password' in metrics['setup_details']:
