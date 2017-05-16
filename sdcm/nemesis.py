@@ -288,7 +288,7 @@ def log_time_elapsed_and_status(method):
                                           'end': int(end_time), 'duration': time_elapsed})
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
             print_nodetool_status(args[0])
-            num_nodes_after= len(args[0].cluster.nodes)
+            num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                   (num_nodes_before, num_nodes_after))
