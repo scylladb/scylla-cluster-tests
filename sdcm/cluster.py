@@ -375,6 +375,7 @@ class BaseNode(object):
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap. So addition means not the first set of node.
         self.is_addition = False
+        self.scylla_version = ''
 
     def file_exists(self, file_path):
         try:
@@ -483,7 +484,7 @@ class BaseNode(object):
         self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
         self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
 
-    def setup_grafana(self):
+    def setup_grafana(self, scylla_version=''):
         self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
         self.remoter.run('sudo chown %s /tmp/grafana-noedit.ini' % self.remoter.user)
         grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
@@ -523,7 +524,12 @@ class BaseNode(object):
         process.run('rm -rf scylla-grafana-monitoring/')
         process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
         process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
-        for i in glob.glob('data_dir/grafana/*.json'):
+        if '666.666.development' in scylla_version:
+            scylla_version = 'master'
+        elif scylla_version:
+            scylla_version = re.findall("^\w+.\w+", scylla_version)[0]
+
+        for i in glob.glob('data_dir/grafana/*.%s.json' % scylla_version):
             json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
 
         for grafana_json in json_mapping:
@@ -1954,8 +1960,9 @@ class BaseLoaderSet(object):
 class BaseMonitorSet(object):
 
     grafana_start_time = None
+    scylla_version = ''
 
-    def wait_for_init(self, targets, verbose=False):
+    def wait_for_init(self, targets, verbose=False, scylla_version=''):
         queue = Queue.Queue()
 
         def node_setup(node):
@@ -1967,7 +1974,8 @@ class BaseMonitorSet(object):
             node.install_prometheus()
             node.setup_prometheus(targets=targets)
             node.install_grafana()
-            node.setup_grafana()
+            node.setup_grafana(scylla_version)
+            self.scylla_version = scylla_version
             # The time will be used in url of Grafana monitor,
             # the data from this point to the end of test will
             # be captured.
@@ -2009,9 +2017,15 @@ class BaseMonitorSet(object):
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js > r.js",
                         shell=True)
+            if not self.scylla_version or '666.666.development' in self.scylla_version:
+                version = 'master'
+            else:
+                scylla_version = re.findall("^\w+.\w+", self.scylla_version)[0]
+                version = scylla_version.replace('.', '-')
+
             for n, node in enumerate(self.nodes):
-                grafana_url = "http://%s:3000/dashboard/db/scylla-per-server-metrics-1-6?from=%s&to=now" % (
-                              node.public_ip_address, start_time)
+                grafana_url = "http://%s:3000/dashboard/db/scylla-per-server-metrics-%s?from=%s&to=now" % (
+                              node.public_ip_address, version, start_time)
                 snapshot_path = os.path.join(self.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
@@ -3027,6 +3041,9 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        if not node_list[0].scylla_version:
+            result = node_list[0].remoter.run("scylla --version")
+            node_list[0].scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
