@@ -2946,7 +2946,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
-        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks `ls /dev/nvme0n*`')
+        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks `ls /dev/nvme0n* | tr "\n" ","`')
         node.remoter.run('sudo sync')
         self.log.info('io.conf right after setup')
         node.remoter.run('sudo cat /etc/scylla.d/io.conf')
