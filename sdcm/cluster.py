@@ -1356,6 +1356,7 @@ class BaseCluster(object):
         self.nodes = []
         self.nemesis = []
         self.params = params
+        self.static_addresses = []
         self.add_nodes(n_nodes)
         self.coredumps = dict()
 
@@ -2527,6 +2528,8 @@ class GCECluster(BaseCluster):
                                                      image=self._gce_image,
                                                      ex_disks_gce_struct=gce_disk_struct)
             self.log.info('Created instance %s', instance)
+            if 'db-node' in name:
+                self.static_addresses.append(self._gce_service.ex_create_address(name, address=instance.public_ips[0]))
             GCE_INSTANCES.append(instance)
             try:
                 n = GCENode(gce_instance=instance,
@@ -3028,6 +3031,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
     def destroy(self):
         self.stop_nemesis()
         super(ScyllaGCECluster, self).destroy()
+        for i in self.static_addresses:
+            self._gce_service.ex_destroy_address(i)
 
 
 class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
