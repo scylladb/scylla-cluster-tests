@@ -168,7 +168,7 @@ class ClusterTester(Test):
         self.loaders.wait_for_init(db_node_address=db_node_address)
         nodes_monitored = [node.private_ip_address for node in self.db_cluster.nodes]
         nodes_monitored += [node.private_ip_address for node in self.loaders.nodes]
-        self.monitors.wait_for_init(targets=nodes_monitored)
+        self.monitors.wait_for_init(targets=nodes_monitored, scylla_version=self.db_cluster.nodes[0].scylla_version)
 
     def get_nemesis_class(self):
         """

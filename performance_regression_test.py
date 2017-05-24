@@ -146,9 +146,9 @@ class PerformanceRegressionTest(ClusterTester):
         metrics['test_details']['sct_git_commit'] = \
             subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
 
-        if os.environ['JOB_NAME']:
-            metrics['test_details']['job_name'] = os.environ['JOB_NAME']
-            metrics['test_details']['job_url'] = os.environ['BUILD_URL']
+        if os.environ.get('JOB_NAME'):
+            metrics['test_details']['job_name'] = os.environ.get('JOB_NAME', '')
+            metrics['test_details']['job_url'] = os.environ.get('BUILD_URL', '')
 
         metrics['results']['stats'] = results
 
