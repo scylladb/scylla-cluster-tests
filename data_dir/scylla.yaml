@@ -6,8 +6,8 @@ test_duration: 60
 stress_cmd: cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
 # tcpdump to try to capture nodetool API
 tcpdump: false
-# Number of database nodes
-n_db_nodes: 6
+# Number list of database nodes in multiple date centers. Legacy type (int): Number of database nodes
+n_db_nodes: '6'
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
 # since 't2.micro' nodes tend to struggle with a lot of load.

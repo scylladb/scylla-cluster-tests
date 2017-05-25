@@ -336,9 +336,10 @@ class GCECredentials(object):
 
 class BaseNode(object):
 
-    def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None):
+    def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         self.name = name
         self.is_seed = None
+        self.dc_idx = dc_idx
         try:
             self.logdir = path.init_dir(base_logdir, self.name)
         except OSError:
@@ -1071,7 +1072,7 @@ class GCENode(BaseNode):
 
     def __init__(self, gce_instance, gce_service, credentials,
                  node_prefix='node', node_index=1, gce_image_username='root',
-                 base_logdir=None):
+                 base_logdir=None, dc_idx=0):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = gce_instance
         self._gce_service = gce_service
@@ -1083,7 +1084,8 @@ class GCENode(BaseNode):
         super(GCENode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
-                                      node_prefix=node_prefix)
+                                      node_prefix=node_prefix,
+                                      dc_idx=dc_idx)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with "keep-alive"',
@@ -1345,7 +1347,7 @@ class BaseCluster(object):
     """
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=[10], params=None):
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
@@ -1369,7 +1371,15 @@ class BaseCluster(object):
         self.nodes = []
         self.nemesis = []
         self.params = params
-        self.add_nodes(n_nodes)
+        self.datacenter = []
+        if isinstance(n_nodes, list):
+            for dc_idx, num in enumerate(n_nodes):
+                self.add_nodes(num, dc_idx=dc_idx)
+                self.datacenter.append("DataCenter%s" % (dc_idx + 1))
+        elif isinstance(n_nodes, int):  # legacy type
+            self.add_nodes(n_nodes)
+        else:
+            raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
 
     def send_file(self, src, dst, verbose=False):
@@ -1403,7 +1413,7 @@ class BaseCluster(object):
             if node.n_coredumps > 0:
                 self.coredumps[node.name] = node.n_coredumps
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         pass
 
     def get_node_private_ips(self):
@@ -2499,7 +2509,7 @@ class GCECluster(BaseCluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials, cluster_uuid=None,
                  gce_instance_type='n1-standard-1', gce_region_name='us-east1-b', gce_n_local_ssd=1, gce_image_username='root',
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=[10], params=None):
 
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
@@ -2554,10 +2564,10 @@ class GCECluster(BaseCluster):
                 "interface": 'NVME',
                 "autoDelete": True}
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         nodes = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            name = "%s-%s" % (self.node_prefix, node_index)
+            name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
             gce_disk_struct = list()
             gce_disk_struct.append(self._get_root_disk_struct(name=name,
                                                               disk_type=self._gce_image_type))
@@ -2580,7 +2590,8 @@ class GCECluster(BaseCluster):
                             gce_image_username=self._gce_image_username,
                             node_prefix=self.node_prefix,
                             node_index=self._node_index,
-                            base_logdir=self.logdir)
+                            base_logdir=self.logdir,
+                            dc_idx=dc_idx)
                 nodes.append(n)
             except:
                 self._instance_wait_safe(instance.destroy)
@@ -2890,7 +2901,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10, params=None):
+                 user_prefix=None, n_nodes=[10], params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
@@ -2915,9 +2926,10 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.version = '2.1'
         self._seed_node_rebooted = False
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data)
+                                                              ec2_user_data=ec2_user_data,
+                                                              dc_idx=dc_idx)
         return added_nodes
 
     def _node_setup(self, node, seed_address):
@@ -2974,6 +2986,10 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                      scylla_yaml_contents)
         scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
                                                             "cluster_name: '{0}'".format(self.name))
+        if len(self.datacenter) > 1:
+            p = re.compile('endpoint_snitch:.*')
+            scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format("GossipingPropertyFileSnitch"),
+                                         scylla_yaml_contents)
 
         if node.is_addition:
             if 'auto_bootstrap' in scylla_yaml_contents:
@@ -2999,6 +3015,21 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+
+        rackdc_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
+                                       'cassandra-rackdc.properties')
+        node.remoter.receive_files(src='/etc/scylla/cassandra-rackdc.properties',
+                                   dst=rackdc_dst_path)
+        with open(rackdc_dst_path, 'r') as f:
+            rackdc_contents = f.read()
+        rackdc_contents += "\ndc=DataCenter%s\n" % (node.dc_idx + 1)
+        rackdc_contents += "\nrack=RACK1\n"
+        with open(rackdc_dst_path, 'w') as f:
+            f.write(rackdc_contents)
+        node.remoter.send_files(src=rackdc_dst_path,
+                                dst='/tmp/cassandra-rackdc.properties')
+        node.remoter.run('sudo mv /tmp/cassandra-rackdc.properties /etc/scylla/cassandra-rackdc.properties')
+
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
         disks_str = ",".join(re.findall('/dev/nvme0n\w+', result.stdout))
