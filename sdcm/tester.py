@@ -761,6 +761,7 @@ class ClusterTester(Test):
                 self.db_cluster = None
         if self.monitors is not None:
             self.monitors.get_backtraces()
+            self.monitors.download_monitor_data()
             if self._failure_post_behavior == 'destroy':
                 self.monitors.destroy()
                 self.monitors = None

@@ -2036,6 +2036,7 @@ class BaseMonitorSet(object):
                            str(details))
 
     def download_monitor_data(self):
+        self.log.debug('Download monitor data')
         for node in self.nodes:
             try:
                 node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
@@ -2378,7 +2379,6 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
     def destroy(self):
         self.log.info('Destroy nodes')
         self.get_monitor_snapshot()
-        self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
 
@@ -3459,7 +3459,6 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
     def destroy(self):
         self.log.info('Destroy nodes')
         self.get_monitor_snapshot()
-        self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
 
@@ -3490,7 +3489,6 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
     def destroy(self):
         self.log.info('Destroy nodes')
         self.get_monitor_snapshot()
-        self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
 
@@ -3524,6 +3522,5 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
     def destroy(self):
         self.log.info('Destroy nodes')
         self.get_monitor_snapshot()
-        self.download_monitor_data()
         for node in self.nodes:
             node.destroy()
