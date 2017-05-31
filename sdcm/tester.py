@@ -11,50 +11,45 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import glob
 import logging
+import os
+import shutil
 import time
 import types
 
-import libvirt
-
 import boto3.session
-
+import libvirt
+import requests
 from avocado import Test
-
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
 from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
-
-from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
+from libcloud.compute.types import Provider
 
 from . import cluster
 from . import nemesis
-
 from .cluster import CassandraAWSCluster
+from .cluster import GCECredentials
 from .cluster import LoaderSetAWS
+from .cluster import LoaderSetGCE
 from .cluster import LoaderSetLibvirt
 from .cluster import LoaderSetOpenStack
-from .cluster import LoaderSetGCE
-
-from .cluster import NoMonitorSet
 from .cluster import MonitorSetAWS
+from .cluster import MonitorSetGCE
 from .cluster import MonitorSetLibvirt
 from .cluster import MonitorSetOpenStack
-from .cluster import MonitorSetGCE
-
+from .cluster import NoMonitorSet
 from .cluster import RemoteCredentials
-from .cluster import UserRemoteCredentials
-from .cluster import GCECredentials
-
 from .cluster import ScyllaAWSCluster
+from .cluster import ScyllaGCECluster
 from .cluster import ScyllaLibvirtCluster
 from .cluster import ScyllaOpenStackCluster
-from .cluster import ScyllaGCECluster
-
+from .cluster import UserRemoteCredentials
 from .data_path import get_data_path
 
 try:
@@ -762,6 +757,33 @@ class ClusterTester(Test):
         if self.monitors is not None:
             self.monitors.get_backtraces()
             self.monitors.download_monitor_data()
+
+            # upload prometheus data
+            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*'))[0]
+            file_path = os.path.join(self.logdir, os.path.basename(os.path.normpath(self.job.logdir)))
+            shutil.make_archive(file_path, 'zip', prometheus_folder)
+            result_path = '%s.zip' % file_path
+            with open(result_path) as fh:
+                mydata = fh.read()
+                url_s3 = 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
+                    os.environ.get('JOB_NAME', "local_run"), os.path.basename(
+                        os.path.normpath(result_path)))
+                self.log.info("uploading prometheus data on %s" % url_s3)
+                response = requests.put(url_s3, data=mydata)
+                self.log.info(response.text)
+
+            grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
+            if grafana_snapshots:
+                result_path = '%s.png' % file_path
+                with open(grafana_snapshots[0]) as fh:
+                    mydata = fh.read()
+                    url_s3 = 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
+                        os.environ.get('JOB_NAME', "local_run"), os.path.basename(
+                            os.path.normpath(result_path)))
+                    self.log.info("uploading grafana snapshot data on %s" % url_s3)
+                    response = requests.put(url_s3, data=mydata)
+                    self.log.info(response.text)
+
             if self._failure_post_behavior == 'destroy':
                 self.monitors.destroy()
                 self.monitors = None
