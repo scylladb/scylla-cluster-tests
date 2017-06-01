@@ -2008,6 +2008,9 @@ class BaseMonitorSet(object):
         Take snapshot for grafana monitor in the end of test
         """
         phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
+        if not self.grafana_start_time:
+            self.log.error("grafana isn't setup, skip to get snapshot")
+            return
         start_time = str(self.grafana_start_time).split('.')[0] + '000'
 
         try:
@@ -2378,7 +2381,6 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3458,7 +3460,6 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3488,7 +3489,6 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3521,6 +3521,5 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
