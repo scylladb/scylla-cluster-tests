@@ -2381,7 +2381,6 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3461,7 +3460,6 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3491,7 +3489,6 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
 
@@ -3524,6 +3521,5 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
 
     def destroy(self):
         self.log.info('Destroy nodes')
-        self.get_monitor_snapshot()
         for node in self.nodes:
             node.destroy()
