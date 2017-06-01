@@ -2962,7 +2962,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
-        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks `ls /dev/nvme0n* | tr "\n" ","`')
+        # detect local-ssd disks
+        result = node.remoter.run('ls /dev/nvme0n*')
+        disks_str = ",".join(re.findall('/dev/nvme0n\w+', result.stdout))
+        assert disks_str != ""
+        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(disks_str))
         node.remoter.run('sudo sync')
         self.log.info('io.conf right after setup')
         node.remoter.run('sudo cat /etc/scylla.d/io.conf')
