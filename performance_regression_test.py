@@ -151,9 +151,7 @@ class PerformanceRegressionTest(ClusterTester):
         if os.environ.get('BUILD_URL'):
             metrics['test_details']['job_url'] = os.environ.get('BUILD_URL', '')
         if self.monitors:
-            zip_file = os.path.join(self.logdir, os.path.basename(os.path.normpath(self.job.logdir)))
-            url_s3 = 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % \
-                 (job_name, os.path.basename(os.path.normpath('%s' % zip_file)))
+            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
             metrics['test_details']['prometheus_report'] = url_s3 + ".zip"
             metrics['test_details']['grafana_snapshot'] = url_s3 + ".png"
 

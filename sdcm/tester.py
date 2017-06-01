@@ -728,6 +728,12 @@ class ClusterTester(Test):
         session.execute(query)
         time.sleep(0.2)
 
+    @staticmethod
+    def get_s3_url(file_name):
+        return 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
+            os.environ.get('JOB_NAME', "local_run"), os.path.basename(
+                os.path.normpath(file_name)))
+
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
         db_cluster_errors = None
@@ -759,15 +765,13 @@ class ClusterTester(Test):
             self.monitors.download_monitor_data()
 
             # upload prometheus data
-            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*'))[0]
-            file_path = os.path.join(self.logdir, os.path.basename(os.path.normpath(self.job.logdir)))
+            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*/*monitor*/prometheus/'))[0]
+            file_path = os.path.normpath(self.job.logdir)
             shutil.make_archive(file_path, 'zip', prometheus_folder)
             result_path = '%s.zip' % file_path
             with open(result_path) as fh:
                 mydata = fh.read()
-                url_s3 = 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
-                    os.environ.get('JOB_NAME', "local_run"), os.path.basename(
-                        os.path.normpath(result_path)))
+                url_s3 = ClusterTester.get_s3_url(result_path)
                 self.log.info("uploading prometheus data on %s" % url_s3)
                 response = requests.put(url_s3, data=mydata)
                 self.log.info(response.text)
@@ -777,9 +781,7 @@ class ClusterTester(Test):
                 result_path = '%s.png' % file_path
                 with open(grafana_snapshots[0]) as fh:
                     mydata = fh.read()
-                    url_s3 = 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
-                        os.environ.get('JOB_NAME', "local_run"), os.path.basename(
-                            os.path.normpath(result_path)))
+                    url_s3 = ClusterTester.get_s3_url(result_path)
                     self.log.info("uploading grafana snapshot data on %s" % url_s3)
                     response = requests.put(url_s3, data=mydata)
                     self.log.info(response.text)
