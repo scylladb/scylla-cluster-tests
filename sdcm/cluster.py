@@ -1572,15 +1572,15 @@ class BaseScyllaCluster(object):
             node_list = self.nodes
 
         new_scylla_bin = self.params.get('update_db_binary')
-        if new_scylla_bin:
+        if new_scylla_bin and os.listdir(new_scylla_bin):
             self._update_db_binary(new_scylla_bin, node_list)
 
     def update_db_packages(self, node_list=None):
-        new_scylla_bin = self.params.get('update_db_packages')
-        if new_scylla_bin:
+        new_scylla_packages = self.params.get('update_db_packages')
+        if new_scylla_packages and os.listdir(new_scylla_packages):
             if node_list is None:
                 node_list = self.nodes
-            self._update_db_packages(new_scylla_bin, node_list)
+            self._update_db_packages(new_scylla_packages, node_list)
 
     def get_node_info_list(self, verification_node):
         assert verification_node in self.nodes
