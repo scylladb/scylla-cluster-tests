@@ -2059,12 +2059,18 @@ class NoMonitorSet(object):
     def __str__(self):
         return 'NoMonitorSet'
 
-    def wait_for_init(self, targets, verbose=False):
+    def wait_for_init(self, targets, verbose=False, scylla_version=''):
         del targets
         del verbose
         self.log.info('Monitor nodes disabled for this run')
 
     def get_backtraces(self):
+        pass
+
+    def get_monitor_snapshot(self):
+        pass
+
+    def download_monitor_data(self):
         pass
 
     def destroy(self):
