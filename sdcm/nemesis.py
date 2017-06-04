@@ -26,6 +26,8 @@ from avocado.utils import process
 from .data_path import get_data_path
 from .log import SDCMAdapter
 
+from sdcm.utils import remote_get_file
+
 
 class Nemesis(object):
 
@@ -236,6 +238,35 @@ class Nemesis(object):
         cmd = 'nodetool -h localhost compact'
         self._run_nodetool(cmd, self.target_node)
 
+    def disrupt_nodetool_refresh(self, big_sstable=True):
+        node = self.target_node
+        self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(node.name))
+        if big_sstable:
+            # 100G, the big file will be saved to GCE image
+            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.tar.gz'
+            sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+            sstable_md5 = 'f64ab85111e817f22f93653a4a791b1f'
+        else:
+            # 3.5K (10 rows)
+            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.small.tar.gz'
+            sstable_file = "/tmp/keyspace1.standard1.small.tar.gz"
+            sstable_md5 = '76cca3135e175d859c0efb67c6a7b233'
+        remote_get_file(node.remoter, sstable_url, sstable_file,
+                        hash_expected=sstable_md5, retries=2)
+
+        self.log.debug('Make sure keyspace1.standard1 exists')
+        result = self._run_nodetool('nodetool --host localhost cfstats keyspace1.standard1',
+                                    node)
+        if result is not None and result.exit_status == 0:
+            result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+            upload_dir = result.stdout.split()[0]
+            node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(sstable_file, upload_dir))
+
+            refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
+            self._run_nodetool(refresh_cmd, node)
+            cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
+            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
@@ -366,6 +397,20 @@ class MajorCompactionMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_major_compaction()
+
+
+class RefreshMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_refresh()
+
+
+class RefreshBigMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_refresh(big_sstable=True)
 
 
 class ChaosMonkey(Nemesis):
