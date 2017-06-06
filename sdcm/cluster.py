@@ -524,7 +524,7 @@ class BaseNode(object):
         process.run('rm -rf scylla-grafana-monitoring/')
         process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
         process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
-        if '666.666.development' in scylla_version:
+        if '666.development' in scylla_version:
             scylla_version = 'master'
         elif scylla_version:
             scylla_version = re.findall("^\w+.\w+", scylla_version)[0]
@@ -2019,7 +2019,7 @@ class BaseMonitorSet(object):
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js > r.js",
                         shell=True)
-            if not self.scylla_version or '666.666.development' in self.scylla_version:
+            if not self.scylla_version or '666.development' in self.scylla_version:
                 version = 'master'
             else:
                 scylla_version = re.findall("^\w+.\w+", self.scylla_version)[0]
