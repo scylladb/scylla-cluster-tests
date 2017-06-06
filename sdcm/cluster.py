@@ -1003,7 +1003,7 @@ WantedBy=multi-user.target
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml'):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-        node.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
+        self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
         with open(yaml_dst_path, 'r') as f:
             scylla_yaml_contents = f.read()
@@ -1053,9 +1053,9 @@ WantedBy=multi-user.target
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
 
-        node.remoter.send_files(src=yaml_dst_path,
+        self.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
+        self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
 
 class OpenStackNode(BaseNode):
@@ -1236,11 +1236,11 @@ class AWSNode(BaseNode):
                  base_logdir=None, dc_idx=0):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
-        self._ec2 = ec2_service
+        self._ec2_service = ec2_service
         self._instance_wait_safe(self._instance.wait_until_running)
         self._wait_public_ip()
-        self._ec2.create_tags(Resources=[self._instance.id],
-                              Tags=[{'Key': 'Name', 'Value': name}])
+        self._ec2_service.create_tags(Resources=[self._instance.id],
+                                      Tags=[{'Key': 'Name', 'Value': name}])
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
@@ -1253,8 +1253,8 @@ class AWSNode(BaseNode):
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
                           TEST_DURATION)
-            self._ec2.create_tags(Resources=[self._instance.id],
-                                  Tags=[{'Key': 'keep', 'Value': 'alive'}])
+            self._ec2_service.create_tags(Resources=[self._instance.id],
+                                          Tags=[{'Key': 'keep', 'Value': 'alive'}])
 
     @property
     def public_ip_address(self):
@@ -1409,7 +1409,7 @@ class BaseCluster(object):
     """
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], params=None):
+                 node_prefix='node', n_nodes=[10], params=None, region_names=None):
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
@@ -1433,11 +1433,10 @@ class BaseCluster(object):
         self.nodes = []
         self.nemesis = []
         self.params = params
-        self.datacenter = []
+        self.datacenter = region_names
         if isinstance(n_nodes, list):
             for dc_idx, num in enumerate(n_nodes):
                 self.add_nodes(num, dc_idx=dc_idx)
-                self.datacenter.append("DataCenter%s" % (dc_idx + 1))
         elif isinstance(n_nodes, int):  # legacy type
             self.add_nodes(n_nodes)
         else:
@@ -2549,8 +2548,8 @@ class GCECluster(BaseCluster):
     Cluster of Node objects, started on GCE (Google Compute Engine).
     """
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials, cluster_uuid=None,
-                 gce_instance_type='n1-standard-1', gce_region_name='us-east1-b', gce_n_local_ssd=1, gce_image_username='root',
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials, cluster_uuid=None,
+                 gce_instance_type='n1-standard-1', gce_region_names=['us-east1-b'], gce_n_local_ssd=1, gce_image_username='root',
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=[10], params=None):
 
@@ -2558,17 +2557,19 @@ class GCECluster(BaseCluster):
         self._gce_image_type = gce_image_type
         self._gce_image_size = gce_image_size
         self._gce_network = gce_network
-        self._gce_service = service
+        self._gce_services = services
         self._credentials = credentials
         self._gce_instance_type = gce_instance_type
         self._gce_image_username = gce_image_username
-        self._gce_region_name = gce_region_name
+        self._gce_region_names = gce_region_names
         self._gce_n_local_ssd = int(gce_n_local_ssd)
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
-                                         params=params)
+                                         params=params,
+                                         #services=services,
+                                         region_names=gce_region_names)
 
     def __str__(self):
         identifier = 'GCE Cluster %s | ' % self.name
@@ -2579,30 +2580,30 @@ class GCECluster(BaseCluster):
         identifier += 'Type: %s' % self._gce_instance_type
         return identifier
 
-    def _get_disk_url(self, disk_type='pd-standard'):
-        project = self._gce_service.ex_get_project()
-        return "projects/%s/zones/%s/diskTypes/%s" % (project.name, self._gce_region_name, disk_type)
+    def _get_disk_url(self, disk_type='pd-standard', dc_idx=0):
+        project = self._gce_services[dc_idx].ex_get_project()
+        return "projects/%s/zones/%s/diskTypes/%s" % (project.name, self._gce_region_names[dc_idx], disk_type)
 
-    def _get_root_disk_struct(self, name, disk_type='pd-standard'):
+    def _get_root_disk_struct(self, name, disk_type='pd-standard', dc_idx=0):
         device_name = '%s-root-%s' % (name, disk_type)
         return {"type": "PERSISTENT",
                 "deviceName": device_name,
                 "initializeParams": {
                     # diskName parameter has a limit of 62 chars, comment it to use system allocated name
                     #"diskName": device_name,
-                    "diskType": self._get_disk_url(disk_type),
+                    "diskType": self._get_disk_url(disk_type, dc_idx=dc_idx),
                     "diskSizeGb": self._gce_image_size,
                     "sourceImage": self._gce_image
                 },
                 "boot": True,
                 "autoDelete": True}
 
-    def _get_scratch_disk_struct(self, name, index):
+    def _get_scratch_disk_struct(self, name, index, dc_idx=0):
         device_name = '%s-data-local-ssd-%s' % (name, index)
         return {"type": "SCRATCH",
                 "deviceName": device_name,
                 "initializeParams": {
-                    "diskType": self._get_disk_url('local-ssd'),
+                    "diskType": self._get_disk_url('local-ssd', dc_idx=dc_idx),
                 },
                 "interface": 'NVME',
                 "autoDelete": True}
@@ -2613,22 +2614,23 @@ class GCECluster(BaseCluster):
             name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
             gce_disk_struct = list()
             gce_disk_struct.append(self._get_root_disk_struct(name=name,
-                                                              disk_type=self._gce_image_type))
+                                                              disk_type=self._gce_image_type,
+                                                              dc_idx=dc_idx))
             for i in range(self._gce_n_local_ssd):
-                gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
+                gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i, dc_idx=dc_idx))
             self.log.info(gce_disk_struct)
             # Name must start with a lowercase letter followed by up to 63
             # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
             assert len(name) <= 63, "Max length of instance name is 63"
-            instance = self._gce_service.create_node(name=name,
-                                                     size=self._gce_instance_type,
-                                                     image=self._gce_image,
-                                                     ex_disks_gce_struct=gce_disk_struct)
+            instance = self._gce_services[dc_idx].create_node(name=name,
+                                                              size=self._gce_instance_type,
+                                                              image=self._gce_image,
+                                                              ex_disks_gce_struct=gce_disk_struct)
             self.log.info('Created instance %s', instance)
             GCE_INSTANCES.append(instance)
             try:
                 n = GCENode(gce_instance=instance,
-                            gce_service=self._gce_service,
+                            gce_service=self._gce_services[dc_idx],
                             credentials=self._credentials,
                             gce_image_username=self._gce_image_username,
                             node_prefix=self.node_prefix,
@@ -2657,28 +2659,32 @@ class AWSCluster(BaseCluster):
     """
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, cluster_uuid=None,
+                 services, credentials, cluster_uuid=None,
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=[10], params=None):
-        if credentials.type == 'generated':
-            credential_key_name = credentials.key_pair_name
-            credential_key_file = credentials.key_file
-            region_name = params.get('region_name')
-            if params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                               'args': (region_name,
-                                                                        credential_key_name,
-                                                                        credential_key_file),
-                                                               'once': True})
-        global CREDENTIALS
-        CREDENTIALS.append(credentials)
+        region_names = params.get('region_name').split()
+        if len(credentials) > 1 or len(region_names) > 1:
+            assert len(credentials) == len(region_names)
+        for idx, region_name in enumerate(region_names):
+            credential = credentials[idx]
+            if credential.type == 'generated':
+                credential_key_name = credential.key_pair_name
+                credential_key_file = credential.key_file
+                if params.get('failure_post_behavior') == 'destroy':
+                    avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
+                                                                   'args': (region_name,
+                                                                            credential_key_name,
+                                                                            credential_key_file),
+                                                                   'once': True})
+            global CREDENTIALS
+            CREDENTIALS.append(credential)
 
         self._ec2_ami_id = ec2_ami_id
         self._ec2_subnet_id = ec2_subnet_id
         self._ec2_security_group_ids = ec2_security_group_ids
-        self._ec2 = service
+        self._ec2_services = services
         self._credentials = credentials
         self._ec2_instance_type = ec2_instance_type
         self._ec2_ami_username = ec2_ami_username
@@ -2687,11 +2693,13 @@ class AWSCluster(BaseCluster):
         self._ec2_block_device_mappings = ec2_block_device_mappings
         self._ec2_user_data = ec2_user_data
         self._ec2_ami_id = ec2_ami_id
+        self.region_names = region_names
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
-                                         params=params)
+                                         params=params,
+                                         region_names=self.region_names)
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
@@ -2717,17 +2725,17 @@ class AWSCluster(BaseCluster):
         self.log.debug("Passing user_data '%s' to create_instances",
                        ec2_user_data)
         interfaces = [{'DeviceIndex': 0,
-                       'SubnetId': self._ec2_subnet_id,
+                       'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
-                       'Groups': self._ec2_security_group_ids}]
-        instances = self._ec2.create_instances(ImageId=self._ec2_ami_id,
-                                               UserData=ec2_user_data,
-                                               MinCount=count,
-                                               MaxCount=count,
-                                               KeyName=self._credentials.key_pair_name,
-                                               BlockDeviceMappings=self._ec2_block_device_mappings,
-                                               NetworkInterfaces=interfaces,
-                                               InstanceType=self._ec2_instance_type)
+                       'Groups': self._ec2_security_group_ids[dc_idx]}]
+        instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
+                                                                UserData=ec2_user_data,
+                                                                MinCount=count,
+                                                                MaxCount=count,
+                                                                KeyName=self._credentials[dc_idx].key_pair_name,
+                                                                BlockDeviceMappings=self._ec2_block_device_mappings,
+                                                                NetworkInterfaces=interfaces,
+                                                                InstanceType=self._ec2_instance_type)
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
         if self.params.get('failure_post_behavior') == 'destroy':
@@ -2749,8 +2757,12 @@ class AWSCluster(BaseCluster):
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,
                      base_logdir, dc_idx):
-        return AWSNode(ec2_instance=instance, ec2_service=self._ec2,
-                       credentials=self._credentials, ami_username=ami_username,
+        if len(self._credentials) > 1:
+            credential = self._credentials[dc_idx]
+        else:
+            credential = self._credentials[0]
+        return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
+                       credentials=credential, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
                        base_logdir=base_logdir, dc_idx=dc_idx)
 
@@ -2795,7 +2807,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
                                                      openstack_network=openstack_network,
                                                      openstack_instance_type=openstack_instance_type,
                                                      openstack_image_username=openstack_image_username,
-                                                     service=service,
+                                                     services=service,
                                                      credentials=credentials,
                                                      cluster_prefix=cluster_prefix,
                                                      node_prefix=node_prefix,
@@ -2912,10 +2924,10 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
 
 class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=[10], params=None):
+                 user_prefix=None, n_nodes=[10], params=None, gce_datacenter=None):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
@@ -2926,12 +2938,13 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                                gce_network=gce_network,
                                                gce_instance_type=gce_instance_type,
                                                gce_image_username=gce_image_username,
-                                               service=service,
+                                               services=services,
                                                credentials=credentials,
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               gce_region_names=gce_datacenter)
         self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
@@ -3088,7 +3101,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
@@ -3101,7 +3114,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
-                     '--totalnodes %s' % (name, n_nodes))
+                     '--totalnodes %s' % (name, sum(n_nodes)))
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
                                                ec2_security_group_ids=ec2_security_group_ids,
@@ -3110,7 +3123,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                                                ec2_user_data=user_data,
                                                ec2_block_device_mappings=ec2_block_device_mappings,
                                                cluster_uuid=cluster_uuid,
-                                               service=service,
+                                               services=services,
                                                credentials=credentials,
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
@@ -3125,14 +3138,24 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
-            if self.nodes:
+            ec2_user_data = ('--clustername %s --bootstrap true '
+                             '--totalnodes %s ' % (self.name,
+                                                   count))
+        if self.nodes:
+            if dc_idx > 0:
+                node_public_ips = [node.public_ip_address for node
+                                    in self.nodes if node.is_seed]
+                seeds = ",".join(node_public_ips)
+                if not seeds:
+                    seeds = self.nodes[0].public_ip_address
+            else:
                 node_private_ips = [node.private_ip_address for node
                                     in self.nodes if node.is_seed]
                 seeds = ",".join(node_private_ips)
-                ec2_user_data = ('--clustername %s --bootstrap true '
-                                 '--totalnodes %s --seeds %s' % (self.name,
-                                                                 count,
-                                                                 seeds))
+                if not seeds:
+                    seeds = self.nodes[0].private_ip_address
+            ec2_user_data += ' --seeds %s' % seeds
+
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data,
                                                               dc_idx=dc_idx)
@@ -3143,7 +3166,10 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         if len(self.datacenter) > 1:
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
-        node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
+            seed_address = self.nodes[0].public_ip_address
+            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch)
+        else:
+            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
         node.remoter.run('sudo systemctl restart scylla-server.service')
 
     def wait_for_init(self, node_list=None, verbose=False):
@@ -3154,8 +3180,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
 
         def node_setup(node):
             node.wait_ssh_up(verbose=verbose)
-            if self._experimental():
-                self._node_setup(node=node)
+            self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -3230,7 +3255,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                ec2_user_data=user_data,
                                                ec2_block_device_mappings=ec2_block_device_mappings,
                                                cluster_uuid=cluster_uuid,
-                                               service=service,
+                                               services=service,
                                                credentials=credentials,
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
@@ -3326,7 +3351,7 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
                                                  openstack_network=openstack_network,
                                                  openstack_instance_type=openstack_instance_type,
                                                  openstack_image_username=openstack_image_username,
-                                                 service=service,
+                                                 services=service,
                                                  credentials=credentials,
                                                  cluster_prefix=cluster_prefix,
                                                  node_prefix=node_prefix,
@@ -3390,7 +3415,7 @@ class LoaderSetGCE(GCECluster, BaseLoaderSet):
                                            gce_n_local_ssd=gce_n_local_ssd,
                                            gce_instance_type=gce_instance_type,
                                            gce_image_username=gce_image_username,
-                                           service=service,
+                                           services=service,
                                            credentials=credentials,
                                            cluster_prefix=cluster_prefix,
                                            node_prefix=node_prefix,
@@ -3456,7 +3481,7 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                                            ec2_instance_type=ec2_instance_type,
                                            ec2_ami_username=ec2_ami_username,
                                            ec2_user_data=user_data,
-                                           service=service,
+                                           services=service,
                                            ec2_block_device_mappings=ec2_block_device_mappings,
                                            credentials=credentials,
                                            cluster_prefix=cluster_prefix,
@@ -3478,7 +3503,7 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
                                                   openstack_network=openstack_network,
                                                   openstack_instance_type=openstack_instance_type,
                                                   openstack_image_username=openstack_image_username,
-                                                  service=service,
+                                                  services=service,
                                                   credentials=credentials,
                                                   cluster_prefix=cluster_prefix,
                                                   node_prefix=node_prefix,
@@ -3507,7 +3532,7 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
                                             gce_network=gce_network,
                                             gce_instance_type=gce_instance_type,
                                             gce_image_username=gce_image_username,
-                                            service=service,
+                                            services=service,
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
                                             node_prefix=node_prefix,
@@ -3538,7 +3563,7 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
                                             ec2_instance_type=ec2_instance_type,
                                             ec2_ami_username=ec2_ami_username,
                                             ec2_user_data=user_data,
-                                            service=service,
+                                            services=service,
                                             ec2_block_device_mappings=ec2_block_device_mappings,
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
