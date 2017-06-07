@@ -2280,8 +2280,6 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         self.nemesis_threads = []
 
     def _node_setup(self, node, seed_address):
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
-                                     'scylla.yaml')
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
@@ -2295,37 +2293,10 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
-                                   dst=yaml_dst_path)
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,
+                          enable_exp=self._experimental())
 
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
-
-        # Set seeds
-        p = re.compile('seeds:.*')
-        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
-                                     scylla_yaml_contents)
-
-        # Set listen_address
-        p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        # Set rpc_address
-        p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
-                                                            "cluster_name: '{0}'".format(self.name))
-
-        if self._experimental():
-            scylla_yaml_contents += "\nexperimental: true\n"
-
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
-
-        node.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
         node.remoter.run(
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         node.remoter.run('sudo systemctl enable scylla-server.service')
@@ -2833,8 +2804,6 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node, seed_address):
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
-                                     'scylla.yaml')
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
@@ -2848,37 +2817,10 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
-                                   dst=yaml_dst_path)
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,
+                          enable_exp=self._experimental())
 
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
-
-        # Set seeds
-        p = re.compile('seeds:.*')
-        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
-                                     scylla_yaml_contents)
-
-        # Set listen_address
-        p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        # Set rpc_address
-        p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.public_ip_address),
-                                     scylla_yaml_contents)
-        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
-                                                            "cluster_name: '{0}'".format(self.name))
-
-        if self._experimental():
-            scylla_yaml_contents += "\nexperimental: true\n"
-
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
-
-        node.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
         node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
@@ -3014,11 +2956,6 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
-                                   dst=yaml_dst_path)
-
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
 
         # Fixme: there is some code that assume the first node as seed,
         # so we can't choose the fast one as seed, let's disable the code.
@@ -3033,64 +2970,14 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         # else:
         #     seed_address = ','.join(self.seed_nodes_private_ips)
 
-        # Set seeds
-        p = re.compile('seeds:.*')
-        scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
-                                     scylla_yaml_contents)
-
-        # Set listen_address
-        p = re.compile('listen_address:.*')
-        scylla_yaml_contents = p.sub('listen_address: {0}'.format(node.private_ip_address),
-                                     scylla_yaml_contents)
-        # Set rpc_address
-        p = re.compile('rpc_address:.*')
-        scylla_yaml_contents = p.sub('rpc_address: {0}'.format(node.private_ip_address),
-                                     scylla_yaml_contents)
-        scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
-                                                            "cluster_name: '{0}'".format(self.name))
+        endpoint_snitch = ''
         if len(self.datacenter) > 1:
-            p = re.compile('endpoint_snitch:.*')
-            scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format("GossipingPropertyFileSnitch"),
-                                         scylla_yaml_contents)
-
-        if node.is_addition:
-            if 'auto_bootstrap' in scylla_yaml_contents:
-                p = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = p.sub('auto_bootstrap: True',
-                                             scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nauto_bootstrap: True\n"
-        else:
-            if 'auto_bootstrap' in scylla_yaml_contents:
-                p = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = p.sub('auto_bootstrap: False',
-                                             scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nauto_bootstrap: False\n"
-
-        if self._experimental():
-            scylla_yaml_contents += "\nexperimental: true\n"
-
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
-
-        node.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
-
-        rackdc_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
-                                       'cassandra-rackdc.properties')
-        node.remoter.receive_files(src='/etc/scylla/cassandra-rackdc.properties',
-                                   dst=rackdc_dst_path)
-        with open(rackdc_dst_path, 'r') as f:
-            rackdc_contents = f.read()
-        rackdc_contents += "\ndc=DataCenter%s\n" % (node.dc_idx + 1)
-        rackdc_contents += "\nrack=RACK1\n"
-        with open(rackdc_dst_path, 'w') as f:
-            f.write(rackdc_contents)
-        node.remoter.send_files(src=rackdc_dst_path,
-                                dst='/tmp/cassandra-rackdc.properties')
-        node.remoter.run('sudo mv /tmp/cassandra-rackdc.properties /etc/scylla/cassandra-rackdc.properties')
+            endpoint_snitch = "GossipingPropertyFileSnitch"
+            node.datacenter_setup(self.datacenter)
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,
+                          enable_exp=self._experimental(),
+                          endpoint_snitch=endpoint_snitch)
 
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
@@ -3238,19 +3125,11 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node):
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-        node.remoter.receive_files(src='/etc/scylla/scylla.yaml', dst=yaml_dst_path)
-
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
-        scylla_yaml_contents += "\nexperimental: true\n"
-
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
-
-        node.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
-        node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+        endpoint_snitch = ''
+        if len(self.datacenter) > 1:
+            endpoint_snitch = "Ec2MultiRegionSnitch"
+            node.datacenter_setup(self.datacenter)
+        node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
         node.remoter.run('sudo systemctl restart scylla-server.service')
 
     def wait_for_init(self, node_list=None, verbose=False):
