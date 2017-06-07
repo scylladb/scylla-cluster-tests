@@ -1172,7 +1172,7 @@ class AWSNode(BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None):
+                 base_logdir=None, dc_idx=0):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2 = ec2_service
@@ -1186,7 +1186,8 @@ class AWSNode(BaseNode):
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
-                                      node_prefix=node_prefix)
+                                      node_prefix=node_prefix,
+                                      dc_idx=dc_idx)
         if TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
@@ -2618,7 +2619,7 @@ class AWSCluster(BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=[10], params=None):
         if credentials.type == 'generated':
             credential_key_name = credentials.key_pair_name
             credential_key_file = credentials.key_file
@@ -2667,7 +2668,7 @@ class AWSCluster(BaseCluster):
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
         global EC2_INSTANCES
@@ -2695,7 +2696,7 @@ class AWSCluster(BaseCluster):
         EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
-                                         self.logdir)
+                                         self.logdir, dc_idx=dc_idx)
                        for node_index, instance in
                        enumerate(instances, start=self._node_index + 1)]
         self._node_index += len(added_nodes)
@@ -2705,11 +2706,11 @@ class AWSCluster(BaseCluster):
         return added_nodes
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,
-                     base_logdir):
+                     base_logdir, dc_idx):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2,
                        credentials=self._credentials, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir)
+                       base_logdir=base_logdir, dc_idx=dc_idx)
 
     def cfstat_reached_threshold(self, key, threshold):
         """
@@ -3129,7 +3130,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=10,
+                 n_nodes=[10],
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
@@ -3160,7 +3161,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
             if self.nodes:
                 node_private_ips = [node.private_ip_address for node
@@ -3171,7 +3172,8 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                                                                  count,
                                                                  seeds))
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data)
+                                                              ec2_user_data=ec2_user_data,
+                                                              dc_idx=dc_idx)
         return added_nodes
 
     def _node_setup(self, node):

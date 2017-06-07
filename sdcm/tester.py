@@ -353,7 +353,13 @@ class ClusterTester(Test):
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if db_info['n_nodes'] is None:
-            db_info['n_nodes'] = self.params.get('n_db_nodes')
+            n_db_nodes = self.params.get('n_db_nodes')
+            if type(n_db_nodes) == int:  # legacy type
+                db_info['n_nodes'] = [n_db_nodes]
+            elif type(n_db_nodes) == str:  # latest type to support multiple datacenters
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
         if monitor_info['n_nodes'] is None:
