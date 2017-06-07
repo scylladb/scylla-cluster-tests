@@ -996,6 +996,67 @@ WantedBy=multi-user.target
             errors += self.search_database_log(expression)
         return errors
 
+    def datacenter_setup(self, datacenters):
+        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\n\" >> /etc/scylla/cassandra-rackdc.properties'"
+        cmd = cmd.format(datacenters[self.dc_idx])
+        self.remoter.run(cmd)
+
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml'):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+        node.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
+
+        with open(yaml_dst_path, 'r') as f:
+            scylla_yaml_contents = f.read()
+
+        if seed_address:
+            # Set seeds
+            p = re.compile('seeds:.*')
+            scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
+                                         scylla_yaml_contents)
+
+            # Set listen_address
+            p = re.compile('listen_address:.*')
+            scylla_yaml_contents = p.sub('listen_address: {0}'.format(self.private_ip_address),
+                                         scylla_yaml_contents)
+            # Set rpc_address
+            p = re.compile('rpc_address:.*')
+            scylla_yaml_contents = p.sub('rpc_address: {0}'.format(self.private_ip_address),
+                                         scylla_yaml_contents)
+
+        if cluster_name:
+            scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
+                                                                "cluster_name: '{0}'".format(cluster_name))
+
+        if enable_exp:
+            scylla_yaml_contents += "\nexperimental: true\n"
+
+        if endpoint_snitch:
+            p = re.compile('endpoint_snitch:.*')
+            scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
+                                         scylla_yaml_contents)
+
+        if self.is_addition:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: True',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: True\n"
+        else:
+            if 'auto_bootstrap' in scylla_yaml_contents:
+                p = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = p.sub('auto_bootstrap: False',
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nauto_bootstrap: False\n"
+
+        with open(yaml_dst_path, 'w') as f:
+            f.write(scylla_yaml_contents)
+
+        node.remoter.send_files(src=yaml_dst_path,
+                                dst='/tmp/scylla.yaml')
+        node.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
+
 
 class OpenStackNode(BaseNode):
 
