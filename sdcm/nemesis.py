@@ -209,8 +209,12 @@ class Nemesis(object):
     def reconfigure_monitoring(self):
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
-            targets = [n.private_ip_address for n in self.cluster.nodes]
-            targets += [n.private_ip_address for n in self.loaders.nodes]
+            if len(self.cluster.datacenter) > 1:
+                targets = [n.public_ip_address for n in self.cluster.nodes]
+                targets += [n.public_ip_address for n in self.loaders.nodes]
+            else:
+                targets = [n.private_ip_address for n in self.cluster.nodes]
+                targets += [n.private_ip_address for n in self.loaders.nodes]
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
