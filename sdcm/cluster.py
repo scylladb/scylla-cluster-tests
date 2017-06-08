@@ -1001,7 +1001,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml'):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1021,6 +1021,16 @@ WantedBy=multi-user.target
             # Set rpc_address
             p = re.compile('rpc_address:.*')
             scylla_yaml_contents = p.sub('rpc_address: {0}'.format(self.private_ip_address),
+                                         scylla_yaml_contents)
+        if broadcast:
+            # Set broadcast_address
+            p = re.compile('[# ]*broadcast_address:.*')
+            scylla_yaml_contents = p.sub('broadcast_address: {0}'.format(broadcast),
+                                         scylla_yaml_contents)
+
+            # Set broadcast_rpc_address
+            p = re.compile('[# ]*broadcast_rpc_address:.*')
+            scylla_yaml_contents = p.sub('broadcast_rpc_address: {0}'.format(broadcast),
                                          scylla_yaml_contents)
 
         if cluster_name:
@@ -3167,7 +3177,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
             seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch)
+            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address)
         else:
             node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
         node.remoter.run('sudo systemctl restart scylla-server.service')
