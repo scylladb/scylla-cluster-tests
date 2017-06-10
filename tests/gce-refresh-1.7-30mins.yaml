@@ -1,0 +1,43 @@
+test_duration: 45
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'gce-refresh-1-7'
+failure_post_behavior: destroy
+stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10 -errors ignore -pop seq=1..10000000 -log interval=5
+
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        # the image contains a big sstable: /tmp/keyspace1.standard1.tar.gz
+        gce_image_db: 'https://www.googleapis.com/compute/v1/projects/skilled-adapter-452/global/images/gce-img-100g-sstable-20170622'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 120
+        gce_n_local_ssd_disk_db: 1
+        gce_instance_type_loader: 'n1-standard-2'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-1'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/30/scylla.repo'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+
+
+
+databases: !mux
+    cassandra:
+        db_type: cassandra
+        instance_type_db: 'm3.large'
+    scylla:
+        db_type: scylla
+        instance_type_db: 'c3.large'
