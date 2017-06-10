@@ -997,7 +997,7 @@ WantedBy=multi-user.target
         return errors
 
     def datacenter_setup(self, datacenters):
-        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\n\" >> /etc/scylla/cassandra-rackdc.properties'"
+        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\n\" >> /etc/scylla/cassandra-rackdc.properties'"
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
@@ -2970,6 +2970,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node, seed_address):
+        node.remoter.run('sudo systemctl stop scylla-server.service')
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
         # Sometimes people might set up base images with
@@ -3023,6 +3024,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo systemctl enable scylla-server.service')
         node.remoter.run('sudo systemctl enable scylla-jmx.service')
         node.remoter.run('sudo sync')
+        node.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
+        node.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
 
         if node.private_ip_address != seed_address:
             wait.wait_for(func=lambda: self._seed_node_rebooted is True,
@@ -3181,6 +3184,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         else:
             node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
         node.remoter.run('sudo systemctl restart scylla-server.service')
+        node.remoter.run('nodetool status', verbose=True)
 
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
