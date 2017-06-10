@@ -559,7 +559,8 @@ class ClusterTester(Test):
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
             if len(self.db_cluster.datacenter) > 1:
-                ip = self.db_cluster.get_node_public_ips()[0]
+                ips = [ip for ip in self.db_cluster.get_node_public_ips()]
+                ip = ','.join(ips)
             else:
                 ip = self.db_cluster.get_node_private_ips()[0]
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
