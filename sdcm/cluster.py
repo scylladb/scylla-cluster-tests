@@ -2007,14 +2007,15 @@ class BaseMonitorSet(object):
         Take snapshot for grafana monitor in the end of test
         """
         phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
+        phantomjs_tar = os.path.basename(phantomjs_url)
         if not self.grafana_start_time:
             self.log.error("grafana isn't setup, skip to get snapshot")
             return
         start_time = str(self.grafana_start_time).split('.')[0] + '000'
 
         try:
-            process.run('wget "%s"' % phantomjs_url)
-            process.run('tar xvfj phantomjs-2.1.1-linux-x86_64.tar.bz2',
+            process.run('curl "{}" -o {} -L'.format(phantomjs_url, phantomjs_tar))
+            process.run('tar xvfj {}'.format(phantomjs_tar),
                         verbose=False)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
