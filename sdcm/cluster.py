@@ -2017,7 +2017,7 @@ class BaseMonitorSet(object):
             process.run('tar xvfj phantomjs-2.1.1-linux-x86_64.tar.bz2',
                         verbose=False)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                        "sed -e 's/200);/10000);/' examples/rasterize.js > r.js",
+                        "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
             if not self.scylla_version or '666.development' in self.scylla_version:
                 version = 'master'
