@@ -2031,7 +2031,7 @@ class BaseMonitorSet(object):
                 snapshot_path = os.path.join(self.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                            "bin/phantomjs r.js \"%s\" \"%s\"" % (
+                            "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                              grafana_url, snapshot_path), shell=True)
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',
