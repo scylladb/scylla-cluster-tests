@@ -227,6 +227,15 @@ class Nemesis(object):
                     self.cluster.wait_for_init(node_list=new_nodes)
                     self.reconfigure_monitoring()
 
+    def disrupt_no_corrupt_repair(self):
+        self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
+        self.repair_nodetool_repair()
+
+    def disrupt_major_compaction(self):
+        self._set_current_disruption('MajorCompaction %s' % self.target_node)
+        cmd = 'nodetool -h localhost compact'
+        self._run_nodetool(cmd, self.target_node)
+
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
@@ -343,6 +352,20 @@ class DecommissionMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=True)
+
+
+class NoCorruptRepairMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_no_corrupt_repair()
+
+
+class MajorCompactionMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_major_compaction()
 
 
 class ChaosMonkey(Nemesis):
