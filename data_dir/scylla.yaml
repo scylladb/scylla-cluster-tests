@@ -46,6 +46,19 @@ update_db_binary: ''
 # update_db_packages: $path_of_folder_with_packages
 update_db_packages: ''
 
+es_url: http://ec2-54-89-144-171.compute-1.amazonaws.com:9200/
+es_user:
+es_password:
+
+# UPGRADE TESTS
+# Repo file that is used in upgrade tests( from data_dir). For example:
+# scylla.repo.upgrade_1.6, scylla.repo.upgrade_1.7, etc
+repo_file: 'scylla.repo.upgrade'
+# Major scylla version to update based on 'repo_file'
+# For example: 1.7.rc2, 1.7.0, etc...
+# By default upgrade till latest major version
+new_version: ''
+
 backends: !mux
     libvirt: !mux
         cluster_backend: 'libvirt'

@@ -379,9 +379,11 @@ class UpgradeNemesis(Nemesis):
 
     # upgrade a single node
     def upgrade_node(self, node):
+        repo_file = self.cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
+        new_version = self.cluster.params.get('new_version', None,  '')
         self.log.info('Upgrading a Node')
         orig_ver = node.remoter.run('rpm -qa scylla-server')
-        scylla_repo = get_data_path('scylla.repo.upgrade')
+        scylla_repo = get_data_path(repo_file)
         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
         node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
@@ -391,7 +393,11 @@ class UpgradeNemesis(Nemesis):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
+        if new_version:
+            node.remoter.run('sudo yum install scylla-{0} scylla-server-{0} scylla-jmx-{0} scylla-tools-{0}'
+                             ' scylla-conf-{0} scylla-kernel-conf-{0} scylla-debuginfo-{0} -y'.format(new_version))
+        else:
+            node.remoter.run('sudo yum update scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
         # flush all memtables to SSTables
         node.remoter.run('sudo nodetool drain')
         node.remoter.run('sudo systemctl restart scylla-server.service')
