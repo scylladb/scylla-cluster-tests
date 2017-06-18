@@ -35,12 +35,16 @@ class UpgradeTest(ClusterTester):
     def test_20_minutes(self):
         """
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
+        If upgrade_node_packages defined we specify duration 10 * len(nodes) minutes.
         """
         self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
                                     loaders=self.loaders,
                                     monitoring_set=self.monitors)
         self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
+        duration = 20
+        if self.params.get('upgrade_node_packages'):
+            duration = 10 * len(self.db_cluster.nodes)
+        self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=duration)
 
     def test_20_minutes_rollback(self):
         """

@@ -58,6 +58,11 @@ repo_file: 'scylla.repo.upgrade'
 # For example: 1.7.rc2, 1.7.0, etc...
 # By default upgrade till latest major version
 new_version: ''
+# The new scylla packages will be uploaded to db instance to update the one
+# provided by the ami. This is used when we want to upgrade to a version
+# that is not yet in the repository.
+# upgrade_node_packages: $path_of_folder_with_packages
+upgrade_node_packages: ''
 
 backends: !mux
     libvirt: !mux
