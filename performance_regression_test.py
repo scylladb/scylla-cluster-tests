@@ -107,12 +107,22 @@ class PerformanceRegressionTest(ClusterTester):
     def generate_stats_json(self, results, cmds=[]):
         metrics = {'test_details': {}, 'setup_details': {}, 'versions': {}, 'results': {}}
 
+        is_gce = False
+        for p in self.params.iteritems():
+            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
+                is_gce = True
         for p in self.params.iteritems():
             if p[1] in ['test_duration']:
                 metrics['test_details'][p[1]] = p[2]
             elif p[1] in ['stress_cmd', 'stress_modes']:
                 continue
             else:
+                if is_gce and (p[0], p[1]) in \
+                        [('/run', 'instance_type_loader'),
+                         ('/run', 'instance_type_monitor'),
+                         ('/run/databases/scylla', 'instance_type_db')]:
+                    # exclude these params from gce run
+                    continue
                 metrics['setup_details'][p[1]] = p[2]
 
         versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla')\
@@ -135,6 +145,16 @@ class PerformanceRegressionTest(ClusterTester):
         metrics['test_details']['test_name'] = self.params.id.name
         metrics['test_details']['sct_git_commit'] = \
             subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+
+        job_name = os.environ.get('JOB_NAME', 'local_run')
+        metrics['test_details']['job_name'] = job_name
+        if os.environ.get('BUILD_URL'):
+            metrics['test_details']['job_url'] = os.environ.get('BUILD_URL', '')
+        if self.monitors:
+            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
+            metrics['test_details']['prometheus_report'] = url_s3 + ".zip"
+            metrics['test_details']['grafana_snapshot'] = url_s3 + ".png"
+
         metrics['results']['stats'] = results
 
         if 'es_password' in metrics['setup_details']:
@@ -234,7 +254,7 @@ class PerformanceRegressionTest(ClusterTester):
         }
         """
         average_stats = {}
-
+        total_stats = {}
         # calculate average stats
         for key in metrics['results']['stats'][0].keys():
             summary = 0
@@ -244,10 +264,14 @@ class PerformanceRegressionTest(ClusterTester):
                 except:
                     average_stats[key] = stat[key]
             if summary != summary:
+                # handle nan float value
                 average_stats[key] = None
-            elif key not in average_stats:
+            if key not in average_stats:
                 average_stats[key] = round(summary / len(metrics['results']['stats']), 1)
+                if key in ['op rate', 'Total errors']:
+                    total_stats.update({key: summary})
         metrics['results']['stats_average'] = average_stats
+        metrics['results']['stats_total'] = total_stats
 
         for section_k, section_v in metrics.iteritems():
             # trying to convert str values into int/float
@@ -268,7 +292,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.log.info(json.dumps(metrics, indent=4))
         if self.params.get('es_url'):
             url = '%s/performanceregression/%s/%s_%s?pretty' % \
-                  (self.params.get('es_url'), metrics['test_details']['test_name'],
+                  (self.params.get('es_url').rstrip('/'), metrics['test_details']['test_name'],
                    metrics['setup_details']['ami_id_db_scylla_desc'], metrics['test_details']['time_completed'])
 
             headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}

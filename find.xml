@@ -1,9 +1,6 @@
 <application>
   <component name="FindSettings">
-    <option name="customScope" value="Directory '[scylla-cluster-tests] - /home/larisau/dev/scylla-cluster-tests'" />
-    <option name="defaultScopeName" value="Directory '[scylla-cluster-tests] - /home/larisau/dev/scylla-cluster-tests'" />
     <option name="localCaseSensitive" value="true" />
     <option name="LOCAL_CASE_SENSITIVE_SEARCH" value="true" />
-    <option name="SEARCH_SCOPE" value="Directory '[scylla-cluster-tests] - /home/larisau/dev/scylla-cluster-tests'" />
   </component>
 </application>
