@@ -290,7 +290,10 @@ class ClusterTester(Test):
         user_credentials = self.params.get('user_credentials_path', None)
         self.credentials = GCECredentials(key_file=user_credentials)
 
-        self.db_cluster = ScyllaGCECluster(gce_image=self.params.get('gce_image'),
+        gce_image_db = self.params.get('gce_image_db')
+        if not gce_image_db:
+            gce_image_db = self.params.get('gce_image')
+        self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
                                            gce_image_type=db_info['disk_type'],
                                            gce_image_size=db_info['disk_size'],
                                            gce_n_local_ssd=db_info['n_local_ssd'],
