@@ -2202,7 +2202,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
@@ -2747,7 +2747,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
@@ -2904,7 +2904,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+        if result.exit_status == 0:
+            node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel')
+        else:
+            node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
