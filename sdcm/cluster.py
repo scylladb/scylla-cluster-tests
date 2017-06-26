@@ -524,7 +524,7 @@ class BaseNode(object):
         process.run('rm -rf scylla-grafana-monitoring/')
         process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
         process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
-        if '666.666.development' in scylla_version:
+        if '666.development' in scylla_version:
             scylla_version = 'master'
         elif scylla_version:
             scylla_version = re.findall("^\w+.\w+", scylla_version)[0]
@@ -2007,19 +2007,20 @@ class BaseMonitorSet(object):
         Take snapshot for grafana monitor in the end of test
         """
         phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
+        phantomjs_tar = os.path.basename(phantomjs_url)
         if not self.grafana_start_time:
             self.log.error("grafana isn't setup, skip to get snapshot")
             return
         start_time = str(self.grafana_start_time).split('.')[0] + '000'
 
         try:
-            process.run('wget "%s"' % phantomjs_url)
-            process.run('tar xvfj phantomjs-2.1.1-linux-x86_64.tar.bz2',
+            process.run('curl "{}" -o {} -L'.format(phantomjs_url, phantomjs_tar))
+            process.run('tar xvfj {}'.format(phantomjs_tar),
                         verbose=False)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                        "sed -e 's/200);/10000);/' examples/rasterize.js > r.js",
+                        "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
-            if not self.scylla_version or '666.666.development' in self.scylla_version:
+            if not self.scylla_version or '666.development' in self.scylla_version:
                 version = 'master'
             else:
                 scylla_version = re.findall("^\w+.\w+", self.scylla_version)[0]
@@ -2031,7 +2032,7 @@ class BaseMonitorSet(object):
                 snapshot_path = os.path.join(self.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                            "bin/phantomjs r.js \"%s\" \"%s\"" % (
+                            "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                              grafana_url, snapshot_path), shell=True)
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',
@@ -2201,7 +2202,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
@@ -2746,7 +2747,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
@@ -2903,7 +2904,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo yum remove -y abrt')
         # Let's re-create the yum database upon update
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y')
+        result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+        if result.exit_status == 0:
+            node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel')
+        else:
+            node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
