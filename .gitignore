@@ -1,2 +1,6 @@
 *.pyc
 .idea/*
+ide.general.xml
+inspection/Default.xml
+codestyles/Default.xml
+_linux/*
