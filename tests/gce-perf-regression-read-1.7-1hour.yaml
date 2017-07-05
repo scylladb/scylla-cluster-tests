@@ -7,6 +7,7 @@ failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: '1.7.rc2'
 #ip_ssh_connections: 'private'
+sc_user_profiles: cust_a/features/doc1.yaml cust_a/offline/ctrs.yaml cust_b/events.yaml cust_c/group.yaml cust_e/events.yaml cust_s/case1.yaml cust_s/case2.yaml
 
 backends: !mux
     gce: !mux

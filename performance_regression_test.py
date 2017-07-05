@@ -182,18 +182,16 @@ class PerformanceRegressionTest(ClusterTester):
                                           'total-partitions', 'total-err'))
 
         test_xml = ""
-        for single_result in results:
-            self.display_single_result(single_result)
-            test_xml += self.get_test_xml(single_result, test_name=test_name)
+        try:
+            for single_result in results:
+                self.display_single_result(single_result)
+                test_xml += self.get_test_xml(single_result, test_name=test_name)
 
-        f = open(os.path.join(self.logdir,
-                              'jenkins_perf_PerfPublisher.xml'), 'w')
-        content = """<report name="%s report" categ="none">
-%s
-</report>""" % (test_name, test_xml)
-
-        f.write(content)
-        f.close()
+            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w') as f:
+                content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
+                f.write(content)
+        except Exception as ex:
+            self.log.debug('Failed to display results: {}'.format(ex))
 
     def add_stress_cmd_params(self, result, cmd, prefix=''):
         # parsing stress command and return dict with params
@@ -316,10 +314,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=100)
         results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=100)
 
-        try:
-            self.display_results(results, test_name='test_write')
-        except:
-            pass
+        self.display_results(results, test_name='test_write')
         self.generate_stats_json(results, [base_cmd_w])
 
     def test_read(self):
@@ -345,10 +340,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
-        try:
-            self.display_results(results, test_name='test_read')
-        except:
-            pass
+        self.display_results(results, test_name='test_read')
         self.generate_stats_json(results, [base_cmd_w, base_cmd_r])
 
     def test_mixed(self):
@@ -375,11 +367,27 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
-        try:
-            self.display_results(results, test_name='test_mixed')
-        except:
-            pass
+        self.display_results(results, test_name='test_mixed')
         self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
+
+    def test_user_profile(self):
+        """
+        Run workload using user profile(-s)
+        """
+        user_profiles = self.params.get('sc_user_profiles')
+        assert user_profiles is not None, 'No user profiles defined!'
+        for cs_profile in user_profiles.split():
+            assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+            self.log.debug('Run stress test with user profile {}'.format(cs_profile))
+            profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
+            for op in ('insert', 'get'):
+                stress_cmd = ("cassandra-stress user profile={} 'ops({}=1)' duration=10m -rate threads=100".format(
+                    profile_dst, op))
+                stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
+                results = self.get_stress_results(queue=stress_queue, stress_num=2)
+                self.display_results(results, test_name='test_write')
+                self.generate_stats_json(results, [stress_cmd])
+
 
 if __name__ == '__main__':
     main()
