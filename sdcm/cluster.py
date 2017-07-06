@@ -3058,7 +3058,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
         if not node_list[0].scylla_version:
             result = node_list[0].remoter.run("scylla --version")
-            node_list[0].scylla_version = result.stdout
+            for node in node_list:
+                node.scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
