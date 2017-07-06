@@ -50,6 +50,7 @@ from .remote import Remote
 from .remote import disable_master_ssh
 from . import data_path
 from . import wait
+from .utils import get_monitor_version
 
 from .collectd import CassandraCollectdSetup
 from .collectd import ScyllaCollectdSetup
@@ -521,14 +522,8 @@ class BaseNode(object):
             process.run('sudo apt-get --assume-yes install git')
         else:
             process.run('sudo yum install git -y')
-        process.run('rm -rf scylla-grafana-monitoring/')
-        process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
-        process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
-        if '666.development' in scylla_version:
-            scylla_version = 'master'
-        elif scylla_version:
-            scylla_version = re.findall("^\w+.\w+", scylla_version)[0]
 
+        scylla_version = get_monitor_version(scylla_version, clone=True)
         for i in glob.glob('data_dir/grafana/*.%s.json' % scylla_version):
             json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
 
@@ -2020,11 +2015,8 @@ class BaseMonitorSet(object):
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
-            if not self.scylla_version or '666.development' in self.scylla_version:
-                version = 'master'
-            else:
-                scylla_version = re.findall("^\w+.\w+", self.scylla_version)[0]
-                version = scylla_version.replace('.', '-')
+            scylla_version = get_monitor_version(self.scylla_version)
+            version = scylla_version.replace('.', '-')
 
             for n, node in enumerate(self.nodes):
                 grafana_url = "http://%s:3000/dashboard/db/scylla-per-server-metrics-%s?from=%s&to=now" % (
