@@ -377,6 +377,15 @@ class BaseNode(object):
         # enable bootstrap. So addition means not the first set of node.
         self.is_addition = False
         self.scylla_version = ''
+        self.is_enterprise = None
+
+    def scylla_pkg(self):
+        if self.is_enterprise is None:
+            result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+            self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                          'No matches found' not in result.stdout) else False
+
+        return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
     def file_exists(self, file_path):
         try:
@@ -2199,7 +2208,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
-        node.remoter.run('sudo yum install -y scylla')
+        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                    dst=yaml_dst_path)
 
@@ -2259,7 +2268,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self._node_setup(node=node, seed_address=seed_address)
             node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y scylla-gdb',
+            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
             queue.put(node)
             queue.task_done()
@@ -2329,7 +2338,7 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %
                              (self.params.get('scylla_repo'), yum_config_path))
-            node.remoter.run('sudo yum install -y scylla-tools')
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.wait_cs_installed(verbose=verbose)
             node.remoter.run('sudo yum install -y screen')
             if db_node_address is not None:
@@ -2744,7 +2753,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
-        node.remoter.run('sudo yum install -y scylla')
+        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                    dst=yaml_dst_path)
 
@@ -2808,7 +2817,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self._node_setup(node=node, seed_address=seed_address)
             node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y scylla-gdb',
+            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
             queue.put(node)
             queue.task_done()
@@ -2905,7 +2914,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
-        node.remoter.run('sudo yum install -y scylla')
+        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
                                    dst=yaml_dst_path)
 
@@ -3012,7 +3021,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self._node_setup(node=node, seed_address=seed_address)
             node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y scylla-gdb',
+            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
             queue.put(node)
             queue.task_done()
@@ -3049,7 +3058,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
         if not node_list[0].scylla_version:
             result = node_list[0].remoter.run("scylla --version")
-            node_list[0].scylla_version = result.stdout
+            for node in node_list:
+                node.scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
@@ -3135,7 +3145,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             if self._experimental():
                 self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y scylla-gdb',
+            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
             queue.put(node)
             queue.task_done()
@@ -3317,7 +3327,7 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %
                              (self.params.get('scylla_repo'), yum_config_path))
-            node.remoter.run('sudo yum install -y scylla-tools')
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.wait_cs_installed(verbose=verbose)
             node.remoter.run('sudo yum install -y screen')
             if db_node_address is not None:
@@ -3381,7 +3391,7 @@ class LoaderSetGCE(GCECluster, BaseLoaderSet):
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %
                              (self.params.get('scylla_repo'), yum_config_path))
-            node.remoter.run('sudo yum install -y scylla-tools')
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.wait_cs_installed(verbose=verbose)
             node.remoter.run('sudo yum install -y screen')
             if db_node_address is not None:
