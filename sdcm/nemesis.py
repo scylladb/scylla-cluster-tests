@@ -22,6 +22,12 @@ import time
 import datetime
 
 from avocado.utils import process
+from cassandra import ConsistencyLevel
+from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster as ClusterDriver
+from cassandra.cluster import NoHostAvailable
+from cassandra.policies import RetryPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy
 
 from .data_path import get_data_path
 from .log import SDCMAdapter
@@ -265,6 +271,7 @@ def log_time_elapsed_and_status(method):
     :param method: Remote method to wrap.
     :return: Wrapped method.
     """
+
     def print_nodetool_status(self):
         for node in self.cluster.nodes:
             try:
@@ -395,7 +402,7 @@ class UpgradeNemesis(Nemesis):
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
             node.remoter.run('sudo nodetool snapshot')
-            # update *developmen* packages
+            # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development* | true')
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
@@ -441,6 +448,28 @@ class UpgradeNemesis(Nemesis):
             self.upgrade_node(node)
 
         self.log.info('Upgrade Nemesis end')
+
+
+class UpgradeNemesisOneNode(UpgradeNemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.log.info('UpgradeNemesisOneNode begin')
+        # get the number of nodes
+        # l = len(self.cluster.nodes)
+        # prepare an array containing the indexes
+        # indexes = [x for x in range(l)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        # random.shuffle(indexes)
+
+        # upgrade all the nodes in random order
+        # for i in indexes:
+        #     node = self.cluster.nodes[i]
+        #     self.upgrade_node(node)
+        self.upgrade_node(self.cluster.node_to_upgrade)
+
+        self.log.info('UpgradeNemesisOneNode end')
 
 
 class RollbackNemesis(Nemesis):
