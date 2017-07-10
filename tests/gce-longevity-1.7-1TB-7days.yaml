@@ -6,7 +6,7 @@ n_loaders: 1
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
-user_prefix: '1TB-longevity-1-7-gce'
+user_prefix: '1tera-longevity-1-7-gce'
 failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
