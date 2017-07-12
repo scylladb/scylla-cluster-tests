@@ -1,12 +1,22 @@
-test_duration: 70
+test_duration: 800
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
-user_prefix: 'perf-regression-gce-1-7'
+user_prefix: 'perf-regression-profiles-1-7'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: '1.7.rc2'
-#ip_ssh_connections: 'private'
+experimental: 'true'
+cs_duration: '60m'
+cs_user_profiles:
+    cust_a/analytics/counters.yaml
+    cust_a/features/doc1.yaml
+    cust_a/offline/ctrs.yaml
+    cust_b/events.yaml
+    cust_c/group.yaml
+    cust_e/events.yaml
+    cust_s/case1.yaml
+    cust_s/case2.yaml
 
 backends: !mux
     gce: !mux
@@ -32,7 +42,22 @@ backends: !mux
         us_east_1:
           gce_datacenter: 'us-east1-b'
 
-
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 'c4.2xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-d934e980'
+            ami_id_db_scylla: 'ami-7e137d68'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-7e137d68'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-3eff0028'
+            ami_db_cassandra_user: 'ubuntu'
+            ami_id_monitor: 'ami-3d101f2a'
+            ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
