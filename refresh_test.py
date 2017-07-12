@@ -13,12 +13,11 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-import time
+import random
 
 from avocado import main
 from sdcm.tester import ClusterTester
-from sdcm.nemesis import RefreshMonkey
-from sdcm.nemesis import RefreshBigMonkey
+from sdcm.utils import remote_get_file
 
 
 class RefreshTest(ClusterTester):
@@ -26,33 +25,41 @@ class RefreshTest(ClusterTester):
     Nodetool refresh after uploading lot of data to a cluster with running load in the background.
     :avocado: enable
     """
-    def test_refresh_small_node(self):
-        self.db_cluster.add_nemesis(nemesis=RefreshMonkey,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
+    def get_random_target(self):
+        return random.choice(self.db_cluster.nodes)
 
+    def prepare_sstable(self, node):
+        self.run_stress_thread(stress_cmd=self.params.get('prepare_stress_cmd'),
+                               stress_num=1,
+                               keyspace_num=1)
+        sstable_file = self.params.get('sstable_file')
+        if self.params.get('skip_download', default='').lower() != 'true':
+            remote_get_file(node.remoter,
+                            self.params.get('sstable_url'),
+                            self.params.get('sstable_file'),
+                            hash_expected=self.params.get('sstable_md5'),
+                            retries=2)
+        result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+        upload_dir = result.stdout.split()[0]
+        node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(sstable_file, upload_dir))
+
+    def nodetool_refresh(self, node):
+
+        self.log.debug('Make sure keyspace1.standard1 exists')
+        result = node.remoter.run('nodetool --host localhost cfstats keyspace1.standard1')
+        if result.exit_status == 0:
+            node.remoter.run('nodetool --host localhost refresh -- keyspace1 standard1')
+            cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
+            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+
+    def test_refresh_node(self):
+        node = self.get_random_target()
+        self.prepare_sstable(node)
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
                                               stress_num=2,
                                               keyspace_num=1)
-        time.sleep(30)
-        self.db_cluster.start_nemesis()
-        self.db_cluster.stop_nemesis(timeout=None)
-
-        self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
-
-    def test_refresh_big_node(self):
-        self.db_cluster.add_nemesis(nemesis=RefreshBigMonkey,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
-
-        # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              stress_num=2,
-                                              keyspace_num=1)
-        time.sleep(30)
-        self.db_cluster.start_nemesis()
-        self.db_cluster.stop_nemesis(timeout=None)
+        self.nodetool_refresh(node)
 
         self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
 
