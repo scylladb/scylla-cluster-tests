@@ -31,6 +31,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 
 from .data_path import get_data_path
 from .log import SDCMAdapter
+from . import wait
 
 from sdcm.utils import remote_get_file
 
@@ -274,6 +275,46 @@ class Nemesis(object):
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
             node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
 
+    def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
+        if all_nodes:
+            nodes = self.cluster.nodes
+        else:
+            nodes = [self.target_node]
+        self._set_current_disruption('Enospc test on {}'.format(nodes))
+        for node in nodes:
+            result = node.remoter.run('cat /proc/mounts')
+            if '/var/lib/scylla' not in result.stdout:
+                self.log.error("Scylla doesn't use an individual storage, skip enospc test")
+                continue
+
+            # get the size of free space (default unit: KB)
+            result = node.remoter.run("df -l|grep '/var/lib/scylla'")
+            free_space_size = result.stdout.split()[3]
+
+            occupy_space_size = int(free_space_size) * 99 / 100
+            occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_99percent'.format(occupy_space_size)
+            self.log.debug('Cost 99% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+
+            # check original ENOSPC error
+            orig_errors = node.search_database_log('No space left on device')
+            result = node.remoter.run(occupy_space_cmd, ignore_status=True, verbose=True)
+            wait.wait_for(func=lambda: len(node.search_database_log('No space left on device')) > len(orig_errors),
+                          step=5,
+                          text='Wait for new ENOSPC error occurs in database')
+
+            self.log.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+            time.sleep(sleep_time)
+
+            self.log.debug('Delete occupy_99percent file to release space to scylla-server')
+            node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_99percent')
+
+            self.log.debug('Sleep a while before restart scylla-server')
+            time.sleep(sleep_time / 2)
+            node.remoter.run('sudo systemctl restart scylla-server.service')
+
+            self.log.debug('Sleep {} seconds to wait scylla-server to recover'.format(sleep_time))
+            time.sleep(sleep_time)
+
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
@@ -419,6 +460,20 @@ class RefreshBigMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=True, skip_download=True)
+
+
+class EnospcMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_enospc()
+
+
+class EnospcAllNodesMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_enospc(all_nodes=True)
 
 
 class ChaosMonkey(Nemesis):
