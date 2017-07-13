@@ -345,10 +345,15 @@ class Nemesis(object):
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
-    def call_random_disrupt_method(self):
-        disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                           attr[0].startswith('disrupt_') and
-                           callable(attr[1])]
+    def call_random_disrupt_method(self, disrupt_methods=None):
+        if not disrupt_methods:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0].startswith('disrupt_') and
+                               callable(attr[1])]
+        else:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0] in disrupt_methods and
+                               callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
         disrupt_method()
 
