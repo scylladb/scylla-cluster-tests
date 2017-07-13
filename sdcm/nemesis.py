@@ -311,9 +311,7 @@ class Nemesis(object):
             self.log.debug('Sleep a while before restart scylla-server')
             time.sleep(sleep_time / 2)
             node.remoter.run('sudo systemctl restart scylla-server.service')
-
-            self.log.debug('Sleep {} seconds to wait scylla-server to recover'.format(sleep_time))
-            time.sleep(sleep_time)
+            node.wait_db_up()
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
