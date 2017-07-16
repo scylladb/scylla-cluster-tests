@@ -291,7 +291,7 @@ class Nemesis(object):
             result = node.remoter.run("df -l|grep '/var/lib/scylla'")
             free_space_size = result.stdout.split()[3]
 
-            occupy_space_size = int(free_space_size) * 99 / 100
+            occupy_space_size = int(free_space_size) * 99.99 / 100
             occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_99percent'.format(occupy_space_size)
             self.log.debug('Cost 99% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
 
