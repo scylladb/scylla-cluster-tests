@@ -512,6 +512,13 @@ class ChaosMonkey(Nemesis):
         self.call_random_disrupt_method()
 
 
+class MdcChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair', 'disrupt_nodetool_decommission'])
+
+
 class UpgradeNemesis(Nemesis):
 
     # upgrade a single node
