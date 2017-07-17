@@ -2970,7 +2970,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node, seed_address):
-        node.remoter.run('sudo systemctl stop scylla-server.service')
+        node.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
         # Sometimes people might set up base images with
