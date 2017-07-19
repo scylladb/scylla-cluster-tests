@@ -1810,16 +1810,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None):
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[]):
         stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
-        stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
-                     stress_cmd +\
-                     "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
-        # We'll save a script with the last c-s command executed on loaders
-        stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
-                                               content='%s\n' % stress_cmd)
-        self.log.info('Stress script content:\n%s' % stress_cmd)
-        stress_script.save()
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
@@ -1828,7 +1820,18 @@ class BaseLoaderSet(object):
                 cs_profile.save()
         queue = Queue.Queue()
 
-        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile):
+        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
+            first_node = [n for n in node_list if n.dc_idx == loader_idx % 3][0]
+            stress_cmd += " -node {}".format(first_node.private_ip_address)
+            stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
+                         stress_cmd +\
+                         "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
+            # We'll save a script with the last c-s command executed on loaders
+            stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
+                                                   content='%s\n' % stress_cmd)
+            self.log.info('Stress script content:\n%s' % stress_cmd)
+            stress_script.save()
+
             try:
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
@@ -1869,7 +1872,7 @@ class BaseLoaderSet(object):
                 for ks_idx in range(1, keyspace_num + 1):
                     setup_thread = threading.Thread(target=node_run_stress,
                                                     args=(loader, loader_idx,
-                                                          cpu_idx, ks_idx, profile))
+                                                          cpu_idx, ks_idx, profile, stress_cmd))
                     setup_thread.daemon = True
                     setup_thread.start()
                     time.sleep(30)
