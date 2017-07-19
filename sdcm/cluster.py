@@ -1972,8 +1972,9 @@ class BaseMonitorSet(object):
 
     grafana_start_time = None
     scylla_version = ''
+    is_enterprise = None
 
-    def wait_for_init(self, targets, verbose=False, scylla_version=''):
+    def wait_for_init(self, targets, verbose=False, scylla_version='', is_enterprise=None):
         queue = Queue.Queue()
 
         def node_setup(node):
@@ -1985,8 +1986,9 @@ class BaseMonitorSet(object):
             node.install_prometheus()
             node.setup_prometheus(targets=targets)
             node.install_grafana()
-            node.setup_grafana(scylla_version)
             self.scylla_version = scylla_version
+            self.is_enterprise = is_enterprise
+            node.setup_grafana(scylla_version)
             # The time will be used in url of Grafana monitor,
             # the data from this point to the end of test will
             # be captured.
@@ -2035,9 +2037,10 @@ class BaseMonitorSet(object):
             scylla_version = get_monitor_version(self.scylla_version)
             version = scylla_version.replace('.', '-')
 
+            scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
-                grafana_url = "http://%s:3000/dashboard/db/scylla-per-server-metrics-%s?from=%s&to=now" % (
-                              node.public_ip_address, version, start_time)
+                grafana_url = "http://%s:3000/dashboard/db/%s-per-server-metrics-%s?from=%s&to=now" % (
+                              node.public_ip_address, scylla_pkg, version, start_time)
                 snapshot_path = os.path.join(self.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
@@ -2069,7 +2072,7 @@ class NoMonitorSet(object):
     def __str__(self):
         return 'NoMonitorSet'
 
-    def wait_for_init(self, targets, verbose=False, scylla_version=''):
+    def wait_for_init(self, targets, verbose=False, scylla_version='', is_enterprise=None):
         del targets
         del verbose
         self.log.info('Monitor nodes disabled for this run')
@@ -2314,6 +2317,10 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        if not node_list[0].scylla_version:
+            result = node_list[0].remoter.run("scylla --version")
+            for node in node_list:
+                node.scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
@@ -2862,6 +2869,10 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        if not node_list[0].scylla_version:
+            result = node_list[0].remoter.run("scylla --version")
+            for node in node_list:
+                node.scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
@@ -3186,6 +3197,10 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         self.get_seed_nodes()
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        if not node_list[0].scylla_version:
+            result = node_list[0].remoter.run("scylla --version")
+            for node in node_list:
+                node.scylla_version = result.stdout
 
     def destroy(self):
         self.stop_nemesis()
