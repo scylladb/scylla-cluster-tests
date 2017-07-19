@@ -46,7 +46,7 @@ update_db_binary: ''
 # update_db_packages: $path_of_folder_with_packages
 update_db_packages: ''
 
-es_url: http://ec2-54-89-144-171.compute-1.amazonaws.com:9200/
+es_url:
 es_user:
 es_password:
 
