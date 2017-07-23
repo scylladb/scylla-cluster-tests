@@ -13,3 +13,8 @@ awscli==1.10.47
 aexpect==1.2.0
 cassandra-driver==2.7.2
 apache-libcloud==1.4.0
+yaml
+requests
+elasticsearch
+sortedcontainers
+jinja2

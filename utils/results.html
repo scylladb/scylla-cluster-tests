@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>TEST COMPARE RESULTS</title>
+</head>
+
+<body>
+    {% for cmp_res in res_list %}
+        <h3>{{ cmp_res.test_type }}</h3>
+        <h3>Compare {{ cmp_res.version_src }} with {{ cmp_res.version_dst }}</h3>
+        {% for param, param_res in cmp_res.res.iteritems() %}
+            <div>
+                <span>{{ param }}: </span><span><strong>{{ param_res }}</strong></span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+</body>
+</html>
