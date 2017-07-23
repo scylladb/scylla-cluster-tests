@@ -44,12 +44,12 @@ class UpgradeTest(ClusterTester):
             # order_by_with_in_test: Check that order-by works with IN
             {
                 'create_tables': ["""
-                      CREATE TABLE order_by_with_in_test(
-                          my_id varchar,
-                          col1 int,
-                          value varchar,
-                          PRIMARY KEY (my_id, col1)
-                      )"""],
+                              CREATE TABLE order_by_with_in_test(
+                                  my_id varchar,
+                                  col1 int,
+                                  value varchar,
+                                  PRIMARY KEY (my_id, col1)
+                              )"""],
                 'truncates': ['TRUNCATE order_by_with_in_test'],
                 'inserts': ["INSERT INTO order_by_with_in_test(my_id, col1, value) VALUES ( 'key1', 1, 'a')",
                             "INSERT INTO order_by_with_in_test(my_id, col1, value) VALUES ( 'key2', 3, 'c')",
@@ -69,11 +69,11 @@ class UpgradeTest(ClusterTester):
             # static_cf_test: Test static CF syntax
             {
                 'create_tables': ["""CREATE TABLE static_cf_test (
-                        userid uuid PRIMARY KEY,
-                        firstname text,
-                        lastname text,
-                        age int
-                    );"""],
+                                userid uuid PRIMARY KEY,
+                                firstname text,
+                                lastname text,
+                                age int
+                            );"""],
                 'truncates': ['TRUNCATE static_cf_test'],
                 'inserts': [
                     "INSERT INTO static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -92,11 +92,11 @@ class UpgradeTest(ClusterTester):
             # static_cf_test_batch: Test static CF syntax with batch
             {
                 'create_tables': ["""CREATE TABLE static_cf_test_batch (
-                    userid uuid PRIMARY KEY,
-                    firstname text,
-                    lastname text,
-                    age int
-                );"""],
+                            userid uuid PRIMARY KEY,
+                            firstname text,
+                            lastname text,
+                            age int
+                        );"""],
                 'truncates': ['TRUNCATE static_cf_test_batch'],
                 'inserts': [
                     "INSERT INTO static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -118,11 +118,11 @@ class UpgradeTest(ClusterTester):
             # noncomposite_static_cf_test: Test non-composite static CF syntax
             {
                 'create_tables': ["""CREATE TABLE noncomposite_static_cf_test (
-                        userid uuid PRIMARY KEY,
-                        firstname ascii,
-                        lastname ascii,
-                        age int
-                    ) WITH COMPACT STORAGE;"""],
+                                userid uuid PRIMARY KEY,
+                                firstname ascii,
+                                lastname ascii,
+                                age int
+                            ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE noncomposite_static_cf_test'],
                 'inserts': [
                     "INSERT INTO noncomposite_static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -143,11 +143,11 @@ class UpgradeTest(ClusterTester):
             # noncomposite_static_cf_test_batch: Test non-composite static CF syntax with batch
             {
                 'create_tables': ["""CREATE TABLE noncomposite_static_cf_test_batch (
-                        userid uuid PRIMARY KEY,
-                        firstname ascii,
-                        lastname ascii,
-                        age int
-                    ) WITH COMPACT STORAGE;"""],
+                                userid uuid PRIMARY KEY,
+                                firstname ascii,
+                                lastname ascii,
+                                age int
+                            ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE noncomposite_static_cf_test_batch'],
                 'inserts': [
                     "INSERT INTO noncomposite_static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -168,11 +168,11 @@ class UpgradeTest(ClusterTester):
             # dynamic_cf_test: Test non-composite dynamic CF syntax
             {
                 'create_tables': ["""CREATE TABLE dynamic_cf_test (
-                        userid uuid,
-                        url text,
-                        time bigint,
-                        PRIMARY KEY (userid, url)
-                    ) WITH COMPACT STORAGE;"""],
+                                userid uuid,
+                                url text,
+                                time bigint,
+                                PRIMARY KEY (userid, url)
+                            ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE dynamic_cf_test'],
                 'inserts': [
                     "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (550e8400-e29b-41d4-a716-446655440000, 'http://foo.bar', 42)",
@@ -198,12 +198,12 @@ class UpgradeTest(ClusterTester):
             # dense_cf_test: Test composite 'dense' CF syntax
             {
                 'create_tables': ["""CREATE TABLE dense_cf_test (
-                              userid uuid,
-                              ip text,
-                              port int,
-                              time bigint,
-                              PRIMARY KEY (userid, ip, port)
-                                ) WITH COMPACT STORAGE;"""],
+                                      userid uuid,
+                                      ip text,
+                                      port int,
+                                      time bigint,
+                                      PRIMARY KEY (userid, ip, port)
+                                        ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE dense_cf_test'],
                 'inserts': [
                     "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.1', 80, 42)",
@@ -246,13 +246,13 @@ class UpgradeTest(ClusterTester):
             # sparse_cf_test: Test composite 'sparse' CF syntax
             {
                 'create_tables': ["""CREATE TABLE sparse_cf_test (
-                        userid uuid,
-                        posted_month int,
-                        posted_day int,
-                        body ascii,
-                        posted_by ascii,
-                        PRIMARY KEY (userid, posted_month, posted_day)
-                    );"""],
+                                userid uuid,
+                                posted_month int,
+                                posted_day int,
+                                body ascii,
+                                posted_by ascii,
+                                PRIMARY KEY (userid, posted_month, posted_day)
+                            );"""],
                 'truncates': ['TRUNCATE sparse_cf_test'],
                 'inserts': [
                     "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES (550e8400-e29b-41d4-a716-446655440000, 1, 12, 'Something else', 'Frodo Baggins')",
@@ -277,11 +277,11 @@ class UpgradeTest(ClusterTester):
             # limit_ranges_test: Validate LIMIT option for 'range queries' in SELECT statements
             {
                 'create_tables': ["""CREATE TABLE limit_ranges_test (
-                        userid int,
-                        url text,
-                        time bigint,
-                        PRIMARY KEY (userid, url)
-                    ) WITH COMPACT STORAGE;"""],
+                                userid int,
+                                url text,
+                                time bigint,
+                                PRIMARY KEY (userid, url)
+                            ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE limit_ranges_test'],
                 'inserts': [
                     "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(id, tld)
@@ -298,11 +298,11 @@ class UpgradeTest(ClusterTester):
             # limit_multiget_test: Validate LIMIT option for 'multiget' in SELECT statements
             {
                 'create_tables': ["""CREATE TABLE limit_multiget_test (
-                        userid int,
-                        url text,
-                        time bigint,
-                        PRIMARY KEY (userid, url)
-                    ) WITH COMPACT STORAGE;"""],
+                                userid int,
+                                url text,
+                                time bigint,
+                                PRIMARY KEY (userid, url)
+                            ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE limit_multiget_test'],
                 'inserts': [
                     "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(id,
@@ -399,11 +399,11 @@ class UpgradeTest(ClusterTester):
             # indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause
             {
                 'create_tables': ["""
-                        CREATE TABLE indexed_with_eq_test (
-                          userid uuid PRIMARY KEY,
-                          firstname text,
-                          lastname text,
-                          age int);"""],
+                                CREATE TABLE indexed_with_eq_test (
+                                  userid uuid PRIMARY KEY,
+                                  firstname text,
+                                  lastname text,
+                                  age int);"""],
                 'truncates': ['CREATE INDEX byAge ON indexed_with_eq_test(age);'],
                 'inserts': [
                     "INSERT INTO indexed_with_eq_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -422,10 +422,10 @@ class UpgradeTest(ClusterTester):
             # select_key_in_test: Query for KEY IN (...)
             {
                 'create_tables': ["""CREATE TABLE select_key_in_test (
-                          userid uuid PRIMARY KEY,
-                          firstname text,
-                          lastname text,
-                          age int);"""],
+                                  userid uuid PRIMARY KEY,
+                                  firstname text,
+                                  lastname text,
+                                  age int);"""],
                 'truncates': ['TRUNCATE select_key_in_test'],
                 'inserts': [
                     "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -442,11 +442,11 @@ class UpgradeTest(ClusterTester):
             # exclusive_slice_test: Test SELECT respects inclusive and exclusive bounds
             {
                 'create_tables': ["""CREATE TABLE exclusive_slice_test (
-                          k int,
-                          c int,
-                          v int,
-                          PRIMARY KEY (k, c)
-                            ) WITH COMPACT STORAGE;"""],
+                                  k int,
+                                  c int,
+                                  v int,
+                                  PRIMARY KEY (k, c)
+                                    ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE exclusive_slice_test'],
                 'inserts': [
                     """BEGIN BATCH
@@ -486,10 +486,10 @@ class UpgradeTest(ClusterTester):
             # in_clause_wide_rows_test: Check IN support for 'wide rows' in SELECT statement
             {
                 'create_tables': ["""CREATE TABLE in_clause_wide_rows_test1 (
-                                                k int,
-                                                c int,
-                                                v int,
-                                                PRIMARY KEY (k, c)) WITH COMPACT STORAGE;""",
+                                                        k int,
+                                                        c int,
+                                                        v int,
+                                                        PRIMARY KEY (k, c)) WITH COMPACT STORAGE;""",
                                   """CREATE TABLE in_clause_wide_rows_test2 (
                                         k int,
                                         c1 int,
@@ -536,11 +536,11 @@ class UpgradeTest(ClusterTester):
             # order_by_test: Check ORDER BY support in SELECT statement
             {
                 'create_tables': ["""CREATE TABLE order_by_test1 (
-                        k int,
-                        c int,
-                        v int,
-                        PRIMARY KEY (k, c)
-                    ) WITH COMPACT STORAGE;""",
+                                k int,
+                                c int,
+                                v int,
+                                PRIMARY KEY (k, c)
+                            ) WITH COMPACT STORAGE;""",
                                   """CREATE TABLE order_by_test2 (
                 k int,
                 c1 int,
@@ -591,11 +591,11 @@ class UpgradeTest(ClusterTester):
             # more_order_by_test: More ORDER BY checks CASSANDRA-4160
             {
                 'create_tables': ["""CREATE COLUMNFAMILY more_order_by_test1 (
-                        row text,
-                        number int,
-                        string text,
-                        PRIMARY KEY (row, number)
-                    ) WITH COMPACT STORAGE""",
+                                row text,
+                                number int,
+                                string text,
+                                PRIMARY KEY (row, number)
+                            ) WITH COMPACT STORAGE""",
                                   """CREATE COLUMNFAMILY more_order_by_test2 (
                 row text,
                 number int,
@@ -650,11 +650,11 @@ class UpgradeTest(ClusterTester):
             # order_by_validation_test:  Check we don't allow order by on row key CASSANDRA-4246
             {
                 'create_tables': ["""CREATE TABLE order_by_validation_test (
-                        k1 int,
-                        k2 int,
-                        v int,
-                        PRIMARY KEY (k1, k2)
-                    )"""],
+                                k1 int,
+                                k2 int,
+                                v int,
+                                PRIMARY KEY (k1, k2)
+                            )"""],
                 'truncates': ['TRUNCATE order_by_validation_test'],
                 'inserts': [
                     "INSERT INTO order_by_validation_test (k1, k2, v) VALUES (0, 0, 0)",
@@ -671,11 +671,11 @@ class UpgradeTest(ClusterTester):
             # reversed_comparator_test
             {
                 'create_tables': ["""CREATE TABLE reversed_comparator_test1 (
-                        k int,
-                        c int,
-                        v int,
-                        PRIMARY KEY (k, c)
-                    ) WITH CLUSTERING ORDER BY (c DESC);""",
+                                k int,
+                                c int,
+                                v int,
+                                PRIMARY KEY (k, c)
+                            ) WITH CLUSTERING ORDER BY (c DESC);""",
                                   """CREATE TABLE reversed_comparator_test2 (
                 k int,
                 c1 int,
@@ -714,11 +714,11 @@ class UpgradeTest(ClusterTester):
             # null_support_test:  Test support for nulls
             {
                 'create_tables': ["""CREATE TABLE null_support_test (
-                        k int,
-                        c int,
-                        v1 int,
-                        v2 set<text>,
-                        PRIMARY KEY (k, c));"""],
+                                k int,
+                                c int,
+                                v1 int,
+                                v2 set<text>,
+                                PRIMARY KEY (k, c));"""],
                 'truncates': ['TRUNCATE order_by_validation_test'],
                 'inserts': [
                     "INSERT INTO null_support_test (k, c, v1, v2) VALUES (0, 0, null, {'1', '2'})",
@@ -742,9 +742,9 @@ class UpgradeTest(ClusterTester):
             # nameless_index_test:  Test CREATE INDEX without name and validate the index can be dropped
             {
                 'create_tables': ["""CREATE TABLE nameless_index_test (
-                        id text PRIMARY KEY,
-                        birth_year int,
-                    )"""],
+                                id text PRIMARY KEY,
+                                birth_year int,
+                            )"""],
                 'truncates': ['TRUNCATE nameless_index_test'],
                 'inserts': [
                     "INSERT INTO users (id, birth_year) VALUES ('Tom', 42)",
@@ -758,12 +758,12 @@ class UpgradeTest(ClusterTester):
             # deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug
             {
                 'create_tables': ["""CREATE TABLE deletion_test1 (
-                        username varchar,
-                        id int,
-                        name varchar,
-                        stuff varchar,
-                        PRIMARY KEY(username, id)
-                    );""",
+                                username varchar,
+                                id int,
+                                name varchar,
+                                stuff varchar,
+                                PRIMARY KEY(username, id)
+                            );""",
                                   """CREATE TABLE deletion_test2 (
                 username varchar,
                 id int,
@@ -804,12 +804,12 @@ class UpgradeTest(ClusterTester):
             # count_test
             {
                 'create_tables': ["""CREATE TABLE count_test (
-                        kind text,
-                        time int,
-                        value1 int,
-                        value2 int,
-                        PRIMARY KEY(kind, time)
-                    )"""],
+                                kind text,
+                                time int,
+                                value1 int,
+                                value2 int,
+                                PRIMARY KEY(kind, time)
+                            )"""],
                 'truncates': ['TRUNCATE count_test'],
                 'inserts': [
                     "INSERT INTO count_test (kind, time, value1, value2) VALUES ('ev1', 0, 0, 0)",
@@ -829,10 +829,10 @@ class UpgradeTest(ClusterTester):
             # batch_test
             {
                 'create_tables': ["""CREATE TABLE batch_test (
-                        userid text PRIMARY KEY,
-                        name text,
-                        password text
-                    )"""],
+                                userid text PRIMARY KEY,
+                                name text,
+                                password text
+                            )"""],
                 'truncates': ['TRUNCATE batch_test'],
                 'inserts': [
                     """BEGIN BATCH
@@ -849,31 +849,31 @@ class UpgradeTest(ClusterTester):
             # table_options_test
             {
                 'create_tables': ["""CREATE TABLE table_options_test (
-                        k int PRIMARY KEY,
-                        c int
-                    ) WITH comment = 'My comment'
-                       AND read_repair_chance = 0.5
-                       AND dclocal_read_repair_chance = 0.5
-                       AND gc_grace_seconds = 4
-                       AND bloom_filter_fp_chance = 0.01
-                       AND compaction = { 'class' : 'LeveledCompactionStrategy',
-                                          'sstable_size_in_mb' : 10 }
-                       AND compression = { 'sstable_compression' : '' }
-                       AND caching = 'all'"""],
+                                k int PRIMARY KEY,
+                                c int
+                            ) WITH comment = 'My comment'
+                               AND read_repair_chance = 0.5
+                               AND dclocal_read_repair_chance = 0.5
+                               AND gc_grace_seconds = 4
+                               AND bloom_filter_fp_chance = 0.01
+                               AND compaction = { 'class' : 'LeveledCompactionStrategy',
+                                                  'sstable_size_in_mb' : 10 }
+                               AND compression = { 'sstable_compression' : '' }
+                               AND caching = 'all'"""],
                 'truncates': ['TRUNCATE table_options_test'],
                 'inserts': [],
                 'queries': ["""
-                    ALTER TABLE table_options_test
-                    WITH comment = 'other comment'
-                     AND read_repair_chance = 0.3
-                     AND dclocal_read_repair_chance = 0.3
-                     AND gc_grace_seconds = 100
-                     AND bloom_filter_fp_chance = 0.1
-                     AND compaction = { 'class' : 'SizeTieredCompactionStrategy',
-                                        'min_sstable_size' : 42 }
-                     AND compression = { 'sstable_compression' : 'SnappyCompressor' }
-                     AND caching = 'rows_only'
-                """],
+                            ALTER TABLE table_options_test
+                            WITH comment = 'other comment'
+                             AND read_repair_chance = 0.3
+                             AND dclocal_read_repair_chance = 0.3
+                             AND gc_grace_seconds = 100
+                             AND bloom_filter_fp_chance = 0.1
+                             AND compaction = { 'class' : 'SizeTieredCompactionStrategy',
+                                                'min_sstable_size' : 42 }
+                             AND compression = { 'sstable_compression' : 'SnappyCompressor' }
+                             AND caching = 'rows_only'
+                        """],
                 'results': [[]],
                 'min_version': '',
                 'max_version': '',
@@ -881,10 +881,10 @@ class UpgradeTest(ClusterTester):
             # timestamp_and_ttl_test
             {
                 'create_tables': ["""CREATE TABLE timestamp_and_ttl_test(
-                        k int PRIMARY KEY,
-                        c text,
-                        d text
-                    )"""],
+                                k int PRIMARY KEY,
+                                c text,
+                                d text
+                            )"""],
                 'truncates': ['TRUNCATE timestamp_and_ttl_test'],
                 'inserts': ["INSERT INTO timestamp_and_ttl_test (k, c) VALUES (1, 'test')",
                             "INSERT INTO timestamp_and_ttl_test (k, c) VALUES (2, 'test') USING TTL 400",
@@ -935,10 +935,10 @@ class UpgradeTest(ClusterTester):
             # undefined_column_handling_test
             {
                 'create_tables': ["""CREATE TABLE undefined_column_handling_test (
-                        k int PRIMARY KEY,
-                        v1 int,
-                        v2 int,
-                    )"""],
+                                k int PRIMARY KEY,
+                                v1 int,
+                                v2 int,
+                            )"""],
                 'truncates': ['TRUNCATE undefined_column_handling_test'],
                 'inserts': ["INSERT INTO undefined_column_handling_test (k, v1, v2) VALUES (0, 0, 0)",
                             "INSERT INTO undefined_column_handling_test (k, v1) VALUES (1, 1)",
@@ -953,13 +953,13 @@ class UpgradeTest(ClusterTester):
             # range_tombstones_test: Test deletion by 'composite prefix' (range tombstones)
             {
                 'create_tables': ["""CREATE TABLE range_tombstones_test (
-                    k int,
-                    c1 int,
-                    c2 int,
-                    v1 int,
-                    v2 int,
-                    PRIMARY KEY (k, c1, c2)
-                );"""],
+                            k int,
+                            c1 int,
+                            c2 int,
+                            v1 int,
+                            v2 int,
+                            PRIMARY KEY (k, c1, c2)
+                        );"""],
                 'truncates': [],
                 'inserts': ["INSERT INTO range_tombstones_test (k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (
                     i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in xrange(0, 5) for j in xrange(0, 2)
@@ -1013,12 +1013,12 @@ class UpgradeTest(ClusterTester):
             # range_tombstones_compaction_test: Test deletion by 'composite prefix' (range tombstones) with compaction
             {
                 'create_tables': ["""CREATE TABLE range_tombstones_compaction_test (
-                    k int,
-                    c1 int,
-                    c2 int,
-                    v1 text,
-                    PRIMARY KEY (k, c1, c2)
-                );"""],
+                            k int,
+                            c1 int,
+                            c2 int,
+                            v1 text,
+                            PRIMARY KEY (k, c1, c2)
+                        );"""],
                 'truncates': [],
                 'inserts': ["INSERT INTO range_tombstones_compaction_test (k, c1, c2, v1) VALUES (0, %d, %d, '%s')" % (
                     c1, c2, '%i%i' % (c1, c2)) for c1 in range(0, 4) for c2 in range(0, 2)],
@@ -1038,13 +1038,13 @@ class UpgradeTest(ClusterTester):
             # delete_row_test: Test deletion of rows
             {
                 'create_tables': ["""CREATE TABLE delete_row_test (
-                     k int,
-                     c1 int,
-                     c2 int,
-                     v1 int,
-                     v2 int,
-                     PRIMARY KEY (k, c1, c2)
-                );"""],
+                             k int,
+                             c1 int,
+                             c2 int,
+                             v1 int,
+                             v2 int,
+                             PRIMARY KEY (k, c1, c2)
+                        );"""],
                 'truncates': ["TRUNCATE delete_row_test"],
                 'inserts': [
                     "INSERT INTO delete_row_test(k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (0, 0, 0, 0, 0),
@@ -1076,11 +1076,11 @@ class UpgradeTest(ClusterTester):
             # set_test
             {
                 'create_tables': ["""CREATE TABLE set_test (
-                    fn text,
-                    ln text,
-                    tags set<text>,
-                    PRIMARY KEY (fn, ln)
-                )"""],
+                            fn text,
+                            ln text,
+                            tags set<text>,
+                            PRIMARY KEY (fn, ln)
+                        )"""],
                 'truncates': ["TRUNCATE set_test"],
                 'inserts': ["UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'foo' }",
                             "UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'bar' }",
@@ -1111,11 +1111,11 @@ class UpgradeTest(ClusterTester):
             # map_test
             {
                 'create_tables': ["""CREATE TABLE map_test (
-                fn text,
-                ln text,
-                m map<text, int>,
-                PRIMARY KEY (fn, ln)
-            )"""],
+                        fn text,
+                        ln text,
+                        m map<text, int>,
+                        PRIMARY KEY (fn, ln)
+                    )"""],
                 'truncates': ["TRUNCATE map_test"],
                 'inserts': ["UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['foo'] = 3",
                             "UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['bar'] = 4",
@@ -1144,11 +1144,11 @@ class UpgradeTest(ClusterTester):
             # list_test
             {
                 'create_tables': ["""CREATE TABLE list_test (
-                    fn text,
-                    ln text,
-                    tags list<text>,
-                    PRIMARY KEY (fn, ln)
-                )"""],
+                            fn text,
+                            ln text,
+                            tags list<text>,
+                            PRIMARY KEY (fn, ln)
+                        )"""],
                 'truncates': ["TRUNCATE list_test"],
                 'inserts': ["UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
                             "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'bar' ]",
@@ -1184,11 +1184,11 @@ class UpgradeTest(ClusterTester):
             # multi_collection_test
             {
                 'create_tables': ["""CREATE TABLE multi_collection_test(
-                    k uuid PRIMARY KEY,
-                    L list<int>,
-                    M map<text, int>,
-                    S set<int>
-                );"""],
+                            k uuid PRIMARY KEY,
+                            L list<int>,
+                            M map<text, int>,
+                            S set<int>
+                        );"""],
                 'truncates': ["TRUNCATE multi_collection_test"],
                 'inserts': [
                     "UPDATE multi_collection_test SET L = [1, 3, 5] WHERE k = b017f48f-ae67-11e1-9096-005056c00008;",
@@ -1252,7 +1252,7 @@ class UpgradeTest(ClusterTester):
                             [[0, 1, 1, 1], [0, 3, 3, 3]],
                             [[0, 1, 1, 1]],
                             [[0, 2, 2, 2], [0, 3, 3, 3], [0, 0, 0, 0], [0, 1, 1, 1]]],
-                'invalid_queries': ["SELECT * FROM test WHERE k2 = 3"],
+                'invalid_queries': ["SELECT * FROM composite_row_key_test WHERE k2 = 3"],
                 'min_version': '',
                 'max_version': '',
                 'skip': ''},
@@ -1300,12 +1300,12 @@ class UpgradeTest(ClusterTester):
                 c int,
                 PRIMARY KEY (k, c)
             )""", """
-                CREATE TABLE only_pk_test2 (
-                    k int,
-                    c int,
-                    PRIMARY KEY (k, c)
-                ) WITH COMPACT STORAGE
-            """],
+                        CREATE TABLE only_pk_test2 (
+                            k int,
+                            c int,
+                            PRIMARY KEY (k, c)
+                        ) WITH COMPACT STORAGE
+                    """],
                 'truncates': ["TRUNCATE only_pk_test1", "TRUNCATE only_pk_test2"],
                 'inserts': ["INSERT INTO only_pk_test1 (k, c) VALUES (%s, %s)" % (k, c) for k in range(0, 2) for c in
                             range(0, 2)],
@@ -1350,11 +1350,11 @@ class UpgradeTest(ClusterTester):
             # range_slice_test: Test a regression from CASSANDRA-1337
             {
                 'create_tables': ["""
-            CREATE TABLE range_slice_test (
-                k text PRIMARY KEY,
-                v int
-            );
-        """],
+                    CREATE TABLE range_slice_test (
+                        k text PRIMARY KEY,
+                        v int
+                    );
+                """],
                 'truncates': ["TRUNCATE range_slice_test"],
                 'inserts': ["INSERT INTO range_slice_test (k, v) VALUES ('foo', 0)",
                             "INSERT INTO range_slice_test (k, v) VALUES ('bar', 1)"],
@@ -1366,12 +1366,12 @@ class UpgradeTest(ClusterTester):
             # composite_index_with_pk_test
             {
                 'create_tables': ["""CREATE TABLE composite_index_with_pk_test (
-                blog_id int,
-                time1 int,
-                time2 int,
-                author text,
-                content text,
-                PRIMARY KEY (blog_id, time1, time2))"""],
+                        blog_id int,
+                        time1 int,
+                        time2 int,
+                        author text,
+                        content text,
+                        PRIMARY KEY (blog_id, time1, time2))"""],
                 'truncates': ["TRUNCATE composite_index_with_pk_test"],
                 'inserts': [
                     "INSERT INTO blogs (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
@@ -1409,19 +1409,19 @@ class UpgradeTest(ClusterTester):
             # limit_bugs_test: Test for LIMIT bugs from CASSANDRA-4579
             {
                 'create_tables': ["""CREATE TABLE limit_bugs_test1 (
-                a int,
-                b int,
-                c int,
-                d int,
-                e int,
-                PRIMARY KEY (a, b)
-            );""", """
-            CREATE TABLE limit_bugs_test2 (
-                a int primary key,
-                b int,
-                c int,
-            );
-        """],
+                        a int,
+                        b int,
+                        c int,
+                        d int,
+                        e int,
+                        PRIMARY KEY (a, b)
+                    );""", """
+                    CREATE TABLE limit_bugs_test2 (
+                        a int primary key,
+                        b int,
+                        c int,
+                    );
+                """],
                 'truncates': ["TRUNCATE limit_bugs_test1", "TRUNCATE limit_bugs_test2"],
                 'inserts': ["INSERT INTO limit_bugs_test1 (a, b, c, d, e) VALUES (1, 1, 1, 1, 1);",
                             "INSERT INTO limit_bugs_test1 (a, b, c, d, e) VALUES (2, 2, 2, 2, 2);",
@@ -1458,12 +1458,12 @@ class UpgradeTest(ClusterTester):
             # npe_composite_table_slice_test: Test for NPE when trying to select a slice from a composite table CASSANDRA-4532
             {
                 'create_tables': ["""CREATE TABLE npe_composite_table_slice_test(
-                status ascii,
-                ctime bigint,
-                key ascii,
-                nil ascii,
-                PRIMARY KEY (status, ctime, key)
-            )"""],
+                        status ascii,
+                        ctime bigint,
+                        key ascii,
+                        nil ascii,
+                        PRIMARY KEY (status, ctime, key)
+                    )"""],
                 'truncates': ["TRUNCATE npe_composite_table_slice_test"],
                 'inserts': [
                     "INSERT INTO npe_composite_table_slice_test(status,ctime,key,nil) VALUES ('C',12345678,'key1','')",
@@ -1483,12 +1483,12 @@ class UpgradeTest(ClusterTester):
             # order_by_multikey_test: Test for #CASSANDRA-4612 bug and more generally order by when multiple C* rows are queried
             {
                 'create_tables': ["""CREATE TABLE order_by_multikey_test(
-                my_id varchar,
-                col1 int,
-                col2 int,
-                value varchar,
-                PRIMARY KEY (my_id, col1, col2)
-            );"""],
+                        my_id varchar,
+                        col1 int,
+                        col2 int,
+                        value varchar,
+                        PRIMARY KEY (my_id, col1, col2)
+                    );"""],
                 'truncates': ["TRUNCATE order_by_multikey_test"],
                 'inserts': [
                     "INSERT INTO order_by_multikey_test(my_id, col1, col2, value) VALUES ( 'key1', 1, 1, 'a');",
@@ -1511,9 +1511,9 @@ class UpgradeTest(ClusterTester):
             # remove_range_slice_test
             {
                 'create_tables': ["""CREATE TABLE remove_range_slice_test (
-                k int PRIMARY KEY,
-                v int
-            )"""],
+                        k int PRIMARY KEY,
+                        v int
+                    )"""],
                 'truncates': ["TRUNCATE remove_range_slice_test"],
                 'inserts': ["INSERT INTO remove_range_slice_test (k, v) VALUES ({}, {})".format(i, i) for i in
                             range(0, 3)] + [
@@ -1526,12 +1526,12 @@ class UpgradeTest(ClusterTester):
             # indexes_composite_test
             {
                 'create_tables': ["""CREATE TABLE indexes_composite_test (
-                blog_id int,
-                timestamp int,
-                author text,
-                content text,
-                PRIMARY KEY (blog_id, timestamp)
-            )""", "CREATE INDEX ON indexes_composite_test(author)"],
+                        blog_id int,
+                        timestamp int,
+                        author text,
+                        content text,
+                        PRIMARY KEY (blog_id, timestamp)
+                    )""", "CREATE INDEX ON indexes_composite_test(author)"],
                 'truncates': ["TRUNCATE indexes_composite_test"],
                 'inserts': [
                     "INSERT INTO indexes_composite_test (blog_id, timestamp, author, content) VALUES (%d, %d, '%s', '%s')" % (
@@ -1597,13 +1597,13 @@ class UpgradeTest(ClusterTester):
                 PRIMARY KEY (k, c)
             ) WITH COMPACT STORAGE
               AND CLUSTERING ORDER BY (c DESC);""", """
-            CREATE TABLE reversed_compact_test2 (
-                k text,
-                c int,
-                v int,
-                PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE;
-        """],
+                    CREATE TABLE reversed_compact_test2 (
+                        k text,
+                        c int,
+                        v int,
+                        PRIMARY KEY (k, c)
+                    ) WITH COMPACT STORAGE;
+                """],
                 'truncates': ["TRUNCATE reversed_compact_test1", "TRUNCATE reversed_compact_test2"],
                 'inserts': [
                     "INSERT INTO %s(k, c, v) VALUES ('foo', %s, %s)" % (k, i, i) for i in range(0, 10) for k in
@@ -1712,19 +1712,19 @@ class UpgradeTest(ClusterTester):
             # batch_and_list_test
             {
                 'create_tables': ["""
-          CREATE TABLE batch_and_list_test (
-            k int PRIMARY KEY,
-            l list<int>
-          )
-        """],
+                  CREATE TABLE batch_and_list_test (
+                    k int PRIMARY KEY,
+                    l list<int>
+                  )
+                """],
                 'truncates': ["TRUNCATE batch_and_list_test"],
                 'inserts': ["""
-              BEGIN BATCH
-                UPDATE batch_and_list_test SET l = l + [ 1 ] WHERE k = 0;
-                UPDATE batch_and_list_test SET l = l + [ 2 ] WHERE k = 0;
-                UPDATE batch_and_list_test SET l = l + [ 3 ] WHERE k = 0;
-              APPLY BATCH
-            """],
+                      BEGIN BATCH
+                        UPDATE batch_and_list_test SET l = l + [ 1 ] WHERE k = 0;
+                        UPDATE batch_and_list_test SET l = l + [ 2 ] WHERE k = 0;
+                        UPDATE batch_and_list_test SET l = l + [ 3 ] WHERE k = 0;
+                      APPLY BATCH
+                    """],
                 'queries': ["SELECT l FROM batch_and_list_test WHERE k = 0",
                             """          BEGIN BATCH
                                             UPDATE batch_and_list_test SET l = [ 1 ] + l WHERE k = 1;
@@ -1923,6 +1923,920 @@ class UpgradeTest(ClusterTester):
                 'min_version': '',
                 'max_version': '',
                 'skip': 'bug? Partition key parts: b must be restricted as other parts are'},
+            # multi_in_test
+            {
+                'create_tables': [
+                    """
+            CREATE TABLE multi_in_test (
+                group text,
+                zipcode text,
+                state text,
+                fips_regions int,
+                city text,
+                PRIMARY KEY(group,zipcode,state,fips_regions)
+            )"""],
+                'truncates': ["TRUNCATE multi_in_test"],
+                'inserts': [
+                    "INSERT INTO multi_in_test (group, zipcode, state, fips_regions, city) VALUES ('%s', '%s', '%s', %s, '%s')" % d
+                    for d in [
+                        ('test', '06029', 'CT', 9, 'Ellington'),
+                        ('test', '06031', 'CT', 9, 'Falls Village'),
+                        ('test', '06902', 'CT', 9, 'Stamford'),
+                        ('test', '06927', 'CT', 9, 'Stamford'),
+                        ('test', '10015', 'NY', 36, 'New York'),
+                        ('test', '07182', 'NJ', 34, 'Newark'),
+                        ('test', '73301', 'TX', 48, 'Austin'),
+                        ('test', '94102', 'CA', 6, 'San Francisco'),
+
+                        ('test2', '06029', 'CT', 9, 'Ellington'),
+                        ('test2', '06031', 'CT', 9, 'Falls Village'),
+                        ('test2', '06902', 'CT', 9, 'Stamford'),
+                        ('test2', '06927', 'CT', 9, 'Stamford'),
+                        ('test2', '10015', 'NY', 36, 'New York'),
+                        ('test2', '07182', 'NJ', 34, 'Newark'),
+                        ('test2', '73301', 'TX', 48, 'Austin'),
+                        ('test2', '94102', 'CA', 6, 'San Francisco'),
+                    ]],
+                'queries': ["#LENGTH select zipcode from multi_in_test",
+                            "#LENGTH select zipcode from multi_in_test where group='test'",
+                            "#LENGTH select zipcode from multi_in_test where zipcode='06902' ALLOW FILTERING",
+                            "#LENGTH select zipcode from multi_in_test where group='test' and zipcode='06902'",
+                            "#LENGTH select zipcode from multi_in_test where group='test' and zipcode IN ('06902','73301','94102')",
+                            "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA')",
+                            "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
+                            "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
+                            "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
+                            "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
+                'results': [16,
+                            8,
+                            2,
+                            1,
+                            3,
+                            2,
+                            1,
+                            2,
+                            3],
+                'invalid_queries': ["select zipcode from multi_in_test where zipcode='06902'"],
+                'min_version': '',
+                'max_version': '',
+                'skip': '#2566 Clustering column "state" cannot be restricted by an IN relation"'},
+            # multi_in_test
+            {
+                'create_tables': [
+                    """
+            CREATE TABLE multi_in_compact_test (
+                group text,
+                zipcode text,
+                state text,
+                fips_regions int,
+                city text,
+                PRIMARY KEY(group,zipcode,state,fips_regions)
+            )  WITH COMPACT STORAGE"""],
+                'truncates': ["TRUNCATE multi_in_compact_test"],
+                'inserts': [
+                    "INSERT INTO multi_in_compact_test (group, zipcode, state, fips_regions, city) VALUES ('%s', '%s', '%s', %s, '%s')" % d
+                    for d in [
+                        ('test', '06029', 'CT', 9, 'Ellington'),
+                        ('test', '06031', 'CT', 9, 'Falls Village'),
+                        ('test', '06902', 'CT', 9, 'Stamford'),
+                        ('test', '06927', 'CT', 9, 'Stamford'),
+                        ('test', '10015', 'NY', 36, 'New York'),
+                        ('test', '07182', 'NJ', 34, 'Newark'),
+                        ('test', '73301', 'TX', 48, 'Austin'),
+                        ('test', '94102', 'CA', 6, 'San Francisco'),
+
+                        ('test2', '06029', 'CT', 9, 'Ellington'),
+                        ('test2', '06031', 'CT', 9, 'Falls Village'),
+                        ('test2', '06902', 'CT', 9, 'Stamford'),
+                        ('test2', '06927', 'CT', 9, 'Stamford'),
+                        ('test2', '10015', 'NY', 36, 'New York'),
+                        ('test2', '07182', 'NJ', 34, 'Newark'),
+                        ('test2', '73301', 'TX', 48, 'Austin'),
+                        ('test2', '94102', 'CA', 6, 'San Francisco'),
+                    ]],
+                'queries': ["#LENGTH select zipcode from multi_in_compact_test",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test'",
+                            "#LENGTH select zipcode from multi_in_compact_test where zipcode='06902' ALLOW FILTERING",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' and zipcode='06902'",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' and zipcode IN ('06902','73301','94102')",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA')",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
+                            "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
+                'results': [16,
+                            8,
+                            2,
+                            1,
+                            3,
+                            2,
+                            1,
+                            2,
+                            3],
+                'invalid_queries': ["select zipcode from multi_in_compact_test where zipcode='06902'"],
+                'min_version': '',
+                'max_version': '',
+                'skip': '#2566 Clustering column "state" cannot be restricted by an IN relation"'},
+            # multi_in_compact_non_composite_test
+            {
+                'create_tables': [
+                    """CREATE TABLE multi_in_compact_non_composite_test (
+                key int,
+                c int,
+                v int,
+                PRIMARY KEY (key, c)
+            ) WITH COMPACT STORAGE"""],
+                'truncates': ["TRUNCATE multi_in_compact_non_composite_test"],
+                'inserts': [
+                    "INSERT INTO multi_in_compact_non_composite_test (key, c, v) VALUES (0, 0, 0)",
+                    "INSERT INTO multi_in_compact_non_composite_test (key, c, v) VALUES (0, 1, 1)",
+                    "INSERT INTO multi_in_compact_non_composite_test (key, c, v) VALUES (0, 2, 2)"],
+                'queries': ["SELECT * FROM multi_in_compact_non_composite_test WHERE key=0 AND c IN (0, 2)"],
+                'results': [[[0, 0, 0], [0, 2, 2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # float_with_exponent_test
+            {
+                'create_tables': [
+                    """CREATE TABLE float_with_exponent_test (
+                k int PRIMARY KEY,
+                d double,
+                f float
+            )"""],
+                'truncates': ["TRUNCATE float_with_exponent_test"],
+                'inserts': [
+                    "INSERT INTO float_with_exponent_test(k, d, f) VALUES (0, 3E+10, 3.4E3)",
+                    "INSERT INTO float_with_exponent_test(k, d, f) VALUES (1, 3.E10, -23.44E-3)",
+                    "INSERT INTO float_with_exponent_test(k, d, f) VALUES (2, 3, -2)"],
+                'queries': [],
+                'results': [],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # compact_metadata_test
+            {
+                'create_tables': [
+                    """CREATE TABLE compact_metadata_test (
+                id int primary key,
+                i int
+            ) WITH COMPACT STORAGE;"""],
+                'truncates': ["TRUNCATE compact_metadata_test"],
+                'inserts': ["INSERT INTO compact_metadata_test (id, i) VALUES (1, 2);"],
+                'queries': ["SELECT * FROM compact_metadata_test"],
+                'results': [[[1, 2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # ticket_5230_test
+            {
+                'create_tables': [
+                    """CREATE TABLE ticket_5230_test (
+                key text,
+                c text,
+                v text,
+                PRIMARY KEY (key, c)
+            )"""],
+                'truncates': ["TRUNCATE ticket_5230_test"],
+                'inserts': ["INSERT INTO ticket_5230_test(key, c, v) VALUES ('foo', '1', '1')",
+                            "INSERT INTO ticket_5230_test(key, c, v) VALUES ('foo', '2', '2')",
+                            "INSERT INTO ticket_5230_test(key, c, v) VALUES ('foo', '3', '3')"],
+                'queries': ["SELECT c FROM ticket_5230_test WHERE key = 'foo' AND c IN ('1', '2');"],
+                'results': [[['1'], ['2']]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # conversion_functions_test
+            {
+                'create_tables': [
+                    """CREATE TABLE conversion_functions_test (
+                k int PRIMARY KEY,
+                i varint,
+                b blob
+            )"""],
+                'truncates': ["TRUNCATE ticket_5230_test"],
+                'inserts': [
+                    "INSERT INTO conversion_functions_test(k, i, b) VALUES (0, blobAsVarint(bigintAsBlob(3)), textAsBlob('foobar'))"],
+                'queries': ["SELECT i, blobAsText(b) FROM conversion_functions_test WHERE k = 0"],
+                'results': [[[3, 'foobar']]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # IN_clause_on_last_key_test: @since('2.0', max_version='3.12').  Fixed by CASSANDRA-12654 in 3.12
+            {
+                'create_tables': [
+                    """CREATE TABLE test (
+                key text,
+                c bigint,
+                v text,
+                x set<text>,
+                PRIMARY KEY (key, c)
+            );"""],
+                'truncates': [],
+                'inserts': [],
+                'queries': [],
+                'results': [],
+                'invalid_queries': ["select zipcode from multi_in_compact_test where zipcode='06902'"],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # function_and_reverse_type_test: CASSANDRA-5386
+            {
+                'create_tables': [
+                    """ CREATE TABLE function_and_reverse_type_test (
+                k int,
+                c timeuuid,
+                v int,
+                PRIMARY KEY (k, c)
+            ) WITH CLUSTERING ORDER BY (c DESC)"""],
+                'truncates': [],
+                'inserts': ["INSERT INTO function_and_reverse_type_test (k, c, v) VALUES (0, now(), 0);"],
+                'queries': [],
+                'results': [],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # NPE_during_select_with_token_test: Test for NPE during CQL3 select with token() CASSANDRA-5404
+            {
+                'create_tables': ["CREATE TABLE NPE_during_select_with_token_test (key text PRIMARY KEY)"],
+                'truncates': [],
+                'inserts': [],
+                'queries': [],
+                'results': [],
+                'invalid_queries': [
+                    "select * from NPE_during_select_with_token_test where token(key) > token(int(3030343330393233)) limit 1;"],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # empty_blob_test
+            {
+                'create_tables': ["CREATE TABLE empty_blob_test (k int PRIMARY KEY, b blob)"],
+                'truncates': ["TRUNCATE empty_blob_test"],
+                'inserts': ["INSERT INTO empty_blob_test (k, b) VALUES (0, 0x)"],
+                'queries': ["SELECT * FROM empty_blob_test"],
+                'results': [[[0, '']]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+
+            # clustering_order_and_functions_test
+            {
+                'create_tables': ["""CREATE TABLE clustering_order_and_functions_test (
+                    k int,
+                    t timeuuid,
+                    PRIMARY KEY (k, t)
+                ) WITH CLUSTERING ORDER BY (t DESC)"""],
+                'truncates': ["TRUNCATE clustering_order_and_functions_test"],
+                'inserts': ["INSERT INTO clustering_order_and_functions_test (k, t) VALUES (%d, now())" % i for i in
+                            range(0, 5)] + ["SELECT dateOf(t) FROM clustering_order_and_functions_test"],
+                'queries': [],
+                'results': [],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # conditional_update_test
+            {
+                'create_tables': ["""CREATE TABLE conditional_update_test (
+                    k int PRIMARY KEY,
+                    v1 int,
+                    v2 text,
+                    v3 int
+                )"""],
+                'truncates': ["TRUNCATE conditional_update_test"],
+                'inserts': [],
+                'queries': ["UPDATE conditional_update_test SET v1 = 3, v2 = 'bar' WHERE k = 0 IF v1 = 4",
+                            "UPDATE conditional_update_test SET v1 = 3, v2 = 'bar' WHERE k = 0 IF EXISTS",
+                            "INSERT INTO conditional_update_test (k, v1, v2) VALUES (0, 2, 'foo') IF NOT EXISTS",
+                            "INSERT INTO conditional_update_test (k, v1, v2) VALUES (0, 5, 'bar') IF NOT EXISTS",
+                            "SELECT * FROM conditional_update_test",
+                            "UPDATE conditional_update_test SET v1 = 3, v2 = 'bar' WHERE k = 0 IF v1 = 4",
+                            "SELECT * FROM conditional_update_test",
+                            "UPDATE conditional_update_test SET v2 = 'bar', v1 = 3 WHERE k = 0 IF v1 = 2",
+                            "UPDATE conditional_update_test SET v2 = 'bar', v1 = 3 WHERE k = 0 IF EXISTS",
+                            "SELECT * FROM conditional_update_test",
+                            "UPDATE conditional_update_test SET v1 = 5, v2 = 'foobar' WHERE k = 0 IF v1 = 3 AND v2 = 'foo'",
+                            "SELECT * FROM conditional_update_test",
+                            "UPDATE conditional_update_test SET v1 = 5, v2 = 'foobar' WHERE k = 0 IF v1 = 3 AND v2 = 'bar'",
+                            "SELECT * FROM conditional_update_test",
+                            "DELETE v2 FROM conditional_update_test WHERE k = 0 IF v1 = 3",
+                            "SELECT * FROM conditional_update_test",
+                            "DELETE v2 FROM conditional_update_test WHERE k = 0 IF v1 = null",
+                            "SELECT * FROM conditional_update_test",
+                            "DELETE v2 FROM conditional_update_test WHERE k = 0 IF v1 = 5",
+                            "SELECT * FROM conditional_update_test",
+                            "DELETE v1 FROM conditional_update_test WHERE k = 0 IF v3 = 4",
+                            "DELETE v1 FROM conditional_update_test WHERE k = 0 IF v3 = null",
+                            "SELECT * FROM conditional_update_test",
+                            "DELETE FROM conditional_update_test WHERE k = 0 IF v1 = null",
+                            "SELECT * FROM conditional_update_test",
+                            "UPDATE conditional_update_test SET v1 = 3, v2 = 'bar' WHERE k = 0 IF EXISTS",
+                            "DELETE FROM conditional_update_test WHERE k = 0 IF v1 IN (null)"],
+                'results': [[[False]],
+                            [[False]],
+                            [[True]],
+                            [[False, 0, 2, 'foo', None]],
+                            [[0, 2, 'foo', None]],
+                            [[0, 2, 'foo', None]],
+                            [[False, 2]],
+                            [[0, 2, 'foo', None]],
+                            [[True]],
+                            [[True]],
+                            [[0, 3, 'bar', None]],
+                            [[False, 3, 'bar']],
+                            [[0, 3, 'bar', None]],
+                            [[True]],
+                            [[0, 5, 'foobar', None]],
+                            [[False, 5]],
+                            [[0, 5, 'foobar', None]],
+                            [[False, 5]],
+                            [[0, 5, 'foobar', None]],
+                            [[True]],
+                            [[0, 5, None, None]],
+                            [[False, None]],
+                            [[True]],
+                            [[0, None, None, None]],
+                            [[True]],
+                            [],
+                            [[False]],
+                            [[True]]
+                            ],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
+            # non_eq_conditional_update_test
+            {
+                'create_tables': ["""CREATE TABLE non_eq_conditional_update_test (
+                    k int PRIMARY KEY,
+                    v1 int,
+                    v2 text,
+                    v3 int
+                )"""],
+                'truncates': ["TRUNCATE non_eq_conditional_update_test"],
+                'inserts': ["INSERT INTO non_eq_conditional_update_test (k, v1, v2) VALUES (0, 2, 'foo')"],
+                'queries': ["UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 < 3",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 <= 3",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 > 1",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 >= 1",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 != 1",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 != 2",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 IN (0, 1, 2)",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 IN (142, 276)",
+                            "UPDATE non_eq_conditional_update_test SET v2 = 'bar' WHERE k = 0 IF v1 IN ()"],
+                'results': [[[True]],
+                            [[True]],
+                            [[True]],
+                            [[True]],
+                            [[True]],
+                            [[False, 2]],
+                            [[True]],
+                            [[False, 2]],
+                            [[False, 2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT + Segmentation fault on shard 6'},
+            # conditional_delete_test
+            {
+                'create_tables': ["""CREATE TABLE conditional_delete_test1 (
+                    k int PRIMARY KEY,
+                    v1 int,
+                )""", """
+                CREATE TABLE conditional_delete_test2 (
+                    k text,
+                    s text static,
+                    i int,
+                    v text,
+                    PRIMARY KEY (k, i)
+                )"""],
+                'truncates': ["TRUNCATE conditional_delete_test1", "TRUNCATE conditional_delete_test2"],
+                'inserts': [],
+                'queries': ["DELETE FROM conditional_delete_test1 WHERE k=1 IF EXISTS",
+                            "INSERT INTO conditional_delete_test1 (k, v1) VALUES (1, 2) IF NOT EXISTS",
+                            "DELETE FROM conditional_delete_test1 WHERE k=1 IF EXISTS",
+                            "SELECT * FROM conditional_delete_test1 WHERE k=1",
+                            "DELETE FROM conditional_delete_test1 WHERE k=1 IF EXISTS",
+                            "INSERT INTO conditional_delete_test1 (k, v1) VALUES (2, 2) IF NOT EXISTS USING TTL 1",
+                            "DELETE FROM conditional_delete_test1 WHERE k=2 IF EXISTS",
+                            "SELECT * FROM conditional_delete_test1 WHERE k=2",
+                            "INSERT INTO conditional_delete_test1 (k, v1) VALUES (3, 2) IF NOT EXISTS",
+                            "DELETE v1 FROM conditional_delete_test1 WHERE k=3 IF EXISTS",
+                            "SELECT * FROM conditional_delete_test1 WHERE k=3",
+                            "DELETE v1 FROM conditional_delete_test1 WHERE k=3 IF EXISTS",
+                            "DELETE FROM conditional_delete_test1 WHERE k=3 IF EXISTS",
+                            "INSERT INTO conditional_delete_test2 (k, s, i, v) VALUES ('k', 's', 0, 'v') IF NOT EXISTS",
+                            "DELETE v FROM conditional_delete_test2 WHERE k='k' AND i=0 IF EXISTS",
+                            "DELETE FROM conditional_delete_test2 WHERE k='k' AND i=0 IF EXISTS",
+                            "DELETE v FROM conditional_delete_test2 WHERE k='k' AND i=0 IF EXISTS"
+                            "DELETE FROM conditional_delete_test2 WHERE k='k' AND i=0 IF EXISTS"],
+                'results': [[[False]],
+                            [[True]],
+                            [[True]],
+                            [],
+                            [[False]],
+                            [[True]],
+                            [[False]],
+                            [],
+                            [[True]],
+                            [[True]],
+                            [[3, None]],
+                            [[True]],
+                            [[True]],
+                            [],
+                            [[True]],
+                            [[True]],
+                            [[False]],
+                            [[False]]
+                            ],
+                'invalid_queries': ["DELETE FROM conditional_delete_test2 WHERE k = 'k' IF EXISTS",
+                                    "DELETE FROM conditional_delete_test2 WHERE k = 'k' IF v = 'foo'",
+                                    "DELETE FROM conditional_delete_test2 WHERE i = 0 IF EXISTS",
+                                    "DELETE FROM conditional_delete_test2 WHERE k = 0 AND i > 0 IF EXISTS",
+                                    "DELETE FROM conditional_delete_test2 WHERE k = 0 AND i > 0 IF v = 'foo'"],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
+            # range_key_ordered_test
+            {
+                'create_tables': ["CREATE TABLE range_key_ordered_test ( k int PRIMARY KEY)"],
+                'truncates': ["TRUNCATE range_key_ordered_test"],
+                'inserts': ["INSERT INTO range_key_ordered_test(k) VALUES (-1)",
+                            "INSERT INTO range_key_ordered_test(k) VALUES ( 0)",
+                            "INSERT INTO range_key_ordered_test(k) VALUES ( 1)"],
+                'queries': ["SELECT * FROM range_key_ordered_test"],
+                'results': [[[0], [1], [-1]]],
+                'invalid_queries': ["SELECT * FROM range_key_ordered_test WHERE k >= -1 AND k < 1;"],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'ordered=True cluster.set_partitioner("org.apache.cassandra.dht.ByteOrderedPartitioner") required'},
+            # nonpure_function_collection_test: CASSANDRA-5795
+            {
+                'create_tables': [
+                    "CREATE TABLE nonpure_function_collection_test (k int PRIMARY KEY, v list<timeuuid>)"],
+                'truncates': [],
+                'inserts': ["INSERT INTO nonpure_function_collection_test(k, v) VALUES (0, [now()])"],
+                'queries': [],
+                'results': [],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # empty_in_test
+            {
+                'create_tables': [
+                    "CREATE TABLE empty_in_test1 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2))",
+                    "CREATE TABLE empty_in_test2 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) WITH COMPACT STORAGE"],
+                'truncates': ["TRUNCATE empty_in_test1", "TRUNCATE empty_in_test2"],
+                'inserts': ["INSERT INTO empty_in_test1 (k1, k2, v) VALUES (%d, %d, %d)" % (i, j, i + j) for i in
+                            range(0, 2) for j in range(0, 2)] +
+                           ["INSERT INTO empty_in_test2 (k1, k2, v) VALUES (%d, %d, %d)" % (i, j, i + j) for i in
+                            range(0, 2) for j in range(0, 2)],
+                'queries': ["SELECT v FROM empty_in_test1 WHERE k1 IN ()",
+                            "SELECT v FROM empty_in_test1 WHERE k1 = 0 AND k2 IN ()",
+                            "DELETE FROM empty_in_test1 WHERE k1 IN ()",
+                            "SELECT * FROM empty_in_test1",
+                            "UPDATE empty_in_test1 SET v = 3 WHERE k1 IN () AND k2 = 2",
+                            "SELECT * FROM empty_in_test1",
+                            "SELECT v FROM empty_in_test2 WHERE k1 IN ()",
+                            "SELECT v FROM empty_in_test2 WHERE k1 = 0 AND k2 IN ()",
+                            "DELETE FROM empty_in_test2 WHERE k1 IN ()",
+                            "SELECT * FROM empty_in_test2",
+                            "UPDATE empty_in_test2 SET v = 3 WHERE k1 IN () AND k2 = 2",
+                            "SELECT * FROM empty_in_test2"
+                            ],
+                'results': [[],
+                            [],
+                            [],
+                            [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
+                            [],
+                            [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
+                            [],
+                            [],
+                            [],
+                            [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
+                            [],
+                            [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]]
+                            ],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # collection_flush_test: CASSANDRA-5805
+            {
+                'create_tables': [
+                    "CREATE TABLE collection_flush_test (k int PRIMARY KEY, s set<int>)"],
+                'truncates': ["TRUNCATE collection_flush_test"],
+                'inserts': ["INSERT INTO collection_flush_test(k, s) VALUES (1, {1})",
+                            "#REMOTER_RUN sudo nodetool flush",
+                            "INSERT INTO collection_flush_test(k, s) VALUES (1, {2})",
+                            "#REMOTER_RUN sudo nodetool flush"],
+                'queries': ["SELECT * FROM collection_flush_test"],
+                'results': [[[1, set([2])]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # select_distinct_test
+            {
+                'create_tables': [
+                    "CREATE TABLE select_distinct_test1 (pk0 int, pk1 int, ck0 int, val int, PRIMARY KEY((pk0, pk1), ck0))",
+                    "CREATE TABLE select_distinct_test2 (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1))) WITH COMPACT STORAGE",
+                    "CREATE TABLE select_distinct_test3 (pk int, name text, val int, PRIMARY KEY(pk, name)) WITH COMPACT STORAGE"],
+                'truncates': ["TRUNCATE select_distinct_test1", "TRUNCATE select_distinct_test2",
+                              "TRUNCATE select_distinct_test3"],
+                'inserts': ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 0, 0)' % (i, i) for
+                            i in xrange(0, 3)] +
+                           ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 1, 1)' % (i, i) for
+                            i in xrange(0, 3)] +
+                           ['INSERT INTO select_distinct_test2 (pk0, pk1, val) VALUES (%d, %d, %d)' % (i, i, i) for i in
+                            xrange(0, 3)] +
+                           ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name0', 0)" % i for i in
+                            xrange(0, 3)] +
+                           ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name1', 1)" % i for i in
+                            xrange(0, 3)],
+                'queries': ['SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 1',
+                            'SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 3',
+                            'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 1',
+                            'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 3',
+                            'SELECT DISTINCT pk FROM select_distinct_test3 LIMIT 1',
+                            'SELECT DISTINCT pk FROM select_distinct_test3 LIMIT 3'],
+                'results': [[[0, 0]],
+                            [[0, 0], [1, 1], [2, 2]],
+                            [[0, 0]],
+                            [[0, 0], [1, 1], [2, 2]],
+                            [[0]],
+                            [[0], [1], [2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'ordered=True cluster.set_partitioner("org.apache.cassandra.dht.ByteOrderedPartitioner") required'},
+            # function_with_null_test
+            {
+                'create_tables': ["""
+                CREATE TABLE function_with_null_test (
+                    k int PRIMARY KEY,
+                    t timeuuid
+                )"""],
+                'truncates': ["TRUNCATE function_with_null_test"],
+                'inserts': ["INSERT INTO function_with_null_test(k) VALUES (0)"],
+                'queries': ["SELECT dateOf(t) FROM function_with_null_test WHERE k=0"],
+                'results': [[[None]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # cas_simple_test
+            {
+                'create_tables': ["CREATE TABLE cas_simple_test (tkn int, consumed boolean, PRIMARY KEY (tkn));"],
+                'truncates': ["TRUNCATE cas_simple_test"],
+                'inserts': [],
+                'queries': [[["INSERT INTO cas_simple_test (tkn, consumed) VALUES ({},FALSE);".format(k),
+                              "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
+                                  k),
+                              "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
+                                  k).format(i)] for k in range(1, 10)][j][i] for j in xrange(0, 9) for i in
+                            xrange(0, 3)],
+                'results': [[], [[True]], [[False, True]]] * 3,
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
+            # internal_application_error_on_select_test: Test for 'Internal application error' on
+            # SELECT .. WHERE col1=val AND col2 IN (1,2) CASSANDRA-6050
+            {
+                'create_tables': ["""
+                CREATE TABLE internal_application_error_on_select_test (
+                    k int PRIMARY KEY,
+                    a int,
+                    b int
+                )
+            """, "CREATE INDEX ON internal_application_error_on_select_test(a)"],
+                'truncates': [],
+                'inserts': [],
+                'queries': [],
+                'results': [],
+                'invalid_queries': [
+                    "SELECT * FROM internal_application_error_on_select_test WHERE a = 3 AND b IN (1, 3)"],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Indexes are not supported yet'},
+            # store_sets_with_if_not_exists_test: Test to fix bug where sets are not stored by INSERT with IF NOT EXISTS CASSANDRA-6069
+            {
+                'create_tables': ["""
+                CREATE TABLE store_sets_with_if_not_exists_test (
+                    k int PRIMARY KEY,
+                    s set<int>
+                )
+            """],
+                'truncates': ["TRUNCATE store_sets_with_if_not_exists_test"],
+                'inserts': [],
+                'queries': ["INSERT INTO store_sets_with_if_not_exists_test(k, s) VALUES (0, {1, 2, 3}) IF NOT EXISTS",
+                            "SELECT * FROM store_sets_with_if_not_exists_test"],
+                'results': [[[True]],
+                            [[0, {1, 2, 3}]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
+            # add_deletion_info_in_unsorted_column_test: Test that UnsortedColumns.addAll(ColumnFamily)
+            # adds the deletion info of the CF in argument. CASSANDRA-6115
+            {
+                'create_tables': [
+                    "CREATE TABLE add_deletion_info_in_unsorted_column_test (k int, v int, PRIMARY KEY (k, v))"],
+                'truncates': ["TRUNCATE add_deletion_info_in_unsorted_column_test"],
+                'inserts': ["INSERT INTO add_deletion_info_in_unsorted_column_test (k, v) VALUES (0, 1)",
+                            "BEGIN BATCH DELETE FROM add_deletion_info_in_unsorted_column_test WHERE k=0 AND v=1; INSERT INTO add_deletion_info_in_unsorted_column_test (k, v) VALUES (0, 2); APPLY BATCH"],
+                'queries': ["SELECT * FROM add_deletion_info_in_unsorted_column_test"],
+                'results': [[[0, 2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # column_name_validation_test
+            {
+                'create_tables': ["""
+                CREATE TABLE column_name_validation_test (
+                    k text,
+                    c int,
+                    v timeuuid,
+                    PRIMARY KEY (k, c)
+                )
+            """],
+                'truncates': [],
+                'inserts': [],
+                'queries': [],
+                'results': [],
+                'invalid_queries': ["INSERT INTO column_name_validation_test(k, c) VALUES ('', 0)",
+                                    "INSERT INTO column_name_validation_test(k, c) VALUES (0, 10000000000)",
+                                    "INSERT INTO column_name_validation_test(k, c, v) VALUES (0, 0, 550e8400-e29b-41d4-a716-446655440000)"],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # user_types_test
+            {
+                'create_tables': ["""
+              CREATE TYPE address (
+              street text,
+              city text,
+              zip_code int,
+              phones set<text>
+              )
+           """, """
+              CREATE TYPE fullname (
+               firstname text,
+               lastname text
+              )
+           """, """
+              CREATE TABLE user_types_test (
+               id uuid PRIMARY KEY,
+               name frozen<fullname>,
+               addresses map<text, frozen<address>>
+              )
+           """],
+                'truncates': ["TRUNCATE user_types_test"],
+                'inserts': [
+                    "INSERT INTO user_types_test (id, name) VALUES (UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd'), {{ firstname: 'Paul', lastname: 'smith'}})"],
+                'queries': [
+                    "SELECT name.firstname FROM user_types_test WHERE id = UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')",
+                    "SELECT name.firstname FROM user_types_test WHERE id = UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')",
+                    "UPDATE user_types_test SET addresses = addresses + {{ 'home': {{ street: '...', city: 'SF', zip_code: 94102, phones: {{}} }} }} WHERE id=UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')"],
+                'results': [[['Paul']],
+                            [['Paul']],
+                            []],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Invalid number of arguments in call to function system.uuid: 0 required but 1 provided'},
+            # more_user_types_test
+            {
+                'create_tables': ["""
+            CREATE TYPE type1 (
+                s set<text>,
+                m map<text, text>,
+                l list<text>
+            )
+        """, """
+            CREATE TYPE type2 (
+                s set<frozen<type1>>,
+            )
+        """, "CREATE TABLE more_user_types_test (id int PRIMARY KEY, val frozen<type2>)"],
+                'truncates': ["TRUNCATE more_user_types_test"],
+                'inserts': [
+                    "INSERT INTO more_user_types_test(id, val) VALUES (0, { s : {{ s : {'foo', 'bar'}, m : { 'foo' : 'bar' }, l : ['foo', 'bar']} }})",
+                    "SELECT * FROM more_user_types_test"],
+                'queries': [],
+                'results': [],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # intersection_logic_returns_empty_result_test
+            {
+                'create_tables': ["""
+            CREATE TABLE intersection_logic_returns_empty_result_test1 (
+                k int,
+                v int,
+                PRIMARY KEY (k, v)
+            )
+        """, """
+            CREATE TABLE intersection_logic_returns_empty_result_test2 (
+                k int,
+                v int,
+                c1 int,
+                c2 int,
+                PRIMARY KEY (k, v)
+            )
+        """],
+                'truncates': ["TRUNCATE intersection_logic_returns_empty_result_test1"],
+                'inserts': ["INSERT INTO intersection_logic_returns_empty_result_test1 (k, v) VALUES (0, 0)",
+                            "#FLUSH"],
+                'queries': ["SELECT v FROM intersection_logic_returns_empty_result_test1 WHERE k=0 AND v IN (1, 0)",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test1 WHERE v IN (1, 0) ALLOW FILTERING",
+                            "INSERT INTO intersection_logic_returns_empty_result_test2 (k, v) VALUES (0, 0)",
+                            "#FLUSH",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE k=0 AND v IN (1, 0)",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE v IN (1, 0) ALLOW FILTERING",
+                            "DELETE FROM intersection_logic_returns_empty_result_test2 WHERE k = 0",
+                            "UPDATE intersection_logic_returns_empty_result_test2 SET c2 = 1 WHERE k = 0 AND v = 0",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE k=0 AND v IN (1, 0)",
+                            "DELETE c2 FROM intersection_logic_returns_empty_result_test2 WHERE k = 0 AND v = 0",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE k=0 AND v IN (1, 0)",
+                            "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE v IN (1, 0) ALLOW FILTERING"],
+                'results': [[[0]],
+                            [[0]],
+                            [],
+                            [[0]],
+                            [[0]],
+                            [],
+                            [],
+                            [[0]],
+                            [],
+                            [],
+                            []],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'allow filtering <Error from server: code=2000 [Syntax error in CQL query] message="line 1:0 no viable alternative at input ''">'},
+            # nan_infinity_test
+            {
+                'create_tables': ["CREATE TABLE nan_infinity_test (f float PRIMARY KEY)"],
+                'truncates': ["TRUNCATE nan_infinity_test"],
+                'inserts': ["INSERT INTO nan_infinity_test(f) VALUES (NaN)",
+                            "INSERT INTO nan_infinity_test(f) VALUES (-NaN)",
+                            "INSERT INTO nan_infinity_test(f) VALUES (Infinity)",
+                            "INSERT INTO nan_infinity_test(f) VALUES (-Infinity)"],
+                'queries': ["#STR SELECT * FROM nan_infinity_test"],
+                'results': ['[[nan], [inf], [-inf]]'],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # static_columns_test
+            {
+                'create_tables': ["""
+            CREATE TABLE static_columns_test (
+                k int,
+                p int,
+                s int static,
+                v int,
+                PRIMARY KEY (k, p)
+            )
+        """],
+                'truncates': ["TRUNCATE static_columns_test"],
+                'inserts': ["INSERT INTO static_columns_test(k, s) VALUES (0, 42)",
+                            "SELECT s, writetime(s) FROM static_columns_test WHERE k=0"],
+                'queries': ["SELECT * FROM static_columns_test",
+                            "INSERT INTO static_columns_test(k, p, s, v) VALUES (0, 0, 12, 0)",
+                            "INSERT INTO static_columns_test(k, p, s, v) VALUES (0, 1, 24, 1)",
+                            "SELECT * FROM static_columns_test",
+                            "SELECT * FROM static_columns_test WHERE k=0 AND p=0",
+                            "SELECT * FROM static_columns_test WHERE k=0 AND p=0 ORDER BY p DESC",
+                            "SELECT * FROM static_columns_test WHERE k=0 AND p=1",
+                            "SELECT * FROM static_columns_test WHERE k=0 AND p=1 ORDER BY p DESC",
+                            "SELECT * FROM static_columns_test WHERE k=0 AND p IN (0, 1)",
+                            "SELECT p, v FROM static_columns_test WHERE k=0 AND p=1",
+                            "SELECT DISTINCT s FROM static_columns_test WHERE k=0",
+                            "SELECT s FROM static_columns_test WHERE k=0",
+                            "SELECT s, v FROM static_columns_test WHERE k=0",
+                            "SELECT s, v FROM static_columns_test WHERE k=0 AND p=1",
+                            "SELECT p, s FROM static_columns_test WHERE k=0 AND p=1",
+                            "SELECT k, p, s FROM static_columns_test WHERE k=0 AND p=1",
+                            "DELETE FROM static_columns_test WHERE k=0 AND p=0",
+                            "SELECT * FROM static_columns_test",
+                            "DELETE s FROM static_columns_test WHERE k=0",
+                            "SELECT * FROM static_columns_test"],
+                'results': [[[0, None, 42, None]],
+                            [],
+                            [],
+                            [[0, 0, 24, 0], [0, 1, 24, 1]],
+                            [[0, 0, 24, 0]],
+                            [[0, 0, 24, 0]],
+                            [[0, 1, 24, 1]],
+                            [[0, 1, 24, 1]],
+                            [[0, 0, 24, 0], [0, 1, 24, 1]],
+                            [[1, 1]],
+                            [[24]],
+                            [[24], [24]],
+                            [[24, 0], [24, 1]],
+                            [[24, 1]],
+                            [[1, 24]],
+                            [[0, 1, 24]],
+                            [],
+                            [[0, 1, 24, 1]],
+                            [],
+                            [[0, 1, None, 1]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            # select_count_paging_test: Test for the CASSANDRA-6579 'select count' paging bug
+            {
+                'create_tables': [
+                    "create table select_count_paging_test(field1 text, field2 timeuuid, field3 boolean, primary key(field1, field2));",
+                    "create index test_index on select_count_paging_test(field3);"],
+                'truncates': ["TRUNCATE select_count_paging_test"],
+                'inserts': [
+                    "insert into select_count_paging_test(field1, field2, field3) values ('hola', now(), false);",
+                    "insert into select_count_paging_test(field1, field2, field3) values ('hola', now(), false);"],
+                'queries': ["select count(*) from select_count_paging_test where field3 = false limit 1;"],
+                'results': [[[2]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Index support is not enabled'},
+            # cas_and_ttl_test
+            {
+                'create_tables': ["CREATE TABLE cas_and_ttl_test (k int PRIMARY KEY, v int, lock boolean)"],
+                'truncates': ["TRUNCATE cas_and_ttl_test"],
+                'inserts': ["INSERT INTO cas_and_ttl_test (k, v, lock) VALUES (0, 0, false)",
+                            "UPDATE cas_and_ttl_test USING TTL 1 SET lock=true WHERE k=0"],
+                'queries': ["UPDATE cas_and_ttl_test SET v = 1 WHERE k = 0 IF lock = null"],
+                'results': [[[True]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
+            # tuple_notation_test: Test the syntax introduced in CASSANDRA-4851
+            {
+                'create_tables': [
+                    "CREATE TABLE tuple_notation_test (k int, v1 int, v2 int, v3 int, PRIMARY KEY (k, v1, v2, v3))"],
+                'truncates': ["TRUNCATE tuple_notation_test"],
+                'inserts': ["INSERT INTO tuple_notation_test(k, v1, v2, v3) VALUES (0, %d, %d, %d)" % (i, j, k) for i in
+                            range(0, 2)
+                            for j in range(0, 2) for k in range(0, 2)],
+                'queries': ["SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0",
+                            "SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v2, v3) >= (1, 0, 1)",
+                            "SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v2) >= (1, 1)",
+                            "SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v2) > (0, 1) AND (v1, v2, v3) <= (1, 1, 0)"],
+                'results': [[[0, 0, 0],
+                             [0, 0, 1],
+                             [0, 1, 0],
+                             [0, 1, 1],
+                             [1, 0, 0],
+                             [1, 0, 1],
+                             [1, 1, 0],
+                             [1, 1, 1]],
+                            [[1, 0, 1], [1, 1, 0], [1, 1, 1]],
+                            [[1, 1, 0], [1, 1, 1]],
+                            [[1, 0, 0], [1, 0, 1], [1, 1, 0]]],
+                'invalid_queries': ["SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v3) > (1, 0)"],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'CHECK INVALID QURY IN 2.0'},
+            # in_order_by_without_selecting_test: Test that columns don't need to be selected for ORDER BY when there is a IN
+            # CASSANDRA-4911
+            {
+                'create_tables': [
+                    "CREATE TABLE in_order_by_without_selecting_test (k int, c1 int, c2 int, v int, PRIMARY KEY (k, c1, c2))"],
+                'truncates': ["TRUNCATE in_order_by_without_selecting_test"],
+                'inserts': ["INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (0, 0, 0, 0)",
+                            "INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (0, 0, 1, 1)",
+                            "INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (0, 0, 2, 2)",
+                            "INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (1, 1, 0, 3)",
+                            "INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (1, 1, 1, 4)",
+                            "INSERT INTO in_order_by_without_selecting_test(k, c1, c2, v) VALUES (1, 1, 2, 5)"],
+                'queries': ["SELECT * FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0)",
+                            "SELECT * FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 ASC, c2 ASC",
+                            "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0)",
+                            "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 ASC",
+                            "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 DESC",
+                            "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0)",
+                            "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0) ORDER BY c1 ASC"],
+                'results': [[[0, 0, 0, 0], [0, 0, 2, 2]],
+                            [[0, 0, 0, 0], [0, 0, 2, 2]],
+                            [[0], [2]],
+                            [[0], [2]],
+                            [[2], [0]], [[0], [1], [2], [3], [4], [5]],
+                            [[0], [1], [2], [3], [4], [5]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': '#2029'},
+            # cas_and_compact_test: Test for CAS with compact storage table, and CASSANDRA-6813 in particular
+            {
+                'create_tables': ["""
+            CREATE TABLE cas_and_compact_test (
+                partition text,
+                key text,
+                owner text,
+                PRIMARY KEY (partition, key)
+            ) WITH COMPACT STORAGE
+        """],
+                'truncates': ["TRUNCATE cas_and_compact_test"],
+                'inserts': ["INSERT INTO cas_and_compact_test(partition, key, owner) VALUES ('a', 'b', null)"],
+                'queries': ["UPDATE cas_and_compact_test SET owner='z' WHERE partition='a' AND key='b' IF owner=null",
+                            "UPDATE cas_and_compact_test SET owner='b' WHERE partition='a' AND key='b' IF owner='a'",
+                            "UPDATE cas_and_compact_test SET owner='b' WHERE partition='a' AND key='b' IF owner='z'",
+                            "INSERT INTO cas_and_compact_test(partition, key, owner) VALUES ('a', 'c', 'x') IF NOT EXISTS"],
+                'results': [[[True]],
+                            [[False, 'z']],
+                            [[True]],
+                            [[True]]],
+                'min_version': '',
+                'max_version': '',
+                'skip': 'Not implemented: LWT'},
 
         ]
 
@@ -1949,7 +2863,15 @@ class UpgradeTest(ClusterTester):
                 else:
                     session.default_fetch_size = default_fetch_size
                 for insert in a['inserts']:
-                    session.execute(insert)
+                    try:
+                        if insert.startswith("#REMOTER_RUN"):
+                            for node in self.db_cluster.nodes:
+                                node.remoter.run(insert.replace('#REMOTER_RUN', ''))
+                        else:
+                            session.execute(insert)
+                    except Exception as e:
+                        print insert, e
+                        raise e
                 for i in range(len(a['queries'])):
                     try:
                         if a['queries'][i].startswith("#SORTED"):
@@ -1961,6 +2883,9 @@ class UpgradeTest(ClusterTester):
                         elif a['queries'][i].startswith("#LENGTH"):
                             res = session.execute(a['queries'][i].replace('#LENGTH', ''))
                             self.assertEqual(len([list(row) for row in res]), a['results'][i])
+                        elif a['queries'][i].startswith("#STR"):
+                            res = session.execute(a['queries'][i].replace('#STR', ''))
+                            self.assertEqual(str([list(row) for row in res]), a['results'][i])
                         else:
                             res = session.execute(a['queries'][i])
                             self.assertEqual([list(row) for row in res], a['results'][i])
@@ -1995,7 +2920,7 @@ class UpgradeTest(ClusterTester):
                                         loaders=self.loaders,
                                         monitoring_set=self.monitors)
             self.db_cluster.start_nemesis(interval=15)
-            # 10 minutes to upgrade 1 node
+            # 15 minutes to upgrade 1 node
             self.db_cluster.stop_nemesis(timeout=15 * 60)
             session = self.cql_connection_patient(self.db_cluster.node_to_upgrade)
             session.execute("USE keyspace1;")
@@ -2012,7 +2937,11 @@ class UpgradeTest(ClusterTester):
                     else:
                         session.default_fetch_size = default_fetch_size
                     for insert in a['inserts']:
-                        session.execute(insert)
+                        if insert.startswith("#REMOTER_RUN"):
+                            for node in self.db_cluster.nodes:
+                                node.remoter.run(insert.replace('#REMOTER_RUN', ''))
+                        else:
+                            session.execute(insert)
                     for i in range(len(a['queries'])):
                         try:
                             if a['queries'][i].startswith("#SORTED"):
@@ -2024,6 +2953,9 @@ class UpgradeTest(ClusterTester):
                             elif a['queries'][i].startswith("#LENGTH"):
                                 res = session.execute(a['queries'][i].replace('#LENGTH', ''))
                                 self.assertEqual(len([list(row) for row in res]), a['results'][i])
+                            elif a['queries'][i].startswith("#STR"):
+                                res = session.execute(a['queries'][i].replace('#STR', ''))
+                                self.assertEqual(str([list(row) for row in res]), a['results'][i])
                             else:
                                 res = session.execute(a['queries'][i])
                                 self.assertEqual([list(row) for row in res], a['results'][i])
@@ -2040,38 +2972,38 @@ class UpgradeTest(ClusterTester):
 
         self.verify_stress_thread(stress_queue)
 
-    # def test_20_minutes(self):
-    #     """
-    #     Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
-    #     If upgrade_node_packages defined we specify duration 10 * len(nodes) minutes.
-    #     """
-    #     self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
-    #                                 loaders=self.loaders,
-    #                                 monitoring_set=self.monitors)
-    #     self.db_cluster.start_nemesis(interval=10)
-    #     duration = 20
-    #     if self.params.get('upgrade_node_packages'):
-    #         duration = 30 * len(self.db_cluster.nodes)
-    #     self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=duration)
-    #
-    # def test_20_minutes_rollback(self):
-    #     """
-    #     Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
-    #     """
-    #     self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
-    #                                 loaders=self.loaders,
-    #                                 monitoring_set=self.monitors)
-    #     self.db_cluster.start_nemesis(interval=10)
-    #     self.db_cluster.stop_nemesis(timeout=None)
-    #
-    #     self.db_cluster.clean_nemesis()
-    #
-    #     self.db_cluster.add_nemesis(nemesis=RollbackNemesis,
-    #                                 loaders=self.loaders,
-    #                                 monitoring_set=self.monitors)
-    #     self.db_cluster.start_nemesis(interval=10)
-    #     self.run_stress(stress_cmd=self.params.get('stress_cmd'),
-    #                     duration=self.params.get('cassandra_stress_duration', 20))
+        def test_20_minutes(self):
+            """
+            Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
+            If upgrade_node_packages defined we specify duration 10 * len(nodes) minutes.
+            """
+            self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
+                                        loaders=self.loaders,
+                                        monitoring_set=self.monitors)
+            self.db_cluster.start_nemesis(interval=10)
+            duration = 20
+            if self.params.get('upgrade_node_packages'):
+                duration = 30 * len(self.db_cluster.nodes)
+            self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=duration)
+
+        def test_20_minutes_rollback(self):
+            """
+            Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
+            """
+            self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
+                                        loaders=self.loaders,
+                                        monitoring_set=self.monitors)
+            self.db_cluster.start_nemesis(interval=10)
+            self.db_cluster.stop_nemesis(timeout=None)
+
+            self.db_cluster.clean_nemesis()
+
+            self.db_cluster.add_nemesis(nemesis=RollbackNemesis,
+                                        loaders=self.loaders,
+                                        monitoring_set=self.monitors)
+            self.db_cluster.start_nemesis(interval=10)
+            self.run_stress(stress_cmd=self.params.get('stress_cmd'),
+                            duration=self.params.get('cassandra_stress_duration', 20))
 
 
 if __name__ == '__main__':
