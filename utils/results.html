@@ -2,15 +2,30 @@
 <html lang="en">
 <head>
     <title>TEST COMPARE RESULTS</title>
+    <style>
+        .blue   { color: blue; }
+        .fbold  { font-weight: bold; }
+        .red    { color: red; }
+        .green  { color: green; }
+        .notice { font-size:120%; }
+    </style>
 </head>
 
 <body>
     {% for cmp_res in res_list %}
-        <h3>{{ cmp_res.test_type }}</h3>
-        <h3>Compare {{ cmp_res.version_src }} with {{ cmp_res.version_dst }}</h3>
+        <h2>{{ cmp_res.test_type }}</h2>
+        <h3 class="blue">Compare {{ cmp_res.version_src }} to {{ cmp_res.version_dst }}</h3>
         {% for param, param_res in cmp_res.res.iteritems() %}
             <div>
-                <span>{{ param }}: </span><span><strong>{{ param_res }}</strong></span>
+                <span class="blue">{{ param }}: </span>
+                <span class="notice fbold">{{ param_res.delta_type }} </span>&nbsp;
+                <span class="notice fbold">{{ param_res.percent }} </span>&nbsp;
+                <span>{{ param_res.comment }} </span>&nbsp;
+                {% if param_res.status == 'Regression' %}
+                    <span class="red fbold"> {{ param_res.status }}</span>
+                {% else %}
+                    <span class="green fbold"> {{ param_res.status }}</span>
+                {% endif %}
             </div>
         {% endfor %}
     {% endfor %}
