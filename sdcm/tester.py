@@ -123,6 +123,7 @@ def clean_aws_resources(method):
         try:
             return method(*args, **kwargs)
         except Exception:
+            TEST_LOG.exception('Exception in wrapped method %s', method.__name__)
             args[0].clean_resources()
             raise
     return wrapper
