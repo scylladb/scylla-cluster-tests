@@ -977,6 +977,9 @@ WantedBy=multi-user.target
     def search_database_log(self, expression):
         matches = []
         pattern = re.compile(expression, re.IGNORECASE)
+
+        if not os.path.exists(self.database_log):
+            return matches
         with open(self.database_log, 'r') as f:
             for index, line in enumerate(f):
                 if index not in self._database_log_errors_index:
