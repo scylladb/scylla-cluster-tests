@@ -1,23 +1,23 @@
 [scylla]
 name=Scylla for Centos $releasever - $basearch
-baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/8/scylla/$releasever/$basearch/
+baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/latest/scylla/$releasever/$basearch/
 enabled=1
 gpgcheck=0
 
 [scylla-generic]
 name=Scylla for centos $releasever
-baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/8/scylla/$releasever/noarch/
+baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/latest/scylla/$releasever/noarch/
 enabled=1
 gpgcheck=0
 
 [scylla-3rdparty]
 name=Scylla 3rdParty for Centos $releasever - $basearch
-baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/8/3rdparty/$releasever/$basearch/
+baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/latest/3rdparty/$releasever/$basearch/
 enabled=1
 gpgcheck=0
 
 [scylla-3rdparty-generic]
 name=Scylla 3rdParty for Centos $releasever
-baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/8/3rdparty/$releasever/noarch/
+baseurl=http://downloads.scylladb.com/rpm/unstable/centos/branch-2.0/latest/3rdparty/$releasever/noarch/
 enabled=1
 gpgcheck=0
