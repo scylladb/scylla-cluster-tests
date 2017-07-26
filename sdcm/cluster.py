@@ -1816,8 +1816,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[]):
-        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[], compaction_strategy=None):
+        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 compaction(strategy=$3) ")
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
@@ -1826,7 +1826,7 @@ class BaseLoaderSet(object):
                 cs_profile.save()
         queue = Queue.Queue()
 
-        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
+        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd, strategy):
             first_node = [n for n in node_list if n.dc_idx == loader_idx % 3][0]
             stress_cmd += " -node {}".format(first_node.private_ip_address)
             stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
@@ -1862,7 +1862,7 @@ class BaseLoaderSet(object):
                 node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
             else:
                 node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx)
+            node_cmd = 'echo %s; %s %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx, strategy)
 
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
@@ -1876,9 +1876,14 @@ class BaseLoaderSet(object):
         for loader_idx, loader in enumerate(self.nodes):
             for cpu_idx in range(stress_num):
                 for ks_idx in range(1, keyspace_num + 1):
+                    if compaction_strategy is None:
+                        strategy = 'SizeTieredCompactionStrategy'
+                    else:
+                        assert len(compaction_strategy) == keyspace_num
+                        strategy = compaction_strategy[ks_idx - 1]
                     setup_thread = threading.Thread(target=node_run_stress,
                                                     args=(loader, loader_idx,
-                                                          cpu_idx, ks_idx, profile, stress_cmd))
+                                                          cpu_idx, ks_idx, profile, stress_cmd, strategy))
                     setup_thread.daemon = True
                     setup_thread.start()
                     time.sleep(30)
