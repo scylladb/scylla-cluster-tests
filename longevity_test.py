@@ -36,6 +36,9 @@ class LongevityTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     loaders=self.loaders,
                                     monitoring_set=self.monitors)
+        compaction_strategy = ['SizeTieredCompactionStrategy',
+                               'DateTieredCompactionStrategy',
+                               'LeveledCompactionStrategy']
         stress_queue = list()
         for cmd in ('stress_cmd', 'stress_cmd_1'):
             stress_cmd = self.params.get(cmd)
@@ -43,13 +46,15 @@ class LongevityTest(ClusterTester):
                 if 'counter_' in stress_cmd:
                     self._create_counter_table()
                 self.log.debug('stress cmd: {}'.format(stress_cmd))
-                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
+                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
+                                                           keyspace_num=3,
+                                                           compaction_strategy=compaction_strategy))
 
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
         for stress in stress_queue:
-            self.verify_stress_thread(queue=stress)
+            self.verify_stress_thread(queue=stress, keyspace_num=3)
 
     def _create_counter_table(self):
         """
