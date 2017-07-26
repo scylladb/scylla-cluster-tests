@@ -554,18 +554,6 @@ class UpgradeNemesisOneNode(UpgradeNemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.log.info('UpgradeNemesisOneNode begin')
-        # get the number of nodes
-        # l = len(self.cluster.nodes)
-        # prepare an array containing the indexes
-        # indexes = [x for x in range(l)]
-        # shuffle it so we will upgrade the nodes in a
-        # random order
-        # random.shuffle(indexes)
-
-        # upgrade all the nodes in random order
-        # for i in indexes:
-        #     node = self.cluster.nodes[i]
-        #     self.upgrade_node(node)
         self.upgrade_node(self.cluster.node_to_upgrade)
 
         self.log.info('UpgradeNemesisOneNode end')
@@ -583,7 +571,7 @@ class RollbackNemesis(Nemesis):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf -y')
+        node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
         node.remoter.run('nodetool drain')
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
