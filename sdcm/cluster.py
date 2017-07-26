@@ -2564,6 +2564,9 @@ class GCECluster(BaseCluster):
             for i in range(self._gce_n_local_ssd):
                 gce_disk_struct.append(self._get_scratch_disk_struct(name=name, index=i))
             self.log.info(gce_disk_struct)
+            # Name must start with a lowercase letter followed by up to 63
+            # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
+            assert len(name) <= 63, "Max length of instance name is 63"
             instance = self._gce_service.create_node(name=name,
                                                      size=self._gce_instance_type,
                                                      image=self._gce_image,
