@@ -2993,6 +2993,12 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         if self._experimental():
             scylla_yaml_contents += "\nexperimental: true\n"
 
+        authenticator = self.params.get('authenticator')
+        if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
+            p = re.compile('[# ]*authenticator:.*')
+            scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
+                                         scylla_yaml_contents)
+
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
 
