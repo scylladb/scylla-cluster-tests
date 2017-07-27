@@ -1001,7 +1001,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1059,6 +1059,11 @@ WantedBy=multi-user.target
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
+
+        if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
+            p = re.compile('[# ]*authenticator:.*')
+            scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
+                                         scylla_yaml_contents)
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -3015,10 +3020,12 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         if len(self.datacenter) > 1:
             endpoint_snitch = "GossipingPropertyFileSnitch"
             node.datacenter_setup(self.datacenter)
+        authenticator = self.params.get('authenticator')
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
                           enable_exp=self._experimental(),
-                          endpoint_snitch=endpoint_snitch)
+                          endpoint_snitch=endpoint_snitch,
+                          authenticator=authenticator)
 
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
