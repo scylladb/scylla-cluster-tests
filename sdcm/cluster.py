@@ -3192,14 +3192,15 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node):
+        authenticator = self.params.get('authenticator')
         endpoint_snitch = ''
         if len(self.datacenter) > 1:
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
             seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address)
+            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address, authenticator=authenticator)
         else:
-            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
+            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch, authenticator=authenticator)
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.remoter.run('nodetool status', verbose=True)
 
