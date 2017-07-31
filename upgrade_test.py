@@ -15,11 +15,12 @@
 
 
 import random
+from collections import OrderedDict
+from uuid import UUID
+
 from avocado import main
 from cassandra import InvalidRequest
 from cassandra.util import sortedset
-from collections import OrderedDict
-from uuid import UUID
 
 from sdcm.nemesis import RollbackNemesis
 from sdcm.nemesis import UpgradeNemesis, UpgradeNemesisOneNode
@@ -373,7 +374,6 @@ class UpgradeTest(ClusterTester):
             ) WITH COMPACT STORAGE;"""],
                 'truncates': ['TRUNCATE counters_test'],
                 'inserts': [
-                    "UPDATE counters_test SET total = 0 WHERE userid = 1 AND url = 'http://foo.com'",
                     "UPDATE counters_test SET total = total + 1 WHERE userid = 1 AND url = 'http://foo.com'",
                 ],
                 'queries': [
@@ -386,16 +386,17 @@ class UpgradeTest(ClusterTester):
                     "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'"],
                 'results': [
                     [[1]],
-                    None,
+                    [],
                     [[-3]],
-                    None,
+                    [],
                     [[-2]],
-                    None,
+                    [],
                     [[-4]]
                 ],
                 'min_version': '1.7',
+                'skip_condition': "self.params.get('experimental', default='false').lower() == 'true'",
                 'max_version': '',
-                'skip': 'Counter support is not enabled'},
+                'skip': ''},
             # indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause
             {
                 'create_tables': ["""
@@ -2849,7 +2850,7 @@ class UpgradeTest(ClusterTester):
         """)
         session.execute("USE keyspace1;")
         for a in all_verification_items:
-            if not a['skip']:
+            if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
                 for create_table in a['create_tables']:
                     session.execute(create_table)
                 for truncate in a['truncates']:
@@ -2857,7 +2858,7 @@ class UpgradeTest(ClusterTester):
 
         for a in all_verification_items:
             session.execute("USE keyspace1;")
-            if not a['skip']:
+            if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
                 if 'disable_paging' in a and a['disable_paging']:
                     session.default_fetch_size = 0
                 else:
@@ -2931,7 +2932,7 @@ class UpgradeTest(ClusterTester):
                         session.execute(truncate)
             for a in all_verification_items:
                 session.execute("USE keyspace1;")
-                if not a['skip']:
+                if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
                     if 'disable_paging' in a and a['disable_paging']:
                         session.default_fetch_size = 0
                     else:
