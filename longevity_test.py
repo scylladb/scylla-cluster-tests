@@ -13,7 +13,8 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-
+import os
+import re
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -40,15 +41,21 @@ class LongevityTest(ClusterTester):
                                'DateTieredCompactionStrategy',
                                'LeveledCompactionStrategy']
         stress_queue = list()
-        for cmd in ('stress_cmd', 'stress_cmd_1'):
-            stress_cmd = self.params.get(cmd)
-            if stress_cmd:
-                if 'counter_' in stress_cmd:
-                    self._create_counter_table()
-                self.log.debug('stress cmd: {}'.format(stress_cmd))
-                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
-                                                           keyspace_num=3,
-                                                           compaction_strategy=compaction_strategy))
+
+        for stress_cmd in self.params.get('stress_cmd'):
+            params = {'stress_cmd': stress_cmd,
+                      'keyspace_num': 3,
+                      'compaction_strategy': compaction_strategy}
+            if 'counter_' in stress_cmd:
+                self._create_counter_table()
+            if 'profile' in stress_cmd:
+                cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
+                cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
+                params.update({'profile': cs_profile})
+            self.log.debug('stress cmd: {}'.format(stress_cmd))
+            stress_queue.append(self.run_stress_thread(**params))
+            if 'profile' in params:
+                del params['profile']
 
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
