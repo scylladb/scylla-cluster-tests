@@ -242,7 +242,7 @@ class Nemesis(object):
                 self.reconfigure_monitoring()
                 # Replace the node that was terminated.
                 if add_node:
-                    new_nodes = self.cluster.add_nodes(count=1)
+                    new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
                     self.cluster.wait_for_init(node_list=new_nodes)
                     self.reconfigure_monitoring()
 
