@@ -539,6 +539,8 @@ class ClusterTester(Test):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
+        results = self.get_stress_results(queue=stress_queue)
+        self.log.debug(results)
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
