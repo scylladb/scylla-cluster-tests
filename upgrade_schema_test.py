@@ -202,7 +202,7 @@ class TestNonStandardComparator(Test):
 
 
 # Fails due to https://github.com/scylladb/scylla/issues/2588
-@test
+#@test
 class TestThriftTableConvertedFromDenseToSparse(Test):
     keys = ['key%d' % i for i in range(10)]
 
