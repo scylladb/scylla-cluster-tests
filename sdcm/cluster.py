@@ -2653,7 +2653,9 @@ class GCECluster(BaseCluster):
 
             self._node_index += 1
             self.nodes += [n]
-            if len(self.nodes) - len(nodes) > 0:
+
+            local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
+            if len(local_nodes) - len(nodes) > 0:
                 n.is_addition = True
 
         assert len(nodes) == count, 'Fail to create {} instances'.format(count)
