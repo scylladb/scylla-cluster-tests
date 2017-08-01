@@ -1144,7 +1144,7 @@ class GCENode(BaseNode):
     def __init__(self, gce_instance, gce_service, credentials,
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
-        name = '%s-%s' % (node_prefix, node_index)
+        name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
         self._instance = gce_instance
         self._gce_service = gce_service
         self._wait_public_ip()
