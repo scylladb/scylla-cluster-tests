@@ -303,6 +303,7 @@ class UpgradeSchemaTest(ClusterTester):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+            self.log.info("started upgrade node {0}".format(self.db_cluster.node_to_upgrade))
             self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode,
 
                                         loaders=self.loaders,
@@ -316,11 +317,11 @@ class UpgradeSchemaTest(ClusterTester):
             cql_client = cluster.connect()
             thrift_client.set_keyspace(ks_name)
             cql_client.set_keyspace(ks_name)
-
             for test in tests:
                 test.runTest()
             thrift_client.transport.flush()
             thrift_client.transport.close()
             cql_client.shutdown()
             cql_client = None
+        self.log.info("test_upgrade_schema completed without errors")
         self.verify_stress_thread(stress_queue)
