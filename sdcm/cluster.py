@@ -3157,6 +3157,10 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         node.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         node.remoter.run('sudo mv /tmp/scylla.yaml /etc/scylla/scylla.yaml')
+
+        # Roy: Temporary test with different task-quota
+        node.remoter.run('sudo sed -i -e "s/--log-to-syslog 1/--log-to-syslog 1 --task-quota-ms 2.0 /g" /etc/sysconfig/scylla-server')
+
         node.remoter.run('sudo systemctl restart scylla-server.service')
 
     def wait_for_init(self, node_list=None, verbose=False):
