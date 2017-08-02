@@ -157,16 +157,15 @@ class Nemesis(object):
         self.target_node.remoter.send_files(break_scylla,
                                             "/tmp/break_scylla.sh")
 
-	# Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-	self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
         self.target_node.wait_db_down()
-	
+
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')
+        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # Start scylla
+        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
 
-	# Start scylla
-	self.target_node.remoter.run('sudo systemctl start scylla-server.service')
         self.target_node.wait_db_up()
 
     def disrupt(self):
