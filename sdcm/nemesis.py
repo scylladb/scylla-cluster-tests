@@ -209,8 +209,12 @@ class Nemesis(object):
     def reconfigure_monitoring(self):
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
-            targets = [n.private_ip_address for n in self.cluster.nodes]
-            targets += [n.private_ip_address for n in self.loaders.nodes]
+            if len(self.cluster.datacenter) > 1:
+                targets = [n.public_ip_address for n in self.cluster.nodes]
+                targets += [n.public_ip_address for n in self.loaders.nodes]
+            else:
+                targets = [n.private_ip_address for n in self.cluster.nodes]
+                targets += [n.private_ip_address for n in self.loaders.nodes]
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
@@ -238,7 +242,7 @@ class Nemesis(object):
                 self.reconfigure_monitoring()
                 # Replace the node that was terminated.
                 if add_node:
-                    new_nodes = self.cluster.add_nodes(count=1)
+                    new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
                     self.cluster.wait_for_init(node_list=new_nodes)
                     self.reconfigure_monitoring()
 
@@ -341,10 +345,15 @@ class Nemesis(object):
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
-    def call_random_disrupt_method(self):
-        disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                           attr[0].startswith('disrupt_') and
-                           callable(attr[1])]
+    def call_random_disrupt_method(self, disrupt_methods=None):
+        if not disrupt_methods:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0].startswith('disrupt_') and
+                               callable(attr[1])]
+        else:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0] in disrupt_methods and
+                               callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
         disrupt_method()
 
@@ -501,6 +510,13 @@ class ChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method()
+
+
+class MdcChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair', 'disrupt_nodetool_decommission'])
 
 
 class UpgradeNemesis(Nemesis):
