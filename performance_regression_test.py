@@ -326,7 +326,7 @@ class PerformanceRegressionTest(ClusterTester):
         """
         base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM n=30000000 "
                       "-schema 'replication(factor=3)' -port jmx=6868 "
-                      "-mode cql3 native -rate threads=1000 -errors ignore "
+                      "-mode cql3 native -rate threads=100 -errors ignore "
                       "-pop seq=1..30000000")
         base_cmd_r = ("cassandra-stress read no-warmup cl=QUORUM duration=50m "
                       "-schema 'replication(factor=3)' -port jmx=6868 "
@@ -352,7 +352,7 @@ class PerformanceRegressionTest(ClusterTester):
         """
         base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM n=30000000 "
                       "-schema 'replication(factor=3)' -port jmx=6868 "
-                      "-mode cql3 native -rate threads=1000 -errors ignore "
+                      "-mode cql3 native -rate threads=100 -errors ignore "
                       "-pop seq=1..30000000")
         base_cmd_m = ("cassandra-stress mixed no-warmup cl=QUORUM duration=50m "
                       "-schema 'replication(factor=3)' -port jmx=6868 "
