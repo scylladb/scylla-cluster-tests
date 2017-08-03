@@ -290,7 +290,7 @@ class Nemesis(object):
             nodes = self.cluster.nodes
         else:
             nodes = [self.target_node]
-        self._set_current_disruption('Enospc test on {}'.format(nodes))
+        self._set_current_disruption('Enospc test on {}'.format([n.name for n in nodes]))
 
         def search_database_enospc(node):
             """
