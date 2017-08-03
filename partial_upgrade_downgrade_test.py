@@ -71,5 +71,6 @@ class PartialUpgradeDowngradeTest(ClusterTester):
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
 
+
 if __name__ == '__main__':
     main()

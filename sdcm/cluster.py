@@ -3167,7 +3167,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         if self.nodes:
             if dc_idx > 0:
                 node_public_ips = [node.public_ip_address for node
-                                    in self.nodes if node.is_seed]
+                                   in self.nodes if node.is_seed]
                 seeds = ",".join(node_public_ips)
                 if not seeds:
                     seeds = self.nodes[0].public_ip_address
