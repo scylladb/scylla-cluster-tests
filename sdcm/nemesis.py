@@ -22,12 +22,6 @@ import time
 import datetime
 
 from avocado.utils import process
-from cassandra import ConsistencyLevel
-from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver
-from cassandra.cluster import NoHostAvailable
-from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy
 
 from .data_path import get_data_path
 from .log import SDCMAdapter
@@ -157,16 +151,16 @@ class Nemesis(object):
         self.target_node.remoter.send_files(break_scylla,
                                             "/tmp/break_scylla.sh")
 
-	# Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-	self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
         self.target_node.wait_db_down()
-	
+
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
         self.target_node.remoter.run('sudo /tmp/break_scylla.sh')
 
-	# Start scylla
-	self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+        # Start scylla
+        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
         self.target_node.wait_db_up()
 
     def disrupt(self):
@@ -570,9 +564,9 @@ class UpgradeNemesis(Nemesis):
     def disrupt(self):
         self.log.info('Upgrade Nemesis begin')
         # get the number of nodes
-        l = len(self.cluster.nodes)
+        nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(l)]
+        indexes = [x for x in range(nodes_num)]
         # shuffle it so we will upgrade the nodes in a
         # random order
         random.shuffle(indexes)
@@ -634,9 +628,9 @@ class RollbackNemesis(Nemesis):
     def disrupt(self):
         self.log.info('Rollback Nemesis begin')
         # get the number of nodes
-        l = len(self.cluster.nodes)
+        nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(l)]
+        indexes = [x for x in range(nodes_num)]
         # shuffle it so we will rollback the nodes in a
         # random order
         random.shuffle(indexes)
