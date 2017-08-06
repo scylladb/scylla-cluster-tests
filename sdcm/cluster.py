@@ -1817,7 +1817,7 @@ class BaseLoaderSet(object):
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[], compaction_strategy=None):
-        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 'compaction(strategy=$3)' ")
+        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 'compaction(strategy='$3')' ")
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
