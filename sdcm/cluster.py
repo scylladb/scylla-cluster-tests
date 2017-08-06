@@ -1001,7 +1001,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1059,6 +1059,11 @@ WantedBy=multi-user.target
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
+
+        if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
+            p = re.compile('[# ]*authenticator:.*')
+            scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
+                                         scylla_yaml_contents)
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -1811,8 +1816,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[]):
-        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[], compaction_strategy=None):
+        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 'compaction(strategy='$3')' ")
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
@@ -1821,9 +1826,10 @@ class BaseLoaderSet(object):
                 cs_profile.save()
         queue = Queue.Queue()
 
-        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
-            first_node = [n for n in node_list if n.dc_idx == loader_idx % 3][0]
-            stress_cmd += " -node {}".format(first_node.private_ip_address)
+        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd, strategy):
+            if '-node' not in stress_cmd:
+                first_node = [n for n in node_list if n.dc_idx == loader_idx % 3][0]
+                stress_cmd += " -node {}".format(first_node.private_ip_address)
             stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
                          stress_cmd +\
                          "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
@@ -1857,7 +1863,7 @@ class BaseLoaderSet(object):
                 node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
             else:
                 node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx)
+            node_cmd = 'echo %s; %s %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx, strategy)
 
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
@@ -1871,9 +1877,14 @@ class BaseLoaderSet(object):
         for loader_idx, loader in enumerate(self.nodes):
             for cpu_idx in range(stress_num):
                 for ks_idx in range(1, keyspace_num + 1):
+                    if compaction_strategy is None:
+                        strategy = 'SizeTieredCompactionStrategy'
+                    else:
+                        assert len(compaction_strategy) == keyspace_num
+                        strategy = compaction_strategy[ks_idx - 1]
                     setup_thread = threading.Thread(target=node_run_stress,
                                                     args=(loader, loader_idx,
-                                                          cpu_idx, ks_idx, profile, stress_cmd))
+                                                          cpu_idx, ks_idx, profile, stress_cmd, strategy))
                     setup_thread.daemon = True
                     setup_thread.start()
                     time.sleep(30)
@@ -3014,10 +3025,12 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         if len(self.datacenter) > 1:
             endpoint_snitch = "GossipingPropertyFileSnitch"
             node.datacenter_setup(self.datacenter)
+        authenticator = self.params.get('authenticator')
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
                           enable_exp=self._experimental(),
-                          endpoint_snitch=endpoint_snitch)
+                          endpoint_snitch=endpoint_snitch,
+                          authenticator=authenticator)
 
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
@@ -3185,14 +3198,15 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         return added_nodes
 
     def _node_setup(self, node):
+        authenticator = self.params.get('authenticator')
         endpoint_snitch = ''
         if len(self.datacenter) > 1:
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
             seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address)
+            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address, authenticator=authenticator)
         else:
-            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch)
+            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch, authenticator=authenticator)
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.remoter.run('nodetool status', verbose=True)
 

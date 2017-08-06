@@ -1,6 +1,7 @@
 test_duration: 10080
-stress_cmd: cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1000000000 -log interval=5
-stress_cmd_1: cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000 -log interval=5",
+             "cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=10080m -port jmx=6868 -mode cql3 native -rate threads=100"]
 n_db_nodes: 4
 n_loaders: 1
 n_monitor_nodes: 1
@@ -9,8 +10,17 @@ nemesis_interval: 30
 user_prefix: 'terabyte-longevity-1-7-gce'
 failure_post_behavior: keep
 space_node_threshold: 644245094
-ip_ssh_connections: 'private'
+ip_ssh_connections: 'public'
 experimental: 'true'
+
+auth:
+    default:
+        stress_cmd: cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1000000000 -log interval=5
+        stress_cmd_1: cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
+    enable:
+        stress_cmd: cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1000000000 -log interval=5
+        stress_cmd_1: cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -pop seq=1..10000000
+        authenticator: 'PasswordAuthenticator'
 
 backends: !mux
     gce: !mux
@@ -35,7 +45,22 @@ backends: !mux
         scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/17/scylla.repo'
         us_east_1:
           gce_datacenter: 'us-east1-b'
-
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 'c4.2xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-d934e980'
+            ami_id_db_scylla: 'ami-29035f52'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-29035f52'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-3eff0028'
+            ami_db_cassandra_user: 'ubuntu'
+            ami_id_monitor: 'ami-29035f52'
+            ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
