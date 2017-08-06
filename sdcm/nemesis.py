@@ -157,9 +157,8 @@ class Nemesis(object):
 
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')
+        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # corrupt the DB
 
-        # Start scylla
         self.target_node.remoter.run('sudo systemctl start scylla-server.service')
         self.target_node.wait_db_up()
 
@@ -349,7 +348,9 @@ class Nemesis(object):
                                attr[0] in disrupt_methods and
                                callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
+        self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method)
         disrupt_method()
+        self.log.info("<<<<<<<<<<<<<ENDED random_disrupt_method %s" % disrupt_method)
 
     def repair_nodetool_repair(self):
         repair_cmd = 'nodetool -h localhost repair'
@@ -358,6 +359,11 @@ class Nemesis(object):
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
         self._run_nodetool(rebuild_cmd, self.target_node)
+
+    def disrupt_nodetool_cleanup(self):
+        self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
+        cmd = 'nodetool -h localhost cleanup keyspace1'
+        self._run_nodetool(cmd, self.target_node)
 
 
 def log_time_elapsed_and_status(method):
@@ -497,6 +503,13 @@ class EnospcAllNodesMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_enospc(all_nodes=True)
+
+
+class NodeToolCleanupMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_cleanup()
 
 
 class ChaosMonkey(Nemesis):
