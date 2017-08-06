@@ -576,16 +576,8 @@ class ClusterTester(Test):
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
-<<<<<<< HEAD
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None):
-        #stress_cmd = self._cs_add_node_flag(stress_cmd)
-||||||| merged common ancestors
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None):
-        stress_cmd = self._cs_add_node_flag(stress_cmd)
-=======
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, compaction_strategy=None):
-        stress_cmd = self._cs_add_node_flag(stress_cmd)
->>>>>>> run_stress_thread: support to assign CompactionStrategy for keyspaces
+        #stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
@@ -593,15 +585,9 @@ class ClusterTester(Test):
                                               self.outputdir,
                                               stress_num=stress_num,
                                               keyspace_num=keyspace_num,
-<<<<<<< HEAD
                                               profile=profile,
-                                              node_list=self.db_cluster.nodes)
-||||||| merged common ancestors
-                                              profile=profile)
-=======
-                                              profile=profile,
+                                              node_list=self.db_cluster.nodes,
                                               compaction_strategy=compaction_strategy)
->>>>>>> run_stress_thread: support to assign CompactionStrategy for keyspaces
 
     @clean_aws_resources
     def kill_stress_thread(self):
