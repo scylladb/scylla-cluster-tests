@@ -183,5 +183,6 @@ class GrowClusterTest(ClusterTester):
         self.grow_cluster(cluster_target_size=4,
                           stress_cmd=self.get_stress_cmd_profile())
 
+
 if __name__ == '__main__':
     main()

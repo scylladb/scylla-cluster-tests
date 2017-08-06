@@ -69,5 +69,6 @@ class SstableCorruptTest(ClusterTester):
         self.db_cluster.nodes[0].remoter.run('sudo systemctl restart scylla-server.service')
         self._run_stress('read', population_size)
 
+
 if __name__ == '__main__':
     main()
