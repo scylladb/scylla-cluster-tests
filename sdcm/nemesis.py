@@ -163,7 +163,7 @@ class Nemesis(object):
 
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # Start scylla
+        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # corrupt the DB
         self.target_node.remoter.run('sudo systemctl start scylla-server.service')
 
         self.target_node.wait_db_up()
