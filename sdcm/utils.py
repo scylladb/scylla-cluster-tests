@@ -18,6 +18,7 @@ import glob
 
 from avocado.utils import process
 
+
 def _remote_get_hash(remoter, file_path):
     try:
         result = remoter.run('md5sum {}'.format(file_path), verbose=True)
