@@ -1,7 +1,4 @@
 test_duration: 10080
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000 -log interval=5",
-             "cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000",
-             "cassandra-stress user profile=data_dir/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=10080m -port jmx=6868 -mode cql3 native -rate threads=100"]
 n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
@@ -13,12 +10,16 @@ space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
 
-auth:
+auth: !mux
     default:
-        stress_cmd: cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000 -log interval=5
+        stress_cmd: ["cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000 -log interval=5",
+                     "cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000",
+                     "cassandra-stress user profile=data_dir/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=10080m -port jmx=6868 -mode cql3 native -rate threads=100"]
         stress_cmd_1: cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000
     enable:
-        stress_cmd: cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -pop seq=1..100000000 -log interval=5
+        stress_cmd: ["cassandra-stress write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -pop seq=1..100000000 -log interval=5",
+                     "cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -pop seq=1..100000000",
+                     "cassandra-stress user profile=data_dir/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=10080m -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=100"]
         stress_cmd_1: cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -pop seq=1..100000000
         authenticator: 'PasswordAuthenticator'
 
