@@ -20,6 +20,7 @@ import logging
 import random
 import time
 import datetime
+import string
 
 from avocado.utils import process
 
@@ -200,14 +201,12 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
+        if len(self.cluster.datacenter) > 1:
+            targets = [n.public_ip_address for n in self.cluster.nodes + self.loaders.nodes]
+        else:
+            targets = [n.private_ip_address for n in self.cluster.nodes + self.loaders.nodes]
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
-            if len(self.cluster.datacenter) > 1:
-                targets = [n.public_ip_address for n in self.cluster.nodes]
-                targets += [n.public_ip_address for n in self.loaders.nodes]
-            else:
-                targets = [n.private_ip_address for n in self.cluster.nodes]
-                targets += [n.private_ip_address for n in self.loaders.nodes]
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
@@ -364,6 +363,19 @@ class Nemesis(object):
         self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
         cmd = 'nodetool -h localhost cleanup keyspace1'
         self._run_nodetool(cmd, self.target_node)
+
+    def disrupt_modify_table_comment(self):
+        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
+        comment = ''.join(random.choice(string.ascii_letters) for i in xrange(24))
+        cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
+        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+
+    def disrupt_modify_table_gc_grace_sec(self):
+        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
+        gc_grace_seconds = random.choice(xrange(216000, 864000))
+        cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
+              " gc_grace_seconds = {};".format(gc_grace_seconds)
+        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
 
 
 def log_time_elapsed_and_status(method):
@@ -654,3 +666,17 @@ class RollbackNemesis(Nemesis):
             self.rollback_node(node)
 
         self.log.info('Rollback Nemesis end')
+
+
+class ModifyTableCommentMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_modify_table_comment()
+
+
+class ModifyTableGCGraceSecondsMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_modify_table_gc_grace_sec()
