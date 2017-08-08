@@ -1774,6 +1774,10 @@ class BaseScyllaCluster(object):
         experimental = self.params.get('experimental')
         return True if experimental and experimental.lower() == 'true' else False
 
+    def _param_enabled(self, param):
+        param = self.params.get(param)
+        return True if param and param.lower() == 'true' else False
+
 
 class BaseLoaderSet(object):
 
