@@ -1770,10 +1770,6 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
         self.log.debug('Stop nemesis end')
 
-    def _experimental(self):
-        experimental = self.params.get('experimental')
-        return True if experimental and experimental.lower() == 'true' else False
-
     def _param_enabled(self, param):
         param = self.params.get(param)
         return True if param and param.lower() == 'true' else False
@@ -2328,7 +2324,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental())
+                          enable_exp=self._param_enabled('experimental'))
 
         node.remoter.run(
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
@@ -2867,7 +2863,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental())
+                          enable_exp=self._param_enabled('experimental'))
 
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
@@ -3027,7 +3023,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         authenticator = self.params.get('authenticator')
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental(),
+                          enable_exp=self._param_enabled('experimental'),
                           endpoint_snitch=endpoint_snitch,
                           authenticator=authenticator)
 
@@ -3203,9 +3199,15 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
             seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address, authenticator=authenticator)
+            node.config_setup(seed_address=seed_address,
+                              enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              broadcast=node.public_ip_address,
+                              authenticator=authenticator)
         else:
-            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch, authenticator=authenticator)
+            node.config_setup(enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              authenticator=authenticator)
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.remoter.run('nodetool status', verbose=True)
 
