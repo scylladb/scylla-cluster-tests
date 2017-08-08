@@ -3125,8 +3125,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         for node in node_list:
             dst_nodes = [n for n in node_list if n.dc_idx != node.dc_idx]
             local_nodes = [n for n in node_list if n.dc_idx == node.dc_idx and n != node]
-            enable_tc = self.params.get('enable_tc')
-            if enable_tc and enable_tc.lower() == 'true':
+            if self._param_enabled('enable_tc'):
                 self.set_tc(node, dst_nodes, local_nodes)
 
     def destroy(self):
