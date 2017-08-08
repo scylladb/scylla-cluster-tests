@@ -622,6 +622,11 @@ class ClusterTester(Test):
         if protocol_version is None:
             protocol_version = 3
 
+        authenticator = self.params.get('authenticator')
+        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
+            user = 'cassandra'
+            password = 'cassandra'
+
         if user is not None:
             auth_provider = self.get_auth_provider(user=user,
                                                    password=password)
