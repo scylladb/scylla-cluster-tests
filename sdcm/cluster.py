@@ -1001,7 +1001,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None, client_encrypt=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1065,16 +1065,26 @@ WantedBy=multi-user.target
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
                                          scylla_yaml_contents)
 
-        if server_encrypt:
+        if server_encrypt or client_encrypt:
             node.remoter.receive_files(src='data_dir/ssl_conf',
                                        dst='/tmp/ssl_conf')
             node.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
+
+        if server_encrypt:
             scylla_yaml_contents += """
 server_encryption_options:
    internode_encryption: all
    certificate: /etc/scylla/db.crt
    keyfile: /etc/scylla/db.key
    truststore: /etc/scylla/cadb.pem
+"""
+
+        if client_encrypt:
+            scylla_yaml_contents += """
+client_encryption_options:
+   enabled: true
+   certificate: /etc/scylla/db.crt
+   keyfile: /etc/scylla/db.key
 """
 
         with open(yaml_dst_path, 'w') as f:
@@ -3038,7 +3048,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                           enable_exp=self._param_enabled('experimental'),
                           endpoint_snitch=endpoint_snitch,
                           authenticator=authenticator,
-                          server_encrypt=self._param_enabled('server_encrypt'))
+                          server_encrypt=self._param_enabled('server_encrypt'),
+                          client_encrypt=self._param_enabled('client_encrypt'))
 
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
@@ -3217,12 +3228,14 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                               endpoint_snitch=endpoint_snitch,
                               broadcast=node.public_ip_address,
                               authenticator=authenticator,
-                              server_encrypt=self._param_enabled('server_encrypt'))
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'))
         else:
             node.config_setup(enable_exp=self._param_enabled('experimental'),
                               endpoint_snitch=endpoint_snitch,
                               authenticator=authenticator,
-                              server_encrypt=self._param_enabled('server_encrypt'))
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.remoter.run('nodetool status', verbose=True)
 
