@@ -3242,7 +3242,7 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
         if not node_list[0].scylla_version:
-            result = node_list[0].remoter.run("rpm -q scylla")
+            result = node_list[0].remoter.run("rpm -q scylla-enterprise || rpm -q scylla")
             match = re.findall("scylla-(.*).el7.centos", result.stdout)
             node_list[0].scylla_version = match[0] if match else ''
             for node in node_list:

@@ -207,11 +207,11 @@ class PerformanceRegressionTest(ClusterTester):
             if match:
                 result['test_details'][section]['cl'] = match.group(0).split('=')[1].strip()
 
-            match = re.search('(duration\s?=\s?\W+)', cmd)
+            match = re.search('(duration\s?=\s?\w+)', cmd)
             if match:
                 result['test_details'][section]['duration'] = match.group(0).split('=')[1].strip()
 
-            match = re.search('( n\s?=\s?\W+)', cmd)
+            match = re.search('( n\s?=\s?\w+)', cmd)
             if match:
                 result['test_details'][section]['n'] = match.group(0).split('=')[1].strip()
 
