@@ -95,6 +95,11 @@ class GrowClusterTest(ClusterTester):
                 "-pop seq=1..%s -node %s" %
                 (mode, duration, threads, population_size, ip))
 
+    def reconfigure_monitor(self):
+        targets = [node.private_ip_address for node in self.db_cluster.nodes + self.loaders.nodes]
+        for monitoring_node in self.monitors.nodes:
+            monitoring_node.reconfigure_prometheus(targets=targets)
+
     def grow_cluster(self, cluster_target_size, stress_cmd):
         # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
@@ -115,6 +120,7 @@ class GrowClusterTest(ClusterTester):
             new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
             self.db_cluster.wait_for_init(node_list=new_nodes)
             node_cnt = len(self.db_cluster.nodes)
+            self.reconfigure_monitor()
 
         end = datetime.datetime.now()
         self.log.info('Growing cluster finished: %s' % str(end))
