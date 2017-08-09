@@ -25,6 +25,7 @@ import subprocess
 
 from avocado import main
 from sdcm.tester import ClusterTester
+from utils.results_analyze import ResultsAnalyzer
 
 
 class PerformanceRegressionTest(ClusterTester):
@@ -288,15 +289,21 @@ class PerformanceRegressionTest(ClusterTester):
             json.dump(metrics, fp, indent=4)
 
         self.log.info(json.dumps(metrics, indent=4))
+        test_id = '{}_{}'.format(metrics['setup_details']['ami_id_db_scylla_desc'],
+                                 metrics['test_details']['time_completed'])
         if self.params.get('es_url'):
-            url = '%s/performanceregression/%s/%s_%s?pretty' % \
-                  (self.params.get('es_url').rstrip('/'), metrics['test_details']['test_name'],
-                   metrics['setup_details']['ami_id_db_scylla_desc'], metrics['test_details']['time_completed'])
+            url = '%s/performanceregression/%s/%s?pretty' % \
+                  (self.params.get('es_url').rstrip('/'), metrics['test_details']['test_name'], test_id)
 
             headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
             r = requests.post(url, data=open('jenkins_%s_summary.json' % test_name, 'rb'), headers=headers,
                               auth=(self.params.get('es_user'), self.params.get('es_password')))
             self.log.info(r.content)
+        self.check_regression(test_id)
+
+    def check_regression(self, test_id):
+        ra = ResultsAnalyzer()
+        ra.check_regression(test_id)
 
     def test_write(self):
         """

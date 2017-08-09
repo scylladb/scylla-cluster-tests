@@ -1,0 +1,7 @@
+es_url: 'http://ec2-54-89-144-171.compute-1.amazonaws.com:9200/'
+es_index: 'performanceregression'
+email:
+  send: True
+  server: localhost
+  sender: 'scylla@scylladb.com'
+  recipients:
