@@ -22,8 +22,9 @@ from avocado import main
 from cassandra import InvalidRequest
 from cassandra.util import sortedset
 
-from sdcm.nemesis import RollbackNemesis
-from sdcm.nemesis import UpgradeNemesis, UpgradeNemesisOneNode
+#from sdcm.nemesis import RollbackNemesis
+#from sdcm.nemesis import UpgradeNemesis
+from sdcm.nemesis import UpgradeNemesisOneNode
 from sdcm.tester import ClusterTester
 
 
@@ -686,12 +687,12 @@ class UpgradeTest(ClusterTester):
             ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC);"""],
                 'truncates': ['TRUNCATE reversed_comparator_test1', 'TRUNCATE reversed_comparator_test2'],
                 'inserts': ["INSERT INTO reversed_comparator_test1 (k, c, v) VALUES (0, {}, {})".format(x, x) for x in
-                            range(0, 10)] +
-                           ["INSERT INTO reversed_comparator_test2 (k, c1, c2, v) VALUES (0, {}, {}, '{}{}')".format(x,
-                                                                                                                     y,
-                                                                                                                     x,
-                                                                                                                     y)
-                            for x in range(0, 10) for y in range(0, 10)],
+                            range(0, 10)] + [
+                                "INSERT INTO reversed_comparator_test2 (k, c1, c2, v) VALUES (0, {}, {}, '{}{}')".format(x,
+                                                                                                                         y,
+                                                                                                                         x,
+                                                                                                                         y)
+                                for x in range(0, 10) for y in range(0, 10)],
                 'queries': [
                     "SELECT c, v FROM reversed_comparator_test1 WHERE k = 0 ORDER BY c ASC",
                     "SELECT c, v FROM reversed_comparator_test1 WHERE k = 0 ORDER BY c DESC",
@@ -2907,9 +2908,9 @@ class UpgradeTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
 
-        l = len(self.db_cluster.nodes)
+        nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(l)]
+        indexes = [x for x in range(nodes_num)]
         # shuffle it so we will upgrade the nodes in a
         # random order
         random.shuffle(indexes)

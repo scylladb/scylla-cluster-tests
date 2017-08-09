@@ -14,3 +14,6 @@ aexpect==1.2.0
 cassandra-driver==3.10
 apache-libcloud==1.4.0
 requests
+elasticsearch
+sortedcontainers
+jinja2

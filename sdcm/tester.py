@@ -123,6 +123,7 @@ def clean_aws_resources(method):
         try:
             return method(*args, **kwargs)
         except Exception:
+            TEST_LOG.exception('Exception in wrapped method %s', method.__name__)
             args[0].clean_resources()
             raise
     return wrapper
@@ -150,7 +151,7 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def setUp(self):
-        self.credentials = None
+        self.credentials = []
         self.db_cluster = None
         self.loaders = None
         self.monitors = None
@@ -161,9 +162,13 @@ class ClusterTester(Test):
         self.db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        nodes_monitored = [node.private_ip_address for node in self.db_cluster.nodes]
-        nodes_monitored += [node.private_ip_address for node in self.loaders.nodes]
-        self.monitors.wait_for_init(targets=nodes_monitored, scylla_version=self.db_cluster.nodes[0].scylla_version)
+        if len(self.db_cluster.datacenter) > 1:
+            targets = [n.public_ip_address for n in self.db_cluster.nodes]
+            targets += [n.public_ip_address for n in self.loaders.nodes]
+        else:
+            targets = [n.private_ip_address for n in self.db_cluster.nodes]
+            targets += [n.private_ip_address for n in self.loaders.nodes]
+        self.monitors.wait_for_init(targets=targets, scylla_version=self.db_cluster.nodes[0].scylla_version)
 
     def get_nemesis_class(self):
         """
@@ -261,7 +266,13 @@ class ClusterTester(Test):
         if loader_info['n_local_ssd'] is None:
             loader_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_loader')
         if db_info['n_nodes'] is None:
-            db_info['n_nodes'] = self.params.get('n_db_nodes')
+            n_db_nodes = self.params.get('n_db_nodes')
+            if isinstance(n_db_nodes, int):  # legacy type
+                db_info['n_nodes'] = [n_db_nodes]
+            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
         if db_info['type'] is None:
             db_info['type'] = self.params.get('gce_instance_type_db')
         if db_info['disk_type'] is None:
@@ -283,10 +294,14 @@ class ClusterTester(Test):
         user_prefix = self.params.get('user_prefix', None)
         service_account_email = self.params.get('gce_service_account_email', None)
         user_credentials = self.params.get('gce_user_credentials', None)
-        datacenter = self.params.get('gce_datacenter', None)
+        gce_datacenter = self.params.get('gce_datacenter', None).split()
         project = self.params.get('gce_project', None)
         service_cls = get_driver(Provider.GCE)
-        service = service_cls(service_account_email, user_credentials, datacenter=datacenter, project=project)
+        services = []
+        for i in gce_datacenter:
+            services.append(service_cls(service_account_email, user_credentials, datacenter=i, project=project))
+        if len(services) > 1:
+            assert len(services) == len(db_info['n_nodes'])
         user_credentials = self.params.get('user_credentials_path', None)
         self.credentials = GCECredentials(key_file=user_credentials)
 
@@ -300,11 +315,12 @@ class ClusterTester(Test):
                                            gce_image_username=self.params.get('gce_image_username'),
                                            gce_network=self.params.get('gce_network'),
                                            gce_instance_type=db_info['type'],
-                                           service=service,
+                                           services=services,
                                            credentials=self.credentials,
                                            user_prefix=user_prefix,
                                            n_nodes=db_info['n_nodes'],
-                                           params=self.params)
+                                           params=self.params,
+                                           gce_datacenter=gce_datacenter)
 
         scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image'),
@@ -314,7 +330,7 @@ class ClusterTester(Test):
                                     gce_image_username=self.params.get('gce_image_username'),
                                     gce_network=self.params.get('gce_network'),
                                     gce_instance_type=loader_info['type'],
-                                    service=service,
+                                    service=services[:1],
                                     credentials=self.credentials,
                                     scylla_repo=scylla_repo,
                                     user_prefix=user_prefix,
@@ -329,7 +345,7 @@ class ClusterTester(Test):
                                           gce_image_username=self.params.get('gce_image_username'),
                                           gce_network=self.params.get('gce_network'),
                                           gce_instance_type=monitor_info['type'],
-                                          service=service,
+                                          service=services[:1],
                                           credentials=self.credentials,
                                           scylla_repo=scylla_repo,
                                           user_prefix=user_prefix,
@@ -344,7 +360,13 @@ class ClusterTester(Test):
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if db_info['n_nodes'] is None:
-            db_info['n_nodes'] = self.params.get('n_db_nodes')
+            n_db_nodes = self.params.get('n_db_nodes')
+            if type(n_db_nodes) == int:  # legacy type
+                db_info['n_nodes'] = [n_db_nodes]
+            elif type(n_db_nodes) == str:  # latest type to support multiple datacenters
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
         if monitor_info['n_nodes'] is None:
@@ -352,35 +374,44 @@ class ClusterTester(Test):
         if monitor_info['type'] is None:
             monitor_info['type'] = self.params.get('instance_type_monitor')
         user_prefix = self.params.get('user_prefix', None)
-        session = boto3.session.Session(region_name=self.params.get('region_name'))
-        service = session.resource('ec2')
+
         user_credentials = self.params.get('user_credentials_path', None)
-        if user_credentials:
-            self.credentials = UserRemoteCredentials(key_file=user_credentials)
-        else:
-            self.credentials = RemoteCredentials(service=service,
-                                                 key_prefix='sct',
-                                                 user_prefix=user_prefix)
+        services = []
+        for i in self.params.get('region_name').split():
+            session = boto3.session.Session(region_name=i)
+            service = session.resource('ec2')
+            services.append(service)
+            if user_credentials:
+                self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+            else:
+                self.credentials.append(RemoteCredentials(service=service,
+                                                          key_prefix='sct',
+                                                          user_prefix=user_prefix))
+
+        ec2_security_group_ids = []
+        for i in self.params.get('security_group_ids').split():
+            ec2_security_group_ids.append(i.split(','))
+        ec2_subnet_id = self.params.get('subnet_id').split()
 
         if self.params.get('db_type') == 'scylla':
-            self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla'),
+            self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
                                                ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                                               ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                               ec2_subnet_id=self.params.get('subnet_id'),
+                                               ec2_security_group_ids=ec2_security_group_ids,
+                                               ec2_subnet_id=ec2_subnet_id,
                                                ec2_instance_type=db_info['type'],
-                                               service=service,
+                                               services=services,
                                                credentials=self.credentials,
                                                ec2_block_device_mappings=db_info['device_mappings'],
                                                user_prefix=user_prefix,
                                                n_nodes=db_info['n_nodes'],
                                                params=self.params)
         elif self.params.get('db_type') == 'cassandra':
-            self.db_cluster = CassandraAWSCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra'),
+            self.db_cluster = CassandraAWSCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
                                                   ec2_ami_username=self.params.get('ami_db_cassandra_user'),
-                                                  ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                                  ec2_subnet_id=self.params.get('subnet_id'),
+                                                  ec2_security_group_ids=ec2_security_group_ids,
+                                                  ec2_subnet_id=ec2_subnet_id,
                                                   ec2_instance_type=db_info['type'],
-                                                  service=service,
+                                                  service=services[:1],
                                                   ec2_block_device_mappings=db_info['device_mappings'],
                                                   credentials=self.credentials,
                                                   user_prefix=user_prefix,
@@ -391,12 +422,12 @@ class ClusterTester(Test):
                        self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
-        self.loaders = LoaderSetAWS(ec2_ami_id=self.params.get('ami_id_loader'),
+        self.loaders = LoaderSetAWS(ec2_ami_id=self.params.get('ami_id_loader').split(),
                                     ec2_ami_username=self.params.get('ami_loader_user'),
-                                    ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                    ec2_subnet_id=self.params.get('subnet_id'),
+                                    ec2_security_group_ids=ec2_security_group_ids,
+                                    ec2_subnet_id=ec2_subnet_id,
                                     ec2_instance_type=loader_info['type'],
-                                    service=service,
+                                    service=services[:1],
                                     ec2_block_device_mappings=loader_info['device_mappings'],
                                     credentials=self.credentials,
                                     scylla_repo=scylla_repo,
@@ -405,12 +436,12 @@ class ClusterTester(Test):
                                     params=self.params)
 
         if monitor_info['n_nodes'] > 0:
-            self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor'),
+            self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor').split(),
                                           ec2_ami_username=self.params.get('ami_monitor_user'),
-                                          ec2_security_group_ids=[self.params.get('security_group_ids')],
-                                          ec2_subnet_id=self.params.get('subnet_id'),
+                                          ec2_security_group_ids=ec2_security_group_ids,
+                                          ec2_subnet_id=ec2_subnet_id,
                                           ec2_instance_type=monitor_info['type'],
-                                          service=service,
+                                          service=services[:1],
                                           ec2_block_device_mappings=monitor_info['device_mappings'],
                                           credentials=self.credentials,
                                           scylla_repo=scylla_repo,
@@ -527,7 +558,11 @@ class ClusterTester(Test):
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            ip = self.db_cluster.get_node_private_ips()[0]
+            if len(self.db_cluster.datacenter) > 1:
+                ips = [ip for ip in self.db_cluster.get_node_public_ips()]
+                ip = ','.join(ips)
+            else:
+                ip = self.db_cluster.get_node_private_ips()[0]
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
         return stress_cmd
 
@@ -536,11 +571,13 @@ class ClusterTester(Test):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
+        results = self.get_stress_results(queue=stress_queue)
+        self.log.debug(results)
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None):
-        stress_cmd = self._cs_add_node_flag(stress_cmd)
+        #stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
@@ -548,7 +585,8 @@ class ClusterTester(Test):
                                               self.outputdir,
                                               stress_num=stress_num,
                                               keyspace_num=keyspace_num,
-                                              profile=profile)
+                                              profile=profile,
+                                              node_list=self.db_cluster.nodes)
 
     @clean_aws_resources
     def kill_stress_thread(self):
@@ -802,7 +840,7 @@ class ClusterTester(Test):
             cluster.remove_cred_from_cleanup(self.credentials)
             if self._failure_post_behavior == 'destroy':
                 self.credentials.destroy()
-                self.credentials = None
+                self.credentials = []
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %

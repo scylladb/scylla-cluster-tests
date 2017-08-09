@@ -51,5 +51,6 @@ class CQLExampleTest(ClusterTester):
         res = session.execute("SELECT v1, v2 from test1")
         self.log.debug(res)
 
+
 if __name__ == '__main__':
     main()

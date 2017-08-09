@@ -21,26 +21,13 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import clean_aws_resources
-from sdcm.nemesis import Nemesis
-from sdcm.nemesis import log_time_elapsed
 from sdcm.data_path import get_data_path
-
-
-class GrowClusterMonkey(Nemesis):
-
-    @log_time_elapsed
-    def disrupt(self):
-        self._set_current_disruption('Add new node to %s' % self.cluster)
-        new_nodes = self.cluster.add_nodes(count=1)
-        self.cluster.wait_for_init(node_list=new_nodes)
-        self.reconfigure_monitoring()
 
 
 class GrowClusterTest(ClusterTester):
 
     """
     Test scylla cluster growth (adding nodes after an initial cluster size).
-
     :avocado: enable
     """
 
@@ -55,13 +42,13 @@ class GrowClusterTest(ClusterTester):
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         # We're starting the cluster with 3 nodes due to
         # replication factor settings we're using with cassandra-stress
-        self._cluster_starting_size = 3
-        self._cluster_target_size = None
-        loader_info = {'n_nodes': 1, 'device_mappings': None,
-                       'type': None}
-        monitor_info = {'n_nodes': 1, 'device_mappings': None,
-                        'type': None}
-        db_info = {'n_nodes': self._cluster_starting_size,
+        self._cluster_starting_size = self.params.get('cluster_initial_size', default=3)
+        self._cluster_target_size = self.params.get('cluster_target_size', default=5)
+        loader_info = {'n_nodes': 1, 'device_mappings': None, 'disk_size': None, 'disk_type': None,
+                       'n_local_ssd': None, 'type': None}
+        monitor_info = {'n_nodes': 1, 'device_mappings': None, 'disk_size': None, 'disk_type': None,
+                        'n_local_ssd': None, 'type': None}
+        db_info = {'n_nodes': self._cluster_starting_size, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
                    'device_mappings': None, 'type': None}
         self.init_resources(loader_info=loader_info, db_info=db_info,
                             monitor_info=monitor_info)
@@ -86,7 +73,7 @@ class GrowClusterTest(ClusterTester):
                 'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
                 'ops\(insert=1\) -node %s' % ip)
 
-    def get_stress_cmd(self):
+    def get_stress_cmd(self, mode='write', duration=None):
         """
         Get a cassandra stress cmd string suitable for grow cluster purposes.
 
@@ -97,14 +84,21 @@ class GrowClusterTest(ClusterTester):
         :rtype: basestring
         """
         ip = self.db_cluster.get_node_private_ips()[0]
-        population_size = 1000000
-        duration = self.params.get('test_duration')
-        threads = 1000
-        return ("cassandra-stress write cl=QUORUM duration=%sm "
-                "-schema 'replication(factor=3)' -port jmx=6868 "
+        population_size = self.params.get('cassandra_stress_population_size', default=1000000)
+        if not duration:
+            duration = self.params.get('test_duration', default=60)
+        threads = self.params.get('cassandra_stress_threads', default=1000)
+
+        return ("cassandra-stress %s cl=QUORUM duration=%sm "
+                "-schema 'replication(factor=3)' -port jmx=6868 -col 'size=FIXED(2) n=FIXED(1)' "
                 "-mode cql3 native -rate threads=%s "
                 "-pop seq=1..%s -node %s" %
-                (duration, threads, population_size, ip))
+                (mode, duration, threads, population_size, ip))
+
+    def reconfigure_monitor(self):
+        targets = [node.private_ip_address for node in self.db_cluster.nodes + self.loaders.nodes]
+        for monitoring_node in self.monitors.nodes:
+            monitoring_node.reconfigure_prometheus(targets=targets)
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
         # 60 minutes should be long enough for adding each node
@@ -119,13 +113,14 @@ class GrowClusterTest(ClusterTester):
         start = datetime.datetime.now()
         self.log.info('Starting to grow cluster: %s' % str(start))
 
-        self.db_cluster.add_nemesis(nemesis=GrowClusterMonkey,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
-        while len(self.db_cluster.nodes) < cluster_target_size:
-            # Run GrowClusterMonkey to add one node at a time
-            self.db_cluster.start_nemesis(interval=10)
-            self.db_cluster.stop_nemesis(timeout=None)
+        add_node_cnt = self.params.get('add_node_cnt', default=1)
+        node_cnt = len(self.db_cluster.nodes)
+        while node_cnt < cluster_target_size:
+            time.sleep(60)
+            new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
+            self.db_cluster.wait_for_init(node_list=new_nodes)
+            node_cnt = len(self.db_cluster.nodes)
+            self.reconfigure_monitor()
 
         end = datetime.datetime.now()
         self.log.info('Growing cluster finished: %s' % str(end))
@@ -138,6 +133,7 @@ class GrowClusterTest(ClusterTester):
         self.kill_stress_thread()
 
         self.verify_stress_thread(queue=stress_queue)
+        self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
 
     def test_grow_3_to_5(self):
         """
@@ -172,6 +168,16 @@ class GrowClusterTest(ClusterTester):
         self.grow_cluster(cluster_target_size=30,
                           stress_cmd=self.get_stress_cmd())
 
+    def test_grow_x_to_y(self):
+        """
+        1) Start a x node cluster
+        2) Start cassandra-stress on the loader node
+        3) Add a new node
+        4) Keep repeating 3) until we get to the target number of y nodes
+        """
+        self.grow_cluster(cluster_target_size=self._cluster_target_size,
+                          stress_cmd=self.get_stress_cmd())
+
     def test_grow_3_to_4_large_partition(self):
         """
         Shorter version of the cluster growth test.
@@ -182,6 +188,7 @@ class GrowClusterTest(ClusterTester):
         """
         self.grow_cluster(cluster_target_size=4,
                           stress_cmd=self.get_stress_cmd_profile())
+
 
 if __name__ == '__main__':
     main()

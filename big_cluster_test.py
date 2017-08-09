@@ -57,5 +57,6 @@ class HugeClusterTest(ClusterTester):
         """
         self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
 
+
 if __name__ == '__main__':
     main()

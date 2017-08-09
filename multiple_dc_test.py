@@ -13,8 +13,6 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-import logging
-
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -39,9 +37,9 @@ class MultipleDcTest(ClusterTester):
         node.wait_db_up()
 
     def test_shutdown(self):
-    """
-    https://github.com/scylladb/scylla-enterprise/issues/228
-    """
+        """
+        https://github.com/scylladb/scylla-enterprise/issues/228
+        """
 
         # run a background workload
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),

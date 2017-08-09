@@ -20,18 +20,13 @@ import logging
 import random
 import time
 import datetime
+import string
 
 from avocado.utils import process
-from cassandra import ConsistencyLevel
-from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver
-from cassandra.cluster import NoHostAvailable
-from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy
 
 from .data_path import get_data_path
 from .log import SDCMAdapter
-from . import wait
+from avocado.utils import wait
 
 from sdcm.utils import remote_get_file
 
@@ -157,11 +152,16 @@ class Nemesis(object):
         self.target_node.remoter.send_files(break_scylla,
                                             "/tmp/break_scylla.sh")
 
+        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
+        self.target_node.wait_db_down()
+
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')
+        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # corrupt the DB
 
-        self._kill_scylla_daemon()
+        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
+        self.target_node.wait_db_up()
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
@@ -201,10 +201,12 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
+        if len(self.cluster.datacenter) > 1:
+            targets = [n.public_ip_address for n in self.cluster.nodes + self.loaders.nodes]
+        else:
+            targets = [n.private_ip_address for n in self.cluster.nodes + self.loaders.nodes]
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
-            targets = [n.private_ip_address for n in self.cluster.nodes]
-            targets += [n.private_ip_address for n in self.loaders.nodes]
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
@@ -232,7 +234,7 @@ class Nemesis(object):
                 self.reconfigure_monitoring()
                 # Replace the node that was terminated.
                 if add_node:
-                    new_nodes = self.cluster.add_nodes(count=1)
+                    new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
                     self.cluster.wait_for_init(node_list=new_nodes)
                     self.reconfigure_monitoring()
 
@@ -280,40 +282,54 @@ class Nemesis(object):
             nodes = self.cluster.nodes
         else:
             nodes = [self.target_node]
-        self._set_current_disruption('Enospc test on {}'.format(nodes))
+        self._set_current_disruption('Enospc test on {}'.format([n.name for n in nodes]))
+
+        def search_database_enospc(node):
+            """
+            Search database log by executing cmd inside node, use shell tool to
+            avoid return and process huge data.
+            """
+            cmd = "journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
+            result = node.remoter.run(cmd, verbose=True)
+            return int(result.stdout)
+
+        def approach_enospc():
+            # get the size of free space (default unit: KB)
+            result = node.remoter.run("df -l|grep '/var/lib/scylla'")
+            free_space_size = result.stdout.split()[3]
+
+            occupy_space_size = int(int(free_space_size) * 90 / 100)
+            occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(occupy_space_size, datetime.datetime.now().strftime('%s'))
+            self.log.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+            try:
+                node.remoter.run(occupy_space_cmd, verbose=True)
+            except Exception as details:
+                self.log.error(str(details))
+            return search_database_enospc(node) > orig_errors
+
         for node in nodes:
             result = node.remoter.run('cat /proc/mounts')
             if '/var/lib/scylla' not in result.stdout:
                 self.log.error("Scylla doesn't use an individual storage, skip enospc test")
                 continue
 
-            # get the size of free space (default unit: KB)
-            result = node.remoter.run("df -l|grep '/var/lib/scylla'")
-            free_space_size = result.stdout.split()[3]
-
-            occupy_space_size = int(free_space_size) * 99 / 100
-            occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_99percent'.format(occupy_space_size)
-            self.log.debug('Cost 99% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
-
             # check original ENOSPC error
-            orig_errors = node.search_database_log('No space left on device')
-            result = node.remoter.run(occupy_space_cmd, ignore_status=True, verbose=True)
-            wait.wait_for(func=lambda: len(node.search_database_log('No space left on device')) > len(orig_errors),
+            orig_errors = search_database_enospc(node)
+            wait.wait_for(func=approach_enospc,
+                          timeout=300,
                           step=5,
                           text='Wait for new ENOSPC error occurs in database')
 
             self.log.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
             time.sleep(sleep_time)
 
-            self.log.debug('Delete occupy_99percent file to release space to scylla-server')
-            node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_99percent')
+            self.log.debug('Delete occupy_90percent file to release space to scylla-server')
+            node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
 
             self.log.debug('Sleep a while before restart scylla-server')
             time.sleep(sleep_time / 2)
             node.remoter.run('sudo systemctl restart scylla-server.service')
-
-            self.log.debug('Sleep {} seconds to wait scylla-server to recover'.format(sleep_time))
-            time.sleep(sleep_time)
+            node.wait_db_up()
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
@@ -321,12 +337,19 @@ class Nemesis(object):
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
-    def call_random_disrupt_method(self):
-        disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                           attr[0].startswith('disrupt_') and
-                           callable(attr[1])]
+    def call_random_disrupt_method(self, disrupt_methods=None):
+        if not disrupt_methods:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0].startswith('disrupt_') and
+                               callable(attr[1])]
+        else:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0] in disrupt_methods and
+                               callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
+        self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method)
         disrupt_method()
+        self.log.info("<<<<<<<<<<<<<ENDED random_disrupt_method %s" % disrupt_method)
 
     def repair_nodetool_repair(self):
         repair_cmd = 'nodetool -h localhost repair'
@@ -335,6 +358,24 @@ class Nemesis(object):
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
         self._run_nodetool(rebuild_cmd, self.target_node)
+
+    def disrupt_nodetool_cleanup(self):
+        self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
+        cmd = 'nodetool -h localhost cleanup keyspace1'
+        self._run_nodetool(cmd, self.target_node)
+
+    def disrupt_modify_table_comment(self):
+        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
+        comment = ''.join(random.choice(string.ascii_letters) for i in xrange(24))
+        cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
+        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+
+    def disrupt_modify_table_gc_grace_sec(self):
+        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
+        gc_grace_seconds = random.choice(xrange(216000, 864000))
+        cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
+              " gc_grace_seconds = {};".format(gc_grace_seconds)
+        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
 
 
 def log_time_elapsed_and_status(method):
@@ -476,11 +517,25 @@ class EnospcAllNodesMonkey(Nemesis):
         self.disrupt_nodetool_enospc(all_nodes=True)
 
 
+class NodeToolCleanupMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_cleanup()
+
+
 class ChaosMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method()
+
+
+class MdcChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair', 'disrupt_nodetool_decommission'])
 
 
 class UpgradeNemesis(Nemesis):
@@ -534,9 +589,9 @@ class UpgradeNemesis(Nemesis):
     def disrupt(self):
         self.log.info('Upgrade Nemesis begin')
         # get the number of nodes
-        l = len(self.cluster.nodes)
+        nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(l)]
+        indexes = [x for x in range(nodes_num)]
         # shuffle it so we will upgrade the nodes in a
         # random order
         random.shuffle(indexes)
@@ -586,9 +641,9 @@ class RollbackNemesis(Nemesis):
     def disrupt(self):
         self.log.info('Rollback Nemesis begin')
         # get the number of nodes
-        l = len(self.cluster.nodes)
+        nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(l)]
+        indexes = [x for x in range(nodes_num)]
         # shuffle it so we will rollback the nodes in a
         # random order
         random.shuffle(indexes)
@@ -599,3 +654,17 @@ class RollbackNemesis(Nemesis):
             self.rollback_node(node)
 
         self.log.info('Rollback Nemesis end')
+
+
+class ModifyTableCommentMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_modify_table_comment()
+
+
+class ModifyTableGCGraceSecondsMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_modify_table_gc_grace_sec()
