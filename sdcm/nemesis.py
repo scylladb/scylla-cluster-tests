@@ -370,7 +370,7 @@ class Nemesis(object):
         cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
         self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
 
-    def disrupt_modify_table_gc_grace_sec(self):
+    def disrupt_modify_table_gc_grace_time(self):
         self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
         gc_grace_seconds = random.choice(xrange(216000, 864000))
         cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
@@ -675,8 +675,8 @@ class ModifyTableCommentMonkey(Nemesis):
         self.disrupt_modify_table_comment()
 
 
-class ModifyTableGCGraceSecondsMonkey(Nemesis):
+class ModifyTableGCGraceTimeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_modify_table_gc_grace_sec()
+        self.disrupt_modify_table_gc_grace_time()
