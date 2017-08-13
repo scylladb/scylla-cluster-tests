@@ -197,7 +197,7 @@ class PerformanceRegressionTest(ClusterTester):
     def add_stress_cmd_params(self, result, cmd, prefix=''):
         # parsing stress command and return dict with params
         cmd = cmd.strip().split('cassandra-stress')[1].strip()
-        if cmd.split(' ')[0] in ['read', 'write', 'mixed']:
+        if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'user']:
             section = '{0}cassandra-stress'.format(prefix)
             result['test_details'][section] = {}
             result['test_details'][section]['command'] = cmd.split(' ')[0]
@@ -215,6 +215,12 @@ class PerformanceRegressionTest(ClusterTester):
             match = re.search('( n\s?=\s?\w+)', cmd)
             if match:
                 result['test_details'][section]['n'] = match.group(0).split('=')[1].strip()
+            match = re.search('profile=(\S+)\s+', cmd)
+            if match:
+                result['test_details'][section]['profile'] = match.group(1).strip()
+                match = re.search('ops(\S+)\s+', cmd)
+                if match:
+                    result['test_details'][section]['ops'] = match.group(1).split('=')[0].strip('(')
 
             for temp in cmd.split(' -')[1:]:
                 k = temp.split()[0]
