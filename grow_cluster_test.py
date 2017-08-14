@@ -33,7 +33,7 @@ class GrowClusterTest(ClusterTester):
 
     @clean_aws_resources
     def setUp(self):
-        self.credentials = None
+        self.credentials = []
         self.db_cluster = None
         self.loaders = None
         self.monitors = None
@@ -48,8 +48,8 @@ class GrowClusterTest(ClusterTester):
                        'n_local_ssd': None, 'type': None}
         monitor_info = {'n_nodes': 1, 'device_mappings': None, 'disk_size': None, 'disk_type': None,
                         'n_local_ssd': None, 'type': None}
-        db_info = {'n_nodes': self._cluster_starting_size, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                   'device_mappings': None, 'type': None}
+        db_info = {'n_nodes': [self._cluster_starting_size], 'disk_size': None, 'disk_type': None,
+                   'n_local_ssd': None, 'device_mappings': None, 'type': None}
         self.init_resources(loader_info=loader_info, db_info=db_info,
                             monitor_info=monitor_info)
         self.loaders.wait_for_init()
