@@ -101,16 +101,21 @@ class ResultsAnalyzer(object):
 
             test_details = 'test_details.job_name:{}'.format(doc['_source']['test_details']['job_name'].split('/')[0])
             test_details_params = ('cassandra-stress', )
-            if not test_type.endswith('write'):
+            if test_type.endswith('read') or test_type.endswith('mixed'):
                 test_details_params += ('preload0-cassandra-stress', )
+            cs_params = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop')
+            if test_type.endswith('profiles'):
+                cs_params = ('command', 'profile', 'ops', 'rate threads')
             for cs in test_details_params:
-                for param in ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop'):
+                for param in cs_params:
                     if param == 'rate threads':
                         test_details += ' AND test_details.{}.rate\ threads: {}'.format(
                             cs, doc['_source']['test_details'][cs][param])
                     else:
-                        test_details += ' AND test_details.{}.{}: {}'.format(
-                            cs, param, doc['_source']['test_details'][cs][param])
+                        param_val = doc['_source']['test_details'][cs][param]
+                        if param in ['profile', 'ops']:
+                            param_val = "\"{}\"".format(param_val)
+                        test_details += ' AND test_details.{}.{}: {}'.format(cs, param, param_val)
 
             query = '{} AND {}'.format(test_details, setup_details)
         except KeyError:

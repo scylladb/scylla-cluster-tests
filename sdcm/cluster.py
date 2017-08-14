@@ -2646,22 +2646,22 @@ class GCECluster(BaseCluster):
             try:
                 n = GCENode(gce_instance=instance,
                             gce_service=self._gce_services[dc_idx],
-                            credentials=self._credentials,
+                            credentials=self._credentials[0],
                             gce_image_username=self._gce_image_username,
                             node_prefix=self.node_prefix,
                             node_index=self._node_index,
                             base_logdir=self.logdir,
                             dc_idx=dc_idx)
                 nodes.append(n)
-            except:
-                self._instance_wait_safe(instance.destroy)
+            except Exception as ex:
+                self.log.exception('Failed to create node: %s', ex)
+            else:
+                self._node_index += 1
+                self.nodes += [n]
 
-            self._node_index += 1
-            self.nodes += [n]
-
-            local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
-            if len(local_nodes) - len(nodes) > 0:
-                n.is_addition = True
+                local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
+                if len(local_nodes) > len(nodes):
+                    n.is_addition = True
 
         assert len(nodes) == count, 'Fail to create {} instances'.format(count)
         self.log.info('added nodes: %s', nodes)
