@@ -377,6 +377,27 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_mixed')
         self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
 
+    def test_read_bench(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a read workload
+        """
+        # -partition-count: number of partitions
+        # -partition-count: number of rows in a partition
+        # -clustering-row-size: the size of a single row
+
+        base_cmd_r = ("scylla-bench -workload uniform -mode counter_update -duration 30m "
+                      "-partition-count 50000000 -clustering-row-count 1 -connection-count "
+                      "32 -concurrency 512 -replication-factor 3")
+
+        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
+        results = self.get_stress_results_bench(queue=stress_queue)
+
+        self.display_results(results, test_name='test_read_bench')
+        self.generate_stats_json(results, [base_cmd_r])
+
 
 if __name__ == '__main__':
     main()
