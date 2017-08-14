@@ -212,11 +212,11 @@ class ClusterTester(Test):
                               ex_tenant_name=tenant)
         user_credentials = self.params.get('user_credentials_path', None)
         if user_credentials:
-            self.credentials = UserRemoteCredentials(key_file=user_credentials)
+            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         else:
-            self.credentials = RemoteCredentials(service=service,
-                                                 key_prefix='sct',
-                                                 user_prefix=user_prefix)
+            self.credentials.append(RemoteCredentials(service=service,
+                                                      key_prefix='sct',
+                                                      user_prefix=user_prefix))
 
         self.db_cluster = ScyllaOpenStackCluster(openstack_image=self.params.get('openstack_image'),
                                                  openstack_image_username=self.params.get('openstack_image_username'),
@@ -303,7 +303,7 @@ class ClusterTester(Test):
         if len(services) > 1:
             assert len(services) == len(db_info['n_nodes'])
         user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials = GCECredentials(key_file=user_credentials)
+        self.credentials.append(GCECredentials(key_file=user_credentials))
 
         gce_image_db = self.params.get('gce_image_db')
         if not gce_image_db:
@@ -839,7 +839,8 @@ class ClusterTester(Test):
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
             if self._failure_post_behavior == 'destroy':
-                self.credentials.destroy()
+                for cr in self.credentials:
+                    cr.destroy()
                 self.credentials = []
 
         if db_cluster_coredumps:
