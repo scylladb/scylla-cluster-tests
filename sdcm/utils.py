@@ -59,7 +59,7 @@ def get_monitor_version(full_version, clone=False):
     if not full_version or '666.development' in full_version:
         ret = 'master'
     else:
-        ret = re.findall("^\w+.\w+", full_version)[0]
+        ret = re.findall("-(\d+\.\d+)", full_version)[0]
 
     # We only add dashboard for release version, let's use master for pre-release version
     jsons = glob.glob('data_dir/grafana/*.%s.json' % ret)
