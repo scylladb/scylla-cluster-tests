@@ -2315,8 +2315,8 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
     def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
                  params=None):
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, '-db-node')
 
         super(ScyllaLibvirtCluster, self).__init__(domain_info=domain_info,
                                                    hypervisor=hypervisor,
@@ -2430,8 +2430,8 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
                  params=None):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = _prepend_user_prefix(
-            user_prefix, 'scylla-loader-node')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+            user_prefix, '-loader-node')
+        node_prefix = _prepend_user_prefix(user_prefix, '-loader-set')
 
         super(LoaderSetLibvirt, self).__init__(domain_info=domain_info,
                                                hypervisor=hypervisor,
@@ -2487,8 +2487,8 @@ class MonitorSetLibvirt(LibvirtCluster, BaseMonitorSet):
     def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=1,
                  params=None):
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-monitor-node')
+        node_prefix = _prepend_user_prefix(user_prefix, '-monitor-set')
 
         super(MonitorSetLibvirt, self).__init__(domain_info=domain_info,
                                                 hypervisor=hypervisor,
@@ -2845,8 +2845,8 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
                  openstack_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
         # We have to pass the cluster name in advance in user_data
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, '-db-node')
         super(ScyllaOpenStackCluster, self).__init__(openstack_image=openstack_image,
                                                      openstack_network=openstack_network,
                                                      openstack_instance_type=openstack_instance_type,
@@ -2973,8 +2973,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=[10], params=None, gce_datacenter=None):
         # We have to pass the cluster name in advance in user_data
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, '-db-node')
         super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
                                                gce_image_type=gce_image_type,
                                                gce_image_size=gce_image_size,
@@ -3164,8 +3164,8 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-db-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-db-cluster')
+        node_prefix = _prepend_user_prefix(user_prefix, '-db-node')
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -3414,8 +3414,8 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
                  openstack_instance_type='m1.small',
                  openstack_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        node_prefix = _prepend_user_prefix(user_prefix, '-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-loader-set')
         super(LoaderSetOpenStack, self).__init__(openstack_image=openstack_image,
                                                  openstack_network=openstack_network,
                                                  openstack_instance_type=openstack_instance_type,
@@ -3475,8 +3475,8 @@ class LoaderSetGCE(GCECluster, BaseLoaderSet):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        node_prefix = _prepend_user_prefix(user_prefix, '-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-loader-set')
         super(LoaderSetGCE, self).__init__(gce_image=gce_image,
                                            gce_network=gce_network,
                                            gce_image_type=gce_image_type,
@@ -3540,8 +3540,8 @@ class LoaderSetAWS(AWSCluster, BaseLoaderSet):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-loader-set')
+        node_prefix = _prepend_user_prefix(user_prefix, '-loader-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
@@ -3566,8 +3566,8 @@ class MonitorSetOpenStack(OpenStackCluster, BaseMonitorSet):
                  openstack_instance_type='m1.small',
                  openstack_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        node_prefix = _prepend_user_prefix(user_prefix, '-monitor-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-monitor-set')
         super(MonitorSetOpenStack, self).__init__(openstack_image=openstack_image,
                                                   openstack_network=openstack_network,
                                                   openstack_instance_type=openstack_instance_type,
@@ -3592,8 +3592,8 @@ class MonitorSetGCE(GCECluster, BaseMonitorSet):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
+        node_prefix = _prepend_user_prefix(user_prefix, '-monitor-node')
+        cluster_prefix = _prepend_user_prefix(user_prefix, '-monitor-set')
         super(MonitorSetGCE, self).__init__(gce_image=gce_image,
                                             gce_image_type=gce_image_type,
                                             gce_image_size=gce_image_size,
@@ -3622,7 +3622,7 @@ class MonitorSetAWS(AWSCluster, BaseMonitorSet):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-node')
+        node_prefix = _prepend_user_prefix(user_prefix, '-monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'scylla-monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
