@@ -813,16 +813,18 @@ class ClusterTester(Test):
             self.monitors.download_monitor_data()
 
             # upload prometheus data
-            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*/*monitor*/prometheus/'))[0]
-            file_path = os.path.normpath(self.job.logdir)
-            shutil.make_archive(file_path, 'zip', prometheus_folder)
-            result_path = '%s.zip' % file_path
-            with open(result_path) as fh:
-                mydata = fh.read()
-                url_s3 = ClusterTester.get_s3_url(result_path)
-                self.log.info("uploading prometheus data on %s" % url_s3)
-                response = requests.put(url_s3, data=mydata)
-                self.log.info(response.text)
+            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*/*monitor*/prometheus/'))
+            if prometheus_folder:
+                prometheus_folder = prometheus_folder[0]
+                file_path = os.path.normpath(self.job.logdir)
+                shutil.make_archive(file_path, 'zip', prometheus_folder)
+                result_path = '%s.zip' % file_path
+                with open(result_path) as fh:
+                    mydata = fh.read()
+                    url_s3 = ClusterTester.get_s3_url(result_path)
+                    self.log.info("uploading prometheus data on %s" % url_s3)
+                    response = requests.put(url_s3, data=mydata)
+                    self.log.info(response.text)
 
             grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
             if grafana_snapshots:
