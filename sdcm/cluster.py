@@ -1838,7 +1838,8 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None, node_list=[]):
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None,
+                          node_list=[]):
         stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
         if profile:
             with open(profile) as fp:
@@ -1849,9 +1850,10 @@ class BaseLoaderSet(object):
         queue = Queue.Queue()
 
         def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
-            first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
-            first_node = first_node[0] if first_node else node_list[0]
-            stress_cmd += " -node {}".format(first_node.private_ip_address)
+            if node_list and '-node' not in stress_cmd:
+                first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
+                first_node = first_node[0] if first_node else node_list[0]
+                stress_cmd += " -node {}".format(first_node.private_ip_address)
             stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
                          stress_cmd +\
                          "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
