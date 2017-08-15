@@ -1001,7 +1001,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None, client_encrypt=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1064,6 +1064,28 @@ WantedBy=multi-user.target
             p = re.compile('[# ]*authenticator:.*')
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
                                          scylla_yaml_contents)
+
+        if server_encrypt or client_encrypt:
+            node.remoter.receive_files(src='data_dir/ssl_conf',
+                                       dst='/tmp/ssl_conf')
+            node.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
+
+        if server_encrypt:
+            scylla_yaml_contents += """
+server_encryption_options:
+   internode_encryption: all
+   certificate: /etc/scylla/db.crt
+   keyfile: /etc/scylla/db.key
+   truststore: /etc/scylla/cadb.pem
+"""
+
+        if client_encrypt:
+            scylla_yaml_contents += """
+client_encryption_options:
+   enabled: true
+   certificate: /etc/scylla/db.crt
+   keyfile: /etc/scylla/db.key
+"""
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -1770,9 +1792,9 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
         self.log.debug('Stop nemesis end')
 
-    def _experimental(self):
-        experimental = self.params.get('experimental')
-        return True if experimental and experimental.lower() == 'true' else False
+    def _param_enabled(self, param):
+        param = self.params.get(param)
+        return True if param and param.lower() == 'true' else False
 
 
 class BaseLoaderSet(object):
@@ -2324,7 +2346,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental())
+                          enable_exp=self._param_enabled('experimental'))
 
         node.remoter.run(
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
@@ -2863,7 +2885,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental())
+                          enable_exp=self._param_enabled('experimental'))
 
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
@@ -3023,9 +3045,11 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         authenticator = self.params.get('authenticator')
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._experimental(),
+                          enable_exp=self._param_enabled('experimental'),
                           endpoint_snitch=endpoint_snitch,
-                          authenticator=authenticator)
+                          authenticator=authenticator,
+                          server_encrypt=self._param_enabled('server_encrypt'),
+                          client_encrypt=self._param_enabled('client_encrypt'))
 
         # detect local-ssd disks
         result = node.remoter.run('ls /dev/nvme0n*')
@@ -3121,8 +3145,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         for node in node_list:
             dst_nodes = [n for n in node_list if n.dc_idx != node.dc_idx]
             local_nodes = [n for n in node_list if n.dc_idx == node.dc_idx and n != node]
-            enable_tc = self.params.get('enable_tc')
-            if enable_tc and enable_tc.lower() == 'true':
+            if self._param_enabled('enable_tc'):
                 self.set_tc(node, dst_nodes, local_nodes)
 
     def destroy(self):
@@ -3200,9 +3223,19 @@ class ScyllaAWSCluster(AWSCluster, BaseScyllaCluster):
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
             seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address, enable_exp=True, endpoint_snitch=endpoint_snitch, broadcast=node.public_ip_address, authenticator=authenticator)
+            node.config_setup(seed_address=seed_address,
+                              enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              broadcast=node.public_ip_address,
+                              authenticator=authenticator,
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'))
         else:
-            node.config_setup(enable_exp=True, endpoint_snitch=endpoint_snitch, authenticator=authenticator)
+            node.config_setup(enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              authenticator=authenticator,
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.remoter.run('nodetool status', verbose=True)
 
