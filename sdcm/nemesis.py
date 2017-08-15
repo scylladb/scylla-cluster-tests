@@ -210,16 +210,23 @@ class Nemesis(object):
             monitoring_node.reconfigure_prometheus(targets=targets)
 
     def disrupt_nodetool_decommission(self, add_node=True):
+        def get_node_info_list(verification_node):
+            try:
+                return self.cluster.get_node_info_list(verification_node)
+            except Exception as details:
+                self.log.error(str(details))
+                return None
         self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.private_ip_address
         decommission_cmd = 'nodetool --host localhost decommission'
         result = self._run_nodetool(decommission_cmd, self.target_node)
         if result is not None:
             verification_node = random.choice(self.cluster.nodes)
-            while verification_node == self.target_node:
+            node_info_list = get_node_info_list(verification_node)
+            while verification_node == self.target_node or node_info_list is None:
                 verification_node = random.choice(self.cluster.nodes)
+                node_info_list = get_node_info_list(verification_node)
 
-            node_info_list = self.cluster.get_node_info_list(verification_node)
             private_ips = [node_info['ip'] for node_info in node_info_list]
             error_msg = ('Node that was decommissioned %s still in the cluster. '
                          'Cluster status info: %s' % (self.target_node,
