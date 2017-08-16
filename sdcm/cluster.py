@@ -1948,6 +1948,66 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
+    def _parse_bench_summary(lines):
+        """
+        Parsing bench results, only parse the summary results.
+        Collect results of all nodes and return a dictionaries' list,
+        the new structure data will be easy to parse, compare, display or save.
+        """
+        results = {'keyspace_idx': None, 'stdev gc time(ms)': None, 'Total errors': None,
+                   'total gc count': None, 'loader_idx': None, 'total gc time (s)': None,
+                   'total gc mb': 0, 'cpu_idx': None, 'avg gc time(ms)': None, 'latency mean': None}
+        enable_parse = False
+
+        for line in lines:
+            line.strip()
+            # Parse load params
+            if line.startswith('Mode:') or line.startswith('Workload:') or line.startswith('Timeout:') or \
+                    line.startswith('Consistency level:') or line.startswith('Partition count') or \
+                    line.startswith('Clustering rows:') or line.startswith('Clustering row size:') or \
+                    line.startswith('Rows per request:') or line.startswith('Page size:') or \
+                    line.startswith('Concurrency:') or line.startswith('Connections:') or \
+                    line.startswith('Maximum rate:') or line.startswith('Client compression:'):
+                split_idx = line.index(':')
+                key = line[:split_idx].strip()
+                value = line[split_idx + 1:].split()[0]
+                results[key] = value
+
+            if line.startswith('Results'):
+                enable_parse = True
+                continue
+            if line.startswith('Latency:'):
+                continue
+            if not enable_parse:
+                continue
+
+            split_idx = line.index(':')
+            key = line[:split_idx].strip()
+            value = line[split_idx + 1:].split()[0]
+            # we try to use the same stats as we have in cassandra
+            if key == 'max':
+                key = 'latency max'
+            elif key == '99.9th':
+                key = 'latency 99.9th percentile'
+            elif key == '99th':
+                key = 'latency 99th percentile'
+            elif key == '95th':
+                key = 'latency 95th percentile'
+            elif key == 'median':
+                key = 'latency median'
+            elif key == 'Operations/s':
+                key = 'op rate'
+            elif key == 'Rows/s':
+                key = 'row rate'
+                results['partition rate'] = value
+            elif key == 'Total ops':  # ==Total rows?
+                key = 'Total partitions'
+            elif key == 'Time (avg)':
+                key = 'Total operation time'
+            results[key] = value
+        return results
+
+    @staticmethod
     def _plot_nemesis_events(nemesis, node):
         nemesis_event_start_times = [
             operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
@@ -2089,7 +2149,7 @@ class BaseLoaderSet(object):
         for node, result in results:
             output = result.stdout + result.stderr
             lines = output.splitlines()
-            ret.append(self._parse_cs_summary(lines))
+            ret.append(self._parse_bench_summary(lines))
 
         return ret
 
