@@ -11,26 +11,6 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2016 ScyllaDB
-
-
-import os
-from avocado import main
-from performance_regression_test import PerformanceRegressionTest
-
-# !/usr/bin/env python
-
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-#
-# See LICENSE for more details.
-#
 # Copyright (c) 2017 ScyllaDB
 
 import os
@@ -55,14 +35,14 @@ class JanusGraphTest(PerformanceRegressionTest):
         3. mvn verify -pl janusgraph-cql -Dstorage.hostname=DB_IP -Dtest=CQLGraphTest
         """
         self.loaders.nodes[0].remoter.run('sudo yum install -y git maven')
-        self.loaders.nodes[0].remoter.run('git clone https://github.com/JanusGraph/janusgraph.git && cd janusgraph')
+        self.loaders.nodes[0].remoter.run('git clone https://github.com/JanusGraph/janusgraph.git')
         self.loaders.nodes[0].remoter.run('cd janusgraph && mvn clean install -DskipTests -pl janusgraph-cql -am')
         self.loaders.nodes[0].remoter.run(
             'cd janusgraph && mvn verify -pl janusgraph-cql -Dstorage.hostname={0} -Dtest=CQLGraphTest'.format(
                 self.db_cluster.nodes[0].private_ip_address), ignore_status=True)
         dest = os.path.join(self.logdir, 'janusgraph-cql')
         os.mkdir(dest)
-        self.loaders.nodes[0].remoter.receive_files(src='/home/centos/janusgraph/janusgraph-cql/target/',
+        self.loaders.nodes[0].remoter.receive_files(src='~/janusgraph/janusgraph-cql/target/',
                                                     dst=dest, ssh_timeout=300)
         self.loaders.nodes[0].remoter.run('cat janusgraph/janusgraph-cql/target/surefire-reports/*.txt')
 
