@@ -192,7 +192,8 @@ class PerformanceRegressionTest(ClusterTester):
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
                 f.write(content)
         except Exception as ex:
-            self.log.debug('Failed to display results: {}'.format(ex))
+            self.log.debug('Failed to display results: {0}'.format(results))
+            self.log.debug('Exception: {0}'.format(ex))
 
     def add_stress_cmd_params(self, result, cmd, prefix=''):
         # parsing stress command and return dict with params
