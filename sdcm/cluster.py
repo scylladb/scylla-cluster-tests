@@ -1066,9 +1066,9 @@ WantedBy=multi-user.target
                                          scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
-            node.remoter.receive_files(src='data_dir/ssl_conf',
-                                       dst='/tmp/ssl_conf')
-            node.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
+            self.remoter.send_files(src='./data_dir/ssl_conf',
+                                    dst='/tmp/')
+            self.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
 
         if server_encrypt:
             scylla_yaml_contents += """
@@ -2678,7 +2678,7 @@ class GCECluster(BaseCluster):
                             credentials=self._credentials[0],
                             gce_image_username=self._gce_image_username,
                             node_prefix=self.node_prefix,
-                            node_index=self._node_index,
+                            node_index=node_index,
                             base_logdir=self.logdir,
                             dc_idx=dc_idx)
                 nodes.append(n)
