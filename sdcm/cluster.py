@@ -1066,9 +1066,9 @@ WantedBy=multi-user.target
                                          scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
-            node.remoter.receive_files(src='data_dir/ssl_conf',
-                                       dst='/tmp/ssl_conf')
-            node.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
+            self.remoter.send_files(src='./data_dir/ssl_conf',
+                                    dst='/tmp/')
+            self.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
 
         if server_encrypt:
             scylla_yaml_contents += """
