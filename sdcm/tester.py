@@ -17,6 +17,10 @@ import os
 import shutil
 import time
 import types
+import re
+import subprocess
+import datetime
+import platform
 
 import boto3.session
 import libvirt
@@ -51,6 +55,7 @@ from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
 from .data_path import get_data_path
+from . import es
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -129,6 +134,54 @@ def clean_aws_resources(method):
     return wrapper
 
 
+def get_stress_cmd_params(cmd):
+    # parsing stress command and return dict with params
+    cmd_params = {}
+    cmd = cmd.strip().split('cassandra-stress')[1].strip()
+    if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
+        cmd_params['command'] = cmd.split(' ')[0]
+        if 'no-warmup' in cmd:
+            cmd_params['no-warmup'] = True
+
+        match = re.search('(cl\s?=\s?\w+)', cmd)
+        if match:
+            cmd_params['cl'] = match.group(0).split('=')[1].strip()
+
+        match = re.search('(duration\s?=\s?\w+)', cmd)
+        if match:
+            cmd_params['duration'] = match.group(0).split('=')[1].strip()
+
+        match = re.search('( n\s?=\s?\w+)', cmd)
+        if match:
+            cmd_params['n'] = match.group(0).split('=')[1].strip()
+        match = re.search('profile=(\S+)\s+', cmd)
+        if match:
+            cmd_params['profile'] = match.group(1).strip()
+            match = re.search('ops(\S+)\s+', cmd)
+            if match:
+                cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
+
+        for temp in cmd.split(' -')[1:]:
+            k = temp.split()[0]
+            match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
+            if match:
+                cmd_params[k] = match.group(2).strip()
+        if 'rate' in cmd_params:
+            # split rate section on separate items
+            if 'threads' in cmd_params['rate']:
+                cmd_params['rate threads'] = \
+                    re.search('(threads\s?=\s?(\w+))', cmd_params['rate']).group(2)
+            if 'throttle' in cmd_params['rate']:
+                cmd_params['throttle threads'] =\
+                    re.search('(throttle\s?=\s?(\w+))', cmd_params['rate']).group(2)
+            if 'fixed' in cmd_params['rate']:
+                cmd_params['fixed threads'] =\
+                    re.search('(fixed\s?=\s?(\w+))', cmd_params['rate']).group(2)
+            del cmd_params['rate']
+
+    return cmd_params
+
+
 class ClusterTester(Test):
 
     def __init__(self, methodName='test', name=None, params=None,
@@ -169,6 +222,17 @@ class ClusterTester(Test):
             targets = [n.private_ip_address for n in self.db_cluster.nodes]
             targets += [n.private_ip_address for n in self.loaders.nodes]
         self.monitors.wait_for_init(targets=targets, scylla_version=self.db_cluster.nodes[0].scylla_version)
+
+        # for saving test details in DB
+        self.test_index = self.__class__.__name__.lower()
+        self.test_type = self.params.id.name
+        self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
+                                      'errors', 'coredumps']}
+        self.stats['setup_details'] = self.get_setup_details()
+        self.stats['versions'] = self.get_scylla_versions()
+        self.stats['test_details'] = self.get_test_details()
+        self.create_test_stats()
 
     def get_nemesis_class(self):
         """
@@ -583,11 +647,12 @@ class ClusterTester(Test):
         self.verify_stress_thread(stress_queue)
 
     @clean_aws_resources
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None):
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix=''):
         #stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
+        self.update_stress_cmd_details(stress_cmd, prefix)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -614,7 +679,9 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
-        return self.loaders.get_stress_results(queue, stress_num=stress_num, keyspace_num=keyspace_num)
+        results = self.loaders.get_stress_results(queue, stress_num=stress_num, keyspace_num=keyspace_num)
+        self.update_stress_results(results)
+        return results
 
     def get_auth_provider(self, user, password):
         return PlainTextAuthProvider(username=user, password=password)
@@ -857,6 +924,12 @@ class ClusterTester(Test):
                     cr.destroy()
                 self.credentials = []
 
+        if db_cluster_errors:
+            self.stats['errors'] = db_cluster_errors
+        if db_cluster_coredumps:
+            self.stats['coredumps'] = db_cluster_coredumps
+        self.update_test_status()
+
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
                       db_cluster_coredumps)
@@ -872,3 +945,99 @@ class ClusterTester(Test):
 
     def tearDown(self):
         self.clean_resources()
+
+    def get_scylla_versions(self):
+        versions = {}
+        try:
+            versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
+            for line in versions_output:
+                for package in ['scylla-jmx', 'scylla-server', 'scylla-tools']:
+                    match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
+                    if match:
+                        versions[package] = {'version': match.group(2),
+                                             'date': match.group(4),
+                                             'commit_id': match.group(5)}
+        except Exception as ex:
+            self.log.error('Failed getting scylla versions: %s', ex)
+
+        return versions
+
+    def get_setup_details(self):
+        setup_details = {}
+        is_gce = False
+        for p in self.params.iteritems():
+            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
+                is_gce = True
+        for p in self.params.iteritems():
+            if p[1] in ['stress_cmd', 'stress_modes']:
+                continue
+            else:
+                if is_gce and (p[0], p[1]) in \
+                        [('/run', 'instance_type_loader'),
+                         ('/run', 'instance_type_monitor'),
+                         ('/run/databases/scylla', 'instance_type_db')]:
+                    # exclude these params from gce run
+                    continue
+                setup_details[p[1]] = p[2]
+
+        if 'es_password' in setup_details:
+            # hide ES password
+            setup_details['es_password'] = '******'
+
+        new_scylla_packages = self.params.get('update_db_packages')
+        setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
+
+        return setup_details
+
+    def get_test_details(self):
+        test_details = {}
+        test_details['test_name'] = self.params.id.name
+        test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+
+        test_details['job_name'] = os.environ.get('JOB_NAME', 'local_run')
+        if os.environ.get('BUILD_URL'):
+            test_details['job_url'] = os.environ.get('BUILD_URL', '')
+
+        test_details['start_host'] = platform.node()
+        test_details['test_duration'] = self._duration
+
+        return test_details
+
+    def update_test_details(self):
+        self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        if self.monitors:
+            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
+            self.stats['test_details']['prometheus_report'] = url_s3 + ".zip"
+            self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+        self.update_test_stats(dict(test_details=self.stats['test_details']))
+
+    def update_stress_cmd_details(self, cmd, prefix=''):
+        section = '{0}cassandra-stress'.format(prefix)
+        if section not in self.stats['test_details']:
+            self.stats['test_details'][section] = []
+        cmd_params = get_stress_cmd_params(cmd)
+        if cmd_params:
+            self.stats['test_details'][section].append(cmd_params)
+            self.update_test_stats(dict(test_details=self.stats['test_details']))
+
+    def update_stress_results(self, results):
+        if 'stats' not in self.stats['results']:
+            self.stats['results']['stats'] = results
+        else:
+            self.stats['results']['stats'].extend(results)
+        self.update_test_stats(dict(results=self.stats['results']))
+
+    def update_test_status(self):
+        self.stats['status'] = self.status
+        self.update_test_stats(dict(status=self.stats['status']))
+
+    def create_test_stats(self):
+        db = es.ES()
+        db.create(self.test_index, self.test_type, self.test_id, self.stats)
+
+    def update_test_stats(self, data=None):
+        db = es.ES()
+        if not data:
+            data = self.stats
+        self.log.info('Update info for test %s: %s', self.test_id, data)
+        db.update(self.test_index, self.test_type, self.test_id, data)
