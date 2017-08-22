@@ -31,33 +31,10 @@ class GrowClusterTest(ClusterTester):
     :avocado: enable
     """
 
-    @clean_aws_resources
-    def setUp(self):
-        self.credentials = []
-        self.db_cluster = None
-        self.loaders = None
-        self.monitors = None
-        self.custom_cs_command = None
-        logging.getLogger('botocore').setLevel(logging.CRITICAL)
-        logging.getLogger('boto3').setLevel(logging.CRITICAL)
-        # We're starting the cluster with 3 nodes due to
-        # replication factor settings we're using with cassandra-stress
-        self._cluster_starting_size = self.params.get('cluster_initial_size', default=3)
+    def __init__(self, *args, **kwargs):
+        super(GrowClusterTest, self).__init__(*args, **kwargs)
+        self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
         self._cluster_target_size = self.params.get('cluster_target_size', default=5)
-        loader_info = {'n_nodes': 1, 'device_mappings': None, 'disk_size': None, 'disk_type': None,
-                       'n_local_ssd': None, 'type': None}
-        monitor_info = {'n_nodes': 1, 'device_mappings': None, 'disk_size': None, 'disk_type': None,
-                        'n_local_ssd': None, 'type': None}
-        db_info = {'n_nodes': [self._cluster_starting_size], 'disk_size': None, 'disk_type': None,
-                   'n_local_ssd': None, 'device_mappings': None, 'type': None}
-        self.init_resources(loader_info=loader_info, db_info=db_info,
-                            monitor_info=monitor_info)
-        self.loaders.wait_for_init()
-        self.db_cluster.wait_for_init()
-        nodes_monitored = [node.private_ip_address for node in self.db_cluster.nodes]
-        nodes_monitored += [node.private_ip_address for node in self.loaders.nodes]
-        self.monitors.wait_for_init(targets=nodes_monitored)
-        self.stress_thread = None
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
