@@ -5,7 +5,9 @@ nemesis_interval: 1
 user_prefix: 'cluster-scale-test'
 failure_post_behavior: destroy
 space_node_threshold: 100
-cluster_initial_size: 50
+n_db_nodes: 50
+n_loaders: 1
+n_monitor_nodes: 1
 cluster_target_size: 200
 add_node_cnt: 1
 experimental: 'true'
