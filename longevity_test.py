@@ -42,6 +42,12 @@ class LongevityTest(ClusterTester):
                                     test_id=self.test_id)
         stress_queue = list()
 
+        # prepare wirte workload
+        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        if prepare_write_cmd:
+            stress_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=2)
+            results = self.get_stress_results(queue=stress_queue, stress_num=2)
+
         for stress_cmd in self.params.get('stress_cmd'):
             params = {'stress_cmd': stress_cmd}
             if 'counter_' in stress_cmd:
