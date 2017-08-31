@@ -14,6 +14,10 @@ class EC2Client(object):
         self._params = params
 
     def _request_spot_instance(self, instance_type, image_id, region_name, count=1, request_type='one-time'):
+        """
+        Create a spot instance request
+        :return: list of request id-s
+        """
         spot_price = self._get_spot_price(instance_type)
         logger.info('Sending spot request')
         network_if = [
@@ -41,6 +45,10 @@ class EC2Client(object):
         pass
 
     def _get_spot_price(self, instance_type, region_name=''):
+        """
+        Calculate spot price for bidding
+        :return: spot bid price
+        """
         logger.info('Calculating spot price for bidding')
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
         prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
@@ -50,6 +58,9 @@ class EC2Client(object):
         return price
 
     def _is_request_fulfilled(self, request_ids):
+        """
+        Check request status
+        """
         resp = self._client.describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
         for req in resp['SpotInstanceRequests']:
             if req['Status']['Code'] != 'fulfilled' or req['State'] != 'active':
@@ -57,6 +68,11 @@ class EC2Client(object):
         return True, resp
 
     def _wait_for_request_done(self, request_ids):
+        """
+        Wait for spot requests fulfilled
+        :param request_ids: spot request id-s
+        :return: list of spot instance id-s
+        """
         logger.info('Waiting for spot instances...')
         timeout = 0
         status = False
@@ -70,9 +86,16 @@ class EC2Client(object):
         return [req['InstanceId'] for req in resp['SpotInstanceRequests']]
 
     def add_tags(self, instance_id, tags=[]):
+        """
+        Add tags to instance
+        """
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, count=1):
+        """
+        Create spot instances
+        :return: list of instance id-s
+        """
         request_ids = self._request_spot_instance(instance_type, image_id, region_name, count)
         instance_ids = self._wait_for_request_done(request_ids)
         logger.info('Spot instances: %s', instance_ids)
@@ -81,6 +104,9 @@ class EC2Client(object):
         return instance_ids
 
     def terminate_instances(self, instance_ids):
+        """
+        Terminate instances
+        """
         self._client.terminate_instances(InstanceIds=instance_ids)
 
 
