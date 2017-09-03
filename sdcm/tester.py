@@ -33,23 +33,23 @@ from libcloud.compute.types import Provider
 
 from . import cluster
 from . import nemesis
-from .cluster import CassandraAWSCluster
 from .cluster import GCECredentials
-from .cluster import LoaderSetAWS
 from .cluster import LoaderSetGCE
 from .cluster import LoaderSetLibvirt
 from .cluster import LoaderSetOpenStack
-from .cluster import MonitorSetAWS
 from .cluster import MonitorSetGCE
 from .cluster import MonitorSetLibvirt
 from .cluster import MonitorSetOpenStack
 from .cluster import NoMonitorSet
 from .cluster import RemoteCredentials
-from .cluster import ScyllaAWSCluster
 from .cluster import ScyllaGCECluster
 from .cluster import ScyllaLibvirtCluster
 from .cluster import ScyllaOpenStackCluster
 from .cluster import UserRemoteCredentials
+from .cluster_aws import CassandraAWSCluster
+from .cluster_aws import ScyllaAWSCluster
+from .cluster_aws import LoaderSetAWS
+from .cluster_aws import MonitorSetAWS
 from .data_path import get_data_path
 
 try:
