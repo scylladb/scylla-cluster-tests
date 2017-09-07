@@ -2816,7 +2816,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             disks_str = ",".join(re.findall('/dev/nvme0n\w+', result.stdout))
         if self._gce_pd_ssd_size:
             # detect pd-ssd disks
-            result = node.remoter.run('ls /dev/sd*')
+            result = node.remoter.run('ls /dev/sd[b-z]')
             disks_str = ",".join(re.findall('/dev/sd\w+', result.stdout))
         assert disks_str != ""
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(disks_str))
