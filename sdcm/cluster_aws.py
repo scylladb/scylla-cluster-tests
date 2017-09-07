@@ -16,8 +16,16 @@ import cluster
 import wait
 from .collectd import ScyllaCollectdSetup
 from .collectd import CassandraCollectdSetup
+import ec2_client
 
 logger = logging.getLogger(__name__)
+
+INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
+INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
+INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
+INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
+SPOT_CNT_LIMIT = 20
+SPOT_FLEET_LIMIT = 50
 
 
 def _prepend_user_prefix(user_prefix, base_name):
@@ -87,6 +95,7 @@ class AWSCluster(cluster.BaseCluster):
         self._ec2_user_data = ec2_user_data
         self._ec2_ami_id = ec2_ami_id
         self.region_names = region_names
+        self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -120,14 +129,42 @@ class AWSCluster(cluster.BaseCluster):
                        'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
-        instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
-                                                                UserData=ec2_user_data,
-                                                                MinCount=count,
-                                                                MaxCount=count,
-                                                                KeyName=self._credentials[dc_idx].key_pair_name,
-                                                                BlockDeviceMappings=self._ec2_block_device_mappings,
-                                                                NetworkInterfaces=interfaces,
-                                                                InstanceType=self._ec2_instance_type)
+
+        if self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
+            instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
+                                                                    UserData=ec2_user_data,
+                                                                    MinCount=count,
+                                                                    MaxCount=count,
+                                                                    KeyName=self._credentials[dc_idx].key_pair_name,
+                                                                    BlockDeviceMappings=self._ec2_block_device_mappings,
+                                                                    NetworkInterfaces=interfaces,
+                                                                    InstanceType=self._ec2_instance_type)
+        else:
+            ec2 = ec2_client.EC2Client()
+            subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
+            spot_params = dict(instance_type=self._ec2_instance_type,
+                               image_id=self._ec2_ami_id[dc_idx],
+                               region_name=subnet_info['AvailabilityZone'],
+                               network_if=interfaces,
+                               key_pair=self._credentials[dc_idx].key_pair_name,
+                               user_data=ec2_user_data,
+                               count=count)
+
+            if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
+                request_cnt = 1
+                if count > SPOT_FLEET_LIMIT:
+                    request_cnt = count / SPOT_FLEET_LIMIT
+                    spot_params['count'] = SPOT_FLEET_LIMIT
+                instances = []
+                for i in range(request_cnt):
+                    instances_i = ec2.create_spot_fleet(**spot_params)
+                    instances.extend(instances_i)
+            elif self.instance_provision == INSTANCE_PROVISION_SPOT_LOW_PRICE or count == 1:
+                instances = ec2.create_spot_instances(**spot_params)
+            elif self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
+                spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60})
+                instances = ec2.create_spot_instances(**spot_params)
+
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
         if self.params.get('failure_post_behavior') == 'destroy':
