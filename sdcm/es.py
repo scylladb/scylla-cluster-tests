@@ -10,7 +10,7 @@ class ES(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self._url = kwargs.get('url', 'http://ec2-54-89-144-171.compute-1.amazonaws.com:9200/')
+        self._url = kwargs.get('url', 'http://ec2-54-174-18-71.compute-1.amazonaws.com:9200/')
         self._es = elasticsearch.Elasticsearch([self._url])
 
     def _create_index(self, index):
