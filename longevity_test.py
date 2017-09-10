@@ -36,7 +36,10 @@ class LongevityTest(ClusterTester):
         """
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     loaders=self.loaders,
-                                    monitoring_set=self.monitors)
+                                    monitoring_set=self.monitors,
+                                    test_index=self.test_index,
+                                    test_type=self.test_type,
+                                    test_id=self.test_id)
         stress_queue = list()
 
         for stress_cmd in self.params.get('stress_cmd'):

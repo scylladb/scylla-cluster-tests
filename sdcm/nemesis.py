@@ -26,6 +26,7 @@ from avocado.utils import process
 
 from .data_path import get_data_path
 from .log import SDCMAdapter
+from . import es
 from avocado.utils import wait
 
 from sdcm.utils import remote_get_file
@@ -33,7 +34,7 @@ from sdcm.utils import remote_get_file
 
 class Nemesis(object):
 
-    def __init__(self, cluster, loaders, monitoring_set, termination_event):
+    def __init__(self, cluster, loaders, monitoring_set, termination_event, **kwargs):
         self.cluster = cluster
         self.loaders = loaders
         self.monitoring_set = monitoring_set
@@ -53,6 +54,22 @@ class Nemesis(object):
         self.error_list = []
         self.interval = 0
         self.start_time = time.time()
+        self.stats = {}
+        self.test_index = kwargs.get('test_index', None)
+        self.test_type = kwargs.get('test_type', None)
+        self.test_id = kwargs.get('test_id', None)
+
+    def update_stats(self, disrupt, status=True, data={}):
+        key = {True: 'runs', False: 'failures'}
+        if disrupt not in self.stats:
+            self.stats[disrupt] = {'runs': [], 'failures': [], 'cnt': 0}
+        self.stats[disrupt][key[status]].append(data)
+        self.stats[disrupt]['cnt'] += 1
+        self.log.info('STATS: %s', self.stats)
+        self.log.info('Update nemesis info for test %s', self.test_id)
+        if self.test_index:
+            db = es.ES()
+            db.update(self.test_index, self.test_type, self.test_id, {'nemesis': self.stats})
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
@@ -411,19 +428,29 @@ def log_time_elapsed_and_status(method):
         start_time = time.time()
         args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
         result = None
+        error = None
+        status = True
         try:
             result = method(*args, **kwargs)
         except Exception, details:
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
+            error = details
         finally:
             end_time = time.time()
             time_elapsed = int(end_time - start_time)
             args[0].duration_list.append(time_elapsed)
-            args[0].operation_log.append({'operation': args[0].current_disruption,
-                                          'start': int(start_time),
-                                          'end': int(end_time), 'duration': time_elapsed})
+            log_info = {'operation': args[0].current_disruption,
+                        'start': int(start_time),
+                        'end': int(end_time),
+                        'duration': time_elapsed}
+            args[0].operation_log.append(log_info)
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
+            if error:
+                log_info.update({'error': error})
+                status = False
+
+            args[0].update_stats(method.__name__, status, log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:

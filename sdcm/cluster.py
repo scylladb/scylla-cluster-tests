@@ -1646,11 +1646,11 @@ class BaseScyllaCluster(object):
             size = int(self.params.get('space_node_threshold'))
         self.wait_cfstat_reached_threshold('Space used (total)', size)
 
-    def add_nemesis(self, nemesis, loaders, monitoring_set):
+    def add_nemesis(self, nemesis, loaders, monitoring_set, **kwargs):
         self.nemesis.append(nemesis(cluster=self,
                                     loaders=loaders,
                                     monitoring_set=monitoring_set,
-                                    termination_event=self.termination_event))
+                                    termination_event=self.termination_event, **kwargs))
 
     def clean_nemesis(self):
         self.nemesis = []
