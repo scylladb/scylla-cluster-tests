@@ -11,6 +11,8 @@ n_monitor_nodes: 1
 cluster_target_size: 200
 add_node_cnt: 1
 experimental: 'true'
+instance_provision: 'on_demand'
+# instance_provision can be one of the following: on_demand|spot_fleet|spot_low_price|spot_duration
 
 backends: !mux
     aws: !mux
@@ -20,18 +22,18 @@ backends: !mux
         # loader instance by default.
         instance_type_loader: 'c4.4xlarge'
         # Size of AWS monitor instance
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_monitor: 'm3.medium'
         us_east_1:
             region_name: 'us-east-1'
-            security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-d934e980'
-            ami_id_db_scylla: 'ami-b390ccc8'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-ad3ce9f4'
+            ami_id_db_scylla: 'ami-56373b2d'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-b390ccc8'
+            ami_id_loader: 'ami-56373b2d'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3eff0028'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-b390ccc8'
+            ami_id_monitor: 'ami-56373b2d'
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'
