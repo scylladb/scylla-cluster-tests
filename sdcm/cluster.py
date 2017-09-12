@@ -1686,8 +1686,9 @@ class BaseLoaderSet(object):
         queue = Queue.Queue()
 
         def node_setup(node):
-            self.log.info('Setup')
+            self.log.info('Setup in BaseLoaderSet')
             node.wait_ssh_up(verbose=verbose)
+
             # The init scripts should install/update c-s, so
             # let's try to guarantee it will be there before
             # proceeding
@@ -1699,6 +1700,16 @@ class BaseLoaderSet(object):
 
             cs_exporter_setup = CassandraStressExporterSetup()
             cs_exporter_setup.install(node)
+
+            if self.params.get('bench_run', default='').lower() == 'true':
+                # go1.7 still not in repo
+                node.remoter.run('sudo yum install git -y')
+                node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.7.linux-amd64.tar.gz')
+                node.remoter.run('sudo tar -C /usr/local -xvzf go1.7.linux-amd64.tar.gz')
+                node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
+                node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
+                node.remoter.run("source $HOME/.bashrc")
+                node.remoter.run("go get github.com/pdziepak/scylla-bench")
 
             queue.put(node)
             queue.task_done()
@@ -1849,6 +1860,66 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
+    def _parse_bench_summary(lines):
+        """
+        Parsing bench results, only parse the summary results.
+        Collect results of all nodes and return a dictionaries' list,
+        the new structure data will be easy to parse, compare, display or save.
+        """
+        results = {'keyspace_idx': None, 'stdev gc time(ms)': None, 'Total errors': None,
+                   'total gc count': None, 'loader_idx': None, 'total gc time (s)': None,
+                   'total gc mb': 0, 'cpu_idx': None, 'avg gc time(ms)': None, 'latency mean': None}
+        enable_parse = False
+
+        for line in lines:
+            line.strip()
+            # Parse load params
+            if line.startswith('Mode:') or line.startswith('Workload:') or line.startswith('Timeout:') or \
+                    line.startswith('Consistency level:') or line.startswith('Partition count') or \
+                    line.startswith('Clustering rows:') or line.startswith('Clustering row size:') or \
+                    line.startswith('Rows per request:') or line.startswith('Page size:') or \
+                    line.startswith('Concurrency:') or line.startswith('Connections:') or \
+                    line.startswith('Maximum rate:') or line.startswith('Client compression:'):
+                split_idx = line.index(':')
+                key = line[:split_idx].strip()
+                value = line[split_idx + 1:].split()[0]
+                results[key] = value
+
+            if line.startswith('Results'):
+                enable_parse = True
+                continue
+            if line.startswith('Latency:'):
+                continue
+            if not enable_parse:
+                continue
+
+            split_idx = line.index(':')
+            key = line[:split_idx].strip()
+            value = line[split_idx + 1:].split()[0]
+            # we try to use the same stats as we have in cassandra
+            if key == 'max':
+                key = 'latency max'
+            elif key == '99.9th':
+                key = 'latency 99.9th percentile'
+            elif key == '99th':
+                key = 'latency 99th percentile'
+            elif key == '95th':
+                key = 'latency 95th percentile'
+            elif key == 'median':
+                key = 'latency median'
+            elif key == 'Operations/s':
+                key = 'op rate'
+            elif key == 'Rows/s':
+                key = 'row rate'
+                results['partition rate'] = value
+            elif key == 'Total ops':  # ==Total rows?
+                key = 'Total partitions'
+            elif key == 'Time (avg)':
+                key = 'Total operation time'
+            results[key] = value
+        return results
+
+    @staticmethod
     def _plot_nemesis_events(nemesis, node):
         nemesis_event_start_times = [
             operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
@@ -1978,6 +2049,74 @@ class BaseLoaderSet(object):
 
         return ret
 
+    def get_stress_results_bench(self, queue):
+        results = []
+        ret = []
+        while len(results) != len(self.nodes):
+            try:
+                results.append(queue.get(block=True, timeout=5))
+            except Queue.Empty:
+                pass
+
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            ret.append(self._parse_bench_summary(lines))
+
+        return ret
+
+    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=[]):
+        queue = Queue.Queue()
+
+        def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
+            try:
+                logdir = path.init_dir(output_dir, self.name)
+            except OSError:
+                logdir = os.path.join(output_dir, self.name)
+            log_file_name = os.path.join(logdir,
+                                         'scylla-bench-l%s-%s.log' %
+                                         (loader_idx, uuid.uuid4()))
+            ips = ",".join([n.private_ip_address for n in node_list])
+            result = node.remoter.run(cmd="/home/centos/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
+                                      timeout=timeout,
+                                      ignore_status=True,
+                                      # watch_stdout_pattern='total,',
+                                      log_file=log_file_name)
+            node.cs_start_time = result.stdout_pattern_found_at
+            queue.put((node, result))
+            queue.task_done()
+
+        for loader_idx, loader in enumerate(self.nodes):
+            setup_thread = threading.Thread(target=node_run_stress_bench,
+                                            args=(loader, loader_idx,
+                                                  stress_cmd, node_list))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        return queue
+
+    def kill_stress_thread_bench(self):
+        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
+        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
+                                             content=kill_script_contents)
+        kill_script.save()
+        kill_script_dir = os.path.dirname(kill_script.path)
+        for loader in self.nodes:
+            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
+            loader.remoter.send_files(kill_script.path, kill_script_dir)
+            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
+            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
+                                           ignore_status=True)
+            if cs_active.exit_status == 0:
+                kill_result = loader.remoter.run(kill_script.path,
+                                                 ignore_status=True)
+                if kill_result.exit_status != 0:
+                    self.log.error('Terminate c-s on node %s:\n%s',
+                                   loader, kill_result)
+            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
+        kill_script.remove()
+
 
 class BaseMonitorSet(object):
 
@@ -1989,7 +2128,7 @@ class BaseMonitorSet(object):
         queue = Queue.Queue()
 
         def node_setup(node):
-            self.log.info('Setup')
+            self.log.info('Setup in BaseMonitorSet')
             node.wait_ssh_up(verbose=verbose)
             # The init scripts should install/update c-s, so
             # let's try to guarantee it will be there before
@@ -2330,7 +2469,7 @@ class LoaderSetLibvirt(LibvirtCluster, BaseLoaderSet):
         queue = Queue.Queue()
 
         def node_setup(node):
-            self.log.info('Setup')
+            self.log.info('Setup in LoaderSetLibvirt')
             node.wait_ssh_up(verbose=verbose)
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %
@@ -2941,7 +3080,7 @@ class LoaderSetOpenStack(OpenStackCluster, BaseLoaderSet):
         queue = Queue.Queue()
 
         def node_setup(node):
-            self.log.info('Setup')
+            self.log.info('Setup in LoaderSetOpenStack')
             node.wait_ssh_up(verbose=verbose)
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %
@@ -3006,7 +3145,7 @@ class LoaderSetGCE(GCECluster, BaseLoaderSet):
         queue = Queue.Queue()
 
         def node_setup(node):
-            self.log.info('Setup')
+            self.log.info('Setup in LoaderSetGCE')
             node.wait_ssh_up(verbose=verbose)
             yum_config_path = '/etc/yum.repos.d/scylla.repo'
             node.remoter.run('sudo curl %s -o %s' %

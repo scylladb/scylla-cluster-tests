@@ -137,11 +137,17 @@ class PerformanceRegressionTest(ClusterTester):
 
         metrics['versions'] = versions
 
-        # we use cmds. the last on is a stress, others are presetup
-        metrics = self.add_stress_cmd_params(metrics, cmds[-1])
-        for i in xrange(len(cmds) - 1):
-            # we can have multiples preloads
-            metrics = self.add_stress_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
+        if self.params.get('bench_run', default='').lower() == 'true':
+            metrics = self.add_stress_bench_cmd_params(metrics, cmds[-1])
+            for i in xrange(len(cmds) - 1):
+                # we can have multiples preloads
+                metrics = self.add_stress_bench_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
+        else:
+            # we use cmds. the last on is a stress, others are presetup
+            metrics = self.add_stress_cmd_params(metrics, cmds[-1])
+            for i in xrange(len(cmds) - 1):
+                # we can have multiples preloads
+                metrics = self.add_stress_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
 
         metrics['test_details']['test_name'] = self.params.id.name
         metrics['test_details']['sct_git_commit'] = \
@@ -241,6 +247,19 @@ class PerformanceRegressionTest(ClusterTester):
                         re.search('(fixed\s?=\s?(\w+))', result['test_details'][section]['rate']).group(2)
                 del result['test_details'][section]['rate']
 
+        return result
+
+    def add_stress_bench_cmd_params(self, result, cmd, prefix=''):
+        # parsing stress command and return dict with params
+        cmd = cmd.strip().split('scylla-bench')[1].strip()
+        section = '{0}scylla-bench'.format(prefix)
+        result['test_details'][section] = {}
+        for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
+                    'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
+                    'timeout', 'client-compression']:
+            match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
+            if match:
+                result['test_details'][section][key] = match.group(2).strip()
         return result
 
     def upload_stats_es(self, metrics, test_name):
@@ -383,6 +402,22 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.display_results(results, test_name='test_mixed')
         self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
+
+    def test_uniform_counter_update_bench(self):
+        """
+        Test steps:
+
+        1. Run workload: -workload uniform -mode counter_update -duration 30m
+        """
+        base_cmd_r = ("scylla-bench -workload uniform -mode counter_update -duration 30m "
+                      "-partition-count 50000000 -clustering-row-count 1 -connection-count "
+                      "32 -concurrency 512 -replication-factor 3")
+
+        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
+        results = self.get_stress_results_bench(queue=stress_queue)
+
+        self.display_results(results, test_name='test_read_bench')
+        self.generate_stats_json(results, [base_cmd_r])
 
 
 if __name__ == '__main__':
