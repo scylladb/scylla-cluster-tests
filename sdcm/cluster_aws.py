@@ -162,7 +162,8 @@ class AWSCluster(cluster.BaseCluster):
             elif self.instance_provision == INSTANCE_PROVISION_SPOT_LOW_PRICE or count == 1:
                 instances = ec2.create_spot_instances(**spot_params)
             elif self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
-                spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60})
+                # duration value must be a multiple of 60
+                spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
                 instances = ec2.create_spot_instances(**spot_params)
 
         instance_ids = [i.id for i in instances]
