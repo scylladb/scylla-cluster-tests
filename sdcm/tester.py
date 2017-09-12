@@ -924,11 +924,12 @@ class ClusterTester(Test):
                     cr.destroy()
                 self.credentials = []
 
-        if db_cluster_errors:
-            self.stats['errors'] = db_cluster_errors
-        if db_cluster_coredumps:
-            self.stats['coredumps'] = db_cluster_coredumps
-        self.update_test_status()
+        if getattr(self, 'stats', None):
+            if db_cluster_errors:
+                self.stats['errors'] = db_cluster_errors
+            if db_cluster_coredumps:
+                self.stats['coredumps'] = db_cluster_coredumps
+            self.update_test_status()
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
