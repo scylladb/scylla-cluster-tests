@@ -975,7 +975,7 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None, client_encrypt=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None, client_encrypt=None, append_conf=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1060,6 +1060,9 @@ client_encryption_options:
    certificate: /etc/scylla/db.crt
    keyfile: /etc/scylla/db.key
 """
+
+        if append_conf:
+            scylla_yaml_contents += append_conf
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -2370,7 +2373,8 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'))
+                          enable_exp=self._param_enabled('experimental'),
+                          append_conf=self.params.get('append_conf'))
 
         node.remoter.run(
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
@@ -2782,7 +2786,8 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'))
+                          enable_exp=self._param_enabled('experimental'),
+                          append_conf=self.params.get('append_conf'))
 
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
@@ -2947,7 +2952,8 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                           endpoint_snitch=endpoint_snitch,
                           authenticator=authenticator,
                           server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=self._param_enabled('client_encrypt'))
+                          client_encrypt=self._param_enabled('client_encrypt'),
+                          append_conf=self.params.get('append_conf'))
 
         if self._gce_n_local_ssd:
             # detect local-ssd disks
