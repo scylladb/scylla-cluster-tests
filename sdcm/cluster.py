@@ -1680,7 +1680,12 @@ class BaseScyllaCluster(object):
 
     def _param_enabled(self, param):
         param = self.params.get(param)
-        return True if param and param.lower() == 'true' else False
+        if isinstance(param, str):
+            return True if param and param.lower() == 'true' else False
+        elif isinstance(param, bool):
+            return param
+        else:
+            raise ValueError('Unsupported type: {}'.format(type(param)))
 
 
 class BaseLoaderSet(object):
