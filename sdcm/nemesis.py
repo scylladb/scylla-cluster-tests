@@ -280,10 +280,10 @@ class Nemesis(object):
             sstable_file = "/tmp/keyspace1.standard1.tar.gz"
             sstable_md5 = 'f64ab85111e817f22f93653a4a791b1f'
         else:
-            # 3.5K (10 rows)
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.small.tar.gz'
-            sstable_file = "/tmp/keyspace1.standard1.small.tar.gz"
-            sstable_md5 = '76cca3135e175d859c0efb67c6a7b233'
+            # 100M (300000 rows)
+            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
+            sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+            sstable_md5 = 'f641f561067dd612ff95f2b89bd12530'
         if not skip_download:
             remote_get_file(node.remoter, sstable_url, sstable_file,
                             hash_expected=sstable_md5, retries=2)

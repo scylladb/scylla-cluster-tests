@@ -6,10 +6,10 @@ user_prefix: 'gce-refresh-1-7'
 failure_post_behavior: destroy
 prepare_stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=30s -schema 'replication(factor=1)' -port jmx=6868 -mode cql3 native -rate threads=10 -errors ignore -pop seq=1..10000000 -log interval=5
 stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=3m -schema 'replication(factor=1)' -port jmx=6868 -mode cql3 native -rate threads=100 -errors ignore -pop seq=1..10000000 -log interval=5
-# 3.5K (10 rows)
-sstable_url: 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.small.tar.gz'
-sstable_file: '/tmp/keyspace1.standard1.small.tar.gz'
-sstable_md5: '76cca3135e175d859c0efb67c6a7b233'
+# 100M (300000 rows)
+sstable_url: 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
+sstable_file: '/tmp/keyspace1.standard1.100M.tar.gz'
+sstable_md5: 'f641f561067dd612ff95f2b89bd12530'
 
 backends: !mux
     gce: !mux
