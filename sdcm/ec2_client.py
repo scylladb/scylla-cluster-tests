@@ -196,12 +196,13 @@ class EC2Client(object):
             request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
                                                       key_pair, user_data, count, duration)
             instance_ids, resp = self._wait_for_request_done(request_ids)
-            if not instance_ids:
-                if resp == STATUS_PRICE_TOO_LOW:
-                    logger.info('Got price-too-low, retrying with higher price')
-                    price_desired = round(price_desired * self._price_index, 4)
-                else:
-                    raise Exception("Failed to get spot instances: %s" % resp)
+            if not instance_ids and resp == STATUS_PRICE_TOO_LOW:
+                price_desired = round(price_desired * self._price_index, 4)
+                if price_desired <= spot_price['avg']:
+                    logger.info('Got price-too-low, retrying with higher price %s', price_desired)
+                    continue
+        if not instance_ids:
+            raise Exception("Failed to get spot instances: %s" % resp)
 
         logger.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
