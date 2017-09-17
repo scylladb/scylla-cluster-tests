@@ -86,6 +86,8 @@ class EC2Client(object):
         """
         logger.info('Calculating spot price for bidding')
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
+        if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
+            raise Exception("Failed getting spot price history for instance type %s", instance_type)
         prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
         price_avg = round(sum(prices) / len(prices), 4)
         price_desired = (price_avg + min(prices)) / 4
