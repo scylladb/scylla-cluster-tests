@@ -574,50 +574,50 @@ class MdcChaosMonkey(Nemesis):
 
 class UpgradeNemesis(Nemesis):
 
-    # upgrade a single node
-    def upgrade_node(self, node):
-        repo_file = self.cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
-        new_version = self.cluster.params.get('new_version', None,  '')
-        upgrade_node_packages = self.cluster.params.get('upgrade_node_packages')
-        self.log.info('Upgrading a Node')
-
-        # We assume that if update_db_packages is not empty we install packages from there.
-        # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
-        orig_ver = node.remoter.run('rpm -qa scylla-server')
-        if upgrade_node_packages:
-            # update_scylla_packages
-            node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
-            # node.remoter.run('sudo yum update -y --skip-broken', connect_timeout=900)
-            node.remoter.run('sudo yum install python34-PyYAML -y')
-            # replace the packages
-            node.remoter.run('rpm -qa scylla\*')
-            node.remoter.run('sudo nodetool snapshot')
-            # update *development* packages
-            node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
-            # and all the rest
-            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
-            node.remoter.run('rpm -qa scylla\*')
-        elif repo_file:
-            scylla_repo = get_data_path(repo_file)
-            node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
-            node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-            node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
-            # backup the data
-            node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
-            node.remoter.run('sudo nodetool snapshot')
-            node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
-            node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-            node.remoter.run('sudo yum clean all')
-            ver_suffix = '-{}'.format(new_version) if new_version else ''
-            node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
-                             ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
-        # flush all memtables to SSTables
-        node.remoter.run('sudo nodetool drain')
-        node.remoter.run('sudo systemctl restart scylla-server.service')
-        node.wait_db_up(verbose=True)
-        new_ver = node.remoter.run('rpm -qa scylla-server')
-        if orig_ver == new_ver:
-            self.log.error('scylla-server version isn\'t changed')
+    # # upgrade a single node
+    # def upgrade_node(self, node):
+    #     repo_file = self.cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
+    #     new_version = self.cluster.params.get('new_version', None,  '')
+    #     upgrade_node_packages = self.cluster.params.get('upgrade_node_packages')
+    #     self.log.info('Upgrading a Node')
+    #
+    #     # We assume that if update_db_packages is not empty we install packages from there.
+    #     # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
+    #     orig_ver = node.remoter.run('rpm -qa scylla-server')
+    #     if upgrade_node_packages:
+    #         # update_scylla_packages
+    #         node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
+    #         # node.remoter.run('sudo yum update -y --skip-broken', connect_timeout=900)
+    #         node.remoter.run('sudo yum install python34-PyYAML -y')
+    #         # replace the packages
+    #         node.remoter.run('rpm -qa scylla\*')
+    #         node.remoter.run('sudo nodetool snapshot')
+    #         # update *development* packages
+    #         node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
+    #         # and all the rest
+    #         node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
+    #         node.remoter.run('rpm -qa scylla\*')
+    #     elif repo_file:
+    #         scylla_repo = get_data_path(repo_file)
+    #         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
+    #         node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
+    #         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+    #         # backup the data
+    #         node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
+    #         node.remoter.run('sudo nodetool snapshot')
+    #         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+    #         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+    #         node.remoter.run('sudo yum clean all')
+    #         ver_suffix = '-{}'.format(new_version) if new_version else ''
+    #         node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
+    #                          ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
+    #     # flush all memtables to SSTables
+    #     node.remoter.run('sudo nodetool drain')
+    #     node.remoter.run('sudo systemctl restart scylla-server.service')
+    #     node.wait_db_up(verbose=True)
+    #     new_ver = node.remoter.run('rpm -qa scylla-server')
+    #     if orig_ver == new_ver:
+    #         self.log.error('scylla-server version isn\'t changed')
 
     @log_time_elapsed_and_status
     def disrupt(self):
