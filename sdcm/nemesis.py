@@ -843,6 +843,11 @@ class MdcChaosMonkey(Nemesis):
 
 class UpgradeNemesis(Nemesis):
 
+    # upgrade a single node
+    def upgrade_node(self, node):
+        self.log.error("UpgradeNmemesis:upgrade_node() isn't implemented")
+        pass
+
     # # upgrade a single node
     # def upgrade_node(self, node):
     #     repo_file = self.cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
