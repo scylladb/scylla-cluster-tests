@@ -48,6 +48,8 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
             node.remoter.run('rpm -qa scylla\*')
+            # flush all memtables to SSTables
+            node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
@@ -64,14 +66,14 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
+            # flush all memtables to SSTables
+            node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo yum clean all')
             ver_suffix = '-{}'.format(new_version) if new_version else ''
             node.remoter.run('sudo yum update scylla{0}\* -y'.format(ver_suffix))
-        # flush all memtables to SSTables
-        node.remoter.run('sudo nodetool drain')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
         new_ver = node.remoter.run('rpm -qa scylla-server')
