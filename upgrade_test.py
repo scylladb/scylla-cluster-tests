@@ -16,6 +16,7 @@
 
 import random
 import time
+import re
 
 from avocado import main
 
@@ -129,6 +130,76 @@ class UpgradeTest(FillDatabaseData):
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
+        self.verify_stress_thread(stress_queue)
+
+    # rollback a single node
+    def rollback_node(self, node):
+        self.log.info('Rollbacking a Node')
+        result = node.remoter.run('rpm -qa scylla-server')
+        orig_ver = result.stdout
+        node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
+        # flush all memtables to SSTables
+        node.remoter.run('nodetool drain')
+        # backup the data
+        node.remoter.run('nodetool snapshot')
+        node.remoter.run('sudo systemctl stop scylla-server.service')
+        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo yum clean all')
+        # workaround Part 1
+        node.remoter.run('sudo yum remove scylla-tools-core -y')
+        node.remoter.run('sudo yum downgrade scylla\* -y')
+        # workaround Part 2
+        node.remoter.run('sudo yum install scylla -y')
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+        result = node.remoter.run('sudo find /var/lib/scylla/data/system')
+        snapshot_name = re.findall("system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
+        cmd = "DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
+        node.remoter.run(cmd, verbose=True)
+        node.remoter.run('sudo systemctl start scylla-server.service')
+        node.wait_db_up(verbose=True)
+        result = node.remoter.run('rpm -qa scylla-server')
+        new_ver = result.stdout
+        self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
+        assert orig_ver != new_ver, "scylla-server version isn't changed"
+
+    def test_partial_upgrade_rollback(self):
+        """
+        """
+
+        self.log.info('Starting c-s write workload')
+        stress_cmd = self.params.get('stress_cmd')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd)
+
+        self.log.info('Sleeping for 360s to let cassandra-stress populate some data before the mixed workload')
+        time.sleep(360)
+
+        self.log.info('Starting c-s read workload for 60m')
+        stress_cmd_1 = self.params.get('stress_cmd_1')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
+
+        self.log.info('Sleeping for 120s to let cassandra-stress start before the upgrade...')
+        time.sleep(120)
+
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(nodes_num)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        # upgrade all the nodes in random order
+        for i in indexes[:-1]:
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+
+        for i in indexes[:-1]:
+            self.log.info('Rollback Node %s begin', self.db_cluster.nodes[i].name)
+            self.rollback_node(self.db_cluster.nodes[i])
+            self.log.info('Rollback Node %s ended', self.db_cluster.nodes[i].name)
+
         self.verify_stress_thread(stress_queue)
 
     def test_20_minutes(self):
