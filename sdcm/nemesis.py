@@ -136,6 +136,24 @@ class Nemesis(object):
             self.log.error(err, exc_info=True)
             return None
 
+    def _run_cqlsh(self, cmd, node, verbose=True):
+        try:
+            result = node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=verbose)
+            self.log.debug("Command '%s' duration -> %s s", result.command,
+                           result.duration)
+            return result
+        except process.CmdError, details:
+            err = ("cqlsh command '%s' failed on node %s: %s" %
+                   (cmd, self.target_node, details.result))
+            self.error_list.append(err)
+            self.log.error(err)
+            return None
+        except Exception:
+            err = 'Unexpected exception running cqlsh'
+            self.error_list.append(err)
+            self.log.error(err, exc_info=True)
+            return None
+
     def _kill_scylla_daemon(self):
         self.log.info('Kill all scylla processes in %s', self.target_node)
         kill_cmd = "sudo pkill -9 scylla"
