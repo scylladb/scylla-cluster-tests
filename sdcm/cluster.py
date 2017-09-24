@@ -1684,6 +1684,8 @@ class BaseScyllaCluster(object):
             return True if param and param.lower() == 'true' else False
         elif isinstance(param, bool):
             return param
+        elif param is None:
+            return False
         else:
             raise ValueError('Unsupported type: {}'.format(type(param)))
 
