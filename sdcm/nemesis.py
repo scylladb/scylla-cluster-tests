@@ -317,7 +317,7 @@ class Nemesis(object):
             refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
             self._run_nodetool(refresh_cmd, node)
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+            self._run_cqlsh(cmd, node)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
@@ -410,14 +410,14 @@ class Nemesis(object):
         self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
         comment = ''.join(random.choice(string.ascii_letters) for i in xrange(24))
         cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+        self._run_cqlsh(cmd, self.target_node)
 
     def disrupt_modify_table_gc_grace_time(self):
         self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
         gc_grace_seconds = random.choice(xrange(216000, 864000))
         cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
               " gc_grace_seconds = {};".format(gc_grace_seconds)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+        self._run_cqlsh(cmd, self.target_node)
 
 
 def log_time_elapsed_and_status(method):
