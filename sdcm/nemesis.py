@@ -433,6 +433,8 @@ def log_time_elapsed_and_status(method):
         try:
             result = method(*args, **kwargs)
         except Exception, details:
+            if isinstance(details, process.CmdError):
+                details = str(details)
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
             error = details
