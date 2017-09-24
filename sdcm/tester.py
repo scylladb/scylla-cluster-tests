@@ -339,6 +339,11 @@ class ClusterTester(Test):
                 db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
             else:
                 self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
+        cpu = self.params.get('gce_instance_type_cpu_db')
+        # unit is GB
+        mem = self.params.get('gce_instance_type_mem_db')
+        if cpu and mem:
+            db_info['type'] = 'custom-{}-{}-ext'.format(cpu, int(mem) * 1024)
         if db_info['type'] is None:
             db_info['type'] = self.params.get('gce_instance_type_db')
         if db_info['disk_type'] is None:
