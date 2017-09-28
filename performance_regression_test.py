@@ -14,18 +14,10 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-import datetime
-import json
 import os
-import re
-
-import platform
-import requests
-import subprocess
 
 from avocado import main
 from sdcm.tester import ClusterTester
-from utils.results_analyze import ResultsAnalyzer
 
 
 class PerformanceRegressionTest(ClusterTester):
@@ -37,6 +29,10 @@ class PerformanceRegressionTest(ClusterTester):
     """
 
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
+
+    def __init__(self, *args, **kwargs):
+        super(PerformanceRegressionTest, self).__init__(*args, **kwargs)
+        self.create_stats = False
 
     def display_single_result(self, result):
         self.log.info(self.str_pattern % (result['op rate'],
@@ -105,82 +101,6 @@ class PerformanceRegressionTest(ClusterTester):
 
         return test_content
 
-    def generate_stats_json(self, results, cmds=[]):
-        metrics = {'test_details': {}, 'setup_details': {}, 'versions': {}, 'results': {}}
-
-        is_gce = False
-        for p in self.params.iteritems():
-            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
-                is_gce = True
-        for p in self.params.iteritems():
-            if p[1] in ['test_duration']:
-                metrics['test_details'][p[1]] = p[2]
-            elif p[1] in ['stress_cmd', 'stress_modes']:
-                continue
-            else:
-                if is_gce and (p[0], p[1]) in \
-                        [('/run', 'instance_type_loader'),
-                         ('/run', 'instance_type_monitor'),
-                         ('/run/databases/scylla', 'instance_type_db')]:
-                    # exclude these params from gce run
-                    continue
-                metrics['setup_details'][p[1]] = p[2]
-
-        versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla')\
-            .stdout.split('\n')
-        versions = {}
-        for line in versions_output:
-            for package in ['scylla-jmx', 'scylla-server', 'scylla-tools']:
-                match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
-                if match:
-                    versions[package] = {'version': match.group(2), 'date': match.group(4), 'commit_id': match.group(5)}
-
-        metrics['versions'] = versions
-
-        if self.params.get('bench_run', default='').lower() == 'true':
-            metrics = self.add_stress_bench_cmd_params(metrics, cmds[-1])
-            for i in xrange(len(cmds) - 1):
-                # we can have multiples preloads
-                metrics = self.add_stress_bench_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
-        else:
-            # we use cmds. the last on is a stress, others are presetup
-            metrics = self.add_stress_cmd_params(metrics, cmds[-1])
-            for i in xrange(len(cmds) - 1):
-                # we can have multiples preloads
-                metrics = self.add_stress_cmd_params(metrics, cmds[i], prefix='preload%s-' % i)
-
-        metrics['test_details']['test_name'] = self.params.id.name
-        metrics['test_details']['sct_git_commit'] = \
-            subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        job_name = os.environ.get('JOB_NAME', 'local_run')
-        metrics['test_details']['job_name'] = job_name
-        if os.environ.get('BUILD_URL'):
-            metrics['test_details']['job_url'] = os.environ.get('BUILD_URL', '')
-        if self.monitors:
-            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
-            metrics['test_details']['prometheus_report'] = url_s3 + ".zip"
-            metrics['test_details']['grafana_snapshot'] = url_s3 + ".png"
-
-        metrics['results']['stats'] = results
-
-        if 'es_password' in metrics['setup_details']:
-            # hide ES password
-            metrics['setup_details']['es_password'] = '******'
-
-        new_scylla_packages = self.params.get('update_db_packages')
-        if new_scylla_packages and os.listdir(new_scylla_packages):
-            metrics['setup_details']['packages_updated'] = True
-        else:
-            metrics['setup_details']['packages_updated'] = False
-
-        metrics['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        metrics['test_details']['start_host'] = platform.node()
-
-        test_name_file = metrics['test_details']['test_name'].replace(':', '__').replace('.', '_')
-
-        self.upload_stats_es(metrics, test_name=test_name_file)
-
     def display_results(self, results, test_name=''):
         self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
                                           'row-rate', 'latency-mean',
@@ -201,136 +121,6 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
-    def add_stress_cmd_params(self, result, cmd, prefix=''):
-        # parsing stress command and return dict with params
-        cmd = cmd.strip().split('cassandra-stress')[1].strip()
-        if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'user']:
-            section = '{0}cassandra-stress'.format(prefix)
-            result['test_details'][section] = {}
-            result['test_details'][section]['command'] = cmd.split(' ')[0]
-            if 'no-warmup' in cmd:
-                result['test_details'][section]['no-warmup'] = True
-
-            match = re.search('(cl\s?=\s?\w+)', cmd)
-            if match:
-                result['test_details'][section]['cl'] = match.group(0).split('=')[1].strip()
-
-            match = re.search('(duration\s?=\s?\w+)', cmd)
-            if match:
-                result['test_details'][section]['duration'] = match.group(0).split('=')[1].strip()
-
-            match = re.search('( n\s?=\s?\w+)', cmd)
-            if match:
-                result['test_details'][section]['n'] = match.group(0).split('=')[1].strip()
-            match = re.search('profile=(\S+)\s+', cmd)
-            if match:
-                result['test_details'][section]['profile'] = match.group(1).strip()
-                match = re.search('ops(\S+)\s+', cmd)
-                if match:
-                    result['test_details'][section]['ops'] = match.group(1).split('=')[0].strip('(')
-
-            for temp in cmd.split(' -')[1:]:
-                k = temp.split()[0]
-                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
-                if match:
-                    result['test_details'][section][k] = match.group(2).strip()
-            if 'rate' in result['test_details'][section]:
-                # split rate section on separate items
-                if 'threads' in result['test_details'][section]['rate']:
-                    result['test_details'][section]['rate threads'] = \
-                        re.search('(threads\s?=\s?(\w+))', result['test_details'][section]['rate']).group(2)
-                if 'throttle' in result['test_details'][section]['rate']:
-                    result['test_details'][section]['throttle threads'] =\
-                        re.search('(throttle\s?=\s?(\w+))', result['test_details'][section]['rate']).group(2)
-                if 'fixed' in result['test_details'][section]['rate']:
-                    result['test_details'][section]['fixed threads'] =\
-                        re.search('(fixed\s?=\s?(\w+))', result['test_details'][section]['rate']).group(2)
-                del result['test_details'][section]['rate']
-
-        return result
-
-    def add_stress_bench_cmd_params(self, result, cmd, prefix=''):
-        # parsing stress command and return dict with params
-        cmd = cmd.strip().split('scylla-bench')[1].strip()
-        section = '{0}scylla-bench'.format(prefix)
-        result['test_details'][section] = {}
-        for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
-                    'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
-                    'timeout', 'client-compression']:
-            match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
-            if match:
-                result['test_details'][section][key] = match.group(2).strip()
-        return result
-
-    def upload_stats_es(self, metrics, test_name):
-        """
-        custom date format is used in ES
-        curl -XPUT 'https://USER:PASSWORD@HOST_NAME:9243/performanceregressiontest' -H 'Content-Type:application/json' -d'{
-           "mappings":{
-              "performanceregressiontest":{
-                 "properties":{
-                    "time_completed":{
-                       "type":"date",
-                       "format":"yyyy-MM-dd HH:mm"
-                    }
-                 }
-              }
-           }
-        }
-        """
-        average_stats = {}
-        total_stats = {}
-        # calculate average stats
-        for key in metrics['results']['stats'][0].keys():
-            summary = 0
-            for stat in metrics['results']['stats']:
-                try:
-                    summary += float(stat[key])
-                except:
-                    average_stats[key] = stat[key]
-            if summary != summary:
-                # handle nan float value
-                average_stats[key] = None
-            if key not in average_stats:
-                average_stats[key] = round(summary / len(metrics['results']['stats']), 1)
-                if key in ['op rate', 'Total errors']:
-                    total_stats.update({key: summary})
-        metrics['results']['stats_average'] = average_stats
-        metrics['results']['stats_total'] = total_stats
-
-        for section_k, section_v in metrics.iteritems():
-            # trying to convert str values into int/float
-            for k, v in section_v.iteritems():
-                value = v
-                try:
-                    value = int(v)
-                except:
-                    try:
-                        value = float(v)
-                    except:
-                        pass
-                    metrics[section_k][k] = value
-
-        with open('jenkins_%s_summary.json' % test_name, 'w') as fp:
-            json.dump(metrics, fp, indent=4)
-
-        self.log.info(json.dumps(metrics, indent=4))
-        test_id = '{}_{}'.format(metrics['setup_details']['ami_id_db_scylla_desc'],
-                                 metrics['test_details']['time_completed'])
-        if self.params.get('es_url'):
-            url = '%s/performanceregression/%s/%s?pretty' % \
-                  (self.params.get('es_url').rstrip('/'), metrics['test_details']['test_name'], test_id)
-
-            headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-            r = requests.post(url, data=open('jenkins_%s_summary.json' % test_name, 'rb'), headers=headers,
-                              auth=(self.params.get('es_user'), self.params.get('es_password')))
-            self.log.info(r.content)
-        self.check_regression(test_id)
-
-    def check_regression(self, test_id):
-        ra = ResultsAnalyzer()
-        ra.check_regression(test_id)
-
     def test_write(self):
         """
         Test steps:
@@ -342,13 +132,13 @@ class PerformanceRegressionTest(ClusterTester):
                       "-schema 'replication(factor=3)' -port jmx=6868 "
                       "-mode cql3 native -rate threads=100 -errors ignore "
                       "-pop seq=1..10000000")
-
+        self.create_test_stats()
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
         results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
 
         self.display_results(results, test_name='test_write')
-        self.generate_stats_json(results, [base_cmd_w])
+        self.check_regression()
 
     def test_read(self):
         """
@@ -366,15 +156,16 @@ class PerformanceRegressionTest(ClusterTester):
                       "-mode cql3 native -rate threads=100 -errors ignore "
                       "-pop 'dist=gauss(1..30000000,15000000,1500000)' ")
 
+        self.create_test_stats()
         # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
         self.get_stress_results(queue=stress_queue, stress_num=2)
 
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
         self.display_results(results, test_name='test_read')
-        self.generate_stats_json(results, [base_cmd_w, base_cmd_r])
+        self.check_regression()
 
     def test_mixed(self):
         """
@@ -392,8 +183,9 @@ class PerformanceRegressionTest(ClusterTester):
                       "-mode cql3 native -rate threads=100 -errors ignore "
                       "-pop 'dist=gauss(1..30000000,15000000,1500000)' ")
 
+        self.create_test_stats()
         # run a write workload as a preparation
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
         self.get_stress_results(queue=stress_queue, stress_num=2)
 
         # run a mixed workload
@@ -401,7 +193,7 @@ class PerformanceRegressionTest(ClusterTester):
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
         self.display_results(results, test_name='test_mixed')
-        self.generate_stats_json(results, [base_cmd_w, base_cmd_m])
+        self.check_regression()
 
     def test_uniform_counter_update_bench(self):
         """
@@ -413,11 +205,12 @@ class PerformanceRegressionTest(ClusterTester):
                       "-partition-count 50000000 -clustering-row-count 1 -connection-count "
                       "32 -concurrency 512 -replication-factor 3")
 
+        self.create_test_stats()
         stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
         results = self.get_stress_results_bench(queue=stress_queue)
 
         self.display_results(results, test_name='test_read_bench')
-        self.generate_stats_json(results, [base_cmd_r])
+        self.check_regression()
 
 
 if __name__ == '__main__':

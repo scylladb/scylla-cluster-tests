@@ -107,7 +107,7 @@ class ResultsAnalyzer(object):
             test_details = 'test_details.job_name:{}'.format(doc['_source']['test_details']['job_name'].split('/')[0])
             test_details_params = ('cassandra-stress', )
             if test_type.endswith('read') or test_type.endswith('mixed'):
-                test_details_params += ('preload0-cassandra-stress', )
+                test_details_params += ('preload-cassandra-stress', )
             cs_params = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop')
             if test_type.endswith('profiles'):
                 cs_params = ('command', 'profile', 'ops', 'rate threads')
