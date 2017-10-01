@@ -22,7 +22,7 @@ class ResultsAnalyzer(object):
     def __init__(self, *args, **kwargs):
         self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
         self._url = self._conf.get('es_url')
-        self._index = self._conf.get('es_index')
+        self._index = kwargs.get('index', self._conf.get('es_index'))
         self._es = elasticsearch.Elasticsearch([self._url])
         self._limit = 1000
 
@@ -74,12 +74,13 @@ class ResultsAnalyzer(object):
                     param, src[param], dst[param], test_type, version_src, version_dst))
         return cmp_res
 
-    def check_regression(self, test_id):
+    def check_regression(self, test_id, is_gce=False):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
         Save the analysis in log and send by email.
         :param test_id: test id created by performance test
+        :param is_gce: is gce instance
         :return: True/False
         """
         # get test res
@@ -93,8 +94,12 @@ class ResultsAnalyzer(object):
         test_type = doc['_type']
         try:
             setup_details = ''
-            for param in ('instance_type_db', 'instance_type_loader', 'instance_type_monitor',
-                          'n_db_nodes', 'n_loaders', 'n_monitor_nodes'):
+            setup_params = ('n_db_nodes', 'n_loaders', 'n_monitor_nodes')
+            if is_gce:
+                setup_params += ('gce_instance_type_db', 'gce_instance_type_loader', 'gce_instance_type_monitor')
+            else:
+                setup_params += ('instance_type_db', 'instance_type_loader', 'instance_type_monitor')
+            for param in setup_params:
                 if setup_details:
                     setup_details += ' AND '
                 setup_details += 'setup_details.{}: {}'.format(param, doc['_source']['setup_details'][param])
@@ -102,7 +107,7 @@ class ResultsAnalyzer(object):
             test_details = 'test_details.job_name:{}'.format(doc['_source']['test_details']['job_name'].split('/')[0])
             test_details_params = ('cassandra-stress', )
             if test_type.endswith('read') or test_type.endswith('mixed'):
-                test_details_params += ('preload0-cassandra-stress', )
+                test_details_params += ('preload-cassandra-stress', )
             cs_params = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop')
             if test_type.endswith('profiles'):
                 cs_params = ('command', 'profile', 'ops', 'rate threads')
@@ -139,6 +144,9 @@ class ResultsAnalyzer(object):
                 continue
             version = tr['_source']['versions']['scylla-server']['version']
             version_date = tr['_source']['versions']['scylla-server']['date']
+            if 'results' not in tr['_source'] or 'stats_average' not in tr['_source']['results']:
+                logger.error('No test results found, test_id: %s', tr['_id'])
+                continue
             stats = tr['_source']['results']['stats_average']
             if version not in group_by_version:
                 group_by_version[version] = dict(tests=SortedDict(), stats_max=dict())
@@ -159,6 +167,9 @@ class ResultsAnalyzer(object):
                                group_by_version[version]['stats_max'],
                                test_version, version, test_type)
             res_list.append(cmp_res)
+        if not res_list:
+            logger.info('No test results to compare with')
+            return False
         logger.info('Regression analysis:')
         logger.info(pp.pformat(res_list))
         self.send_email('Performance regression compare results', res_list)

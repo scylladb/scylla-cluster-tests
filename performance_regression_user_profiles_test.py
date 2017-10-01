@@ -15,15 +15,18 @@
 
 import os
 from avocado import main
-from performance_regression_test import PerformanceRegressionTest
+from sdcm.tester import ClusterTester
 
 
-class PerformanceRegressionUserProfilesTest(PerformanceRegressionTest):
+class PerformanceRegressionUserProfilesTest(ClusterTester):
     """
     Test Scylla performance regression with cassandra-stress using custom user profiles.
 
     :avocado: enable
     """
+    def __init__(self, *args, **kwargs):
+        super(PerformanceRegressionUserProfilesTest, self).__init__(*args, **kwargs)
+        self.create_stats = False
 
     def _clean_keyspace(self, cs_profile):
         with open(cs_profile) as fdr:
@@ -47,10 +50,10 @@ class PerformanceRegressionUserProfilesTest(PerformanceRegressionTest):
             for op in ('insert', 'get'):
                 stress_cmd = ("cassandra-stress user profile={} 'ops({}=1)' duration={} -rate threads=100".format(
                     profile_dst, op, duration))
+                self.create_test_stats()
                 stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
-                results = self.get_stress_results(queue=stress_queue, stress_num=2)
-                self.display_results(results, test_name='test_write')
-                self.generate_stats_json(results, [stress_cmd])
+                self.get_stress_results(queue=stress_queue, stress_num=2)
+                self.check_regression()
                 self._clean_keyspace(cs_profile)
 
 

@@ -56,6 +56,7 @@ from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
 from .data_path import get_data_path
 from . import es
+from results_analyze import ResultsAnalyzer
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -135,7 +136,11 @@ def clean_aws_resources(method):
 
 
 def get_stress_cmd_params(cmd):
-    # parsing stress command and return dict with params
+    """
+    Parsing cassandra stress command
+    :param cmd: stress cmd
+    :return: dict with params
+    """
     cmd_params = {}
     cmd = cmd.strip().split('cassandra-stress')[1].strip()
     if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
@@ -182,6 +187,23 @@ def get_stress_cmd_params(cmd):
     return cmd_params
 
 
+def get_stress_bench_cmd_params(cmd):
+    """
+    Parsing bench stress command
+    :param cmd: stress cmd
+    :return: dict with params
+    """
+    cmd = cmd.strip().split('scylla-bench')[1].strip()
+    cmd_params = {}
+    for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
+                'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
+                'timeout', 'client-compression']:
+        match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
+        if match:
+            cmd_params[key] = match.group(2).strip()
+    return cmd_params
+
+
 class ClusterTester(Test):
 
     def __init__(self, methodName='test', name=None, params=None,
@@ -201,6 +223,14 @@ class ClusterTester(Test):
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
         cluster.set_duration(self._duration)
+
+        # for saving test details in DB
+        self.test_index = self.__class__.__name__.lower()
+        self.test_type = self.params.id.name
+        self.test_id = None
+        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
+                                      'errors', 'coredumps']}
+        self.create_stats = True
 
     @clean_aws_resources
     def setUp(self):
@@ -222,17 +252,8 @@ class ClusterTester(Test):
             targets = [n.private_ip_address for n in self.db_cluster.nodes]
             targets += [n.private_ip_address for n in self.loaders.nodes]
         self.monitors.wait_for_init(targets=targets, scylla_version=self.db_cluster.nodes[0].scylla_version)
-
-        # for saving test details in DB
-        self.test_index = self.__class__.__name__.lower()
-        self.test_type = self.params.id.name
-        self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
-                                      'errors', 'coredumps']}
-        self.stats['setup_details'] = self.get_setup_details()
-        self.stats['versions'] = self.get_scylla_versions()
-        self.stats['test_details'] = self.get_test_details()
-        self.create_test_stats()
+        if self.create_stats:
+            self.create_test_stats()
 
     def get_nemesis_class(self):
         """
@@ -670,6 +691,7 @@ class ClusterTester(Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
+        self.update_bench_stress_cmd_details(stress_cmd)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -700,7 +722,9 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def get_stress_results_bench(self, queue):
-        return self.loaders.get_stress_results_bench(queue)
+        results = self.loaders.get_stress_results_bench(queue)
+        self.update_stress_results(results)
+        return results
 
     def get_auth_provider(self, user, password):
         return PlainTextAuthProvider(username=user, password=password)
@@ -1036,10 +1060,21 @@ class ClusterTester(Test):
     def update_stress_cmd_details(self, cmd, prefix=''):
         section = '{0}cassandra-stress'.format(prefix)
         if section not in self.stats['test_details']:
-            self.stats['test_details'][section] = []
+            self.stats['test_details'][section] = [] if self.create_stats else {}
         cmd_params = get_stress_cmd_params(cmd)
         if cmd_params:
-            self.stats['test_details'][section].append(cmd_params)
+            self.stats['test_details'][section].append(cmd_params) if self.create_stats else\
+                self.stats['test_details'][section].update(cmd_params)
+            self.update_test_stats(dict(test_details=self.stats['test_details']))
+
+    def update_bench_stress_cmd_details(self, cmd, prefix=''):
+        section = '{0}scylla-bench'.format(prefix)
+        if section not in self.stats['test_details']:
+            self.stats['test_details'][section] = [] if self.create_stats else {}
+        cmd_params = get_stress_bench_cmd_params(cmd)
+        if cmd_params:
+            self.stats['test_details'][section].append(cmd_params) if self.create_stats else\
+                self.stats['test_details'][section].update(cmd_params)
             self.update_test_stats(dict(test_details=self.stats['test_details']))
 
     def update_stress_results(self, results):
@@ -1047,13 +1082,42 @@ class ClusterTester(Test):
             self.stats['results']['stats'] = results
         else:
             self.stats['results']['stats'].extend(results)
+        self.calculate_stats_average()
         self.update_test_stats(dict(results=self.stats['results']))
+
+    def calculate_stats_average(self):
+        average_stats = {}
+        total_stats = {}
+
+        for key in self.stats['results']['stats'][0].keys():
+            summary = 0
+            for stat in self.stats['results']['stats']:
+                try:
+                    summary += float(stat[key])
+                except:
+                    average_stats[key] = stat[key]
+            if summary != summary:
+                # handle non float value
+                average_stats[key] = None
+            if key not in average_stats:
+                average_stats[key] = round(summary / len(self.stats['results']['stats']), 1)
+                if key in ['op rate', 'Total errors']:
+                    total_stats.update({key: summary})
+
+        self.stats['results']['stats_average'] = average_stats
+        self.stats['results']['stats_total'] = total_stats
 
     def update_test_status(self):
         self.stats['status'] = self.status
         self.update_test_stats(dict(status=self.stats['status']))
 
     def create_test_stats(self):
+        self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
+                                      'errors', 'coredumps']}
+        self.stats['setup_details'] = self.get_setup_details()
+        self.stats['versions'] = self.get_scylla_versions()
+        self.stats['test_details'] = self.get_test_details()
         db = es.ES()
         db.create(self.test_index, self.test_type, self.test_id, self.stats)
 
@@ -1061,5 +1125,17 @@ class ClusterTester(Test):
         db = es.ES()
         if not data:
             data = self.stats
-        self.log.info('Update info for test %s: %s', self.test_id, data)
-        db.update(self.test_index, self.test_type, self.test_id, data)
+        if self.test_id:
+            try:
+                self.log.info('Update info for test %s: %s', self.test_id, data)
+                db.update(self.test_index, self.test_type, self.test_id, data)
+            except Exception as ex:
+                self.log.error('Failed to update test stats: test_id: %s, error: %s', self.test_id, ex)
+
+    def check_regression(self):
+        ra = ResultsAnalyzer(index=self.test_index)
+        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
+        try:
+            ra.check_regression(self.test_id, is_gce)
+        except Exception as ex:
+            self.log.exception('Failed to check regression: %s', ex)
