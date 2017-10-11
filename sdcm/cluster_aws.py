@@ -384,8 +384,7 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
         if len(self.datacenter) > 1:
             endpoint_snitch = "Ec2MultiRegionSnitch"
             node.datacenter_setup(self.datacenter)
-            seed_address = self.nodes[0].public_ip_address
-            node.config_setup(seed_address=seed_address,
+            node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                               enable_exp=self._param_enabled('experimental'),
                               endpoint_snitch=endpoint_snitch,
                               broadcast=node.public_ip_address,
