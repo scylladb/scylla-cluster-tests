@@ -13,15 +13,15 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import logging
 import time
 import datetime
 
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_aws_resources
 from sdcm.data_path import get_data_path
+from sdcm import nemesis
+from sdcm import prometheus
 
 
 class GrowClusterTest(ClusterTester):
@@ -35,6 +35,7 @@ class GrowClusterTest(ClusterTester):
         super(GrowClusterTest, self).__init__(*args, **kwargs)
         self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
         self._cluster_target_size = self.params.get('cluster_target_size', default=5)
+        self.metrics_srv = prometheus.NemesisMetrics()
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
@@ -72,6 +73,13 @@ class GrowClusterTest(ClusterTester):
                 "-pop seq=1..%s -node %s" %
                 (mode, duration, threads, population_size, ip))
 
+    def add_nodes(self, add_node_cnt):
+        self.metrics_srv.event_start('add_node')
+        new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
+        self.db_cluster.wait_for_init(node_list=new_nodes)
+        self.metrics_srv.event_stop('add_node')
+        self.reconfigure_monitor()
+
     def reconfigure_monitor(self):
         targets = [node.private_ip_address for node in self.db_cluster.nodes + self.loaders.nodes]
         for monitoring_node in self.monitors.nodes:
@@ -94,10 +102,8 @@ class GrowClusterTest(ClusterTester):
         node_cnt = len(self.db_cluster.nodes)
         while node_cnt < cluster_target_size:
             time.sleep(60)
-            new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
-            self.db_cluster.wait_for_init(node_list=new_nodes)
+            self.add_nodes(add_node_cnt)
             node_cnt = len(self.db_cluster.nodes)
-            self.reconfigure_monitor()
 
         end = datetime.datetime.now()
         self.log.info('Growing cluster finished: %s' % str(end))
@@ -165,6 +171,44 @@ class GrowClusterTest(ClusterTester):
         """
         self.grow_cluster(cluster_target_size=4,
                           stress_cmd=self.get_stress_cmd_profile())
+
+    def test_add_remove_nodes(self):
+        """
+        1) Start a x node cluster
+        2) Start cassandra-stress on the loader node
+        3) Add a new node
+        4) Decommission random chosen node
+        5) Repeat 3) and 4) for number of times
+        """
+        wait_interval = 60
+        cnt = self._cluster_target_size - self._cluster_starting_size
+        duration = wait_interval * 2 * cnt
+        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd(),
+                                              duration=duration)
+
+        start = datetime.datetime.now()
+        self.log.info('Starting to add/remove nodes: %s' % str(start))
+
+        while cnt > 0:
+            time.sleep(wait_interval)
+            self.add_nodes(1)
+            time.sleep(wait_interval)
+            dn = nemesis.Nemesis(self.db_cluster, self.loaders, self.monitors, None)
+            dn.disrupt_nodetool_decommission(add_node=False)
+            cnt -= 1
+
+        end = datetime.datetime.now()
+        self.log.info('Add/remove nodes finished: %s' % str(end))
+        self.log.info('Duration: %s' % str(end - start))
+
+        # Run 2 more minutes before stop c-s
+        time.sleep(2 * 60)
+
+        # Kill c-s when decommission is done
+        self.kill_stress_thread()
+
+        self.verify_stress_thread(queue=stress_queue)
+        self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
 
 
 if __name__ == '__main__':
