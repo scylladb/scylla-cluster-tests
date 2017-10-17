@@ -59,7 +59,7 @@ class Nemesis(object):
         self.test_index = kwargs.get('test_index', None)
         self.test_type = kwargs.get('test_type', None)
         self.test_id = kwargs.get('test_id', None)
-        self.metrics_srv = prometheus.NemesisMetrics()
+        self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def update_stats(self, disrupt, status=True, data={}):
         key = {True: 'runs', False: 'failures'}

@@ -8,6 +8,7 @@ START = 'start'
 STOP = 'stop'
 
 logger = logging.getLogger(__name__)
+nm_obj = None
 
 
 def start_metrics_server():
@@ -20,6 +21,13 @@ def start_metrics_server():
     except Exception as ex:
         logger.error('Cannot start local http metrics server: %s', ex)
     return None
+
+
+def nemesis_metrics_obj():
+    global nm_obj
+    if not nm_obj:
+        nm_obj = NemesisMetrics()
+    return nm_obj
 
 
 class NemesisMetrics(object):
