@@ -399,7 +399,12 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                               server_encrypt=self._param_enabled('server_encrypt'),
                               client_encrypt=self._param_enabled('client_encrypt'))
         node.remoter.run('sudo systemctl restart scylla-server.service')
-        node.remoter.run('nodetool status', verbose=True)
+        try:
+            node.remoter.run('nodetool status', verbose=True)
+        except Exception as ex:
+            self.log.error('Failed running nodetool status, error: %s. Retrying...', ex)
+            time.sleep(5)
+            node.remoter.run('nodetool status', verbose=True)
 
     def wait_for_init(self, node_list=None, verbose=False):
         if node_list is None:
