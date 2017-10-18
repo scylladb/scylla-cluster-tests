@@ -15,6 +15,7 @@
 
 import time
 import datetime
+import random
 
 from avocado import main
 
@@ -35,7 +36,7 @@ class GrowClusterTest(ClusterTester):
         super(GrowClusterTest, self).__init__(*args, **kwargs)
         self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
         self._cluster_target_size = self.params.get('cluster_target_size', default=5)
-        self.metrics_srv = prometheus.NemesisMetrics()
+        self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
@@ -180,22 +181,33 @@ class GrowClusterTest(ClusterTester):
         4) Decommission random chosen node
         5) Repeat 3) and 4) for number of times
         """
-        wait_interval = 60
-        cnt = self._cluster_target_size - self._cluster_starting_size
-        duration = wait_interval * 2 * cnt
-        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd(),
-                                              duration=duration)
+        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
 
         start = datetime.datetime.now()
+        duration = 0
+        wait_interval = 60
+        max_random_cnt = 3
         self.log.info('Starting to add/remove nodes: %s' % str(start))
 
-        while cnt > 0:
+        while duration <= self._duration:
             time.sleep(wait_interval)
-            self.add_nodes(1)
-            time.sleep(wait_interval)
-            dn = nemesis.Nemesis(self.db_cluster, self.loaders, self.monitors, None)
-            dn.disrupt_nodetool_decommission(add_node=False)
-            cnt -= 1
+            node_cnt = len(self.db_cluster.nodes)
+            max_add_cnt = max_random_cnt if max_random_cnt <= self._cluster_target_size - node_cnt else\
+                self._cluster_target_size - node_cnt
+            if max_add_cnt >= 1:
+                add_cnt = random.randint(1, max_add_cnt)
+                self.log.info('Add %s nodes to cluster', add_cnt)
+                for i in range(add_cnt):
+                    self.add_nodes(1)
+                time.sleep(wait_interval)
+            rm_cnt = random.randint(1, max_random_cnt) if len(self.db_cluster.nodes) >= 10 else 0
+            if rm_cnt > 0:
+                self.log.info('Remove %s nodes from cluster', rm_cnt)
+                for i in range(rm_cnt):
+                    dn = nemesis.DecommissionMonkey(self.db_cluster, self.loaders, self.monitors, None)
+                    dn.disrupt(add_node=False)
+            duration = (datetime.datetime.now() - start).seconds / 60  # current duration in minutes
+            self.log.info('Count of nodes in cluster: %s', len(self.db_cluster.nodes))
 
         end = datetime.datetime.now()
         self.log.info('Add/remove nodes finished: %s' % str(end))

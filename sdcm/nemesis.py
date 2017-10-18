@@ -516,8 +516,8 @@ class CorruptThenRebuildMonkey(Nemesis):
 class DecommissionMonkey(Nemesis):
 
     @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_nodetool_decommission(add_node=True)
+    def disrupt(self, add_node=True):
+        self.disrupt_nodetool_decommission(add_node=add_node)
 
 
 class NoCorruptRepairMonkey(Nemesis):
