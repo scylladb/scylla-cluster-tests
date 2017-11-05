@@ -2718,6 +2718,7 @@ class GCECluster(BaseCluster):
             instance = self._gce_services[dc_idx].create_node(name=name,
                                                               size=self._gce_instance_type,
                                                               image=self._gce_image,
+                                                              ex_network=self._gce_network,
                                                               ex_disks_gce_struct=gce_disk_struct)
             self.log.info('Created instance %s', instance)
             GCE_INSTANCES.append(instance)
