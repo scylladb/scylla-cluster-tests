@@ -27,6 +27,7 @@ from avocado.utils import process
 from .data_path import get_data_path
 from .log import SDCMAdapter
 from . import es
+from . import prometheus
 from avocado.utils import wait
 
 from sdcm.utils import remote_get_file
@@ -58,6 +59,7 @@ class Nemesis(object):
         self.test_index = kwargs.get('test_index', None)
         self.test_type = kwargs.get('test_type', None)
         self.test_id = kwargs.get('test_id', None)
+        self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def update_stats(self, disrupt, status=True, data={}):
         key = {True: 'runs', False: 'failures'}
@@ -371,9 +373,12 @@ class Nemesis(object):
                                attr[0] in disrupt_methods and
                                callable(attr[1])]
         disrupt_method = random.choice(disrupt_methods)
-        self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method)
+        disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
+        self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method_name)
+        self.metrics_srv.event_start(disrupt_method_name)
         disrupt_method()
-        self.log.info("<<<<<<<<<<<<<ENDED random_disrupt_method %s" % disrupt_method)
+        self.metrics_srv.event_stop(disrupt_method_name)
+        self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
 
     def repair_nodetool_repair(self):
         repair_cmd = 'nodetool -h localhost repair'
@@ -427,6 +432,9 @@ def log_time_elapsed_and_status(method):
         num_nodes_before = len(args[0].cluster.nodes)
         start_time = time.time()
         args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
+        class_name = args[0].__class__.__name__.replace('Monkey', '')
+        if class_name.find('Chaos') < 0:
+            args[0].metrics_srv.event_start(class_name)
         result = None
         error = None
         status = True
@@ -451,6 +459,8 @@ def log_time_elapsed_and_status(method):
                 log_info.update({'error': error})
                 status = False
 
+            if class_name.find('Chaos') < 0:
+                args[0].metrics_srv.event_stop(class_name)
             args[0].update_stats(method.__name__, status, log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
@@ -506,8 +516,8 @@ class CorruptThenRebuildMonkey(Nemesis):
 class DecommissionMonkey(Nemesis):
 
     @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_nodetool_decommission(add_node=True)
+    def disrupt(self, add_node=True):
+        self.disrupt_nodetool_decommission(add_node=add_node)
 
 
 class NoCorruptRepairMonkey(Nemesis):

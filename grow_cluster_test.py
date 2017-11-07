@@ -13,15 +13,16 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import logging
 import time
 import datetime
+import random
 
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_aws_resources
 from sdcm.data_path import get_data_path
+from sdcm import nemesis
+from sdcm import prometheus
 
 
 class GrowClusterTest(ClusterTester):
@@ -35,6 +36,7 @@ class GrowClusterTest(ClusterTester):
         super(GrowClusterTest, self).__init__(*args, **kwargs)
         self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
         self._cluster_target_size = self.params.get('cluster_target_size', default=5)
+        self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
@@ -72,6 +74,13 @@ class GrowClusterTest(ClusterTester):
                 "-pop seq=1..%s -node %s" %
                 (mode, duration, threads, population_size, ip))
 
+    def add_nodes(self, add_node_cnt):
+        self.metrics_srv.event_start('add_node')
+        new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
+        self.db_cluster.wait_for_init(node_list=new_nodes)
+        self.metrics_srv.event_stop('add_node')
+        self.reconfigure_monitor()
+
     def reconfigure_monitor(self):
         targets = [node.private_ip_address for node in self.db_cluster.nodes + self.loaders.nodes]
         for monitoring_node in self.monitors.nodes:
@@ -94,10 +103,8 @@ class GrowClusterTest(ClusterTester):
         node_cnt = len(self.db_cluster.nodes)
         while node_cnt < cluster_target_size:
             time.sleep(60)
-            new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
-            self.db_cluster.wait_for_init(node_list=new_nodes)
+            self.add_nodes(add_node_cnt)
             node_cnt = len(self.db_cluster.nodes)
-            self.reconfigure_monitor()
 
         end = datetime.datetime.now()
         self.log.info('Growing cluster finished: %s' % str(end))
@@ -165,6 +172,55 @@ class GrowClusterTest(ClusterTester):
         """
         self.grow_cluster(cluster_target_size=4,
                           stress_cmd=self.get_stress_cmd_profile())
+
+    def test_add_remove_nodes(self):
+        """
+        1) Start a x node cluster
+        2) Start cassandra-stress on the loader node
+        3) Add a new node
+        4) Decommission random chosen node
+        5) Repeat 3) and 4) for number of times
+        """
+        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
+
+        start = datetime.datetime.now()
+        duration = 0
+        wait_interval = 60
+        max_random_cnt = 3
+        self.log.info('Starting to add/remove nodes: %s' % str(start))
+
+        while duration <= self._duration:
+            time.sleep(wait_interval)
+            node_cnt = len(self.db_cluster.nodes)
+            max_add_cnt = max_random_cnt if max_random_cnt <= self._cluster_target_size - node_cnt else\
+                self._cluster_target_size - node_cnt
+            if max_add_cnt >= 1:
+                add_cnt = random.randint(1, max_add_cnt)
+                self.log.info('Add %s nodes to cluster', add_cnt)
+                for i in range(add_cnt):
+                    self.add_nodes(1)
+                time.sleep(wait_interval)
+            rm_cnt = random.randint(1, max_random_cnt) if len(self.db_cluster.nodes) >= 10 else 0
+            if rm_cnt > 0:
+                self.log.info('Remove %s nodes from cluster', rm_cnt)
+                for i in range(rm_cnt):
+                    dn = nemesis.DecommissionMonkey(self.db_cluster, self.loaders, self.monitors, None)
+                    dn.disrupt(add_node=False)
+            duration = (datetime.datetime.now() - start).seconds / 60  # current duration in minutes
+            self.log.info('Count of nodes in cluster: %s', len(self.db_cluster.nodes))
+
+        end = datetime.datetime.now()
+        self.log.info('Add/remove nodes finished: %s' % str(end))
+        self.log.info('Duration: %s' % str(end - start))
+
+        # Run 2 more minutes before stop c-s
+        time.sleep(2 * 60)
+
+        # Kill c-s when decommission is done
+        self.kill_stress_thread()
+
+        self.verify_stress_thread(queue=stress_queue)
+        self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
 
 
 if __name__ == '__main__':

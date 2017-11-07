@@ -56,6 +56,10 @@ class LongevityTest(ClusterTester):
                 del params['profile']
 
         self.db_cluster.wait_total_space_used_per_node()
+        for stress_cmd in self.params.get('stress_read_cmd'):
+            self.log.debug('stress read cmd: {}'.format(stress_cmd))
+            stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
+
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
         for stress in stress_queue:

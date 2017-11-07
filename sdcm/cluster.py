@@ -52,6 +52,7 @@ from .utils import get_monitor_version
 from .collectd import ScyllaCollectdSetup
 
 from .loader import CassandraStressExporterSetup
+from .prometheus import start_metrics_server
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -337,6 +338,7 @@ class BaseNode(object):
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
+        self._metrics_target = None
         self.prometheus_data_dir = None
 
         self.cs_start_time = None
@@ -580,6 +582,17 @@ scrape_configs:
   - targets: %s
 
 """ % (targets_list, scylla_targets_list, node_exporter_targets_list)
+
+        if self._metrics_target:
+            prometheus_cfg += """
+
+- job_name: sct_metrics
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+""" % [self._metrics_target]
+
         tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
         tmp_path_prom = os.path.join(tmp_dir_prom,
                                      self.prometheus_custom_cfg_basename)
@@ -597,7 +610,9 @@ scrape_configs:
         self._write_prometheus_cfg(targets)
         self.remoter.run('sudo systemctl restart prometheus.service')
 
-    def setup_prometheus(self, targets):
+    def setup_prometheus(self, targets, metrics_cfg=True):
+        if metrics_cfg:
+            self._metrics_target = start_metrics_server()
         self._write_prometheus_cfg(targets)
 
         systemd_unit = """[Unit]
