@@ -21,11 +21,11 @@ from avocado import main
 
 from sdcm.nemesis import RollbackNemesis
 from sdcm.nemesis import UpgradeNemesis
-from sdcm.tester import ClusterTester
 from sdcm.data_path import get_data_path
+from utils.fill_db_data import FillDatabaseData
 
 
-class UpgradeTest(ClusterTester):
+class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
 
@@ -83,13 +83,13 @@ class UpgradeTest(ClusterTester):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
-
-        #duration = 30 * len(self.db_cluster.nodes)
+        self.log.info('Populate DB with many types of tables and data')
+        self.fill_db_data()
+        self.verify_db_data()
 
         self.log.info('Starting c-s write workload for 5m')
         stress_cmd = self._cs_add_node_flag(self.params.get('stress_cmd'))
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd)
-                                              #duration=duration)
+        self.run_stress_thread(stress_cmd=stress_cmd)
 
         self.log.info('Sleeping for 360s to let cassandra-stress populate some data before the mixed workload')
         time.sleep(360)
@@ -97,7 +97,7 @@ class UpgradeTest(ClusterTester):
         self.log.info('Starting c-s mixed workload for 60m')
         stress_cmd_1 = self._cs_add_node_flag(self.params.get('stress_cmd_1'))
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
-                                              #duration=duration)
+
         self.log.info('Sleeping for 120s to let cassandra-stress start before the upgrade...')
         time.sleep(120)
 
@@ -115,6 +115,7 @@ class UpgradeTest(ClusterTester):
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             self.log.info('Upgrade Node ended')
 
+        self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
     def test_20_minutes(self):
