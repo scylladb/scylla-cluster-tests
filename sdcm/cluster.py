@@ -344,7 +344,7 @@ class BaseNode(object):
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
-        self._database_error_patterns = ['std::bad_alloc']
+        self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
         self.termination_event = threading.Event()
         if node_prefix is not None and 'db-node' in node_prefix:
             self.start_journal_thread()
