@@ -47,14 +47,16 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
             assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
             self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, duration))
             profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
-            for op in ('insert', 'get'):
-                stress_cmd = ("cassandra-stress user profile={} 'ops({}=1)' duration={} -rate threads=100".format(
-                    profile_dst, op, duration))
-                self.create_test_stats()
-                stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
-                self.get_stress_results(queue=stress_queue, stress_num=2)
-                self.check_regression()
-                self._clean_keyspace(cs_profile)
+            with open(cs_profile) as pconf:
+                cont = pconf.readlines()
+                for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
+                    stress_cmd = (cmd.format(profile_dst, duration))
+                    self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                    self.create_test_stats()
+                    stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
+                    self.get_stress_results(queue=stress_queue, stress_num=2)
+                    self.check_regression()
+                    self._clean_keyspace(cs_profile)
 
 
 if __name__ == '__main__':
