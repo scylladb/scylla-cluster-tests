@@ -461,7 +461,10 @@ def log_time_elapsed_and_status(method):
 
             if class_name.find('Chaos') < 0:
                 args[0].metrics_srv.event_stop(class_name)
-            args[0].update_stats(method.__name__, status, log_info)
+            disrupt = args[0].current_disruption.split()[0]
+            log_info['node'] = args[0].current_disruption.replace(disrupt, '').strip()
+            del log_info['operation']
+            args[0].update_stats(disrupt, status, log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
