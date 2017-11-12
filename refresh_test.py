@@ -98,6 +98,7 @@ class RefreshTest(ClusterTester):
 
             # go through the matrix to check timeout per minute
             prev = None
+            significant = []
             for time_idx in range(len(matrix[0])):
                 all_timeout = 0
                 for shard_unit in matrix:
@@ -105,8 +106,12 @@ class RefreshTest(ClusterTester):
                 if prev:
                     timeout_per_min =  all_timeout - prev
                     self.log.debug('timeout_per_min: %s', timeout_per_min)
-                    assert timeout_per_min < 5000, read_timeout_msg
+                    if timeout_per_min > 5000:
+                        significant.append(timeout_per_min)
                 prev = all_timeout
+
+            self.log.debug(significant)
+            assert len(significant) == 0, read_timeout_msg
 
     def test_refresh_node(self):
         """
