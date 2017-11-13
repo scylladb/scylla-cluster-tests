@@ -2861,10 +2861,14 @@ class FillDatabaseData(ClusterTester):
                         print insert, e
                         raise e
 
-    def run_db_queries(self, session):
+    def run_db_queries(self, session, default_fetch_size):
         for a in self.all_verification_items:
             session.execute("USE keyspace1;")
             if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
+                if 'disable_paging' in a and a['disable_paging']:
+                    session.default_fetch_size = 0
+                else:
+                    session.default_fetch_size = default_fetch_size
                 for i in range(len(a['queries'])):
                     try:
                         if a['queries'][i].startswith("#SORTED"):
@@ -2901,7 +2905,6 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
-        default_fetch_size = session.default_fetch_size
 
         session.execute("""
             CREATE KEYSPACE IF NOT EXISTS keyspace1
@@ -2913,7 +2916,7 @@ class FillDatabaseData(ClusterTester):
         self.cql_create_tables(session)
 
         # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
-        self.cql_insert_data_to_tables(session, default_fetch_size)
+        self.cql_insert_data_to_tables(session, session.default_fetch_size)
 
     def verify_db_data(self):
         # Prepare connection
@@ -2922,7 +2925,7 @@ class FillDatabaseData(ClusterTester):
 
         session.execute("USE keyspace1;")
 
-        self.run_db_queries(session)
+        self.run_db_queries(session, session.default_fetch_size)
 
 
 if __name__ == '__main__':
