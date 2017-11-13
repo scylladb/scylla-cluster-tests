@@ -1773,9 +1773,14 @@ class BaseLoaderSet(object):
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
                 stress_cmd += " -node {}".format(first_node.private_ip_address)
-            stress_cmd = "mkfifo /tmp/cs_pipe_$1_$2; cat /tmp/cs_pipe_$1_$2|python /usr/bin/cassandra_stress_exporter & " +\
+            stress_cmd_opt = stress_cmd.split()[1]
+            cs_pipe_name = '/tmp/cs_{}_pipe_$1_$2'.format(stress_cmd_opt)
+            stress_cmd = "mkfifo {}; cat {}|python /usr/bin/cassandra_stress_exporter {} & ".format(cs_pipe_name,
+                                                                                                    cs_pipe_name,
+                                                                                                    stress_cmd_opt) +\
                          stress_cmd +\
-                         "|tee /tmp/cs_pipe_$1_$2; pkill -P $$ -f cassandra_stress_exporter; rm -f /tmp/cs_pipe_$1_$2"
+                         "|tee {}; pkill -P $$ -f cassandra_stress_exporter; rm -f {}".format(cs_pipe_name,
+                                                                                              cs_pipe_name)
             # We'll save a script with the last c-s command executed on loaders
             stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
                                                    content='%s\n' % stress_cmd)
