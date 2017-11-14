@@ -85,27 +85,31 @@ class UpgradeTest(FillDatabaseData):
         """
         self.log.info('Populate DB with many types of tables and data')
         self.fill_db_data()
+        self.log.info('Run some Queries to verify data BEFORE UPGRADE')
         self.verify_db_data()
 
-        self.log.info('Starting c-s write workload for 5m')
+        self.log.info('Starting c-s write workload to pupulate 10M paritions')
+        # YAML: stress_cmd: cassandra-stress write cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868
+        # -mode cql3 native -rate threads=1000 -pop seq=1..10000000
         stress_cmd = self._cs_add_node_flag(self.params.get('stress_cmd'))
         self.run_stress_thread(stress_cmd=stress_cmd)
 
         self.log.info('Sleeping for 360s to let cassandra-stress populate some data before the mixed workload')
-        time.sleep(360)
+        time.sleep(600)
 
-        self.log.info('Starting c-s mixed workload for 60m')
+        self.log.info('Starting c-s read workload for 60m')
+        # YAML: stress_cmd_1: cassandra-stress read cl=QUORUM duration=60m -schema 'replication(factor=3)'
+        # -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..10000000
         stress_cmd_1 = self._cs_add_node_flag(self.params.get('stress_cmd_1'))
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
 
-        self.log.info('Sleeping for 120s to let cassandra-stress start before the upgrade...')
-        time.sleep(120)
+        self.log.info('Sleeping for 300s to let cassandra-stress start before the upgrade...')
+        time.sleep(300)
 
         nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
         indexes = [x for x in range(nodes_num)]
-        # shuffle it so we will upgrade the nodes in a
-        # random order
+        # shuffle it so we will upgrade the nodes in a random order
         random.shuffle(indexes)
 
         # upgrade all the nodes in random order
@@ -116,6 +120,7 @@ class UpgradeTest(FillDatabaseData):
             time.sleep(300)
             self.log.info('Upgrade Node ended')
 
+        self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
