@@ -113,6 +113,7 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
             self.log.info('Upgrade Node begin')
             self.upgrade_node(self.db_cluster.node_to_upgrade)
+            time.sleep(300)
             self.log.info('Upgrade Node ended')
 
         self.verify_db_data()
