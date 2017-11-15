@@ -50,6 +50,10 @@ import socket
 import os
 import time
 
+cs_opt = ''
+if len(sys.argv) > 1:
+    cs_opt = '_' + sys.argv[1]
+
 hostname = socket.gethostname().split('.')[0]
 
 server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -82,7 +86,7 @@ class ValuePack:
                 print('collectd error: ' + reply)
 
 start_time = time.time()
-plugin = 'cassandra_stress'
+plugin = 'cassandra_stress' + cs_opt
 plugin_instance = '0'
 
 with os.fdopen(sys.stdin.fileno(), 'r', 1) as input:
