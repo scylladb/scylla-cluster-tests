@@ -654,6 +654,9 @@ class ClusterTester(Test):
         elif cluster_backend == 'gce':
             self.get_cluster_gce(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
+        seeds_num = self.params.get('seeds_num', default=1)
+        for i in range(seeds_num):
+            self.db_cluster.nodes[i].is_seed = True
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:

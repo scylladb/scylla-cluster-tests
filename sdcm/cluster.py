@@ -1479,6 +1479,20 @@ class BaseScyllaCluster(object):
                 node.is_seed = False
         return seed_nodes
 
+    def get_seed_nodes_by_flag(self):
+        """
+        We set is_seed at two point, before and after node_setup.
+        However, we can only call this function when the flag is set.
+        """
+        node_private_ips = [node.private_ip_address for node
+                            in self.nodes if node.is_seed]
+        seeds = ",".join(node_private_ips)
+        if not seeds:
+            # use first node as seed by default
+            seeds = self.nodes[0].private_ip_address
+            seeds = self.nodes[0].is_seed = True
+        return seeds
+
     def _update_db_binary(self, new_scylla_bin, node_list):
         self.log.debug('User requested to update DB binary...')
 
@@ -2384,7 +2398,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         self.termination_event = threading.Event()
         self.nemesis_threads = []
 
-    def _node_setup(self, node, seed_address):
+    def _node_setup(self, node):
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
@@ -2398,7 +2412,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.config_setup(seed_address=seed_address,
+        node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                           cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'),
                           append_conf=self.params.get('append_conf'))
@@ -2427,9 +2441,9 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
 
         queue = Queue.Queue()
 
-        def node_setup(node, seed_address):
+        def node_setup(node):
             node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node, seed_address=seed_address)
+            self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -2443,14 +2457,18 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
-        seed = node_list[0].public_ip_address
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
-        node_setup(node_list[0], seed_address=seed)
-        for node in node_list[1:]:
+        seed_address = self.get_seed_nodes_by_flag()
+        seed_address_list = seed_address.split(',')
+        for i in seed_address_list:
+            node_setup(i)
+        for node in node_list:
+            if node in seed_address_list:
+                continue
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(node, seed))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2798,7 +2816,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
                                                                     ec2_user_data=ec2_user_data)
         return added_nodes
 
-    def _node_setup(self, node, seed_address):
+    def _node_setup(self, node):
         # Sometimes people might set up base images with
         # previous versions of scylla installed (they shouldn't).
         # But anyway, let's cover our bases as much as possible.
@@ -2812,7 +2830,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.config_setup(seed_address=seed_address,
+        node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                           cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'),
                           append_conf=self.params.get('append_conf'))
@@ -2845,9 +2863,9 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
 
         queue = Queue.Queue()
 
-        def node_setup(node, seed_address):
+        def node_setup(node):
             node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node, seed_address=seed_address)
+            self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -2860,14 +2878,18 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
         for node in node_list:
             self.collectd_setup.install(node)
 
-        seed = self.nodes[0].private_ip_address
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.
         # Let's setup the seed node first, then set up the others
-        node_setup(node_list[0], seed_address=seed)
-        for node in node_list[1:]:
+        seed_address = self.get_seed_nodes_by_flag()
+        seed_address_list = seed_address.split(',')
+        for i in seed_address_list:
+            node_setup(i)
+        for node in node_list:
+            if node in seed_address_list:
+                continue
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(node, seed))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
 
@@ -2934,7 +2956,7 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                                                               dc_idx=dc_idx)
         return added_nodes
 
-    def _node_setup(self, node, seed_address):
+    def _node_setup(self, node):
         node.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
@@ -2956,24 +2978,13 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
 
-        # Fixme: there is some code that assume the first node as seed,
-        # so we can't choose the fast one as seed, let's disable the code.
-        # The gce instances are created in parallel right now, this
-        # optimization is also not necessary
-        # https://github.com/scylladb/scylla-cluster-tests/issues/241
-        #
-        # node_private_ip_address = node.private_ip_address
-        # if not self.seed_nodes_private_ips:
-        #     self.seed_nodes_private_ips = [node_private_ip_address]
-        #     seed_address = node_private_ip_address
-        # else:
-        #     seed_address = ','.join(self.seed_nodes_private_ips)
-
         endpoint_snitch = ''
         if len(self.datacenter) > 1:
             endpoint_snitch = "GossipingPropertyFileSnitch"
             node.datacenter_setup(self.datacenter)
         authenticator = self.params.get('authenticator')
+        seed_address = self.get_seed_nodes_by_flag()
+        seed_address_list = seed_address.split(',')
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'),
@@ -3002,13 +3013,13 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
         node.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         node.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
 
-        if node.private_ip_address != seed_address:
+        if node.private_ip_address not in seed_address_list:
             wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                           step=30,
                           text='Wait for seed node to be up after reboot')
         node.restart()
         node.wait_ssh_up()
-        if node.private_ip_address == seed_address:
+        if node.private_ip_address in seed_address_list:
             self.log.info('Seed node is up after reboot')
             self._seed_node_rebooted = True
 
@@ -3033,9 +3044,9 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
 
         queue = Queue.Queue()
 
-        def node_setup(node, seed_address):
+        def node_setup(node):
             node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node, seed_address=seed_address)
+            self._node_setup(node=node)
             node.wait_db_up(verbose=verbose)
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -3049,10 +3060,15 @@ class ScyllaGCECluster(GCECluster, BaseScyllaCluster):
             node.wait_ssh_up(verbose=verbose)
             self.collectd_setup.install(node)
 
-        seed = self.nodes[0].private_ip_address
+        node_private_ips = [node.private_ip_address for node
+                            in self.nodes if node.is_seed]
+        seeds = ",".join(node_private_ips)
+        if not seeds:
+            seeds = self.nodes[0].private_ip_address
+            seeds = self.nodes[0].is_seed = True
         for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
-                                            args=(node, seed))
+                                            args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
 
