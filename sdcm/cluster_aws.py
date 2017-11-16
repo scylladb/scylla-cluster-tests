@@ -405,49 +405,12 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
             time.sleep(5)
             node.remoter.run('nodetool status', verbose=True)
 
-    def wait_for_init(self, node_list=None, verbose=False):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
         if node_list is None:
             node_list = self.nodes
+        res = self._wait_for_node_setup(node_list, verbose, timeout)
+        assert res is True, 'Node setup has failed!'
 
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node)
-            node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                             verbose=verbose, ignore_status=True)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for node in node_list:
-            node.wait_ssh_up(verbose=verbose)
-            self.collectd_setup.install(node)
-
-        for node in node_list:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list),
-                              int(time_elapsed))
-            except Queue.Empty:
-                pass
-
-        self.update_db_binary(node_list)
-        self.update_db_packages(node_list)
-        self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
         if not node_list[0].scylla_version:
             result = node_list[0].remoter.run("rpm -q {}".format(node_list[0].scylla_pkg()))
             match = re.findall("scylla-(.*).el7.centos", result.stdout)
