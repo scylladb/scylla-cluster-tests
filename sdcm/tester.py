@@ -706,12 +706,13 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def verify_stress_thread(self, queue):
-        errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
+        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
+        self.update_stress_results(results)
         errors = errors[-5:]
         if errors:
             self.fail("cassandra-stress errors on "

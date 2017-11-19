@@ -2005,6 +2005,7 @@ class BaseLoaderSet(object):
 
     def verify_stress_thread(self, queue, db_cluster):
         results = []
+        cs_summary = []
         while len(results) != len(self.nodes):
             try:
                 results.append(queue.get(block=True, timeout=5))
@@ -2015,13 +2016,14 @@ class BaseLoaderSet(object):
         for node, result in results:
             output = result.stdout + result.stderr
             lines = output.splitlines()
+            cs_summary.append(self._parse_cs_summary(lines))
             for line in lines:
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
             plotfile = os.path.join(self.logdir, str(node))
             self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
-        return errors
+        return cs_summary, errors
 
     def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
         results = []
