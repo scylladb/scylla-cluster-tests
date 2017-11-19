@@ -2003,10 +2003,10 @@ class BaseLoaderSet(object):
                                plotfile=plotfile,
                                node=node)
 
-    def verify_stress_thread(self, queue, db_cluster):
+    def verify_stress_thread(self, queue, db_cluster, stress_num=1, keyspace_num=1):
         results = []
         cs_summary = []
-        while len(results) != len(self.nodes):
+        while len(results) != len(self.nodes) * stress_num * keyspace_num:
             try:
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
