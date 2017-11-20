@@ -713,7 +713,10 @@ class ClusterTester(Test):
         # to run out of memory when writing the XML report. Since
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
-        self.update_stress_results(results)
+        if results:
+            self.update_stress_results(results)
+        else:
+            self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
         if errors:
             self.fail("cassandra-stress errors on "
