@@ -38,18 +38,18 @@ from libcloud.compute.types import Provider
 from . import cluster
 from . import nemesis
 from .cluster import GCECredentials
-from .cluster import LoaderSetGCE
 from .cluster import LoaderSetLibvirt
 from .cluster import LoaderSetOpenStack
-from .cluster import MonitorSetGCE
 from .cluster import MonitorSetLibvirt
 from .cluster import MonitorSetOpenStack
 from .cluster import NoMonitorSet
 from .cluster import RemoteCredentials
-from .cluster import ScyllaGCECluster
 from .cluster import ScyllaLibvirtCluster
 from .cluster import ScyllaOpenStackCluster
 from .cluster import UserRemoteCredentials
+from .cluster_gce import ScyllaGCECluster
+from .cluster_gce import LoaderSetGCE
+from .cluster_gce import MonitorSetGCE
 from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
@@ -705,13 +705,18 @@ class ClusterTester(Test):
         self.loaders.kill_stress_thread()
 
     @clean_aws_resources
-    def verify_stress_thread(self, queue):
-        errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
+    def verify_stress_thread(self, queue, stress_num=1, keyspace_num=1):
+        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster, stress_num=stress_num,
+                                                            keyspace_num=keyspace_num)
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
+        if results:
+            self.update_stress_results(results)
+        else:
+            self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
         if errors:
             self.fail("cassandra-stress errors on "

@@ -260,9 +260,16 @@ class Nemesis(object):
                 self.reconfigure_monitoring()
                 # Replace the node that was terminated.
                 if add_node:
-                    new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
-                    self.cluster.wait_for_init(node_list=new_nodes)
-                    self.reconfigure_monitoring()
+                    # retry in case of failure
+                    for i in range(2):
+                        new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
+                        try:
+                            self.cluster.wait_for_init(node_list=new_nodes, timeout=30)
+                        except Exception as ex:
+                            self.log.error('Failed adding new node %s, error: %s', new_nodes, ex)
+                        else:
+                            self.reconfigure_monitoring()
+                            break
 
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
