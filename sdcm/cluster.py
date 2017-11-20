@@ -1645,9 +1645,9 @@ class BaseScyllaCluster(object):
 
         results = []
         while len(results) != len(node_list):
+            time_elapsed = time.time() - start_time
             try:
                 results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
                 self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
                               len(results), len(node_list), int(time_elapsed))
             except Queue.Empty:
