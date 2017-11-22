@@ -82,9 +82,10 @@ class GrowClusterTest(ClusterTester):
         self.reconfigure_monitor()
 
     def reconfigure_monitor(self):
-        targets = [node.private_ip_address for node in self.db_cluster.nodes + self.loaders.nodes]
+        targets = [node.private_ip_address for node in self.db_cluster.nodes]
+        loader_targets = [node.private_ip_address for node in self.loaders.nodes]
         for monitoring_node in self.monitors.nodes:
-            monitoring_node.reconfigure_prometheus(targets=targets)
+            monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
         # 60 minutes should be long enough for adding each node

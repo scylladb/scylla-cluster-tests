@@ -245,13 +245,10 @@ class ClusterTester(Test):
         self.db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        if len(self.db_cluster.datacenter) > 1:
-            targets = [n.public_ip_address for n in self.db_cluster.nodes]
-            targets += [n.public_ip_address for n in self.loaders.nodes]
-        else:
-            targets = [n.private_ip_address for n in self.db_cluster.nodes]
-            targets += [n.private_ip_address for n in self.loaders.nodes]
-        self.monitors.wait_for_init(targets=targets, scylla_version=self.db_cluster.nodes[0].scylla_version)
+        ip_addr_attr = 'public_ip_address' if len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+        self.monitors.wait_for_init(targets={'db_nodes': [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes],
+                                             'loaders': [getattr(n, ip_addr_attr) for n in self.loaders.nodes]},
+                                    scylla_version=self.db_cluster.nodes[0].scylla_version)
         if self.create_stats:
             self.create_test_stats()
 

@@ -220,13 +220,12 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
-        if len(self.cluster.datacenter) > 1:
-            targets = [n.public_ip_address for n in self.cluster.nodes + self.loaders.nodes]
-        else:
-            targets = [n.private_ip_address for n in self.cluster.nodes + self.loaders.nodes]
+        ip_addr_attr = 'public_ip_address' if len(self.cluster.datacenter) > 1 else 'private_ip_address'
+        targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
+        loader_targets = [getattr(n, ip_addr_attr) for n in self.loaders.nodes]
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
-            monitoring_node.reconfigure_prometheus(targets=targets)
+            monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
 
     def disrupt_nodetool_decommission(self, add_node=True):
         def get_node_info_list(verification_node):
