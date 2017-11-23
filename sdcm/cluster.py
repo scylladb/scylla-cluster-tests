@@ -556,8 +556,8 @@ class BaseNode(object):
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
     def _write_prometheus_cfg(self, targets):
-        scylla_targets_list = ['%s:9100' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
-        node_exporter_targets_list = ['%s:9180' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
+        scylla_targets_list = ['%s:9180' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
+        node_exporter_targets_list = ['%s:9100' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
         loader_targets_list = ['%s:9103' % str(ip) for ip in targets['loaders']]
         prometheus_cfg = """
 global:
