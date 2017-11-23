@@ -556,21 +556,15 @@ class BaseNode(object):
         self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
 
     def _write_prometheus_cfg(self, targets):
-        targets_list = ['%s:9103' % str(ip) for ip in targets]
-        scylla_targets_list = ['%s:9100' % str(ip) for ip in targets]
-        node_exporter_targets_list = ['%s:9180' % str(ip) for ip in targets]
+        scylla_targets_list = ['%s:9180' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
+        node_exporter_targets_list = ['%s:9100' % str(ip) for ip in targets['db_nodes'] + targets['loaders']]
+        loader_targets_list = ['%s:9103' % str(ip) for ip in targets['loaders']]
         prometheus_cfg = """
 global:
   scrape_interval: 15s
 
   external_labels:
     monitor: 'scylla-monitor'
-
-scrape_configs:
-- job_name: orig-scylla
-  honor_labels: true
-  static_configs:
-  - targets: %s
 
 scrape_configs:
 - job_name: scylla
@@ -583,7 +577,12 @@ scrape_configs:
   static_configs:
   - targets: %s
 
-""" % (targets_list, scylla_targets_list, node_exporter_targets_list)
+- job_name: stress_metrics
+  honor_labels: true
+  static_configs:
+  - targets: %s
+
+""" % (scylla_targets_list, node_exporter_targets_list, loader_targets_list)
 
         if self._metrics_target:
             prometheus_cfg += """
