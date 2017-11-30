@@ -407,8 +407,7 @@ class BaseNode(object):
                 # Here we are assuming we're using a cassandra image, based
                 # on older Ubuntu
                 cassandra_log = '/var/log/cassandra/system.log'
-                wait.wait_for(self.file_exists, step=10,
-                              file_path=cassandra_log)
+                wait.wait_for(self.file_exists, step=10, timeout=600, throw_exc=True, file_path=cassandra_log)
                 db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
             self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
@@ -807,12 +806,11 @@ WantedBy=multi-user.target
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
-    def wait_ssh_up(self, verbose=True):
+    def wait_ssh_up(self, verbose=True, timeout=None):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
-        wait.wait_for(func=self.remoter.is_up, step=10,
-                      text=text)
+        wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
 
@@ -896,19 +894,17 @@ WantedBy=multi-user.target
         self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
-    def wait_jmx_up(self, verbose=True):
+    def wait_jmx_up(self, verbose=True, timeout=None):
         text = None
         if verbose:
             text = '%s: Waiting for JMX service to be up' % self
-        wait.wait_for(func=self.jmx_up, step=60,
-                      text=text)
+        wait.wait_for(func=self.jmx_up, step=60, text=text, timeout=timeout, throw_exc=True)
 
-    def wait_jmx_down(self, verbose=True):
+    def wait_jmx_down(self, verbose=True, timeout=None):
         text = None
         if verbose:
             text = '%s: Waiting for JMX service to be down' % self
-        wait.wait_for(func=lambda: not self.jmx_up(), step=60,
-                      text=text)
+        wait.wait_for(func=lambda: not self.jmx_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
     def _report_housekeeping_uuid(self, verbose=True):
         """
@@ -928,12 +924,11 @@ WantedBy=multi-user.target
             self.remoter.run('sudo -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
-    def wait_db_up(self, verbose=True):
+    def wait_db_up(self, verbose=True, timeout=None):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
-        wait.wait_for(func=self.db_up, step=60,
-                      text=text)
+        wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout, throw_exc=True)
         self._report_housekeeping_uuid()
 
     def apt_running(self):
@@ -951,12 +946,11 @@ WantedBy=multi-user.target
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
-    def wait_db_down(self, verbose=True):
+    def wait_db_down(self, verbose=True, timeout=None):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
-        wait.wait_for(func=lambda: not self.db_up(), step=60,
-                      text=text)
+        wait.wait_for(func=lambda: not self.db_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
     def wait_cs_installed(self, verbose=True):
         text = None
