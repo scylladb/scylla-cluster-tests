@@ -610,9 +610,13 @@ scrape_configs:
         self._write_prometheus_cfg(targets)
         self.remoter.run('sudo systemctl restart prometheus.service')
 
-    def setup_prometheus(self, targets, metrics_cfg=True):
+    def setup_prometheus(self, targets, metrics_cfg=True, sct_public_ip=None):
         if metrics_cfg:
-            self._metrics_target = start_metrics_server()
+            default_addr = start_metrics_server()
+            if sct_public_ip:
+                self._metrics_target = sct_public_ip + ':' + default_addr.split(':')[1]
+            else:
+                self._metrics_target = default_addr
         self._write_prometheus_cfg(targets)
 
         systemd_unit = """[Unit]
@@ -2120,7 +2124,7 @@ class BaseMonitorSet(object):
             # let's try to guarantee it will be there before
             # proceeding
             node.install_prometheus()
-            node.setup_prometheus(targets=targets)
+            node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
             node.install_grafana()
             self.scylla_version = scylla_version
             self.is_enterprise = is_enterprise
