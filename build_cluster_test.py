@@ -82,7 +82,7 @@ class BuildClusterTest(ClusterTester):
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo systemctl start scylla-server.service')
             node.remoter.run('sudo systemctl start scylla-jmx.service')
-            node.wait_db_up()
+            node.wait_db_up(timeout=300)
             node.wait_jmx_up()
 
         base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM duration=5m "
