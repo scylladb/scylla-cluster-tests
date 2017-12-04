@@ -76,7 +76,7 @@ class BuildClusterTest(ClusterTester):
         for node in self.db_cluster.nodes:
             # for private_ip, public_dns in addresses.iteritems():
                 # replace IPs on public dns names
-            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.private_ip_address, addresses[private_ip_address]))
+            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.private_ip_address, addresses.get(node.private_ip_address,"")))
 
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo systemctl start scylla-server.service')
