@@ -154,7 +154,7 @@ class ResultsAnalyzer(object):
             group_by_version[version]['tests'][version_date] = stats
             old_max = group_by_version[version]['stats_max']
             group_by_version[version]['stats_max'] =\
-                {k: stats[k] if stats[k] > old_max[k] else old_max[k] for k in self.PARAMS if k in stats}
+                {k: stats[k] if stats[k] > old_max[k] else old_max[k] for k in self.PARAMS if k in stats and k in old_max}
 
         res_list = list()
         # compare with max in the test version and all the previous versions

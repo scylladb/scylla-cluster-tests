@@ -137,6 +137,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
         results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
 
+        self.update_test_details()
         self.display_results(results, test_name='test_write')
         self.check_regression()
 
@@ -164,6 +165,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
+        self.update_test_details()
         self.display_results(results, test_name='test_read')
         self.check_regression()
 
@@ -192,6 +194,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
         results = self.get_stress_results(queue=stress_queue, stress_num=2)
 
+        self.update_test_details()
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
 
@@ -209,6 +212,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
         results = self.get_stress_results_bench(queue=stress_queue)
 
+        self.update_test_details()
         self.display_results(results, test_name='test_read_bench')
         self.check_regression()
 

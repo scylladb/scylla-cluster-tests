@@ -55,6 +55,7 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
                     self.create_test_stats()
                     stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
                     self.get_stress_results(queue=stress_queue, stress_num=2)
+                    self.update_test_details()
                     self.check_regression()
                     self._clean_keyspace(cs_profile)
 
