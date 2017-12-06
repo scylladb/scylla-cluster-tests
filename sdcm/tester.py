@@ -1087,6 +1087,9 @@ class ClusterTester(Test):
         total_stats = {}
 
         for key in self.stats['results']['stats'][0].keys():
+            # exclude loader info from statistics
+            if key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
+                continue
             summary = 0
             for stat in self.stats['results']['stats']:
                 try:
@@ -1100,9 +1103,10 @@ class ClusterTester(Test):
                 average_stats[key] = round(summary / len(self.stats['results']['stats']), 1)
                 if key in ['op rate', 'Total errors']:
                     total_stats.update({key: summary})
-
-        self.stats['results']['stats_average'] = average_stats
-        self.stats['results']['stats_total'] = total_stats
+        if average_stats:
+            self.stats['results']['stats_average'] = average_stats
+        if total_stats:
+            self.stats['results']['stats_total'] = total_stats
 
     def update_test_details(self):
         self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
