@@ -1,29 +1,13 @@
-test_duration: 800
+test_duration: 70
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -errors ignore -pop seq=1..10000000"
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
-user_prefix: 'perf-regression-profiles-1-7'
+user_prefix: 'perf-regression-write-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
-ami_id_db_scylla_desc: '1.7.rc2'
-experimental: 'true'
-cs_duration: '60m'
-cs_user_profiles:
-    cust_a/analytics/counters.yaml
-    cust_a/analytics/timeseries.yaml
-    cust_a/features/doc1.yaml
-    cust_a/offline/ctrs.yaml
-    cust_a/online/doc1.yaml
-    cust_a/online/doc2.yaml
-    cust_a/online/doc3.yaml
-    cust_a/users/users1.yaml
-    cust_a/users/users2.yaml
-    cust_b/events.yaml
-    cust_c/group.yaml
-    cust_d/short.yaml
-    cust_e/events.yaml
-    cust_s/case1.yaml
-    cust_s/case2.yaml
+ami_id_db_scylla_desc: 'VERSION_DESC'
+#ip_ssh_connections: 'private'
 
 backends: !mux
     gce: !mux
@@ -41,35 +25,33 @@ backends: !mux
         gce_instance_type_loader: 'n1-standard-2'
         gce_root_disk_type_loader: 'pd-standard'
         gce_n_local_ssd_disk_loader: 0
-        gce_instance_type_monitor: 'n1-standard-1'
+        gce_instance_type_monitor: 'n1-standard-2'
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
-        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/17/scylla.repo'
+        scylla_repo: 'REPO_FILE_PATH'
         us_east_1:
           gce_datacenter: 'us-east1-b'
 
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_loader: 'c4.large'
+        instance_type_monitor: t2.small
+        instance_type_db: 'i2.2xlarge'
         us_east_1:
+            user_credentials_path: ''
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-d934e980'
-            ami_id_db_scylla: 'ami-7e137d68'
+            subnet_id: 'subnet-ec4a72c4'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-7e137d68'
             ami_loader_user: 'centos'
-            ami_id_db_cassandra: 'ami-3eff0028'
-            ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-3d101f2a'
             ami_monitor_user: 'centos'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_loader: 'AMI_ID'
+            ami_id_monitor: 'AMI_ID'
 
 databases: !mux
     cassandra:
         db_type: cassandra
-        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        instance_type_db: 'c3.large'
