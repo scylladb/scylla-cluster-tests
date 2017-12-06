@@ -972,12 +972,12 @@ class ClusterTester(Test):
                     cr.destroy()
                 self.credentials = []
 
-        if getattr(self, 'stats', None):
+        if getattr(self, 'stats', None) and self.create_stats:
             if db_cluster_errors:
                 self.stats['errors'] = db_cluster_errors
             if db_cluster_coredumps:
                 self.stats['coredumps'] = db_cluster_coredumps
-            self.update_test_status()
+            self.update_test_details()
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
@@ -1054,14 +1054,6 @@ class ClusterTester(Test):
 
         return test_details
 
-    def update_test_details(self):
-        self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self.monitors:
-            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
-            self.stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
-        self.update_test_stats(dict(test_details=self.stats['test_details']))
-
     def update_stress_cmd_details(self, cmd, prefix=''):
         section = '{0}cassandra-stress'.format(prefix)
         if section not in self.stats['test_details']:
@@ -1095,6 +1087,9 @@ class ClusterTester(Test):
         total_stats = {}
 
         for key in self.stats['results']['stats'][0].keys():
+            # exclude loader info from statistics
+            if key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
+                continue
             summary = 0
             for stat in self.stats['results']['stats']:
                 try:
@@ -1108,13 +1103,24 @@ class ClusterTester(Test):
                 average_stats[key] = round(summary / len(self.stats['results']['stats']), 1)
                 if key in ['op rate', 'Total errors']:
                     total_stats.update({key: summary})
+        if average_stats:
+            self.stats['results']['stats_average'] = average_stats
+        if total_stats:
+            self.stats['results']['stats_total'] = total_stats
 
-        self.stats['results']['stats_average'] = average_stats
-        self.stats['results']['stats_total'] = total_stats
-
-    def update_test_status(self):
+    def update_test_details(self):
+        self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        if self.monitors:
+            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
+            self.stats['test_details']['prometheus_report'] = url_s3 + ".zip"
+            self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
         self.stats['status'] = self.status
-        self.update_test_stats(dict(status=self.stats['status']))
+        update_data = {'status': self.stats['status'], 'test_details': self.stats['test_details']}
+        if self.stats['errors']:
+            update_data.update({'errors': self.stats['errors']})
+        if self.stats['coredumps']:
+            update_data.update({'coredumps': self.stats['coredumps']})
+        self.update_test_stats(update_data)
 
     def create_test_stats(self):
         self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

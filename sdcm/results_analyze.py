@@ -30,6 +30,12 @@ class ResultsAnalyzer(object):
         with open(conf_file) as cf:
             return yaml.load(cf)
 
+    def _remove_non_stat_keys(self, stats):
+        for non_stat_key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
+            if non_stat_key in stats:
+                del stats[non_stat_key]
+        return stats
+
     def get_all(self):
         """
         Get all the test results in json format
@@ -90,6 +96,12 @@ class ResultsAnalyzer(object):
             return False
         logger.info(pp.pformat(doc))
 
+        # check if stats exists
+        test_stats = self._remove_non_stat_keys(doc['_source']['results']['stats_average'])
+        if not test_stats:
+            logger.error('Cannot find results for test: {}!'.format(test_id))
+            return False
+
         # filter tests
         test_type = doc['_type']
         try:
@@ -147,14 +159,16 @@ class ResultsAnalyzer(object):
             if 'results' not in tr['_source'] or 'stats_average' not in tr['_source']['results']:
                 logger.error('No test results found, test_id: %s', tr['_id'])
                 continue
-            stats = tr['_source']['results']['stats_average']
+            stats = self._remove_non_stat_keys(tr['_source']['results']['stats_average'])
+            if not stats:
+                continue
             if version not in group_by_version:
                 group_by_version[version] = dict(tests=SortedDict(), stats_max=dict())
                 group_by_version[version]['stats_max'] = {k: 0 for k in self.PARAMS}
             group_by_version[version]['tests'][version_date] = stats
             old_max = group_by_version[version]['stats_max']
             group_by_version[version]['stats_max'] =\
-                {k: stats[k] if stats[k] > old_max[k] else old_max[k] for k in self.PARAMS if k in stats}
+                {k: stats[k] if stats[k] > old_max[k] else old_max[k] for k in self.PARAMS if k in stats and k in old_max}
 
         res_list = list()
         # compare with max in the test version and all the previous versions
@@ -163,7 +177,7 @@ class ResultsAnalyzer(object):
             if version == test_version and not len(group_by_version[test_version]['tests']):
                 logger.info('No previous tests in the current version {} to compare'.format(test_version))
                 continue
-            cmp_res = self.cmp(doc['_source']['results']['stats_average'],
+            cmp_res = self.cmp(test_stats,
                                group_by_version[version]['stats_max'],
                                test_version, version, test_type)
             res_list.append(cmp_res)
