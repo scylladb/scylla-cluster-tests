@@ -10,18 +10,13 @@ n_db_nodes: 3
 n_loaders: 4
 # Number of monitor nodes running prometheus
 n_monitor_nodes: 1
-# From 0.19 on, iotune will require bigger disk, so let's use a big
-# loader instance by default.
-instance_type_loader: 'c3.xlarge'
-# Size of AWS monitor instance
-instance_type_monitor: t2.small
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
 nemesis_class_name: 'CorruptThenRepairMonkey'
 # Nemesis sleep interval to use if None provided specifically
 nemesis_interval: 30
 # Prefix for your AWS VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
-user_prefix:
+user_prefix: 'cases-repair-100gb-VERSION'
 # Failure/post test behavior
 # Default: Destroy AWS instances and credentials (destroy)
 # Keep AWS instances running and leave credentials alone (keep)
@@ -36,50 +31,50 @@ space_node_threshold: 107374182400
 # update_db_binary: $path_of_the_new_scylla_binary
 update_db_binary: ''
 
-regions: !mux
-    us_west_1:
-        region_name: 'us-west-1'
-        security_group_ids: 'sg-dcd785b9'
-        subnet_id: 'subnet-10a04c75'
-        ami_id_db_scylla: 'ami-2be31b46'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-32bcc552'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-3cf7c979'
-        ami_db_cassandra_user: 'ubuntu'
-        ami_id_monitor: 'ami-e2246382'
-        ami_monitor_user: 'centos'
-    us_west_2:
-        region_name: 'us-west-2'
-        security_group_ids: 'sg-81703ae4'
-        subnet_id: 'subnet-5207ee37'
-        ami_id_db_scylla: 'ami-15b84575'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-15b84575'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-1cff962c'
-        ami_db_cassandra_user: 'ubuntu'
-        ami_id_monitor: 'ami-ed4d8b8d'
-        ami_monitor_user: 'centos'
-    us_east_1:
-        region_name: 'us-east-1'
-        security_group_ids: 'sg-c5e1f7a0'
-        subnet_id: 'subnet-ec4a72c4'
-        ami_id_db_scylla: 'ami-dd46ffca'
-        ami_db_scylla_user: 'centos'
-        ami_id_loader: 'ami-dd46ffca'
-        ami_loader_user: 'centos'
-        ami_id_db_cassandra: 'ami-ada2b6c4'
-        ami_db_cassandra_user: 'ubuntu'
-        ami_id_monitor: 'ami-dd46ffca'
-        ami_monitor_user: 'centos'
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_network: 'qa-vpc'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 8
+        gce_instance_type_loader: 'n1-standard-4'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-2'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/17/scylla.repo'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 'c4.2xlarge'
+        instance_type_db: 'i2.8xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-d934e980'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_loader: 'AMI_ID'
+            ami_id_monitor: 'AMI_ID'
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
         db_type: cassandra
-        instance_type_db: 'i2.8xlarge'
     scylla:
         db_type: scylla
-        # Let's use c3.xlarge since we're using iotune
-        # and we'll stress the DB nodes more thoroughly
-        instance_type_db: 'i2.8xlarge'
+
