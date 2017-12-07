@@ -13,7 +13,7 @@ nemesis_interval: 30
 user_prefix: 'longevity-tls-1tb-7d-not-jenkins'
 failure_post_behavior: keep
 space_node_threshold: 644245094
-ip_ssh_connections: 'public'
+ip_ssh_connections: 'private'
 experimental: 'true'
 server_encrypt: 'true'
 # Setting client encryption to false for now, till we will find the way to make c-s work with that
