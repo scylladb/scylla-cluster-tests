@@ -1,0 +1,36 @@
+test_duration: 5760
+n_db_nodes: 3
+n_loaders: 1 
+n_monitor_nodes: 1
+user_prefix: 'build-cluster-dns'
+failure_post_behavior: destory
+ip_ssh_connections: 'private'
+experimental: 'true'
+
+
+backends: !mux
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 'c4.2xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-d934e980'
+            ami_id_db_scylla: 'ami-e79e069d'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'ami-e79e069d'
+            ami_loader_user: 'centos'
+            ami_id_db_cassandra: 'ami-ada2b6c4'
+            ami_db_cassandra_user: 'ubuntu'
+            ami_id_monitor: 'ami-e79e069d'
+            ami_monitor_user: 'centos'
+        stop_services: 'true'
+
+databases: !mux
+    cassandra:
+        db_type: cassandra
+        instance_type_db: 'm3.large'
+    scylla:
+        db_type: scylla
+        instance_type_db: 'i2.4xlarge'
