@@ -8,7 +8,7 @@ import os
 import tempfile
 import yaml
 
-from botocore.exceptions import WaiterError
+from botocore.exceptions import WaiterError, ClientError
 import boto3.session
 from avocado.utils import runtime as avocado_runtime
 
@@ -120,6 +120,17 @@ class AWSCluster(cluster.BaseCluster):
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
+    def create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):
+        instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
+                                                                UserData=ec2_user_data,
+                                                                MinCount=count,
+                                                                MaxCount=count,
+                                                                KeyName=self._credentials[dc_idx].key_pair_name,
+                                                                BlockDeviceMappings=self._ec2_block_device_mappings,
+                                                                NetworkInterfaces=interfaces,
+                                                                InstanceType=self._ec2_instance_type)
+        return instances
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -130,14 +141,7 @@ class AWSCluster(cluster.BaseCluster):
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
 
         if self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
-                                                                    UserData=ec2_user_data,
-                                                                    MinCount=count,
-                                                                    MaxCount=count,
-                                                                    KeyName=self._credentials[dc_idx].key_pair_name,
-                                                                    BlockDeviceMappings=self._ec2_block_device_mappings,
-                                                                    NetworkInterfaces=interfaces,
-                                                                    InstanceType=self._ec2_instance_type)
+            instances = self.create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
         else:
             ec2 = ec2_client.EC2Client()
             subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
@@ -169,11 +173,20 @@ class AWSCluster(cluster.BaseCluster):
             for i in range(request_cnt):
                 if tail_cnt and i == request_cnt - 1:
                     spot_params['count'] = tail_cnt
-                if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
-                    instances_i = ec2.create_spot_fleet(**spot_params)
-                else:
-                    instances_i = ec2.create_spot_instances(**spot_params)
-                instances.extend(instances_i)
+                try:
+                    if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
+                        instances_i = ec2.create_spot_fleet(**spot_params)
+                    else:
+                        instances_i = ec2.create_spot_instances(**spot_params)
+                    instances.extend(instances_i)
+                except ClientError as cl_ex:
+                    if 'MaxSpotInstanceCountExceeded' in cl_ex.message:
+                        self.log.debug('Cannot create spot instance(-s): %s.'
+                                       'Creating on demand instance(-s) instead.', cl_ex)
+                        instances_i = self.create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                        instances.extend(instances_i)
+                    else:
+                        raise
 
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
