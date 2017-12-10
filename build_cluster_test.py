@@ -18,7 +18,6 @@ from avocado import main
 
 from sdcm.tester import ClusterTester
 
-
 class BuildClusterTest(ClusterTester):
 
     """
@@ -72,17 +71,21 @@ class BuildClusterTest(ClusterTester):
             else:
                 self.log.error("Node instance doesn't have public dns name. "
                                "Please check AMI!")
+        scrpit = "import fileinput\n"\
+                 "def multipleReplace(text, wordDict):\n"\
+                 "    for key in wordDict:\n"\
+                 "        text = text.replace(key, wordDict[key])\n"\
+                 "    return text\n"\
+                 "addresses = "+str(addresses)+"\n"\
+                 "for line in fileinput.input('./scylla.yaml', inplace=True):\n"\
+                 "    print multipleReplace(line,addresses) if (any(key in line for key in addresses.keys())) else line\n"
 
         for node in self.db_cluster.nodes:
-            for private_ip, public_dns in addresses.iteritems():
-                # replace IPs on public dns names
-                node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.
-                                 format(private_ip, public_dns))
-
+            node.remoter.run('python -c \"exec \"'+scrpit+'\"\"')
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo systemctl start scylla-server.service')
             node.remoter.run('sudo systemctl start scylla-jmx.service')
-            node.wait_db_up()
+            node.wait_db_up(timeout=300)
             node.wait_jmx_up()
 
         base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM duration=5m "
