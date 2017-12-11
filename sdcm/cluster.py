@@ -994,7 +994,7 @@ WantedBy=multi-user.target
 
         if seed_address:
             # Set seeds
-            p = re.compile('^[# ]*seeds:.*')
+            p = re.compile('- seeds:.*')
             scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
                                          scylla_yaml_contents)
 
