@@ -13,7 +13,6 @@ import boto3.session
 from avocado.utils import runtime as avocado_runtime
 
 import cluster
-import wait
 from .collectd import ScyllaCollectdSetup
 from .collectd import CassandraCollectdSetup
 import ec2_client
@@ -180,7 +179,7 @@ class AWSCluster(cluster.BaseCluster):
                         instances_i = ec2.create_spot_instances(**spot_params)
                     instances.extend(instances_i)
                 except ClientError as cl_ex:
-                    if 'MaxSpotInstanceCountExceeded' in cl_ex.message:
+                    if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
                         self.log.debug('Cannot create spot instance(-s): %s.'
                                        'Creating on demand instance(-s) instead.', cl_ex)
                         instances_i = self.create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
