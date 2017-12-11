@@ -994,26 +994,26 @@ WantedBy=multi-user.target
 
         if seed_address:
             # Set seeds
-            p = re.compile('- seeds:.*')
-            scylla_yaml_contents = p.sub('- seeds: "{0}"'.format(seed_address),
+            p = re.compile('seeds:.*')
+            scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
                                          scylla_yaml_contents)
 
             # Set listen_address
-            p = re.compile('^[# ]*listen_address:.*')
+            p = re.compile('listen_address:.*')
             scylla_yaml_contents = p.sub('listen_address: {0}'.format(self.private_ip_address),
                                          scylla_yaml_contents)
             # Set rpc_address
-            p = re.compile('^[# ]*rpc_address:.*')
+            p = re.compile('rpc_address:.*')
             scylla_yaml_contents = p.sub('rpc_address: {0}'.format(self.private_ip_address),
                                          scylla_yaml_contents)
         if broadcast:
             # Set broadcast_address
-            p = re.compile('^[# ]*broadcast_address:.*')
+            p = re.compile('[# ]*broadcast_address:.*')
             scylla_yaml_contents = p.sub('broadcast_address: {0}'.format(broadcast),
                                          scylla_yaml_contents)
 
             # Set broadcast_rpc_address
-            p = re.compile('^[# ]*broadcast_rpc_address:.*')
+            p = re.compile('[# ]*broadcast_rpc_address:.*')
             scylla_yaml_contents = p.sub('broadcast_rpc_address: {0}'.format(broadcast),
                                          scylla_yaml_contents)
 
@@ -1025,27 +1025,27 @@ WantedBy=multi-user.target
             scylla_yaml_contents += "\nexperimental: true\n"
 
         if endpoint_snitch:
-            p = re.compile('^[# ]*endpoint_snitch:.*')
+            p = re.compile('endpoint_snitch:.*')
             scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
                                          scylla_yaml_contents)
 
         if self.is_addition:
             if 'auto_bootstrap' in scylla_yaml_contents:
-                p = re.compile('^[# ]*auto_bootstrap:.*')
+                p = re.compile('auto_bootstrap:.*')
                 scylla_yaml_contents = p.sub('auto_bootstrap: True',
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nauto_bootstrap: True\n"
         else:
             if 'auto_bootstrap' in scylla_yaml_contents:
-                p = re.compile('^[# ]*auto_bootstrap:.*')
+                p = re.compile('auto_bootstrap:.*')
                 scylla_yaml_contents = p.sub('auto_bootstrap: False',
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
-            p = re.compile('^[# ]*authenticator:.*')
+            p = re.compile('[# ]*authenticator:.*')
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
                                          scylla_yaml_contents)
 
