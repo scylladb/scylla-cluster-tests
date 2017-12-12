@@ -4,7 +4,7 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replicati
              "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000",
              "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"]
 stress_read_cmd: ["cassandra-stress read duration=5760m -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
-                  "cassandra-stress counter_read duration=5760m -port jmx=6868-mode cql3 native -rate threads=10 -pop seq=1..1000000"]
+                  "cassandra-stress counter_read duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000"]
 n_db_nodes: 6
 n_loaders: 3
 n_monitor_nodes: 1
