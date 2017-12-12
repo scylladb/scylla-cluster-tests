@@ -20,7 +20,6 @@ from sdcm.tester import ClusterTester
 
 
 class BuildClusterTest(ClusterTester):
-
     """
     Build a Scylla cluster with the appropriate parameters.
 
@@ -99,14 +98,12 @@ class BuildClusterTest(ClusterTester):
                 node.wait_db_up(timeout=300)
                 node.wait_jmx_up()
 
-        base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM duration=5m "
-                      "-schema 'replication(factor=3)' -port jmx=6868 "
-                      "-mode cql3 native -rate threads=10 -errors ignore "
-                      "-pop seq=1..1000000")
+        base_cmd_w = self.params.get('stress_cmd')
 
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, keyspace_num=10)
         self.get_stress_results(queue=stress_queue, stress_num=1, keyspace_num=10)
+        self.verify_stress_thread(queue=stress_queue)
 
 
 if __name__ == '__main__':
