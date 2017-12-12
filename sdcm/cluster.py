@@ -1018,8 +1018,9 @@ WantedBy=multi-user.target
                                          scylla_yaml_contents)
 
         if cluster_name:
-            scylla_yaml_contents = scylla_yaml_contents.replace("cluster_name: 'Test Cluster'",
-                                                                "cluster_name: '{0}'".format(cluster_name))
+            p = re.compile('[# ]*cluster_name:.*')
+            scylla_yaml_contents = p.sub('cluster_name: {0}'.format(cluster_name),
+                                         scylla_yaml_contents)
 
         if enable_exp:
             scylla_yaml_contents += "\nexperimental: true\n"
