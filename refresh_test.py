@@ -130,14 +130,14 @@ class RefreshTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('prepare_stress_cmd'),
                                               stress_num=1,
                                               keyspace_num=1)
-        self.get_stress_results(queue=stress_queue, stress_num=1, keyspace_num=1)
+        self.get_stress_results(queue=stress_queue)
         # run a mixed workload
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
                                               stress_num=2,
                                               keyspace_num=1)
         self.prepare_sstable(node)
         self.nodetool_refresh(node)
-        self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
+        self.get_stress_results(queue=stress_queue)
 
         # finish to watch read_timeout
         self.end = self.get_current_timestamp()

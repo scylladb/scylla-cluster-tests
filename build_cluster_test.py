@@ -102,7 +102,6 @@ class BuildClusterTest(ClusterTester):
 
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, keyspace_num=10)
-        self.get_stress_results(queue=stress_queue, stress_num=1, keyspace_num=10)
         self.verify_stress_thread(queue=stress_queue)
 
 
