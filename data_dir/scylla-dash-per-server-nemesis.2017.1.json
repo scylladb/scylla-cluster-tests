@@ -450,7 +450,12 @@
                         "points": false,
                         "renderer": "flot",
                         "seriesOverrides": [
-
+                             {
+                                 "alias": "/method=\"[a-z]/",
+                                 "fill": 2,
+                                 "lines": true,
+                                 "yaxis": 2
+                             }
                         ],
                         "span": 5,
                         "stack": false,
@@ -462,6 +467,13 @@
                                 "metric": "",
                                 "refId": "A",
                                 "step": 1
+                            },
+                            {
+                              "expr": "nemesis_disruptions_gauge",
+                              "intervalFactor": 2,
+                              "legendFormat": "",
+                              "refId": "B",
+                              "step": 2
                             }
                         ],
                         "timeFrom": null,
@@ -487,8 +499,9 @@
                             },
                             {
                                 "format": "short",
+                                "label": "Nemesis",
                                 "logBase": 1,
-                                "max": null,
+                                "max": 1,
                                 "min": null,
                                 "show": true
                             }
@@ -548,7 +561,240 @@
                             "threshold": 0,
                             "label": "Others"
                         }
-                    }
+                    },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "datasource": "prometheus",
+          "editable": true,
+          "error": false,
+          "fill": 0,
+          "grid": {
+            "threshold1": null,
+            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+            "threshold2": null,
+            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+          },
+          "id": 149,
+          "isNew": true,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 2,
+          "links": [],
+          "nullPointMode": "connected",
+          "percentage": false,
+          "pointradius": 1,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/method=\"[a-z]/",
+              "fill": 2,
+              "lines": true,
+              "yaxis": 2
+            }
+          ],
+          "span": 5,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "A",
+              "step": 2
+            },
+            {
+              "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
+              "intervalFactor": 2,
+              "legendFormat": "",
+              "refId": "B",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
+              "intervalFactor": 2,
+              "refId": "C",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+              "intervalFactor": 2,
+              "refId": "D",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
+              "intervalFactor": 2,
+              "refId": "E",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_user_gauge{type=\"lat_perc_95\"}",
+              "intervalFactor": 2,
+              "refId": "F",
+              "step": 4
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "cassandra-stress latency 95%",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "cumulative"
+          },
+          "type": "graph",
+          "xaxis": {
+            "show": true
+          },
+          "yaxes": [
+            {
+              "format": "ops",
+              "logBase": 1,
+              "max": null,
+              "min": 0,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": "Nemesis",
+              "logBase": 1,
+              "max": 1,
+              "min": null,
+              "show": true
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "datasource": "prometheus",
+          "editable": true,
+          "error": false,
+          "fill": 0,
+          "grid": {
+            "threshold1": null,
+            "threshold1Color": "rgba(216, 200, 27, 0.27)",
+            "threshold2": null,
+            "threshold2Color": "rgba(234, 112, 112, 0.22)"
+          },
+          "id": 150,
+          "isNew": true,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 2,
+          "links": [],
+          "nullPointMode": "connected",
+          "percentage": false,
+          "pointradius": 1,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/method=\"[a-z]/",
+              "fill": 2,
+              "lines": true,
+              "yaxis": 2
+            }
+          ],
+          "span": 5,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "A",
+              "step": 2
+            },
+            {
+              "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+              "intervalFactor": 2,
+              "legendFormat": "",
+              "refId": "B",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+              "intervalFactor": 2,
+              "refId": "C",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+              "intervalFactor": 2,
+              "refId": "D",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
+              "intervalFactor": 2,
+              "refId": "E",
+              "step": 4
+            },
+            {
+              "expr": "collectd_cassandra_stress_counter_user_gauge{type=\"lat_perc_99\"}",
+              "intervalFactor": 2,
+              "refId": "F",
+              "step": 4
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "cassandra-stress latency 99%",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "cumulative"
+          },
+          "type": "graph",
+          "xaxis": {
+            "show": true
+          },
+          "yaxes": [
+            {
+              "format": "ops",
+              "logBase": 1,
+              "max": null,
+              "min": 0,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": "Nemesis",
+              "logBase": 1,
+              "max": 1,
+              "min": null,
+              "show": true
+            }
+          ]
+        }
+
                 ],
                 "title": "New row"
             },
