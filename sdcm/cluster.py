@@ -511,8 +511,9 @@ class BaseNode(object):
         scylla_version = get_monitor_version(scylla_version, clone=True)
         for i in glob.glob('data_dir/grafana/*.%s.json' % scylla_version):
             json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
-        if scylla_version == 'master':
-            json_mapping['scylla-dash-per-server-nemesis.master.json'] = 'dashboards/db'
+
+        for i in glob.glob('data_dir/scylla-dash-per-server-nemesis.%s.json' % scylla_version):
+            json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
 
         for grafana_json in json_mapping:
             url = 'http://%s:3000/api/%s' % (self.public_ip_address, json_mapping[grafana_json])
