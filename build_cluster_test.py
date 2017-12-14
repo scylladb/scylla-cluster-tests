@@ -20,7 +20,6 @@ from sdcm.tester import ClusterTester
 
 
 class BuildClusterTest(ClusterTester):
-
     """
     Build a Scylla cluster with the appropriate parameters.
 
@@ -66,33 +65,45 @@ class BuildClusterTest(ClusterTester):
             node.wait_db_down()
 
         addresses = {}
+        seeds = []
         for node in self.db_cluster.nodes:
             if hasattr(node._instance, 'public_dns_name'):
                 addresses[node.private_ip_address] = node._instance.public_dns_name
+                if node.is_seed:
+                    seeds.append(node.private_ip_address)
             else:
                 self.log.error("Node instance doesn't have public dns name. "
                                "Please check AMI!")
 
         for node in self.db_cluster.nodes:
-            for private_ip, public_dns in addresses.iteritems():
-                # replace IPs on public dns names
-                node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.
-                                 format(private_ip, public_dns))
+            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.private_ip_address,
+                                                                                          addresses.get(
+                                                                                              node.private_ip_address,
+                                                                                              "")))
+            for seed in seeds:
+                node.remoter.run(
+                    'sudo sed -i.bak2 s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(seed, addresses.get(seed, "")))
 
         for node in self.db_cluster.nodes:
-            node.remoter.run('sudo systemctl start scylla-server.service')
-            node.remoter.run('sudo systemctl start scylla-jmx.service')
-            node.wait_db_up()
-            node.wait_jmx_up()
+            if node.is_seed:
+                node.remoter.run('sudo systemctl start scylla-server.service')
+                node.remoter.run('sudo systemctl start scylla-jmx.service')
+                node.wait_db_up(timeout=300)
+                node.wait_jmx_up()
 
-        base_cmd_w = ("cassandra-stress write no-warmup cl=QUORUM duration=5m "
-                      "-schema 'replication(factor=3)' -port jmx=6868 "
-                      "-mode cql3 native -rate threads=10 -errors ignore "
-                      "-pop seq=1..1000000")
+        for node in self.db_cluster.nodes:
+            if not node.is_seed:
+                node.remoter.run('sudo systemctl start scylla-server.service')
+                node.remoter.run('sudo systemctl start scylla-jmx.service')
+                node.wait_db_up(timeout=300)
+                node.wait_jmx_up()
+
+        base_cmd_w = self.params.get('stress_cmd')
 
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, keyspace_num=10)
         self.get_stress_results(queue=stress_queue, stress_num=1, keyspace_num=10)
+        self.verify_stress_thread(queue=stress_queue)
 
 
 if __name__ == '__main__':
