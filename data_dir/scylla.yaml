@@ -222,5 +222,5 @@ databases: !mux
         # Let's use c3.large since we're using iotune
         # and we'll stress the DB nodes more thoroughly
         instance_type_db: 'c3.large'
-        # Spawn a monitor node 
+        # Spawn a monitor node
         n_monitor_nodes: 1

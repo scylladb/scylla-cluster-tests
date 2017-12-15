@@ -18,8 +18,8 @@ ip_ssh_connections: 'public'
 ami_id_db_scylla_desc: '1.7.rc2'
 
 #es_url:
-#es_user: 
-#es_password: 
+#es_user:
+#es_password:
 
 backends: !mux
     aws: !mux
