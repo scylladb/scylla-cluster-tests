@@ -50,7 +50,11 @@ class LongevityTest(ClusterTester):
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
             self.verify_stress_thread(queue=write_queue)
 
-        for stress_cmd in self.params.get('stress_cmd'):
+        stress_cmds = self.params.get('stress_cmd')
+        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        if stress_multiplier > 1:
+            stress_cmds *= stress_multiplier
+        for stress_cmd in stress_cmds:
             params = {'stress_cmd': stress_cmd}
             if 'counter_' in stress_cmd:
                 self._create_counter_table()

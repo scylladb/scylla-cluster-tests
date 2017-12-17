@@ -61,7 +61,7 @@ class MultipleDcTest(ClusterTester):
         self.start_scylla(old_node)
         self.start_scylla(new_node)
 
-        results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
+        results = self.get_stress_results(queue=stress_queue)
 
     def test_series_stop(self):
 
@@ -76,7 +76,7 @@ class MultipleDcTest(ClusterTester):
         for node in nodes_2nd_dc:
             self.start_scylla(node)
 
-        results = self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
+        results = self.get_stress_results(queue=stress_queue)
 
     def test_parallel_stop(self):
         # run a background workload

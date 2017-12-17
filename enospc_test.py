@@ -36,7 +36,7 @@ class EnospcTest(ClusterTester):
         self.db_cluster.start_nemesis(interval=15)
         self.db_cluster.stop_nemesis(timeout=1000)
 
-        self.get_stress_results(queue=stress_queue, stress_num=2, keyspace_num=1)
+        self.get_stress_results(queue=stress_queue)
 
 
 if __name__ == '__main__':

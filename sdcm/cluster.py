@@ -79,6 +79,8 @@ TEST_DURATION = 60
 # max limit of coredump file can be uploaded(5 GB)
 COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 IP_SSH_CONNECTIONS = 'public'
+TASK_QUEUE = 'task_queue'
+RES_QUEUE = 'res_queue'
 
 
 def set_ip_ssh_connections(ip_type):
@@ -1664,6 +1666,9 @@ class BaseScyllaCluster(object):
 
 class BaseLoaderSet(object):
 
+    def __init__(self):
+        self._loader_queue = []
+
     def wait_for_init(self, verbose=False, db_node_address=None):
         queue = Queue.Queue()
 
@@ -1714,6 +1719,11 @@ class BaseLoaderSet(object):
         time_elapsed = time.time() - start_time
         self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
+    def get_loader(self):
+        if not self._loader_queue:
+            self._loader_queue = [node for node in self.nodes]
+        return self._loader_queue.pop(0)
+
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None,
                           node_list=[]):
         stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
@@ -1723,9 +1733,10 @@ class BaseLoaderSet(object):
                 cs_profile = script.TemporaryScript(name=os.path.basename(profile), content=profile_content)
                 self.log.info('Profile content:\n%s' % profile_content)
                 cs_profile.save()
-        queue = Queue.Queue()
+        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
 
         def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
+            queue[TASK_QUEUE].put(node)
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
@@ -1776,10 +1787,17 @@ class BaseLoaderSet(object):
                                       watch_stdout_pattern='total,',
                                       log_file=log_file_name)
             node.cs_start_time = result.stdout_pattern_found_at
-            queue.put((node, result))
-            queue.task_done()
+            queue[RES_QUEUE].put((node, result))
+            queue[TASK_QUEUE].task_done()
 
-        for loader_idx, loader in enumerate(self.nodes):
+        if self.params.get('round_robin', default='').lower() == 'true':
+            # cancel stress_num
+            stress_num = 1
+            loaders = [self.get_loader()]
+        else:
+            loaders = self.nodes
+
+        for loader_idx, loader in enumerate(loaders):
             for cpu_idx in range(stress_num):
                 for ks_idx in range(1, keyspace_num + 1):
                     setup_thread = threading.Thread(target=node_run_stress,
@@ -2001,14 +2019,13 @@ class BaseLoaderSet(object):
                                plotfile=plotfile,
                                node=node)
 
-    def verify_stress_thread(self, queue, db_cluster, stress_num=1, keyspace_num=1):
+    def verify_stress_thread(self, queue, db_cluster):
         results = []
         cs_summary = []
-        while len(results) != len(self.nodes) * stress_num * keyspace_num:
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
+        self.log.debug('Wait for %s stress threads to verify', queue[TASK_QUEUE].qsize())
+        queue[TASK_QUEUE].join()
+        while not queue[RES_QUEUE].empty():
+            results.append(queue[RES_QUEUE].get())
 
         errors = []
         for node, result in results:
@@ -2023,14 +2040,13 @@ class BaseLoaderSet(object):
 
         return cs_summary, errors
 
-    def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
+    def get_stress_results(self, queue):
         results = []
         ret = []
-        while len(results) != len(self.nodes) * stress_num * keyspace_num:
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
+        self.log.debug('Wait for %s stress threads results', queue[TASK_QUEUE].qsize())
+        queue[TASK_QUEUE].join()
+        while not queue[RES_QUEUE].empty():
+            results.append(queue[RES_QUEUE].get())
 
         for node, result in results:
             output = result.stdout + result.stderr
@@ -2042,11 +2058,10 @@ class BaseLoaderSet(object):
     def get_stress_results_bench(self, queue):
         results = []
         ret = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
+        self.log.debug('Wait for %s bench stress threads results', queue[TASK_QUEUE].qsize())
+        queue[TASK_QUEUE].join()
+        while not queue[RES_QUEUE].empty():
+            results.append(queue[RES_QUEUE].get())
 
         for node, result in results:
             output = result.stdout + result.stderr
@@ -2056,9 +2071,10 @@ class BaseLoaderSet(object):
         return ret
 
     def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=[]):
-        queue = Queue.Queue()
+        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
+            queue[TASK_QUEUE].put(node)
             try:
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
@@ -2073,8 +2089,8 @@ class BaseLoaderSet(object):
                                       # watch_stdout_pattern='total,',
                                       log_file=log_file_name)
             node.cs_start_time = result.stdout_pattern_found_at
-            queue.put((node, result))
-            queue.task_done()
+            queue[RES_QUEUE].put((node, result))
+            queue[TASK_QUEUE].task_done()
 
         for loader_idx, loader in enumerate(self.nodes):
             setup_thread = threading.Thread(target=node_run_stress_bench,

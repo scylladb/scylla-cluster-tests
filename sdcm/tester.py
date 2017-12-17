@@ -702,9 +702,8 @@ class ClusterTester(Test):
         self.loaders.kill_stress_thread()
 
     @clean_aws_resources
-    def verify_stress_thread(self, queue, stress_num=1, keyspace_num=1):
-        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster, stress_num=stress_num,
-                                                            keyspace_num=keyspace_num)
+    def verify_stress_thread(self, queue):
+        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
@@ -720,9 +719,10 @@ class ClusterTester(Test):
                       "nodes:\n%s" % "\n".join(errors))
 
     @clean_aws_resources
-    def get_stress_results(self, queue, stress_num=1, keyspace_num=1):
-        results = self.loaders.get_stress_results(queue, stress_num=stress_num, keyspace_num=keyspace_num)
-        self.update_stress_results(results)
+    def get_stress_results(self, queue, store_results=True):
+        results = self.loaders.get_stress_results(queue)
+        if store_results:
+            self.update_stress_results(results)
         return results
 
     @clean_aws_resources
