@@ -8,12 +8,11 @@ import os
 import tempfile
 import yaml
 
-from botocore.exceptions import WaiterError
+from botocore.exceptions import WaiterError, ClientError
 import boto3.session
 from avocado.utils import runtime as avocado_runtime
 
 import cluster
-import wait
 from .collectd import ScyllaCollectdSetup
 from .collectd import CassandraCollectdSetup
 import ec2_client
@@ -120,25 +119,28 @@ class AWSCluster(cluster.BaseCluster):
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
+    def create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):
+        instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
+                                                                UserData=ec2_user_data,
+                                                                MinCount=count,
+                                                                MaxCount=count,
+                                                                KeyName=self._credentials[dc_idx].key_pair_name,
+                                                                BlockDeviceMappings=self._ec2_block_device_mappings,
+                                                                NetworkInterfaces=interfaces,
+                                                                InstanceType=self._ec2_instance_type)
+        return instances
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
-        self.log.debug("Passing user_data '%s' to create_instances",
-                       ec2_user_data)
+        self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
         interfaces = [{'DeviceIndex': 0,
                        'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
 
         if self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
-                                                                    UserData=ec2_user_data,
-                                                                    MinCount=count,
-                                                                    MaxCount=count,
-                                                                    KeyName=self._credentials[dc_idx].key_pair_name,
-                                                                    BlockDeviceMappings=self._ec2_block_device_mappings,
-                                                                    NetworkInterfaces=interfaces,
-                                                                    InstanceType=self._ec2_instance_type)
+            instances = self.create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
         else:
             ec2 = ec2_client.EC2Client()
             subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
@@ -150,21 +152,40 @@ class AWSCluster(cluster.BaseCluster):
                                user_data=ec2_user_data,
                                count=count)
 
-            if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
-                request_cnt = 1
-                if count > SPOT_FLEET_LIMIT:
-                    request_cnt = count / SPOT_FLEET_LIMIT
-                    spot_params['count'] = SPOT_FLEET_LIMIT
-                instances = []
-                for i in range(request_cnt):
-                    instances_i = ec2.create_spot_fleet(**spot_params)
-                    instances.extend(instances_i)
-            elif self.instance_provision == INSTANCE_PROVISION_SPOT_LOW_PRICE or count == 1:
-                instances = ec2.create_spot_instances(**spot_params)
-            elif self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
+            if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
                 # duration value must be a multiple of 60
                 spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
-                instances = ec2.create_spot_instances(**spot_params)
+
+            limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
+            request_cnt = 1
+            tail_cnt = 0
+            if count > limit:
+                # pass common reservationid
+                spot_params['user_data'] += (' --customreservation %s' % str(uuid.uuid4())[:18])
+                self.log.debug("User_data to spot instances: '%s'", spot_params['user_data'])
+                request_cnt = count / limit
+                spot_params['count'] = limit
+                tail_cnt = count % limit
+                if tail_cnt:
+                    request_cnt += 1
+            instances = []
+            for i in range(request_cnt):
+                if tail_cnt and i == request_cnt - 1:
+                    spot_params['count'] = tail_cnt
+                try:
+                    if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
+                        instances_i = ec2.create_spot_fleet(**spot_params)
+                    else:
+                        instances_i = ec2.create_spot_instances(**spot_params)
+                    instances.extend(instances_i)
+                except ClientError as cl_ex:
+                    if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
+                        self.log.debug('Cannot create spot instance(-s): %s.'
+                                       'Creating on demand instance(-s) instead.', cl_ex)
+                        instances_i = self.create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                        instances.extend(instances_i)
+                    else:
+                        raise
 
         instance_ids = [i.id for i in instances]
         region_name = self.params.get('region_name')
@@ -195,34 +216,6 @@ class AWSCluster(cluster.BaseCluster):
                        credentials=credential, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
                        base_logdir=base_logdir, dc_idx=dc_idx)
-
-    def cfstat_reached_threshold(self, key, threshold):
-        """
-        Find whether a certain cfstat key in all nodes reached a certain value.
-
-        :param key: cfstat key, example, 'Space used (total)'.
-        :param threshold: threshold value for cfstats key. Example, 2432043080.
-        :return: Whether all nodes reached that threshold or not.
-        """
-        tcpdump = self.params.get('tcpdump')
-        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
-        reached_threshold = True
-        for value in cfstats:
-            if value < threshold:
-                reached_threshold = False
-        if reached_threshold:
-            self.log.debug("Done waiting on cfstats: %s" % cfstats)
-        return reached_threshold
-
-    def wait_cfstat_reached_threshold(self, key, threshold):
-        text = "Waiting until cfstat '%s' reaches value '%s'" % (key, threshold)
-        wait.wait_for(func=self.cfstat_reached_threshold, step=10,
-                      text=text, key=key, threshold=threshold)
-
-    def wait_total_space_used_per_node(self, size=None):
-        if size is None:
-            size = int(self.params.get('space_node_threshold'))
-        self.wait_cfstat_reached_threshold('Space used (total)', size)
 
 
 class AWSNode(cluster.BaseNode):

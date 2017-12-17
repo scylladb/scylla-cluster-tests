@@ -3,11 +3,15 @@ import datetime
 import time
 import boto3
 import base64
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
 STATUS_PRICE_TOO_LOW = 'price-too-low'
+STATUS_ERROR = 'error'
+FLEET_LIMIT_EXCEEDED_ERROR = 'spotInstanceCountLimitExceeded'
+MAX_SPOT_EXCEEDED_ERROR = 'MaxSpotInstanceCountExceeded'
 REQUEST_TIMEOUT = 300
 
 
@@ -136,6 +140,16 @@ class EC2Client(object):
         for req in resp['SpotFleetRequestConfigs']:
             if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
                             req['ActivityStatus'] != STATUS_FULFILLED:
+                if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
+                    tt = datetime.datetime.now().timetuple()
+                    search_start_time = datetime.datetime(tt.tm_year, tt.tm_mon, tt.tm_mday)
+                    resp = self._client.describe_spot_fleet_request_history(SpotFleetRequestId=request_id,
+                                                                            StartTime=search_start_time,
+                                                                            MaxResults=10)
+                    logger.debug('Fleet request error history: %s', resp)
+                    errors = [i['EventInformation']['EventSubType'] for i in resp['HistoryRecords']]
+                    if FLEET_LIMIT_EXCEEDED_ERROR in errors:
+                        return False, FLEET_LIMIT_EXCEEDED_ERROR
                 return False, resp
         return True, resp
 
@@ -151,6 +165,8 @@ class EC2Client(object):
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_fleet_request_fulfilled(request_id)
+            if not status and resp == FLEET_LIMIT_EXCEEDED_ERROR:
+                break
             timeout += self._wait_interval
         if not status:
             self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=True)
@@ -231,7 +247,9 @@ class EC2Client(object):
                                               user_data, count)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
-            raise Exception("Failed to get spot fleet: %s" % resp)
+            err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR
+            raise ClientError(error_response={'Error': {'Code': err_code, 'Message': resp}},
+                              operation_name='create_spot_fleet')
 
         logger.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
