@@ -719,9 +719,10 @@ class ClusterTester(Test):
                       "nodes:\n%s" % "\n".join(errors))
 
     @clean_aws_resources
-    def get_stress_results(self, queue):
+    def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
-        self.update_stress_results(results)
+        if store_results:
+            self.update_stress_results(results)
         return results
 
     @clean_aws_resources

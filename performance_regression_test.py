@@ -152,7 +152,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.create_test_stats()
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
-        self.get_stress_results(queue=stress_queue)
+        self.get_stress_results(queue=stress_queue, store_results=False)
 
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue)
@@ -175,7 +175,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.create_test_stats()
         # run a write workload as a preparation
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
-        self.get_stress_results(queue=stress_queue)
+        self.get_stress_results(queue=stress_queue, store_results=False)
 
         # run a mixed workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
