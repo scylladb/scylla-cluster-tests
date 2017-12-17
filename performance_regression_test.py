@@ -146,7 +146,7 @@ class PerformanceRegressionTest(ClusterTester):
         2. Run a read workload
         """
 
-        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_r = self.params.get('stress_cmd_r')
 
         self.create_test_stats()
@@ -169,7 +169,7 @@ class PerformanceRegressionTest(ClusterTester):
         2. Run a mixed workload
         """
 
-        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_m = self.params.get('stress_cmd_m')
 
         self.create_test_stats()
