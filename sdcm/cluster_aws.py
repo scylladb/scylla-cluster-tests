@@ -232,8 +232,6 @@ class AWSNode(cluster.BaseNode):
         self._ec2_service = ec2_service
         self._instance_wait_safe(self._instance.wait_until_running)
         self._wait_public_ip()
-        self._ec2_service.create_tags(Resources=[self._instance.id],
-                                      Tags=[{'Key': 'Name', 'Value': name}])
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
@@ -242,15 +240,16 @@ class AWSNode(cluster.BaseNode):
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
+        tags_list = [{'Key': 'Name', 'Value': name},
+                     {'Key': 'workspace', 'Value': cluster.WORKSPACE},
+                     {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
         if cluster.TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
                           'Tagging node with {"keep": "alive"}',
                           cluster.TEST_DURATION)
-            self._ec2_service.create_tags(Resources=[self._instance.id],
-                                          Tags=[{'Key': 'keep', 'Value': 'alive'}])
+            tags_list.append({'Key': 'keep', 'Value': 'alive'})
         self._ec2_service.create_tags(Resources=[self._instance.id],
-                                      Tags=[{'Key': 'workspace', 'Value': cluster.WORKSPACE},
-                                            {'Key': 'uname', 'Value': ' | '.join(os.uname())}])
+                                      Tags=tags_list)
 
     @property
     def public_ip_address(self):
