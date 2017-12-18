@@ -81,6 +81,7 @@ COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 IP_SSH_CONNECTIONS = 'public'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
+WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
 def set_ip_ssh_connections(ip_type):

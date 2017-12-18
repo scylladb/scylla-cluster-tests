@@ -45,6 +45,8 @@ class GCENode(cluster.BaseNode):
                           cluster.TEST_DURATION)
             self._instance_wait_safe(self._gce_service.ex_set_node_tags,
                                      self._instance, ['keep-alive'])
+        self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
+                                 self._instance, {'workspace': cluster.WORKSPACE, 'uname': ' | '.join(os.uname())})
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """

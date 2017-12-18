@@ -248,6 +248,9 @@ class AWSNode(cluster.BaseNode):
                           cluster.TEST_DURATION)
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=[{'Key': 'keep', 'Value': 'alive'}])
+        self._ec2_service.create_tags(Resources=[self._instance.id],
+                                      Tags=[{'Key': 'workspace', 'Value': cluster.WORKSPACE},
+                                            {'Key': 'uname', 'Value': ' | '.join(os.uname())}])
 
     @property
     def public_ip_address(self):
