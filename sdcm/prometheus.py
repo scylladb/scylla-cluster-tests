@@ -4,6 +4,8 @@ import random
 import logging
 import prometheus_client
 
+from avocado.utils import network
+
 START = 'start'
 STOP = 'stop'
 
@@ -11,15 +13,23 @@ logger = logging.getLogger(__name__)
 nm_obj = None
 
 
-def start_metrics_server():
-    seed = os.getpid() / 100
-    port = random.randint(8000 + seed, 10000 - seed)
+def start_metrics_server(port=9389):
+    """
+    https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+    Occupied port 9389 for SCT
+    """
+    hostname = socket.gethostname()
+    if not network.is_port_free(port, hostname):
+        port = network.find_free_port(8001, 10000)
+
     try:
+        logger.debug('Try to start prometheus API server on port: %s', port)
         prometheus_client.start_http_server(port)
-        ip = socket.gethostbyname(socket.gethostname())
+        ip = socket.gethostbyname(hostname)
         return '{}:{}'.format(ip, port)
     except Exception as ex:
         logger.error('Cannot start local http metrics server: %s', ex)
+
     return None
 
 
