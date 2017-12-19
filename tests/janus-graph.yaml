@@ -54,5 +54,5 @@ backends: !mux
 databases: !mux
     scylla:
         db_type: scylla
-        instance_type_db: 'i2.2xlarge'
+        instance_type_db: 'i3.2xlarge'
         n_monitor_nodes: 1
