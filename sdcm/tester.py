@@ -1000,7 +1000,8 @@ class ClusterTester(Test):
         try:
             versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
             for line in versions_output:
-                for package in ['scylla-jmx', 'scylla-server', 'scylla-tools']:
+                for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
+                                'scylla-enterprise-server', 'scylla-enterprise-tools']:
                     match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
                     if match:
                         versions[package] = {'version': match.group(2),
