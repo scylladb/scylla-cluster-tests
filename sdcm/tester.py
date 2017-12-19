@@ -1028,8 +1028,9 @@ class ClusterTester(Test):
                     # exclude these params from gce run
                     continue
                 elif p[1] == 'n_db_nodes' and isinstance(p[2], str) and re.search('\s', p[2]):  # multidc
-                    p[2] = re.sub('\s', '_', p[2])
-                setup_details[p[1]] = p[2]
+                    setup_details['n_db_nodes'] = re.sub('\s', '_', p[2])
+                else:
+                    setup_details[p[1]] = p[2]
 
         if 'es_password' in setup_details:
             # hide ES password
