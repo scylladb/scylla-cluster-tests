@@ -245,7 +245,7 @@ class ClusterTester(Test):
         self.db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        if self.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
+        if self.params.get('cluster_backend') != 'gce' and len(self.db_cluster.datacenter) > 1:
             ip_addr_attr = 'public_ip_address'
         else:
             ip_addr_attr = 'private_ip_address'
