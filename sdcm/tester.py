@@ -1094,13 +1094,12 @@ class ClusterTester(Test):
                 continue
             summary = 0
             for stat in self.stats['results']['stats']:
+                if key not in stat:
+                    continue
                 try:
                     summary += float(stat[key])
                 except:
                     average_stats[key] = stat[key]
-            if summary != summary:
-                # handle non float value
-                average_stats[key] = None
             if key not in average_stats:
                 average_stats[key] = round(summary / len(self.stats['results']['stats']), 1)
                 if key in ['op rate', 'Total errors']:
