@@ -245,7 +245,10 @@ class ClusterTester(Test):
         self.db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        ip_addr_attr = 'public_ip_address' if len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+        if self.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
+            ip_addr_attr = 'public_ip_address'
+        else:
+            ip_addr_attr = 'private_ip_address'
         self.monitors.wait_for_init(targets={'db_nodes': [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes],
                                              'loaders': [getattr(n, ip_addr_attr) for n in self.loaders.nodes]},
                                     scylla_version=self.db_cluster.nodes[0].scylla_version)

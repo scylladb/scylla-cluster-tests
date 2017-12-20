@@ -221,7 +221,10 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
-        ip_addr_attr = 'public_ip_address' if len(self.cluster.datacenter) > 1 else 'private_ip_address'
+        if self.cluster.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
+            ip_addr_attr = 'public_ip_address'
+        else:
+            ip_addr_attr = 'private_ip_address'
         targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
         loader_targets = [getattr(n, ip_addr_attr) for n in self.loaders.nodes]
         for monitoring_node in self.monitoring_set.nodes:
