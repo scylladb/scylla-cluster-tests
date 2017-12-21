@@ -1254,6 +1254,7 @@ class BaseCluster(object):
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
                  node_prefix='node', n_nodes=[10], params=None, region_names=None):
+        super(BaseCluster, self).__init__()
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
@@ -1673,7 +1674,7 @@ class BaseScyllaCluster(object):
 
 class BaseLoaderSet(object):
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self._loader_queue = []
 
     def wait_for_init(self, verbose=False, db_node_address=None):
