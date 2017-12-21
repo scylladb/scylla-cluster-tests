@@ -13,7 +13,7 @@ nemesis_interval: 5
 user_prefix: 'longevity-50gb-4d-not-jenkins'
 failure_post_behavior: keep
 space_node_threshold: 644245094
-ip_ssh_connections: 'public'
+ip_ssh_connections: 'private'
 experimental: 'true'
 append_conf: 'enable_sstable_data_integrity_check: true'
 
