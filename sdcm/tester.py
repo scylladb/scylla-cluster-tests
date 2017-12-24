@@ -1097,7 +1097,7 @@ class ClusterTester(Test):
                 continue
             summary = 0
             for stat in self.stats['results']['stats']:
-                if key not in stat:
+                if key not in stat or stat[key] == 'NaN':
                     continue
                 try:
                     summary += float(stat[key])
