@@ -329,6 +329,7 @@ class BaseNode(object):
         ssh_login_info['hostname'] = self._ssh_ip_mapping[IP_SSH_CONNECTIONS]
 
         self.remoter = Remote(**ssh_login_info)
+        self._ssh_login_info = ssh_login_info
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
@@ -1092,26 +1093,28 @@ client_encryption_options:
                                 dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, targets):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
         self.log.debug('Install scylla-mgmt')
         rsa_id_dst = '/tmp/scylla-test'
         mgmt_user = 'scylla-mgmt'
         mgmt_conf_tmp = '/tmp/scylla-mgmt.yaml'
         mgmt_conf_dst = '/etc/scylla-mgmt/scylla-mgmt.yaml'
 
-        self.remoter.run('sudo yum install epel-release')
+        self.remoter.run('sudo yum install -y epel-release')
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla.repo -L {}'.format(scylla_repo))
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-mgmt.repo -L {}'.format(scylla_mgmt_repo))
         self.remoter.run('sudo yum install -y scylla-mgmt')
         self.remoter.run('echo yes| sudo scyllamgmt_setup')
-        self.remoter.send_files(src='~/.ssh/scylla-test', dst=rsa_id_dst)
+        self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
         self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
         self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
+
         mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
                      'database':
-                         {'hosts': [str(trg) for trg in targets['db_nodes']]},
+                         {'hosts': db_hosts,
+                          'timeout': '5s'},
                      'ssh':
-                         {'user': 'scylla-test',
+                         {'user': self._ssh_login_info['user'],
                           'identity_file': rsa_id_dst}
                      }
         (_, conf_file) = tempfile.mkstemp(dir='/tmp')
@@ -2196,10 +2199,14 @@ class BaseMonitorSet(object):
             self.grafana_start_time = time.time()
             node.remoter.run('sudo yum install screen -y')
             if 'scylla_repo' in kwargs and 'scylla_mgmt_repo' in kwargs:
+                if kwargs.get('mgmt_db_local') is True:
+                    mgmt_db_hosts = ['127.0.0.1']
+                else:
+                    mgmt_db_hosts = [str(trg) for trg in targets['db_nodes']]
                 node.install_mgmt(scylla_repo=kwargs.get('scylla_repo'),
                                   scylla_mgmt_repo=kwargs.get('scylla_mgmt_repo'),
                                   mgmt_port=kwargs.get('mgmt_port'),
-                                  targets=targets)
+                                  db_hosts=mgmt_db_hosts)
             queue.put(node)
             queue.task_done()
 

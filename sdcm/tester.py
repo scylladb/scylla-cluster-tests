@@ -254,7 +254,8 @@ class ClusterTester(Test):
         if self.params.get('use_mgmt', default=None):
             mgmt_params = {'mgmt_port': self.params.get('mgmt_port', default=10090),
                            'scylla_repo': self.params.get('scylla_repo_m'),
-                           'scylla_mgmt_repo': self.params.get('scylla_mgmt_repo')
+                           'scylla_mgmt_repo': self.params.get('scylla_mgmt_repo'),
+                           'mgmt_db_local': self.params.get('mgmt_db_local', default=True)
                            }
             self.log.debug('mgmt_params: %s', mgmt_params)
         self.monitors.wait_for_init(targets={'db_nodes': [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes],

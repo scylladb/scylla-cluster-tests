@@ -2,6 +2,7 @@ import requests
 import logging
 import json
 import time
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,18 @@ class ScyllaMgmt(object):
             logger.error(err_msg)
             raise Exception(err_msg)
 
+    def get_cluster(self, cluster_name):
+        """
+        Get cluster by name
+        :param cluster_name: cluster name
+        :return: cluster id if found, otherwise None
+        """
+        resp = self.get('clusters', params={'name': cluster_name})
+        if not resp:
+            logger.debug('Cluster %s not found in scylla mgmt', cluster_name)
+            return None
+        return resp[0]['id']
+
     def add_cluster(self, cluster_name, hosts, shard_count=16):
         """
         Add cluster to management
@@ -72,6 +85,50 @@ class ScyllaMgmt(object):
         """
         self.delete('cluster/{}'.format(cluster_id))
 
+    def get_schedule_task(self, cluster_id):
+        """
+        Find auto scheduling repair task created automatically on cluster creation
+        :param cluster_id: cluster id
+        :return: task dict
+        """
+        resp = []
+        while not resp:
+            resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair_auto_schedule'})
+        return resp[0]
+
+    def disable_task_schedule(self, cluster_id, task):
+        start_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        task['schedule'] = {'start_date': start_time.isoformat() + 'Z',
+                            'interval_days': 0,
+                            'num_retries': 0}
+        task['enabled'] = True
+
+        self.put(path='cluster/{}/task/repair_auto_schedule/{}'.format(cluster_id, task['id']), data=task)
+
+    def start_repair_task(self, cluster_id, task_id, task_type='repair'):
+        self.put(path='cluster/{}/task/{}/{}/start'.format(cluster_id, task_type, task_id))
+
+    def get_repair_tasks(self, cluster_id):
+        """
+        Get cluster repair tasks(repair units per cluster keyspace)
+        :param cluster_id: cluster id
+        :return: repair tasks dict with unit id as key, task id as value
+        """
+        resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair'})
+        tasks = {}
+        for task in resp:
+            unit_id = task['properties']['unit_id']
+            if unit_id not in tasks and 'status' not in task:
+                tasks[unit_id] = task['id']
+        return tasks
+
+    def get_task_progress(self, cluster_id, repair_unit):
+        try:
+            return self.get(path='cluster/{}/repair/unit/{}/progress'.format(cluster_id, repair_unit))
+        except Exception as ex:
+            logger.exception('Failed to get repair progress: %s', ex)
+        return None
+
     def run_repair(self, cluster_id, timeout=0):
         """
         Run repair for cluster
@@ -79,26 +136,14 @@ class ScyllaMgmt(object):
         :param timeout: timeout in seconds to wait for repair done
         :return: repair status(True/False)
         """
-        # get repair schedule task
-        resp = []
-        while not resp:
-            resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair_auto_schedule'})
+        sched_task = self.get_schedule_task(cluster_id)
 
-        # start repair schedule task
-        task_id = resp[0]['id']
-        self.put(path='cluster/{}/task/repair_auto_schedule/{}/start'.format(cluster_id, task_id))
+        if sched_task['schedule']['interval_days'] > 0:
+            self.disable_task_schedule(cluster_id, sched_task)
 
-        # get repair units
-        resp = self.get(path='cluster/{}/repair/units'.format(cluster_id))
-        units = [unit['id'] for unit in resp]
+        self.start_repair_task(cluster_id, sched_task['id'], 'repair_auto_schedule')
 
-        # get repair tasks
-        resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair'})
-        tasks = {}
-        for task in resp:
-            unit_id = task['properties']['unit_id']
-            if unit_id not in tasks:
-                tasks[unit_id] = task['id']
+        tasks = self.get_repair_tasks(cluster_id)
 
         status = True
         # start repair tasks one by one:
@@ -107,9 +152,9 @@ class ScyllaMgmt(object):
         unit_to = timeout / len(tasks)
         start_time = time.time()
         for unit, task in tasks.iteritems():
-            self.put(path='cluster/{}/task/repair/{}/start'.format(cluster_id, task))
+            self.start_repair_task(cluster_id, task, 'repair')
             task_status = self.wait_for_repair_done(cluster_id, unit, unit_to)
-            if task_status['status'] != STATUS_DONE:
+            if task_status['status'] != STATUS_DONE or task_status['error']:
                 logger.error('Repair unit %s failed, status: %s, error count: %s', unit,
                              task_status['status'], task_status['error'])
                 status = False
@@ -133,7 +178,9 @@ class ScyllaMgmt(object):
         logger.info('Wait for repair unit done: %s', unit)
         while not done and wait_time <= timeout:
             time.sleep(interval)
-            resp = self.get(path='cluster/{}/repair/unit/{}/progress'.format(cluster_id, unit))
+            resp = self.get_task_progress(cluster_id, unit)
+            if not resp:
+                break
             status['status'] = resp['status']
             status['percent'] = resp['percent_complete']
             if resp['error']:
