@@ -350,8 +350,6 @@ class ClusterTester(Test):
             loader_info['disk_size'] = self.params.get('gce_root_disk_size_loader')
         if loader_info['n_local_ssd'] is None:
             loader_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_loader')
-        if loader_info['pd_ssd_size'] is None:
-            loader_info['pd_ssd_size'] = self.params.get('gce_pd_ssd_disk_size_loader')
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -373,8 +371,6 @@ class ClusterTester(Test):
             db_info['disk_size'] = self.params.get('gce_root_disk_size_db')
         if db_info['n_local_ssd'] is None:
             db_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_db')
-        if db_info['pd_ssd_size'] is None:
-            db_info['pd_ssd_size'] = self.params.get('gce_pd_ssd_disk_size_db')
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
@@ -385,8 +381,7 @@ class ClusterTester(Test):
             monitor_info['disk_size'] = self.params.get('gce_root_disk_size_monitor')
         if monitor_info['n_local_ssd'] is None:
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
-        if monitor_info['pd_ssd_size'] is None:
-            monitor_info['pd_ssd_size'] = self.params.get('gce_pd_ssd_disk_size_monitor')
+
         user_prefix = self.params.get('user_prefix', None)
         service_account_email = self.params.get('gce_service_account_email', None)
         user_credentials = self.params.get('gce_user_credentials', None)
@@ -404,6 +399,8 @@ class ClusterTester(Test):
         gce_image_db = self.params.get('gce_image_db')
         if not gce_image_db:
             gce_image_db = self.params.get('gce_image')
+        cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db', default=0),
+                                    'pd-standard': self.params.get('gce_pd_standard_disk_size_db', default=0)}
         self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
                                            gce_image_type=db_info['disk_type'],
                                            gce_image_size=db_info['disk_size'],
@@ -415,11 +412,12 @@ class ClusterTester(Test):
                                            credentials=self.credentials,
                                            user_prefix=user_prefix,
                                            n_nodes=db_info['n_nodes'],
+                                           add_disks=cluster_additional_disks,
                                            params=self.params,
-                                           gce_datacenter=gce_datacenter,
-                                           gce_pd_ssd_size=db_info['pd_ssd_size'])
+                                           gce_datacenter=gce_datacenter)
 
         scylla_repo = get_data_path('scylla.repo')
+        loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image'),
                                     gce_image_type=loader_info['disk_type'],
                                     gce_image_size=loader_info['disk_size'],
@@ -432,10 +430,11 @@ class ClusterTester(Test):
                                     scylla_repo=scylla_repo,
                                     user_prefix=user_prefix,
                                     n_nodes=loader_info['n_nodes'],
-                                    params=self.params,
-                                    gce_pd_ssd_size=loader_info['pd_ssd_size'])
+                                    add_disks=loader_additional_disks,
+                                    params=self.params)
 
         if monitor_info['n_nodes'] > 0:
+            monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor', default=0)}
             self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image'),
                                           gce_image_type=monitor_info['disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
@@ -448,8 +447,8 @@ class ClusterTester(Test):
                                           scylla_repo=scylla_repo,
                                           user_prefix=user_prefix,
                                           n_nodes=monitor_info['n_nodes'],
-                                          params=self.params,
-                                          gce_pd_ssd_size=monitor_info['pd_ssd_size'])
+                                          add_disks=monitor_additional_disks,
+                                          params=self.params)
         else:
             self.monitors = NoMonitorSet()
 
@@ -629,14 +628,14 @@ class ClusterTester(Test):
                        monitor_info=None):
         if loader_info is None:
             loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                           'device_mappings': None, 'pd_ssd_size': None}
+                           'device_mappings': None}
         if db_info is None:
             db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                       'device_mappings': None, 'pd_ssd_size': None}
+                       'device_mappings': None}
 
         if monitor_info is None:
             monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                            'device_mappings': None, 'pd_ssd_size': None}
+                            'device_mappings': None}
 
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend is None:
