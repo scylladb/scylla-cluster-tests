@@ -476,6 +476,36 @@ class Nemesis(object):
         except Exception as ex:
             self.log.error('Failed to execute scylla-manager repair, error: %s', ex)
 
+    def disrupt_abort_repair(self):
+        """
+        Start repair target_node in background, then try to abort the repair streaming.
+        """
+        def repair_thread():
+            repair_cmd = 'nodetool -h localhost repair'
+            self._run_nodetool(repair_cmd, self.target_node)
+
+        self.log.debug("Start repair target_node in background")
+        thread1 = threading.Thread(target=repair_thread)
+        thread1.start()
+
+        def repair_streaming_exists():
+            result = process.run('curl http://%s:10000/stream_manager/' % self.target_node.private_ip_address)
+            return 'repair-' in result.stdout
+
+        wait.wait_for(func=repair_streaming_exists,
+                      timeout=10,
+                      step=0.01,
+                      text='Wait for repair starts')
+
+        self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
+        url = "http://%s:10000/storage_service/force_terminate_repair" % self.target_node.private_ip_address
+        process.run('curl -X POST  --header "Accept: application/json" %s' % url)
+        thread1.join(timeout=120)
+
+        self.log.debug("Execute a complete repair for target node")
+        repair_cmd = 'nodetool -h localhost repair'
+        self._run_nodetool(repair_cmd, self.target_node)
+
 
 def log_time_elapsed_and_status(method):
     """
@@ -798,3 +828,10 @@ class MgmtRepair(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_mgmt_repair()
+
+
+class AbortRepair(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_abort_repair()
