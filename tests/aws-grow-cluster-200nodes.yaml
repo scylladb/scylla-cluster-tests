@@ -1,7 +1,6 @@
 test_duration: 1440
 cassandra_stress_threads: 500
 cassandra_stress_population_size: 10000000
-nemesis_interval: 1
 user_prefix: 'cluster-scale-test'
 failure_post_behavior: destroy
 space_node_threshold: 100
@@ -11,8 +10,8 @@ n_monitor_nodes: 1
 cluster_target_size: 200
 add_node_cnt: 1
 experimental: 'true'
-instance_provision: 'on_demand'
-# instance_provision can be one of the following: on_demand|spot_fleet|spot_low_price|spot_duration
+# aws instance provision: on_demand|spot_fleet|spot_low_price|spot_duration
+instance_provision: 'spot_fleet'
 
 backends: !mux
     aws: !mux

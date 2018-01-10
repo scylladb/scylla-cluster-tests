@@ -93,10 +93,8 @@ class GrowClusterTest(ClusterTester):
         duration = 60 * nodes_to_add
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
-        # Wait for cluster is filled with data
-        # Set space_node_threshold in config file for the size
-        self.db_cluster.wait_total_space_used_per_node()
 
+        time.sleep(2 * 60)
         start = datetime.datetime.now()
         self.log.info('Starting to grow cluster: %s' % str(start))
 
