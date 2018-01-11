@@ -6,7 +6,6 @@ import tempfile
 import Queue
 
 import cluster
-from .collectd import ScyllaCollectdSetup
 from . import wait
 from .loader import CassandraStressExporterSetup
 
@@ -272,7 +271,6 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                params=params,
                                                gce_region_names=gce_datacenter,
                                                gce_pd_ssd_size=gce_pd_ssd_size)
-        self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()

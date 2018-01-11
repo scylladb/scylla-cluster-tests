@@ -49,8 +49,6 @@ from . import data_path
 from . import wait
 from .utils import get_monitor_version
 
-from .collectd import ScyllaCollectdSetup
-
 from .loader import CassandraStressExporterSetup
 from .prometheus import start_metrics_server
 
@@ -1639,11 +1637,6 @@ class BaseScyllaCluster(object):
 
         start_time = time.time()
 
-        # avoid using node.remoter in thread
-        for node in node_list:
-            node.wait_ssh_up(verbose=verbose)
-            self.collectd_setup.install(node)
-
         for node in node_list:
             setup_thread = threading.Thread(target=node_setup,
                                             args=(node, ))
@@ -2370,7 +2363,6 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
                                                    node_prefix=node_prefix,
                                                    n_nodes=n_nodes,
                                                    params=params)
-        self.collectd_setup = ScyllaCollectdSetup()
         self.seed_nodes_private_ips = None
         self.termination_event = threading.Event()
         self.nemesis_threads = []
@@ -2432,7 +2424,6 @@ class ScyllaLibvirtCluster(LibvirtCluster, BaseScyllaCluster):
         # avoid using node.remoter in thread
         for node in node_list:
             node.wait_ssh_up(verbose=verbose)
-            self.collectd_setup.install(node)
 
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.
@@ -2652,7 +2643,6 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
                                                      node_prefix=node_prefix,
                                                      n_nodes=n_nodes,
                                                      params=params)
-        self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -2721,10 +2711,6 @@ class ScyllaOpenStackCluster(OpenStackCluster, BaseScyllaCluster):
             queue.task_done()
 
         start_time = time.time()
-
-        # avoid using node.remoter in thread
-        for node in node_list:
-            self.collectd_setup.install(node)
 
         # If we setup all nodes in paralel, we might have troubles
         # with nodes not able to contact the seed node.

@@ -13,7 +13,6 @@ import boto3.session
 from avocado.utils import runtime as avocado_runtime
 
 import cluster
-from .collectd import ScyllaCollectdSetup
 from .collectd import CassandraCollectdSetup
 import ec2_client
 
@@ -343,7 +342,6 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
-        self.collectd_setup = ScyllaCollectdSetup()
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
