@@ -669,7 +669,7 @@
           },
           "yaxes": [
             {
-              "format": "ops",
+              "format": "ms",
               "logBase": 1,
               "max": null,
               "min": 0,
@@ -784,7 +784,7 @@
           },
           "yaxes": [
             {
-              "format": "ops",
+              "format": "ms",
               "logBase": 1,
               "max": null,
               "min": 0,
