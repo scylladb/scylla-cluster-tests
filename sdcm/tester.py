@@ -249,9 +249,19 @@ class ClusterTester(Test):
             ip_addr_attr = 'public_ip_address'
         else:
             ip_addr_attr = 'private_ip_address'
+
+        mgmt_params = {}
+        if self.params.get('use_mgmt', default=None):
+            mgmt_params = {'mgmt_port': self.params.get('mgmt_port', default=10090),
+                           'scylla_repo': self.params.get('scylla_repo_m'),
+                           'scylla_mgmt_repo': self.params.get('scylla_mgmt_repo'),
+                           'mgmt_db_local': self.params.get('mgmt_db_local', default=True)
+                           }
+            self.log.debug('mgmt_params: %s', mgmt_params)
         self.monitors.wait_for_init(targets={'db_nodes': [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes],
                                              'loaders': [getattr(n, ip_addr_attr) for n in self.loaders.nodes]},
-                                    scylla_version=self.db_cluster.nodes[0].scylla_version)
+                                    scylla_version=self.db_cluster.nodes[0].scylla_version,
+                                    **mgmt_params)
         if self.create_stats:
             self.create_test_stats()
 

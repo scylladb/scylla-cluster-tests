@@ -28,6 +28,7 @@ from .data_path import get_data_path
 from .log import SDCMAdapter
 from . import es
 from . import prometheus
+from . import mgmt
 from avocado.utils import wait
 
 from sdcm.utils import remote_get_file
@@ -454,6 +455,27 @@ class Nemesis(object):
               " gc_grace_seconds = {};".format(gc_grace_seconds)
         self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
 
+    def disrupt_mgmt_repair(self):
+        self._set_current_disruption('ManagementRepair')
+        if not self.cluster.params.get('use_mgmt', default=None):
+            self.log.warning('Scylla mgmt configuration is not defined!')
+            return
+        server = self.monitoring_set.nodes[0].public_ip_address
+        port = self.cluster.params.get('mgmt_port', default=10090)
+        try:
+            mgmt_client = mgmt.ScyllaMgmt(server=server, port=port)
+            cluster_name = self.cluster.name
+            cluster_id = mgmt_client.get_cluster(cluster_name)
+            if not cluster_id:
+                ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
+                                                      len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
+                cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
+            repair_timeout = 36 * 60 * 60  # 36 hours
+            mgmt_client.run_repair(cluster_id, timeout=repair_timeout)
+        except Exception as ex:
+            self.log.error('Failed to execute mgmt repair, error: %s', ex)
+
 
 def log_time_elapsed_and_status(method):
     """
@@ -769,3 +791,10 @@ class ModifyTableGCGraceTimeMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_modify_table_gc_grace_time()
+
+
+class MgmtRepair(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_mgmt_repair()
