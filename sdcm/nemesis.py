@@ -140,6 +140,24 @@ class Nemesis(object):
             self.log.error(err, exc_info=True)
             return None
 
+    def _run_cqlsh(self, cmd, node, verbose=True):
+        try:
+            result = node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=verbose)
+            self.log.debug("Command '%s' duration -> %s s", result.command,
+                           result.duration)
+            return result
+        except process.CmdError, details:
+            err = ("cqlsh command '%s' failed on node %s: %s" %
+                   (cmd, self.target_node, details.result))
+            self.error_list.append(err)
+            self.log.error(err)
+            return None
+        except Exception:
+            err = 'Unexpected exception running cqlsh'
+            self.error_list.append(err)
+            self.log.error(err, exc_info=True)
+            return None
+
     def _kill_scylla_daemon(self):
         self.log.info('Kill all scylla processes in %s', self.target_node)
         kill_cmd = "sudo pkill -9 scylla"
@@ -312,7 +330,7 @@ class Nemesis(object):
             refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
             self._run_nodetool(refresh_cmd, node)
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+            self._run_cqlsh(cmd, node)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
@@ -446,14 +464,14 @@ class Nemesis(object):
         self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
         comment = ''.join(random.choice(string.ascii_letters) for i in xrange(24))
         cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+        self._run_cqlsh(cmd, self.target_node)
 
     def disrupt_modify_table_gc_grace_time(self):
         self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
         gc_grace_seconds = random.choice(xrange(216000, 864000))
         cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
               " gc_grace_seconds = {};".format(gc_grace_seconds)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+        self._run_cqlsh(cmd, self.target_node)
 
     def disrupt_mgmt_repair(self):
         self._set_current_disruption('ManagementRepair')
