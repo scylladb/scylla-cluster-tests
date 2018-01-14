@@ -12,7 +12,7 @@ STATUS_ERROR = 'error'
 
 class ScyllaMgmt(object):
     """
-    Provides communication with scylla management via REST API
+    Provides communication with scylla-manager via REST API
     """
 
     def __init__(self, server, port=9090):
@@ -21,7 +21,7 @@ class ScyllaMgmt(object):
     def get(self, path, params={}):
         resp = requests.get(url=self._url + path, params=params)
         if resp.status_code not in [200, 201, 202]:
-            err_msg = 'GET request to mgmt failed! error: {}'.format(resp.content)
+            err_msg = 'GET request to scylla-manager failed! error: {}'.format(resp.content)
             logger.error(err_msg)
             raise Exception(err_msg)
         try:
@@ -33,7 +33,7 @@ class ScyllaMgmt(object):
     def post(self, path, data):
         resp = requests.post(url=self._url + path, data=json.dumps(data))
         if resp.status_code not in [200, 201]:
-            err_msg = 'POST request to mgmt failed! error: {}'.format(resp.content)
+            err_msg = 'POST request to scylla-manager failed! error: {}'.format(resp.content)
             logger.error(err_msg)
             raise Exception(err_msg)
         return resp
@@ -41,7 +41,7 @@ class ScyllaMgmt(object):
     def put(self, path, data={}):
         resp = requests.put(url=self._url + path, data=json.dumps(data))
         if resp.status_code not in [200, 201]:
-            err_msg = 'PUT request to mgmt failed! error: {}'.format(resp.content)
+            err_msg = 'PUT request to scylla-manager failed! error: {}'.format(resp.content)
             logger.error(err_msg)
             raise Exception(err_msg)
         return resp
@@ -49,7 +49,7 @@ class ScyllaMgmt(object):
     def delete(self, path):
         resp = requests.delete(url=self._url + path)
         if resp.status_code not in [200, 204]:
-            err_msg = 'DELETE request to mgmt failed! error: {}'.format(resp.content)
+            err_msg = 'DELETE request to scylla-manager failed! error: {}'.format(resp.content)
             logger.error(err_msg)
             raise Exception(err_msg)
 
@@ -61,7 +61,7 @@ class ScyllaMgmt(object):
         """
         resp = self.get('clusters', params={'name': cluster_name})
         if not resp:
-            logger.debug('Cluster %s not found in scylla mgmt', cluster_name)
+            logger.debug('Cluster %s not found in scylla-manager', cluster_name)
             return None
         return resp[0]['id']
 
@@ -114,7 +114,9 @@ class ScyllaMgmt(object):
         :param cluster_id: cluster id
         :return: repair tasks dict with unit id as key, task id as value
         """
-        resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair'})
+        resp = []
+        while not resp:
+            resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair'})
         tasks = {}
         for task in resp:
             unit_id = task['properties']['unit_id']
@@ -147,7 +149,7 @@ class ScyllaMgmt(object):
 
         status = True
         # start repair tasks one by one:
-        # currently scylla-mgmt cannot execute tasks simultaneously, only one can run
+        # currently scylla-manager cannot execute tasks simultaneously, only one can run
         logger.info('Start repair tasks per cluster %s keyspace', cluster_id)
         unit_to = timeout / len(tasks)
         start_time = time.time()
