@@ -1096,17 +1096,17 @@ client_encryption_options:
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
-        self.log.debug('Install scylla-mgmt')
+        self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
-        mgmt_user = 'scylla-mgmt'
-        mgmt_conf_tmp = '/tmp/scylla-mgmt.yaml'
-        mgmt_conf_dst = '/etc/scylla-mgmt/scylla-mgmt.yaml'
+        mgmt_user = 'scylla-manager'
+        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
+        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
         self.remoter.run('sudo yum install -y epel-release')
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla.repo -L {}'.format(scylla_repo))
-        self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-mgmt.repo -L {}'.format(scylla_mgmt_repo))
-        self.remoter.run('sudo yum install -y scylla-mgmt')
-        self.remoter.run('echo yes| sudo scyllamgmt_setup')
+        self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-manager.repo -L {}'.format(scylla_mgmt_repo))
+        self.remoter.run('sudo yum install -y scylla-manager')
+        self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
         self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
         self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
@@ -1124,7 +1124,7 @@ client_encryption_options:
             yaml.dump(mgmt_conf, fd, default_flow_style=False)
         self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)
         self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
-        self.remoter.run('sudo systemctl restart scylla-mgmt.service')
+        self.remoter.run('sudo systemctl restart scylla-manager.service')
 
 
 class OpenStackNode(BaseNode):

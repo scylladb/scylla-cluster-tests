@@ -23,12 +23,12 @@ append_conf: 'enable_sstable_data_integrity_check: true'
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'on_demand'
 
-# scylla-mgmt configuration
+# scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: true
 mgmt_port: 10090
 scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/f4a2920f80c4bf178217c2553ad65ad7/centos/scylladb-2017.1.repo'
-scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/mgmt/rpm/unstable/centos/master/latest/scylla-mgmt.repo'
+scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-1.0/latest/scylla-manager.repo'
 
 
 backends: !mux

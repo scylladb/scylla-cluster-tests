@@ -458,7 +458,7 @@ class Nemesis(object):
     def disrupt_mgmt_repair(self):
         self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
-            self.log.warning('Scylla mgmt configuration is not defined!')
+            self.log.warning('Scylla-manager configuration is not defined!')
             return
         server = self.monitoring_set.nodes[0].public_ip_address
         port = self.cluster.params.get('mgmt_port', default=10090)
@@ -474,7 +474,7 @@ class Nemesis(object):
             repair_timeout = 36 * 60 * 60  # 36 hours
             mgmt_client.run_repair(cluster_id, timeout=repair_timeout)
         except Exception as ex:
-            self.log.error('Failed to execute mgmt repair, error: %s', ex)
+            self.log.error('Failed to execute scylla-manager repair, error: %s', ex)
 
 
 def log_time_elapsed_and_status(method):
