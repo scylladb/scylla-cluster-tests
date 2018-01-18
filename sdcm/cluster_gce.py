@@ -127,7 +127,7 @@ class GCECluster(cluster.BaseCluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=['us-east1-b'],
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], add_disks=None, params=None):
+                 node_prefix='node', n_nodes=[10], add_disks=None, params=None, gce_local_ssd_if='NVME'):
 
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
@@ -140,6 +140,7 @@ class GCECluster(cluster.BaseCluster):
         self._gce_region_names = gce_region_names
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
+        self._gce_local_ssd_if = gce_local_ssd_if
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -209,7 +210,7 @@ class GCECluster(cluster.BaseCluster):
                                                               disk_type=self._gce_image_type,
                                                               dc_idx=dc_idx))
             for i in range(self._gce_n_local_ssd):
-                gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
+                gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, interface=self._gce_local_ssd_if, dc_idx=dc_idx))
             if self._add_disks:
                 for disk_type, disk_size in self._add_disks.iteritems():
                     disk_size = int(disk_size)
@@ -258,7 +259,8 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=[10], add_disks=None, params=None, gce_datacenter=None):
+                 user_prefix=None, n_nodes=[10], add_disks=None, params=None,
+                 gce_datacenter=None, gce_local_ssd_if=None):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
@@ -276,7 +278,8 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                n_nodes=n_nodes,
                                                add_disks=add_disks,
                                                params=params,
-                                               gce_region_names=gce_datacenter)
+                                               gce_region_names=gce_datacenter,
+                                               gce_local_ssd_if=gce_local_ssd_if)
         self.nemesis = []
         self.nemesis_threads = []
         self.termination_event = threading.Event()
@@ -330,10 +333,10 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
 
         if self._gce_n_local_ssd:
             # detect local-ssd disks
-            result = node.remoter.run('ls /dev/nvme0n*')
+            result = node.remoter.run('ls /dev/nvme0n*', ignore_status=True)
             disks_str = ",".join(re.findall('/dev/nvme0n\w+', result.stdout))
-        if self._add_disks and ('pd-ssd' in self._add_disks and int(self._add_disks['pd-ssd'])) or\
-                ('pd-standard' in self._add_disks and int(self._add_disks['pd-standard'])):
+        if (self._add_disks and ('pd-ssd' in self._add_disks and int(self._add_disks['pd-ssd'])) or\
+                ('pd-standard' in self._add_disks and int(self._add_disks['pd-standard']))) or not disks_str:
             # detect pd-ssd and pd-standard disks
             result = node.remoter.run('ls /dev/sd[b-z]')
             disks_str = ",".join(re.findall('/dev/sd\w+', result.stdout))
@@ -403,7 +406,8 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10, add_disks=None, params=None):
+                 user_prefix=None, n_nodes=10, add_disks=None, params=None,
+                 gce_local_ssd_if=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
         super(LoaderSetGCE, self).__init__(gce_image=gce_image,
@@ -419,7 +423,8 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
                                            node_prefix=node_prefix,
                                            n_nodes=n_nodes,
                                            add_disks=add_disks,
-                                           params=params)
+                                           params=params,
+                                           gce_local_ssd_if=gce_local_ssd_if)
         self.scylla_repo = scylla_repo
 
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -468,7 +473,8 @@ class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10, add_disks=None, params=None):
+                 user_prefix=None, n_nodes=10, add_disks=None, params=None,
+                 gce_local_ssd_if=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
         super(MonitorSetGCE, self).__init__(gce_image=gce_image,
@@ -484,7 +490,8 @@ class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
                                             node_prefix=node_prefix,
                                             n_nodes=n_nodes,
                                             add_disks=add_disks,
-                                            params=params)
+                                            params=params,
+                                            gce_local_ssd_if=gce_local_ssd_if)
         self.scylla_repo = scylla_repo
 
     def destroy(self):
