@@ -297,9 +297,9 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
         node.remoter.run('sudo yum clean all')
         result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
         if result.exit_status == 0:
-            node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel')
+            node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
         else:
-            node.remoter.run('sudo yum update -y --skip-broken')
+            node.remoter.run('sudo yum update -y --skip-broken', retry=3)
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
         node.remoter.run('sudo curl %s -o %s' %
