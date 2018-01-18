@@ -52,9 +52,17 @@ def get_monitor_version(full_version, clone=False):
     :return: dashboard version (eg: 1.7, 2.0, master)
     """
     if not os.path.exists('scylla-grafana-monitoring/') or clone:
+        # clean old files
         process.run('rm -rf scylla-grafana-monitoring/')
+        process.run('rm -rf data_dir/grafana')
         process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
-        process.run('cp -r scylla-grafana-monitoring/grafana data_dir/')
+        # convert template to final dashboard
+        for i in glob.glob('scylla-grafana-monitoring/grafana/*.*.template.json'):
+            process.run('cd scylla-grafana-monitoring/ && mkdir -p grafana/build && pwd && ./make_dashboards.py -t grafana/types.json -d %s'
+                        % i.replace('scylla-grafana-monitoring', '.'), shell=True, verbose=True)
+        # copy dashboard to data_dir
+        process.run('cp -r scylla-grafana-monitoring/grafana data_dir/', shell=True)
+        process.run('cp scylla-grafana-monitoring/grafana/build/* data_dir/grafana/', shell=True)
 
     if not full_version or '666.development' in full_version:
         ret = 'master'
