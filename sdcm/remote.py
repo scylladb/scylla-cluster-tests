@@ -866,7 +866,7 @@ class Remote(BaseRemote):
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None, watch_stdout_pattern=None):
+            args=None, log_file=None, watch_stdout_pattern=None, retry=0):
         """
         Run a shell command on the remoter object.
 
@@ -885,24 +885,30 @@ class Remote(BaseRemote):
         :param watch_stdout_pattern: Mark a timestamp (time.time()) on which
                 the given stdout pattern appeared first. This will be
                 available on result.stdout_pattern_found_at
+        :param retry: unconditionally retry times if execution raise exception.
         :return: avocado.utils.process.CmdResult object with the result of
                 the remote command executed.
         """
         if args is None:
             args = ()
-        if verbose:
-            self.log.debug("Running '%s'", cmd)
+        for i in range(retry + 1):
+            try:
+                if verbose:
+                    self.log.debug("Running '%s'", cmd)
 
-        # Start a master SSH connection if necessary.
-        self.start_master_ssh()
+                # Start a master SSH connection if necessary.
+                self.start_master_ssh()
 
-        env = " ".join("=".join(pair) for pair in self.env.iteritems())
-        return self._run(cmd=cmd, timeout=timeout, verbose=verbose,
-                         ignore_status=ignore_status,
-                         connect_timeout=connect_timeout,
-                         env=env, options=options, args=args,
-                         log_file=log_file,
-                         watch_stdout_pattern=watch_stdout_pattern)
+                env = " ".join("=".join(pair) for pair in self.env.iteritems())
+                return self._run(cmd=cmd, timeout=timeout, verbose=verbose,
+                                 ignore_status=ignore_status,
+                                 connect_timeout=connect_timeout,
+                                 env=env, options=options, args=args,
+                                 log_file=log_file,
+                                 watch_stdout_pattern=watch_stdout_pattern)
+            except Exception:
+                if i == retry:
+                    raise
 
     def run_output_check(self, cmd, timeout=None, ignore_status=False,
                          stdout_ok_regexp=None, stdout_err_regexp=None,
