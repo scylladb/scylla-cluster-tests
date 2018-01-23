@@ -393,7 +393,10 @@ LoadPlugin processes
         # Disable SELinux to allow the unix socket plugin to work
         self.node.remoter.run('sudo setenforce 0', ignore_status=True)
         self.node.remoter.run('sudo systemctl enable collectd.service')
-        self.node.remoter.run('sudo systemctl restart collectd.service')
+        if self.node.is_docker():
+            self.node.remoter.run('sudo /usr/sbin/collectd')
+        else:
+            self.node.remoter.run('sudo systemctl restart collectd.service')
 
     def collectd_exporter_setup(self):
         systemd_unit = """[Unit]
@@ -419,7 +422,11 @@ WantedBy=multi-user.target
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
             self.node.remoter.run('sudo mv %s %s' %
                                   (tmp_path_remote, system_path_remote))
-            self.node.remoter.run('sudo systemctl start collectd-exporter.service')
+
+            if self.node.is_docker():
+                self.node.remoter.run('sudo {} -collectd.listen-address=:65534 &'.format(self.collectd_exporter_path))
+            else:
+                self.node.remoter.run('sudo systemctl start collectd-exporter.service')
         finally:
             shutil.rmtree(tmp_dir_exporter)
 
