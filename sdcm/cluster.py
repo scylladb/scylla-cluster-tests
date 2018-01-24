@@ -1215,6 +1215,11 @@ class BaseCluster(object):
 
 class BaseScyllaCluster(object):
 
+    def __init__(self, *args, **kwargs):
+        self.termination_event = threading.Event()
+        self.nemesis = []
+        self.nemesis_threads = []
+
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
             node = self.nodes[0]
@@ -1456,7 +1461,6 @@ class BaseScyllaCluster(object):
 
     def start_nemesis(self, interval=30):
         self.log.debug('Start nemesis begin')
-        self.termination_event = threading.Event()
         for nemesis in self.nemesis:
             nemesis.set_termination_event(self.termination_event)
             nemesis.set_target_node()

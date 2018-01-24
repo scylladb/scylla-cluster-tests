@@ -342,9 +342,6 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
-        self.nemesis = []
-        self.nemesis_threads = []
-        self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
@@ -455,9 +452,6 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                n_nodes=n_nodes,
                                                params=params)
         self.collectd_setup = CassandraCollectdSetup()
-        self.nemesis = []
-        self.nemesis_threads = []
-        self.termination_event = threading.Event()
 
     def get_seed_nodes(self):
         node = self.nodes[0]
