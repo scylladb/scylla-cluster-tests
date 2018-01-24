@@ -1,4 +1,6 @@
-FROM scylladb/scylla
+ARG SOURCE_IMAGE
+
+FROM ${SOURCE_IMAGE}
 
 # Install sshd, sudo and collectd:
 RUN yum -y update && \
@@ -26,4 +28,5 @@ EXPOSE 22
 # Supervisord configuration:
 ADD etc/sshd.conf /etc/supervisord.conf.d/sshd.conf
 ADD etc/collectd.conf /etc/supervisord.conf.d/collectd.conf
+ADD etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
 

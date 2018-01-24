@@ -1,6 +1,7 @@
 import json
 import time
 import logging
+import os
 from avocado.utils import process
 
 import cluster
@@ -94,9 +95,16 @@ class DockerCluster(cluster.BaseCluster):
         self._image = kwargs.get('docker_image', 'scylladb/scylla-nightly')
         self.nodes = []
         self.credentials = kwargs.get('credentials')
-        # self._update_image()    # TODO: uncomment
+        self._node_img_tag = 'scylla-sct-img'
+        self._context_path = os.path.join(os.path.dirname(__file__), '../docker/scylla-sct')
+        self._create_node_image()
         super(DockerCluster, self).__init__(node_prefix=kwargs.get('node_prefix'),
-                                            n_nodes=kwargs.get('n_nodes'), params=kwargs.get('params'))
+                                            n_nodes=kwargs.get('n_nodes'),
+                                            params=kwargs.get('params'))
+
+    def _create_node_image(self):
+        self._update_image()
+        _cmd('build --build-arg SOURCE_IMAGE={} -t {} {}'.format(self._image, self._node_img_tag, self._context_path))
 
     def _clean_old_images(self):
         images = _cmd('images -f "dangling=true" -q')
@@ -106,13 +114,13 @@ class DockerCluster(cluster.BaseCluster):
     def _update_image(self):
         logger.debug('update scylla image')
         _cmd('pull {}'.format(self._image), timeout=90)
-        self.clean_old_images()
+        self._clean_old_images()
 
     def _create_node(self, node_name, is_seed=False, seed_ip=None):
         if is_seed:
-            _cmd('run --name {} -d {}'.format(node_name, self._image))
+            _cmd('run --name {} -d {}'.format(node_name, self._node_img_tag))
         else:
-            _cmd('run --name {} -d {} --seeds="{}"'.format(node_name, self._image, seed_ip))
+            _cmd('run --name {} -d {} --seeds="{}"'.format(node_name, self._node_img_tag, seed_ip))
         return DockerNode(node_name,
                           credentials=self.credentials[0],
                           base_logdir=self.logdir)
