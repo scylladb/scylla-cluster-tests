@@ -1102,7 +1102,7 @@ client_encryption_options:
         mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
         mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
-        self.remoter.run('sudo yum install -y epel-release')
+        self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla.repo -L {}'.format(scylla_repo))
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-manager.repo -L {}'.format(scylla_mgmt_repo))
         self.remoter.run('sudo yum install -y scylla-manager')

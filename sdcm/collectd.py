@@ -426,11 +426,11 @@ WantedBy=multi-user.target
     def install(self, node):
         self.node = node
 
-        self.node.remoter.run('sudo yum install -y epel-release')
+        self.node.remoter.run('sudo yum install -y epel-release', retry=3)
         self.node.remoter.run('sudo yum upgrade ca-certificates -y '
                               '--disablerepo=epel',
                               ignore_status=True,
-                              verbose=True)
+                              verbose=True, retry=3)
         self.node.remoter.run('sudo yum install -y collectd')
         self._setup_collectd()
         self._set_exporter_path()
