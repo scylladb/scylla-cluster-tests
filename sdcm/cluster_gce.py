@@ -311,6 +311,8 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
         node.remoter.run('sudo curl %s -o %s' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
+        node.remoter.run('sudo yum downgrade -y https://kojipkgs.fedoraproject.org//packages/'
+                         'yaml-cpp/0.5.1/6.el7/x86_64/yaml-cpp-0.5.1-6.el7.x86_64.rpm')
 
         endpoint_snitch = ''
         if len(self.datacenter) > 1:
