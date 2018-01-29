@@ -360,6 +360,8 @@ class ClusterTester(Test):
             loader_info['disk_size'] = self.params.get('gce_root_disk_size_loader')
         if loader_info['n_local_ssd'] is None:
             loader_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_loader')
+        if db_info['local_ssd_if'] is None:
+            db_info['local_ssd_if'] = self.params.get('gce_local_ssd_if_loader')
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -381,6 +383,8 @@ class ClusterTester(Test):
             db_info['disk_size'] = self.params.get('gce_root_disk_size_db')
         if db_info['n_local_ssd'] is None:
             db_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_db')
+        if db_info['local_ssd_if'] is None:
+            db_info['local_ssd_if'] = self.params.get('gce_local_ssd_if_db')
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
@@ -391,6 +395,8 @@ class ClusterTester(Test):
             monitor_info['disk_size'] = self.params.get('gce_root_disk_size_monitor')
         if monitor_info['n_local_ssd'] is None:
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
+        if db_info['local_ssd_if'] is None:
+            db_info['local_ssd_if'] = self.params.get('gce_local_ssd_if_monitor')
 
         user_prefix = self.params.get('user_prefix', None)
         service_account_email = self.params.get('gce_service_account_email', None)
@@ -424,7 +430,8 @@ class ClusterTester(Test):
                                            n_nodes=db_info['n_nodes'],
                                            add_disks=cluster_additional_disks,
                                            params=self.params,
-                                           gce_datacenter=gce_datacenter)
+                                           gce_datacenter=gce_datacenter,
+                                           gce_local_ssd_if=db_info['local_ssd_if'])
 
         scylla_repo = get_data_path('scylla.repo')
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}
@@ -441,7 +448,8 @@ class ClusterTester(Test):
                                     user_prefix=user_prefix,
                                     n_nodes=loader_info['n_nodes'],
                                     add_disks=loader_additional_disks,
-                                    params=self.params)
+                                    params=self.params,
+                                    gce_local_ssd_if=loader_info['local_ssd_if'])
 
         if monitor_info['n_nodes'] > 0:
             monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor', default=0)}
@@ -458,7 +466,8 @@ class ClusterTester(Test):
                                           user_prefix=user_prefix,
                                           n_nodes=monitor_info['n_nodes'],
                                           add_disks=monitor_additional_disks,
-                                          params=self.params)
+                                          params=self.params,
+                                          gce_local_ssd_if=monitor_info['local_ssd_if'])
         else:
             self.monitors = NoMonitorSet()
 
@@ -638,14 +647,14 @@ class ClusterTester(Test):
                        monitor_info=None):
         if loader_info is None:
             loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                           'device_mappings': None}
+                           'device_mappings': None, 'local_ssd_if': None}
         if db_info is None:
             db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                       'device_mappings': None}
+                       'device_mappings': None, 'local_ssd_if': None}
 
         if monitor_info is None:
             monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                            'device_mappings': None}
+                            'device_mappings': None, 'local_ssd_if': None}
 
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend is None:
