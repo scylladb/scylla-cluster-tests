@@ -277,9 +277,6 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                add_disks=add_disks,
                                                params=params,
                                                gce_region_names=gce_datacenter)
-        self.nemesis = []
-        self.nemesis_threads = []
-        self.termination_event = threading.Event()
         self.seed_nodes_private_ips = None
         self.version = '2.1'
         self._seed_node_rebooted = False

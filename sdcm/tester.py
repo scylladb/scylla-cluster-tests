@@ -57,6 +57,7 @@ from .cluster_aws import MonitorSetAWS
 from .data_path import get_data_path
 from . import es
 from results_analyze import ResultsAnalyzer
+from . import docker
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -245,7 +246,7 @@ class ClusterTester(Test):
         self.db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        if self.params.get('cluster_backend') != 'gce' and len(self.db_cluster.datacenter) > 1:
+        if self.params.get('cluster_backend') not in ['gce', 'docker'] and len(self.db_cluster.datacenter) > 1:
             ip_addr_attr = 'public_ip_address'
         else:
             ip_addr_attr = 'private_ip_address'
@@ -633,6 +634,28 @@ class ClusterTester(Test):
         else:
             self.monitors = NoMonitorSet()
 
+    def get_cluster_docker(self):
+        user_prefix = self.params.get('user_prefix', None)
+        docker_image = self.params.get('docker_image', None)
+        n_nodes = self.params.get('n_db_nodes')
+        user_credentials = self.params.get('user_credentials_path', None)
+        self.credentials.append(GCECredentials(key_file=user_credentials))
+        self.db_cluster = docker.ScyllaDockerCluster(docker_image=docker_image,
+                                                     n_nodes=[n_nodes],
+                                                     user_prefix=user_prefix,
+                                                     credentials=self.credentials,
+                                                     params=self.params)
+        self.loaders = docker.LoaderSetDocker(docker_image=docker_image,
+                                              n_nodes=self.params.get('n_loaders'),
+                                              user_prefix=user_prefix,
+                                              credentials=self.credentials,
+                                              params=self.params)
+        self.monitors = docker.MonitorSetDocker(docker_image=docker_image,
+                                                n_nodes=self.params.get('n_monitor_nodes'),
+                                                user_prefix=user_prefix,
+                                                credentials=self.credentials,
+                                                params=self.params)
+
     @clean_aws_resources
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -663,6 +686,9 @@ class ClusterTester(Test):
         elif cluster_backend == 'gce':
             self.get_cluster_gce(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
+        elif cluster_backend == 'docker':
+            self.get_cluster_docker()
+
         seeds_num = self.params.get('seeds_num', default=1)
         for i in range(seeds_num):
             self.db_cluster.nodes[i].is_seed = True

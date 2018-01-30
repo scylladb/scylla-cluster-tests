@@ -276,6 +276,8 @@ class BaseNode(object):
         except OSError:
             self.logdir = os.path.join(base_logdir, self.name)
 
+        self._public_ip_address = None
+        self._private_ip_address = None
         self._ssh_ip_mapping = {'public': self.public_ip_address,
                                 'private': self.private_ip_address}
         ssh_login_info['hostname'] = self._ssh_ip_mapping[IP_SSH_CONNECTIONS]
@@ -289,8 +291,6 @@ class BaseNode(object):
         self._journal_thread = None
         self.n_coredumps = 0
         self._backtrace_thread = None
-        self._public_ip_address = None
-        self._private_ip_address = None
         self._prometheus_thread = None
         self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
@@ -312,6 +312,9 @@ class BaseNode(object):
         self.is_addition = False
         self.scylla_version = ''
         self.is_enterprise = None
+
+    def is_docker(self):
+        return self.__class__.__name__ == 'DockerNode'
 
     def scylla_pkg(self):
         if self.is_enterprise is None:
@@ -447,8 +450,11 @@ class BaseNode(object):
         self.remoter.run('sudo mv /tmp/grafana.ini /etc/grafana/grafana.ini')
         self.remoter.run('sudo chmod 666 /etc/grafana/grafana.ini')
 
-        self.remoter.run('sudo systemctl daemon-reload')
-        self.remoter.run('sudo systemctl start grafana-server')
+        if self.is_docker():
+            self.remoter.run('sudo service grafana-server start')
+        else:
+            self.remoter.run('sudo systemctl daemon-reload')
+            self.remoter.run('sudo systemctl start grafana-server')
         self.remoter.run('sudo systemctl enable grafana-server.service')
 
         def _register_grafana_json(json_filename, url):
@@ -604,7 +610,11 @@ WantedBy=multi-user.target
             self.remoter.run('sudo mv %s %s' %
                              (self.prometheus_service_path_tmp,
                               self.prometheus_service_path))
-            self.remoter.run('sudo systemctl start prometheus.service')
+            if self.is_docker():
+                self.remoter.run('sudo %s -config.file %s -storage.local.path %s &' %
+                                 (self.prometheus_path, self.prometheus_custom_cfg_path, self.prometheus_data_dir))
+            else:
+                self.remoter.run('sudo systemctl start prometheus.service')
         finally:
             shutil.rmtree(tmp_dir_prom)
 
@@ -952,7 +962,9 @@ WantedBy=multi-user.target
         cmd = cmd.format(datacenters[self.dc_idx])
         self.remoter.run(cmd)
 
-    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None, yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None, server_encrypt=None, client_encrypt=None, append_conf=None):
+    def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
+                     yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None,
+                     server_encrypt=None, client_encrypt=None, append_conf=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1059,8 +1071,17 @@ client_encryption_options:
         self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla.repo -L {}'.format(scylla_repo))
         self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-manager.repo -L {}'.format(scylla_mgmt_repo))
+        if self.is_docker():
+            self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
+                             ' scylla-server scylla-conf')
         self.remoter.run('sudo yum install -y scylla-manager')
-        self.remoter.run('echo yes| sudo scyllamgr_setup')
+        if self.is_docker():
+            try:
+                self.remoter.run('echo no| sudo scyllamgr_setup')
+            except Exception as ex:
+                pass
+        else:
+            self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
         self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
         self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
@@ -1078,7 +1099,10 @@ client_encryption_options:
             yaml.dump(mgmt_conf, fd, default_flow_style=False)
         self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)
         self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
-        self.remoter.run('sudo systemctl restart scylla-manager.service')
+        if self.is_docker():
+            self.remoter.run('sudo supervisorctl start scylla-manager')
+        else:
+            self.remoter.run('sudo systemctl restart scylla-manager.service')
 
 
 
@@ -1190,6 +1214,11 @@ class BaseCluster(object):
 
 
 class BaseScyllaCluster(object):
+
+    def __init__(self, *args, **kwargs):
+        self.termination_event = threading.Event()
+        self.nemesis = []
+        self.nemesis_threads = []
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -1432,7 +1461,6 @@ class BaseScyllaCluster(object):
 
     def start_nemesis(self, interval=30):
         self.log.debug('Start nemesis begin')
-        self.termination_event = threading.Event()
         for nemesis in self.nemesis:
             nemesis.set_termination_event(self.termination_event)
             nemesis.set_target_node()
@@ -1507,6 +1535,7 @@ class BaseLoaderSet(object):
 
     def __init__(self, *args, **kwargs):
         self._loader_queue = []
+        self.params = kwargs.get('params', {})
 
     def wait_for_init(self, verbose=False, db_node_address=None):
         queue = Queue.Queue()
