@@ -156,11 +156,14 @@ class ResultsAnalyzer(object):
         for tr in tests_filtered['hits']['hits']:
             if tr['_id'] == test_id:  # filter the current test
                 continue
+            if 'versions' not in tr['_source'] or 'scylla-server' not in tr['_source']['versions']:
+                logger.error('Skip test %s: scylla version is not found', tr['_id'])
+                continue
+            if 'results' not in tr['_source'] or 'stats_average' not in tr['_source']['results']:
+                logger.error('Skip test %s: no test results found', tr['_id'])
+                continue
             version = tr['_source']['versions']['scylla-server']['version']
             version_date = tr['_source']['versions']['scylla-server']['date']
-            if 'results' not in tr['_source'] or 'stats_average' not in tr['_source']['results']:
-                logger.error('No test results found, test_id: %s', tr['_id'])
-                continue
             stats = self._remove_non_stat_keys(tr['_source']['results']['stats_average'])
             if not stats:
                 continue
