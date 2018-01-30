@@ -15,6 +15,7 @@
 
 import os
 import re
+import time
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -41,21 +42,37 @@ class LongevityTest(ClusterTester):
                                     test_type=self.test_type,
                                     test_id=self.test_id)
         stress_queue = list()
+        write_queue = list()
 
         # prepare write workload
         prepare_write_cmd = self.params.get('prepare_write_cmd')
+        keyspace_num = self.params.get('keyspace_num', default=1)
+        pre_create_schema = self.params.get('pre_create_schema', default=False)
+
         if prepare_write_cmd:
-            write_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd)
+            # If the test load is too heavy for one lader (e.g. many keyspaces), the load should be splitted evenly
+            # across the loaders (round_robin).
+            if pre_create_schema:
+                self._pre_create_schema()
+            if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
+                self.log.debug("Using round_robin for multiple Keyspaces...")
+                for i in xrange(1, keyspace_num):
+                    keyspace_name = 'keyspace{}'.format(i)
+                    write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, keyspace_name=keyspace_name))
+                    time.sleep(5)
+            else:
+                write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, keyspace_num=keyspace_num))
             self.db_cluster.wait_total_space_used_per_node()
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-            self.verify_stress_thread(queue=write_queue)
+            for stress in write_queue:
+                self.verify_stress_thread(queue=stress)
 
         stress_cmds = self.params.get('stress_cmd')
         stress_multiplier = self.params.get('stress_multiplier', default=1)
         if stress_multiplier > 1:
             stress_cmds *= stress_multiplier
         for stress_cmd in stress_cmds:
-            params = {'stress_cmd': stress_cmd}
+            params = {'stress_cmd': stress_cmd, 'keyspace_num': keyspace_num}
             if 'counter_' in stress_cmd:
                 self._create_counter_table()
             if 'profile' in stress_cmd:
@@ -113,6 +130,24 @@ class LongevityTest(ClusterTester):
                 AND read_repair_chance = 0.0
                 AND speculative_retry = '99.0PERCENTILE';
         """)
+
+    def _pre_create_schema(self):
+        """
+        For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
+        cassandra-stress.
+        """
+        node = self.db_cluster.nodes[0]
+        session = self.cql_connection_patient(node)
+
+        keyspace_num = self.params.get('keyspace_num', default=1)
+        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
+
+        for i in xrange(1, keyspace_num):
+            keyspace_name = 'keyspace{}'.format(i)
+            self.create_ks(session, keyspace_name, rf=3)
+            self.log.debug('{} Created'.format(keyspace_name))
+            self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
+                           columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'})
 
 
 if __name__ == '__main__':
