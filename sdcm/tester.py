@@ -1157,7 +1157,9 @@ class ClusterTester(Test):
                 self.log.error('Failed to update test stats: test_id: %s, error: %s', self.test_id, ex)
 
     def check_regression(self):
-        ra = ResultsAnalyzer(index=self.test_index)
+        ra = ResultsAnalyzer(index=self.test_index,
+                             send_email=self.params.get('send_email', default=True),
+                             email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
             ra.check_regression(self.test_id, is_gce)

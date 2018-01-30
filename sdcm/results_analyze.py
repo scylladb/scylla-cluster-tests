@@ -25,10 +25,12 @@ class ResultsAnalyzer(object):
         self._index = kwargs.get('index', self._conf.get('es_index'))
         self._es = elasticsearch.Elasticsearch([self._url])
         self._limit = 1000
+        self._send_email = kwargs.get('send_email', True)
+        self._email_recipients = kwargs.get('email_recipients', None)
 
     def _get_conf(self, conf_file):
         with open(conf_file) as cf:
-            return yaml.load(cf)
+            return yaml.safe_load(cf)
 
     def _remove_non_stat_keys(self, stats):
         for non_stat_key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
@@ -203,9 +205,10 @@ class ResultsAnalyzer(object):
         return html
 
     def send_email(self, subject, content, html=True):
-        if self._conf['email']['send'] and self._conf['email']['recipients']:
+        if self._send_email and self._email_recipients:
+            logger.debug('Send email to {}'.format(self._email_recipients))
             content = self.render_to_html(content)
             em = Email(self._conf['email']['server'],
-                             self._conf['email']['sender'],
-                             self._conf['email']['recipients'])
+                       self._conf['email']['sender'],
+                       self._email_recipients)
             em.send(subject, content, html)

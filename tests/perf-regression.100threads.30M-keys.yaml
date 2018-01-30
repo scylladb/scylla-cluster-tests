@@ -12,6 +12,10 @@ space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
 #ip_ssh_connections: 'private'
 
+# email definitions to send regression report
+send_email: true
+email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com']
+
 backends: !mux
     gce: !mux
         cluster_backend: 'gce'
