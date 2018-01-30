@@ -185,6 +185,29 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
 
+    def test_latency_read(self):
+        """
+        Test steps:
+
+        1.
+        """
+
+        base_cmd_w = self.params.get('prepare_write_cmd')
+        base_cmd_r = self.params.get('stress_cmd_m')
+
+        self.create_test_stats()
+        # run a write workload as a preparation
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, prefix='preload-')
+        self.get_stress_results(queue=stress_queue, store_results=False)
+
+        # run a mixed workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.update_test_details()
+        self.display_results(results, test_name='test_mixed')
+        self.check_regression()
+
     def test_uniform_counter_update_bench(self):
         """
         Test steps:
