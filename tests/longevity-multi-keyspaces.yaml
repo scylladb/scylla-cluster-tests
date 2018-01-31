@@ -9,7 +9,7 @@ nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 user_prefix: 'longevity-1000-keyspaces-VERSION'
 failure_post_behavior: keep
-space_node_threshold: 64424500
+space_node_threshold: 6442450
 ip_ssh_connections: 'private'
 experimental: 'true'
 round_robin: 'true'
