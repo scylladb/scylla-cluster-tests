@@ -47,6 +47,7 @@ class LongevityTest(ClusterTester):
             if 'profile' in params:
                 del params['profile']
 
+        return stress_queue
 
     def _parse_stress_cmd(self, stress_cmd, params):
         # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
@@ -58,6 +59,8 @@ class LongevityTest(ClusterTester):
             cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
             cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
             params.update({'profile': cs_profile})
+
+        return params
 
     default_params = {'timeout': 650000}
 
@@ -109,12 +112,6 @@ class LongevityTest(ClusterTester):
             for stress in write_queue:
                 self.verify_stress_thread(queue=stress)
 
-        stress_cmds = self.params.get('stress_cmd')
-        # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
-        stress_multiplier = self.params.get('stress_multiplier', default=1)
-        if stress_multiplier > 1:
-            stress_cmds *= stress_multiplier
-
         # Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
         if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
@@ -124,37 +121,12 @@ class LongevityTest(ClusterTester):
 
                     self._run_all_stress_cmds(stress_queue, params)
 
-                    # Another option (option 2) - In case the above won't work for any reason...
-                    # for stress_cmd in stress_cmds:
-                    #     params = {'stress_cmd': stress_cmd, 'keyspace_name': keyspace_name}
-                    #     self._parse_stress_cmd(stress_cmd, params)
-                    #
-                    #     # Run all stress commands
-                    #     self.log.debug('stress cmd: {}'.format(stress_cmd))
-                    #     stress_queue.append(self.run_stress_thread(**params))
-                    #
-                    #     # Remove "user profile" param for the next command
-                    #     if 'profile' in params:
-                    #         del params['profile']
-
         # The old method when we run all stress_cmds for all keyspace on the same loader
         else:
                 params = {'keyspace_num': keyspace_num}
                 self._run_all_stress_cmds(stress_queue, params)
-                # MATCH to option 2
-                # for stress_cmd in stress_cmds:
-                #         params = {'stress_cmd': stress_cmd, 'keyspace_num': keyspace_num}
-                #         self._parse_stress_cmd(stress_cmd, params)
-                #
-                #         # Run all stress commands
-                #         self.log.debug('stress cmd: {}'.format(stress_cmd))
-                #         stress_queue.append(self.run_stress_thread(**params))
-                #
-                #         # Remove "user profile" param for the next command
-                #         if 'profile' in params:
-                #             del params['profile']
 
-        if not prepare_write_cmd:
+        if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
             self.db_cluster.wait_total_space_used_per_node()
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 

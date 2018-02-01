@@ -1,23 +1,21 @@
 test_duration: 3600
 prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=48h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..10000000 -log interval=30"
 stress_cmd: ["cassandra-stress read cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..10000000 -log interval=10"]
-#keyspace_num: 1000
-#n_db_nodes: 4
-#n_loaders: 5
-keyspace_num: 10
-n_db_nodes: 3
-n_loaders: 2
-####
+keyspace_num: 1000
+n_db_nodes: 4
+n_loaders: 5
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 user_prefix: 'longevity-1000-keyspaces-VERSION'
 failure_post_behavior: keep
-space_node_threshold: 64424500
+space_node_threshold: 6442450
 ip_ssh_connections: 'private'
 experimental: 'true'
 round_robin: 'true'
 pre_create_schema: True
+nemesis_during_prepare: 'true'
+instance_provision: 'spot_low_price'
 
 
 backends: !mux
@@ -52,7 +50,7 @@ backends: !mux
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-d934e980'
+            subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'AMI_ID'
             ami_id_loader: 'AMI_ID'
             ami_id_monitor: 'AMI_ID'
