@@ -1,9 +1,13 @@
 test_duration: 3600
 prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=48h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..10000000 -log interval=30"
 stress_cmd: ["cassandra-stress read cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..10000000 -log interval=10"]
-keyspace_num: 1000
-n_db_nodes: 4
-n_loaders: 5
+#keyspace_num: 1000
+#n_db_nodes: 4
+#n_loaders: 5
+keyspace_num: 10
+n_db_nodes: 3
+n_loaders: 2
+####
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
@@ -55,6 +59,11 @@ backends: !mux
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
+
+    docker: !mux
+        cluster_backend: 'docker'
+        docker_image: 'scylladb/scylla'
+        user_credentials_path: '~/.ssh/scylla-test'
 
 databases: !mux
     cassandra:
