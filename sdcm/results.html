@@ -8,26 +8,80 @@
         .red    { color: red; }
         .green  { color: green; }
         .notice { font-size:120%; }
+        .small { font-size:80%; }
     </style>
 </head>
 
 <body>
-    {% for cmp_res in res_list %}
-        <h2>{{ cmp_res.test_type }}</h2>
-        <h3 class="blue">Compare {{ cmp_res.version_src }} to {{ cmp_res.version_dst }}</h3>
-        {% for param, param_res in cmp_res.res.iteritems() %}
-            <div>
-                <span class="blue">{{ param }}: </span>
-                <span class="notice fbold">{{ param_res.delta_type }} </span>&nbsp;
-                <span class="notice fbold">{{ param_res.percent }} </span>&nbsp;
-                <span>{{ param_res.comment }} </span>&nbsp;
-                {% if param_res.status == 'Regression' %}
-                    <span class="red fbold"> {{ param_res.status }}</span>
-                {% else %}
-                    <span class="green fbold"> {{ param_res.status }}</span>
-                {% endif %}
-            </div>
+    <h3>Test: {{ results.test_type }}</h3>
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ results.test_id }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ results.test_version }}</span>
+    </h3>
+
+    <table border="1" style="width:100%">
+        <tr>
+            <th>Version compared to</th>
+            <th>Op rate</th>
+            <th>Latency mean</th>
+            <th>Latency 99th percentile</th>
+        </tr>
+        {% for cmp_res in results.res_list %}
+        <tr>
+            <td>
+                <span class="blue fbold">{{ cmp_res.version_dst }}</span>
+            </td>
+            <td>
+                <div>
+                    <span> {{ cmp_res.res.op_rate.val }} - </span>
+                    {% if cmp_res.res.op_rate.status == 'Regression' %}
+                        <span class="red fbold">
+                    {% else %}
+                        <span class="green fbold">
+                    {% endif %}
+                            {{ cmp_res.res.op_rate.percent }} {{ cmp_res.res.op_rate.status }}
+                        </span></span>
+                    <span class="small blue"> vs </span>
+                    <span>{{ cmp_res.res.op_rate.best_val }}</span>
+                    <span class="blue"> [{{ cmp_res.res.op_rate.best_id }}] </span>
+                </div>
+            </td>
+            <td>
+                <div>
+                    <span> {{ cmp_res.res.latency_mean.val }} - </span>
+                    {% if cmp_res.res.latency_mean.status == 'Regression' %}
+                        <span class="red fbold">
+                    {% else %}
+                        <span class="green fbold">
+                    {% endif %}
+                            {{ cmp_res.res.latency_mean.percent }} {{ cmp_res.res.latency_mean.status }}
+                        </span></span>
+                    <span class="small blue"> vs </span>
+                    <span>{{ cmp_res.res.latency_mean.best_val }}</span>
+                    <span class="blue"> [{{ cmp_res.res.latency_mean.best_id }}] </span>
+                </div>
+            </td>
+            <td>
+                <div>
+                    <span> {{ cmp_res.res.latency_99th_percentile.val }} - </span>
+                    {% if cmp_res.res.latency_99th_percentile.status == 'Regression' %}
+                        <span class="red fbold">
+                    {% else %}
+                        <span class="green fbold">
+                    {% endif %}
+                            {{ cmp_res.res.latency_99th_percentile.percent }} {{ cmp_res.res.latency_99th_percentile.status }}
+                        </span></span>
+                    <span class="small blue"> vs </span>
+                    <span>{{ cmp_res.res.latency_99th_percentile.best_val }}</span>
+                    <span class="blue"> [{{ cmp_res.res.latency_99th_percentile.best_id }}] </span>
+                </div>
+            </td>
+        </tr>
         {% endfor %}
-    {% endfor %}
+    </table>
 </body>
 </html>
