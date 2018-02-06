@@ -1570,6 +1570,7 @@ class BaseLoaderSet(object):
                 node.remoter.run("source $HOME/.bashrc")
                 node.remoter.run("go get github.com/pdziepak/scylla-bench")
 
+
             queue.put(node)
             queue.task_done()
 
@@ -1596,9 +1597,12 @@ class BaseLoaderSet(object):
             self._loader_queue = [node for node in self.nodes]
         return self._loader_queue.pop(0)
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, profile=None,
-                          node_list=[]):
-        stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
+    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
+                          profile=None, node_list=[]):
+        if keyspace_name:
+            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
+        else:
+            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
@@ -1666,6 +1670,7 @@ class BaseLoaderSet(object):
             # cancel stress_num
             stress_num = 1
             loaders = [self.get_loader()]
+            self.log.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
         else:
             loaders = self.nodes
 
