@@ -712,7 +712,7 @@ class ClusterTester(Test):
 
     @clean_aws_resources
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
-                          keyspace_name=''):
+                          keyspace_name='', round_robin=False):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
@@ -724,7 +724,8 @@ class ClusterTester(Test):
                                               keyspace_num=keyspace_num,
                                               keyspace_name=keyspace_name,
                                               profile=profile,
-                                              node_list=self.db_cluster.nodes)
+                                              node_list=self.db_cluster.nodes,
+                                              round_robin=round_robin)
 
     @clean_aws_resources
     def run_stress_thread_bench(self, stress_cmd, duration=None):
