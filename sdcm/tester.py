@@ -1053,13 +1053,14 @@ class ClusterTester(Test):
         return versions
 
     def get_setup_details(self):
+        exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
         setup_details = {}
         is_gce = False
         for p in self.params.iteritems():
             if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
                 is_gce = True
         for p in self.params.iteritems():
-            if p[1] in ['stress_cmd', 'stress_modes']:
+            if p[1] in exclude_details or p[1].startswith('stress_cmd'):
                 continue
             else:
                 if is_gce and (p[0], p[1]) in \
@@ -1072,10 +1073,6 @@ class ClusterTester(Test):
                     setup_details['n_db_nodes'] = re.sub('\s', '_', p[2])
                 else:
                     setup_details[p[1]] = p[2]
-
-        if 'es_password' in setup_details:
-            # hide ES password
-            setup_details['es_password'] = '******'
 
         new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
