@@ -15,7 +15,7 @@ experimental: 'true'
 round_robin: 'true'
 pre_create_schema: True
 nemesis_during_prepare: 'true'
-instance_provision: 'spot_low_price'
+#instance_provision: 'spot_low_price'
 
 
 backends: !mux
