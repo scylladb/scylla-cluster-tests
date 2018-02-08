@@ -227,16 +227,16 @@ class ResultsAnalyzer(object):
                 group_by_version[version] = dict(tests=SortedDict(), stats_best=dict(), best_test_id=dict())
                 group_by_version[version]['stats_best'] = {k: 0 for k in self.PARAMS}
                 group_by_version[version]['best_test_id'] = {k: tr['_id'] for k in self.PARAMS}
-                prev_test_id = tr['_id']
             group_by_version[version]['tests'][version_date] = curr_test_stats
             old_best = group_by_version[version]['stats_best']
             group_by_version[version]['stats_best'] =\
                 {k: self._get_best_value(k, curr_test_stats[k], old_best[k])
                  for k in self.PARAMS if k in curr_test_stats and k in old_best}
-            group_by_version[version]['best_test_id'] = \
-                {k: tr['_id'] if group_by_version[version]['stats_best'][k] == curr_test_stats[k] else prev_test_id
-                 for k in self.PARAMS if k in curr_test_stats and k in old_best}
-            prev_test_id = tr['_id']
+            # replace best test id if best value changed
+            for k in self.PARAMS:
+                if k in curr_test_stats and k in old_best and\
+                        group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
+                            group_by_version[version]['best_test_id'][k] = tr['_id']
 
         res_list = list()
         # compare with the best in the test version and all the previous versions
