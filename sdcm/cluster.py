@@ -647,15 +647,13 @@ WantedBy=multi-user.target
                            details)
 
     def _upload_coredump(self, coredump):
-        base_upload_url = 'scylladb-users-upload.s3.amazonaws.com/%s/%s'
+        base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
         self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
         self.remoter.run("sudo curl --request PUT --upload-file "
                          "'%s' '%s'" % (coredump, upload_url))
-        self.log.info("To download it, you may use "
-                      "'curl --user-agent [user-agent] %s > %s'",
-                      upload_url, os.path.basename(coredump))
+        self.log.info("You can download it by https://storage.cloud.google.com/%s (available for ScyllaDB employee)" % upload_url)
 
     def _get_coredump_size(self, coredump):
         try:
