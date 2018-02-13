@@ -11,6 +11,7 @@ space_node_threshold: 5000
 ip_ssh_connections: 'private'
 experimental: 'true'
 round_robin: 'true'
+instance_provision: 'spot_low_price'
 
 
 backends: !mux
