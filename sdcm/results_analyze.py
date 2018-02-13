@@ -255,7 +255,7 @@ class ResultsAnalyzer(object):
             return False
         results = dict(test_type=test_type,
                        test_id=test_id,
-                       test_version=test_version,
+                       test_version=doc['_source']['versions']['scylla-server'],
                        res_list=res_list)
         logger.info('Regression analysis:')
         logger.info(pp.pformat(results))
