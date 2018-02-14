@@ -234,78 +234,22 @@ class PerformanceRegressionTest(ClusterTester):
         self.update_test_details()
         # TEMP check if possible
         self.display_results(results, test_name='test_latency')
-        self.display_results(results, test_name='test_latency_write')
+        self.check_regression()
 
         # Run READ workload
         self.create_test_stats()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
-        self.display_results(results, test_name='test_latency_read')
+        self.display_results(results, test_name='test_latency')
+        self.check_regression()
 
         # run MIXED workload
         self.create_test_stats()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
-        self.display_results(results, test_name='test_latency_mixed')
-
-        self.check_regression()
-
-    def test_latency_read(self):
-        """
-        Test steps:
-
-        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
-        2. Run READ workload with gauss population.
-        """
-
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        base_cmd_r = self.params.get('stress_cmd_r')
-
-        self.create_test_stats()
-        # run a write workload as a preparation - if ROUND_ROBIN is set, load the data in parallel from all loaders.
-        round_robin = False
-        if self.params.get('round_robin', default='').lower() == 'true':
-            round_robin = True
-        stress_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1, prefix='preload-',
-                                              round_robin=round_robin)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-
-        # run READ workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
-        results = self.get_stress_results(queue=stress_queue)
-
-        self.update_test_details()
-        self.display_results(results, test_name='test_latency_read')
-        self.check_regression()
-
-    def test_latency_mixed(self):
-        """
-        Test steps:
-
-        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
-        2. Run MIXED workload with gauss population.
-        """
-
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        base_cmd_m = self.params.get('stress_cmd_m')
-
-        self.create_test_stats()
-        # run a write workload as a preparation - if ROUND_ROBIN is set, load the data in parallel from all loaders.
-        round_robin = False
-        if self.params.get('round_robin', default='').lower() == 'true':
-            round_robin = True
-        stress_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1, prefix='preload-',
-                                              round_robin=round_robin)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-
-        # run MIXED workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
-        results = self.get_stress_results(queue=stress_queue)
-
-        self.update_test_details()
-        self.display_results(results, test_name='test_latency_mixed')
+        self.display_results(results, test_name='test_latency')
         self.check_regression()
 
     def test_uniform_counter_update_bench(self):
