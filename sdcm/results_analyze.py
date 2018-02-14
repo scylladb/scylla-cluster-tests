@@ -27,6 +27,7 @@ class QueryFilter(object):
         self.test_doc = test_doc
         self.test_type = test_doc['_type']
         self.is_gce = is_gce
+        self.date_re = '/2018-*/'
 
     def setup_instance_params(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
@@ -61,6 +62,7 @@ class QueryFilter(object):
                     if param in ['profile', 'ops']:
                         param_val = "\"{}\"".format(param_val)
                     test_details += ' AND test_details.{}.{}: {}'.format(cs, param, param_val)
+        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
         return test_details
 
     def __call__(self, *args, **kwargs):
@@ -202,7 +204,6 @@ class ResultsAnalyzer(object):
                        'hits.hits._source.results.stats_average',
                        'hits.hits._source.results.stats_total',
                        'hits.hits._source.versions.scylla-server']
-
         tests_filtered = self._es.search(index=self._index, doc_type=test_type, q=query, filter_path=filter_path,
                                          size=self._limit)
         if not tests_filtered:
@@ -253,14 +254,23 @@ class ResultsAnalyzer(object):
         if not res_list:
             logger.info('No test results to compare with')
             return False
+
+        # send results by email
         results = dict(test_type=test_type,
                        test_id=test_id,
-                       test_version=test_version,
+                       test_version=doc['_source']['versions']['scylla-server'],
                        res_list=res_list)
         logger.info('Regression analysis:')
         logger.info(pp.pformat(results))
+
+        dashboard_url = self._conf.get('kibana_url')
+        for dash in ('dashboard_master', 'dashboard_releases'):
+            dash_url = '{}{}'.format(dashboard_url, self._conf.get(dash))
+            results.update({dash: dash_url})
+
         subject = 'Performance Regression Compare Results - {} - {}'.format(test_type.split('.')[-1], test_version)
         self.send_email(subject, results)
+
         return True
 
     @staticmethod
