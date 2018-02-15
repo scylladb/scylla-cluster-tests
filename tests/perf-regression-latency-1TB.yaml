@@ -1,0 +1,70 @@
+test_duration: 500
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..250000000",
+                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=250000000..500000000",
+                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=500000000..750000000",
+                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=750000000..1000000000"]
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=10 limit=15000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=10 limit=10000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=10 limit=9000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+user_prefix: 'perf-regression-VERSION'
+failure_post_behavior: destroy
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+#ip_ssh_connections: 'private'
+round_robin: 'true'
+# instance_provision: 'spot_low_price'
+
+# email definitions to send regression report
+send_email: true
+email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com']
+
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 1
+        gce_instance_type_loader: 'n1-standard-2'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-2'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'REPO_FILE_PATH'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.large'
+        instance_type_monitor: t2.small
+        instance_type_db: 'i3.4xlarge'
+        us_east_1:
+            user_credentials_path: ''
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-c327759a'
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_loader: 'AMI_ID'
+            ami_id_monitor: 'AMI_ID'
+
+databases: !mux
+    cassandra:
+        db_type: cassandra
+    scylla:
+        db_type: scylla
