@@ -3,8 +3,8 @@ prepare_write_cmd: "cassandra-stress write cl=QUORUM n=1100200300 -schema 'repli
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=10080m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300 -log interval=5",
              "cassandra-stress counter_write cl=QUORUM duration=10080m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..10000000",
              "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=10080m -port jmx=6868 -mode cql3 native -rate threads=10"]
-stress_read_cmd: ["cassandra-stress read duration=5760m -mode cql3 native -rate threads=10 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300 -port jmx=6868 -log interval=5",
-                  "cassandra-stress counter_read duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10000000"]
+stress_read_cmd: ["cassandra-stress read duration=10080m -mode cql3 native -rate threads=10 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300 -port jmx=6868 -log interval=5",
+                  "cassandra-stress counter_read duration=10080m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10000000"]
 n_db_nodes: 4
 n_loaders: 2
 n_monitor_nodes: 1
