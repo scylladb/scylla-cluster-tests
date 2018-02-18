@@ -1191,3 +1191,30 @@ class ClusterTester(Test):
             ra.check_regression(self.test_id, is_gce)
         except Exception as ex:
             self.log.exception('Failed to check regression: %s', ex)
+
+    def populate_data_parallel(self, size_in_gb, blocking=True):
+        base_cmd = "cassandra-stress write cl=QUORUM "
+        stress_fixed_params = " -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' " \
+                              "-port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
+        stress_keys = "n="
+        population = " -pop seq="
+
+        total_keys = size_in_gb * 1024 * 1024
+        n_loaders = self.params.get('n_loaders')
+        keys_per_node = total_keys / n_loaders
+
+        write_queue = list()
+        start = 1
+        for i in range(1, n_loaders + 1):
+            stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
+                         str(keys_per_node * i) + stress_fixed_params
+            start = keys_per_node * i + 1
+
+            write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
+            time.sleep(3)
+
+        if blocking:
+            for stress in write_queue:
+                self.verify_stress_thread(queue=stress)
+
+        return write_queue
