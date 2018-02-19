@@ -24,19 +24,12 @@ class CorruptThenRebuildTest(ClusterTester):
     """
     def test_corrupt_then_rebuild_nodes(self):
 
-        # run a prepare write workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_write_cmd'),
-                                              stress_num=1,
-                                              keyspace_num=1)
-        #wait for prepare write to finish
-        self.db_cluster.wait_total_space_used_per_node()
+        #populates 100GB
+        self.populate_data_parallel(100)
 
         # run rebuild
-        nm = nemesis.CorruptThenRebuildMonkey(self.db_cluster, self.loaders, self.monitors, None)
-        nm.disrupt()
-
-        #verify stress
-        self.verify_stress_thread(queue=stress_queue)
+        current_nemesis = nemesis.CorruptThenRebuildMonkey(self.db_cluster, self.loaders, self.monitors, None)
+        current_nemesis.disrupt()
 
 
 if __name__ == '__main__':
