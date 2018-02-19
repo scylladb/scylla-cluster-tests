@@ -32,13 +32,14 @@ def _cmd(cmd, timeout=10, sudo=False):
 
 class DockerNode(cluster.BaseNode):
 
-    def __init__(self, name, credentials, base_logdir=None):
+    def __init__(self, name, credentials, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
                           'user': 'scylla-test',
                           'key_file': credentials.key_file}
         super(DockerNode, self).__init__(name=name,
                                          base_logdir=base_logdir,
-                                         ssh_login_info=ssh_login_info)
+                                         ssh_login_info=ssh_login_info,
+                                         node_prefix=node_prefix)
         self.wait_for_status_running()
         self.wait_public_ip()
 
@@ -104,7 +105,8 @@ class DockerCluster(cluster.BaseCluster):
 
     def _create_node_image(self):
         self._update_image()
-        _cmd('build --build-arg SOURCE_IMAGE={} -t {} {}'.format(self._image, self._node_img_tag, self._context_path))
+        _cmd('build --build-arg SOURCE_IMAGE={} -t {} {}'.format(self._image, self._node_img_tag, self._context_path),
+             timeout=300)
 
     def _clean_old_images(self):
         images = _cmd('images -f "dangling=true" -q')
@@ -113,17 +115,18 @@ class DockerCluster(cluster.BaseCluster):
 
     def _update_image(self):
         logger.debug('update scylla image')
-        _cmd('pull {}'.format(self._image), timeout=90)
+        _cmd('pull {}'.format(self._image), timeout=120)
         self._clean_old_images()
 
     def _create_node(self, node_name, is_seed=False, seed_ip=None):
-        if is_seed:
-            _cmd('run --name {} -d {}'.format(node_name, self._node_img_tag))
-        else:
-            _cmd('run --name {} -d {} --seeds="{}"'.format(node_name, self._node_img_tag, seed_ip))
+        cmd = 'run --name {} -d {}'.format(node_name, self._node_img_tag)
+        if not is_seed and seed_ip:
+            cmd = '{} --seeds="{}"'.format(cmd, seed_ip)
+        _cmd(cmd, timeout=30)
         return DockerNode(node_name,
                           credentials=self.credentials[0],
-                          base_logdir=self.logdir)
+                          base_logdir=self.logdir,
+                          node_prefix=self.node_prefix)
 
     def add_nodes(self, count, dc_idx=0):
         for node_index in xrange(count):

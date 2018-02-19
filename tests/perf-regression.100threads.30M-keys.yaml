@@ -11,6 +11,7 @@ failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
 #ip_ssh_connections: 'private'
+instance_provision: 'spot_low_price'
 
 # email definitions to send regression report
 send_email: true

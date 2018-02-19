@@ -93,7 +93,8 @@ class LongevityTest(ClusterTester):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
                     keyspace_name = 'keyspace{}'.format(i)
-                    write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, keyspace_name=keyspace_name))
+                    write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd,
+                                                              keyspace_name=keyspace_name, round_robin=True))
                     time.sleep(5)
             # Not using round_robin and all keyspaces will run on all loaders
             else:
@@ -117,7 +118,7 @@ class LongevityTest(ClusterTester):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
                     keyspace_name = 'keyspace{}'.format(i)
-                    params = {'keyspace_name': keyspace_name}
+                    params = {'keyspace_name': keyspace_name, 'round_robin': True}
 
                     self._run_all_stress_cmds(stress_queue, params)
 

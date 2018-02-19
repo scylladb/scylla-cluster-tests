@@ -20,13 +20,20 @@
     </h3>
     <h3>
         <span>Version: </span>
-        <span class="blue">{{ results.test_version }}</span>
+        <span class="blue">{{ results.test_version.version }} </span>
     </h3>
+    <div>
+        <span> Build Date: </span>
+        <span class="blue"> {{ results.test_version.date }} </span>
+        <span> , Commit Id: </span>
+        <span class="blue"> {{ results.test_version.commit_id }}</span>
+    </div>
+    <div>&nbsp;&nbsp;</div>
 
     <table border="1" style="width:100%">
         <tr>
             <th>Version compared to</th>
-            <th>Op rate</th>
+            <th>Op rate total</th>
             <th>Latency mean</th>
             <th>Latency 99th percentile</th>
         </tr>
@@ -83,5 +90,10 @@
         </tr>
         {% endfor %}
     </table>
+
+    <h3>Dashboard:</h3>
+    <li><a href={{ results.dashboard_master }}>Perf-Regression Master</a></li>
+    <li><a href={{ results.dashboard_releases }}>Perf-Regression By-Release</a></li>
+
 </body>
 </html>

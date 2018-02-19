@@ -1596,11 +1596,12 @@ class BaseLoaderSet(object):
         return self._loader_queue.pop(0)
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
-                          profile=None, node_list=[]):
+                          profile=None, node_list=[], round_robin=False):
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
         else:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
+
         if profile:
             with open(profile) as fp:
                 profile_content = fp.read()
@@ -1664,7 +1665,7 @@ class BaseLoaderSet(object):
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
-        if self.params.get('round_robin', default='').lower() == 'true':
+        if round_robin:
             # cancel stress_num
             stress_num = 1
             loaders = [self.get_loader()]
