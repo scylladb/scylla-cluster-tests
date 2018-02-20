@@ -95,7 +95,7 @@ class LongevityTest(ClusterTester):
                     keyspace_name = 'keyspace{}'.format(i)
                     write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd,
                                                               keyspace_name=keyspace_name, round_robin=True))
-                    time.sleep(5)
+                    time.sleep(2)
             # Not using round_robin and all keyspaces will run on all loaders
             else:
                 write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, keyspace_num=keyspace_num))
