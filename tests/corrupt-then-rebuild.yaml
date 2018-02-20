@@ -16,7 +16,7 @@ instance_provision: 'spot_low_price'
 backends: !mux
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.large'
+        instance_type_loader: 'c4.4xlarge'
         instance_type_monitor: 't2.small'
         us_east_1:
             region_name: 'us-east-1'
@@ -30,9 +30,6 @@ backends: !mux
             ami_monitor_user: 'centos'
 
 databases: !mux
-    cassandra:
-        db_type: cassandra
-        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
         instance_type_db: 'i3.2xlarge'
