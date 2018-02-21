@@ -30,6 +30,7 @@ from .data_path import get_data_path
 from .log import SDCMAdapter
 from . import prometheus
 from . import mgmt
+from . import event
 from avocado.utils import wait
 
 from sdcm.utils import remote_get_file
@@ -59,7 +60,7 @@ class Nemesis(object):
         self.start_time = time.time()
         self.stats = {}
         self.db_stats = kwargs.get('db_stats', None)
-        self.metrics_srv = prometheus.nemesis_metrics_obj()
+        self.metrics_srv = prometheus.sct_metrics_obj()
         self._random_sequence = None
 
     def update_stats(self, disrupt, status=True, data={}):
@@ -71,6 +72,13 @@ class Nemesis(object):
         self.log.info('Update nemesis info: %s', self.stats)
         if self.db_stats:
             self.db_stats.update({'nemesis': self.stats})
+
+    def save_event(self, disrupt, status=True, data={}):
+        event_log = event.get_event_log()
+        event_name = 'disrupt'
+        event_msg = '{} status: {}, {}'.format(disrupt, status, data)
+        evt = event.SCTError(event_name, event_msg) if not status else event.SCTInfo(event_name, event_msg)
+        event_log.save(evt)
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
@@ -702,16 +710,19 @@ def log_time_elapsed_and_status(method):
                         'duration': time_elapsed}
             args[0].operation_log.append(log_info)
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
-            if error:
-                log_info.update({'error': error})
-                status = False
 
             if class_name.find('Chaos') < 0:
                 args[0].metrics_srv.event_stop(class_name)
             disrupt = args[0].current_disruption.split()[0]
             log_info['node'] = args[0].current_disruption.replace(disrupt, '').strip()
             del log_info['operation']
+            if error:
+                log_info.update({'error': error})
+                status = False
+                args[0].metrics_srv.nemesis_error_event(disrupt)
+
             args[0].update_stats(disrupt, status, log_info)
+            args[0].save_event(disrupt, status, log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:

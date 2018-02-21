@@ -25,7 +25,6 @@ import uuid
 import yaml
 import shutil
 
-from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from avocado.utils import path
 from avocado.utils import process
@@ -40,6 +39,8 @@ from .utils import log_run_info, retrying
 from .utils import Distro
 
 from .loader import CassandraStressExporterSetup
+from .prometheus import start_metrics_server, sct_metrics_obj
+from . import event
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -202,7 +203,6 @@ class RemoteCredentials(object):
         self.key_file = os.path.join(tempfile.gettempdir(),
                                      '%s.pem' % self.name)
         self.write_key_file()
-        logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Created')
 
@@ -268,9 +268,10 @@ class BaseNode(object):
 
         self.remoter = Remote(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
-        logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
+        self.event_log = event.get_event_log()
+        self.metrics_srv = sct_metrics_obj()
 
         self._journal_thread = None
         self.n_coredumps = 0
@@ -590,6 +591,9 @@ class BaseNode(object):
             if line.startswith('Coredump:'):
                 coredump = line.split()[-1]
                 self.log.debug('Found coredump file: {}'.format(coredump))
+                self.event_log.save(event.SCTError('coredump',
+                                                   'Coredump file on node {}: {}'.format(self.name, coredump)))
+                self.metrics_srv.coredump_event(str(self))
                 coredump_files = self._try_split_coredump(coredump)
                 for f in coredump_files:
                     self._upload_coredump(f)
@@ -1202,7 +1206,6 @@ class BaseCluster(object):
         except OSError:
             self.logdir = os.path.join(os.environ['AVOCADO_TEST_LOGDIR'],
                                        self.name)
-        logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
@@ -1823,6 +1826,7 @@ class BaseLoaderSet(object):
     def __init__(self, params):
         self._loader_queue = []
         self.params = params
+        self.event_log = event.get_event_log()
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -1891,6 +1895,10 @@ class BaseLoaderSet(object):
 
         def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
             queue[TASK_QUEUE].put(node)
+
+            self.event_log.save(event.SCTInfo('c-stress',
+                                              'Run s-c on loader {}, cmd: {}'.format(node.name, stress_cmd)))
+
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
@@ -1939,6 +1947,10 @@ class BaseLoaderSet(object):
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
+
+            self.event_log.save(event.SCTInfo('c-stress',
+                                              'Finished s-c on loader {}, cmd: {}'.format(node.name, stress_cmd)))
+
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -2502,7 +2514,6 @@ class BaseMonitorSet(object):
 class NoMonitorSet(object):
 
     def __init__(self):
-        logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.nodes = []
 

@@ -1,6 +1,4 @@
-import os
 import socket
-import random
 import logging
 import prometheus_client
 
@@ -8,6 +6,7 @@ from avocado.utils import network
 
 START = 'start'
 STOP = 'stop'
+ERROR = 'error'
 
 logger = logging.getLogger(__name__)
 nm_obj = None
@@ -33,29 +32,46 @@ def start_metrics_server(port=9389):
     return None
 
 
-def nemesis_metrics_obj():
+def sct_metrics_obj():
     global nm_obj
     if not nm_obj:
-        nm_obj = NemesisMetrics()
+        nm_obj = SCTMetrics()
     return nm_obj
 
 
-class NemesisMetrics(object):
+def log_error(method):
+    def wrapper(*args, **kwargs):
+        try:
+            return method(*args, **kwargs)
+        except Exception as ex:
+            logger.exception('Prometheus error: %s: %s', method.__name__, ex)
+    return wrapper
+
+
+class SCTMetrics(object):
 
     DISRUPT_COUNTER = 'nemesis_disruptions_counter'
     DISRUPT_GAUGE = 'nemesis_disruptions_gauge'
+    DISRUPT_ERROR_COUNTER = 'nemesis_disruption_error_counter'
+    COREDUMP_COUNTER = 'coredump_counter'
 
     def __init__(self):
-        super(NemesisMetrics, self).__init__()
-        self._disrupt_counter = self.create_counter(self.DISRUPT_COUNTER,
-                                                    'Counter for nemesis disruption methods',
-                                                    ['method', 'event'])
-        self._disrupt_gauge = self.create_gauge(self.DISRUPT_GAUGE,
-                                                'Gauge for nemesis disruption methods',
-                                                ['method'])
+        super(SCTMetrics, self).__init__()
+        self._disrupt_counter = self._create_counter(self.DISRUPT_COUNTER,
+                                                     'Counter for nemesis disruption methods',
+                                                     ['method', 'event'])
+        self._disrupt_gauge = self._create_gauge(self.DISRUPT_GAUGE,
+                                                 'Gauge for nemesis disruption methods',
+                                                 ['method'])
+        self._disrupt_error_counter = self._create_counter(self.DISRUPT_ERROR_COUNTER,
+                                                           'Counter for nemesis disruption errors',
+                                                           ['method', 'event'])
+        self._coredump_counter = self._create_counter(self.COREDUMP_COUNTER,
+                                                      'Counter for coredumps',
+                                                      ['node', 'event'])
 
     @staticmethod
-    def create_counter(name, desc, param_list):
+    def _create_counter(name, desc, param_list):
         try:
             return prometheus_client.Counter(name, desc, param_list)
         except Exception as ex:
@@ -63,23 +79,27 @@ class NemesisMetrics(object):
         return None
 
     @staticmethod
-    def create_gauge(name, desc, param_list):
+    def _create_gauge(name, desc, param_list):
         try:
             return prometheus_client.Gauge(name, desc, param_list)
         except Exception as ex:
             logger.error('Cannot create metrics gauge: %s', ex)
         return None
 
+    @log_error
     def event_start(self, disrupt):
-        try:
-            self._disrupt_counter.labels(disrupt, START).inc()
-            self._disrupt_gauge.labels(disrupt).inc()
-        except Exception as ex:
-            logger.exception('Cannot start metrics event: %s', ex)
+        self._disrupt_counter.labels(disrupt, START).inc()
+        self._disrupt_gauge.labels(disrupt).inc()
 
+    @log_error
     def event_stop(self, disrupt):
-        try:
-            self._disrupt_counter.labels(disrupt, STOP).inc()
-            self._disrupt_gauge.labels(disrupt).dec()
-        except Exception as ex:
-            logger.exception('Cannot stop metrics event: %s', ex)
+        self._disrupt_counter.labels(disrupt, STOP).inc()
+        self._disrupt_gauge.labels(disrupt).dec()
+
+    @log_error
+    def nemesis_error_event(self, disrupt):
+        self._disrupt_error_counter.labels(disrupt, ERROR).inc()
+
+    @log_error
+    def coredump_event(self, node):
+        self._coredump_counter.labels(node, ERROR).inc()

@@ -36,7 +36,7 @@ class GrowClusterTest(ClusterTester):
         super(GrowClusterTest, self).__init__(*args, **kwargs)
         self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
         self._cluster_target_size = self.params.get('cluster_target_size', default=5)
-        self.metrics_srv = prometheus.nemesis_metrics_obj()
+        self.metrics_srv = prometheus.sct_metrics_obj()
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')

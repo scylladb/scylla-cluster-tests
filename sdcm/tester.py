@@ -54,6 +54,7 @@ from .data_path import get_data_path
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
+from . import event
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -152,6 +153,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
         cluster.set_duration(self._duration)
+        self.event_log = event.get_event_log(self.logdir)
+        self.event_log.save('TEST START')
 
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
 
@@ -181,6 +184,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if self.create_stats:
             self.create_test_stats()
+
+        event.start_event_handler(self.monitors.nodes[0].public_ip_address)
 
     def get_nemesis_class(self):
         """
@@ -664,6 +669,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         self.update_stress_cmd_details(stress_cmd, prefix)
+        self.event_log.save(event.SCTInfo('c-stress', 'Start cassandra stress, cmd: %s' % stress_cmd))
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -679,6 +685,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         self.update_bench_stress_cmd_details(stress_cmd)
+        self.event_log.save(event.SCTInfo('c-stress', 'Start cassandra stress bench, cmd: %s' % stress_cmd))
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -1081,7 +1088,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.fail('Errors found on DB node logs (see test logs)')
 
     def tearDown(self):
+        event.stop_event_handler()
         self.clean_resources()
+        self.event_log.save('TEST END')
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
