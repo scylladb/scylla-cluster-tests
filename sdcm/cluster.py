@@ -1107,7 +1107,6 @@ client_encryption_options:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
 
-
 class BaseCluster(object):
 
     """
@@ -1213,6 +1212,66 @@ class BaseCluster(object):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
+
+
+def wait_for_init_wrap(method):
+    """
+    Wraps wait_for_init class method.
+    Run setup of nodes simultaneously and wait for all the setups finished.
+    Raise exception if setup failed or timeout expired.
+    """
+    def wrapper(*args, **kwargs):
+        cl_inst = args[0]
+        logger.debug('Class instance: %s', cl_inst)
+        logger.debug('Method kwargs: %s', kwargs)
+        node_list = kwargs.get('node_list', None) or cl_inst.nodes
+        timeout = kwargs.get('timeout', None)
+        setup_kwargs = {k: kwargs[k] for k in kwargs if k not in ('node_list', 'timeout')}
+
+        queue = Queue.Queue()
+
+        def node_setup(node):
+            status = True
+            try:
+                cl_inst.node_setup(node, **setup_kwargs)
+            except Exception:
+                cl_inst.log.exception('Node setup failed: %s', str(node))
+                status = False
+
+            queue.put((node, status))
+            queue.task_done()
+
+        start_time = time.time()
+
+        for node in node_list:
+            setup_thread = threading.Thread(target=node_setup,
+                                            args=(node,))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        results = []
+        while len(results) != len(node_list):
+            time_elapsed = time.time() - start_time
+            try:
+                node, node_status = queue.get(block=True, timeout=5)
+                assert node_status is True, 'Setup has failed!'
+                results.append(node)
+                cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
+                                 len(results), len(node_list), str(node), int(time_elapsed))
+            except Queue.Empty:
+                pass
+            if timeout and time_elapsed / 60 > timeout:
+                msg = 'Stop waiting for node(-s) setup(%d/%d): timeout - %d min - has expired'.format(
+                    len(results), len(node_list), timeout)
+                cl_inst.log.error(msg)
+                raise Exception(msg)
+
+        time_elapsed = time.time() - start_time
+        cl_inst.log.debug('Setup duration -> %s s', int(time_elapsed))
+
+        method(*args, **kwargs)
+    return wrapper
 
 
 class BaseScyllaCluster(object):
@@ -1423,6 +1482,18 @@ class BaseScyllaCluster(object):
                     pass
         return node_info_list
 
+    def get_scylla_version(self):
+        if not self.nodes[0].scylla_version:
+            try:
+                result = self.nodes[0].remoter.run("rpm -q {}".format(self.nodes[0].scylla_pkg()))
+            except Exception as ex:
+                self.log.error('Failed getting scylla version: %s', ex)
+            else:
+                match = re.findall("scylla-(.*).el7.centos", result.stdout)
+                if match:
+                    for node in self.nodes:
+                        node.scylla_version = match[0]
+
     def cfstat_reached_threshold(self, key, threshold):
         """
         Find whether a certain cfstat key in all nodes reached a certain value.
@@ -1491,46 +1562,20 @@ class BaseScyllaCluster(object):
         else:
             raise ValueError('Unsupported type: {}'.format(type(param)))
 
-    def _wait_for_node_setup(self, node_list, verbose=False, timeout=None):
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node)
-            node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                             verbose=verbose, ignore_status=True)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for node in node_list:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node, ))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            time_elapsed = time.time() - start_time
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list), int(time_elapsed))
-            except Queue.Empty:
-                pass
-            if timeout and time_elapsed / 60 > timeout:
-                self.log.error('Stop waiting for node(-s) setup(%d/%d): timeout - %d min - has expired',
-                               len(results), len(node_list), timeout)
-                return False
-
+    @wait_for_init_wrap
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
+        """
+        Scylla cluster setup.
+        :param node_list: List of nodes to watch for init.
+        :param verbose: Whether to print extra info while watching for init.
+        :param timeout: timeout in minutes to wait for init to be finished
+        :return:
+        """
+        node_list = node_list or self.nodes
         self.update_db_binary(node_list)
         self.update_db_packages(node_list)
         self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
-        return True
+        self.get_scylla_version()
 
 
 class BaseLoaderSet(object):
@@ -1539,56 +1584,35 @@ class BaseLoaderSet(object):
         self._loader_queue = []
         self.params = kwargs.get('params', {})
 
+    def node_setup(self, node, verbose=False, db_node_address=None):
+        self.log.info('Setup in BaseLoaderSet')
+        node.wait_ssh_up(verbose=verbose)
+
+        # The init scripts should install/update cs, so
+        # let's try to guarantee it will be there before
+        # proceeding
+        node.wait_cs_installed(verbose=verbose)
+        node.remoter.run('sudo yum install -y screen')
+        if db_node_address is not None:
+            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                             db_node_address)
+
+        cs_exporter_setup = CassandraStressExporterSetup()
+        cs_exporter_setup.install(node)
+
+        if self.params.get('bench_run', default='').lower() == 'true':
+            # go1.7 still not in repo
+            node.remoter.run('sudo yum install git -y')
+            node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.7.linux-amd64.tar.gz')
+            node.remoter.run('sudo tar -C /usr/local -xvzf go1.7.linux-amd64.tar.gz')
+            node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
+            node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
+            node.remoter.run("source $HOME/.bashrc")
+            node.remoter.run("go get github.com/pdziepak/scylla-bench")
+
+    @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            self.log.info('Setup in BaseLoaderSet')
-            node.wait_ssh_up(verbose=verbose)
-
-            # The init scripts should install/update c-s, so
-            # let's try to guarantee it will be there before
-            # proceeding
-            node.wait_cs_installed(verbose=verbose)
-            node.remoter.run('sudo yum install -y screen')
-            if db_node_address is not None:
-                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
-                                 db_node_address)
-
-            cs_exporter_setup = CassandraStressExporterSetup()
-            cs_exporter_setup.install(node)
-
-            if self.params.get('bench_run', default='').lower() == 'true':
-                # go1.7 still not in repo
-                node.remoter.run('sudo yum install git -y')
-                node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.7.linux-amd64.tar.gz')
-                node.remoter.run('sudo tar -C /usr/local -xvzf go1.7.linux-amd64.tar.gz')
-                node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
-                node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
-                node.remoter.run("source $HOME/.bashrc")
-                node.remoter.run("go get github.com/pdziepak/scylla-bench")
-
-
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
-
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        pass
 
     def get_loader(self):
         if not self._loader_queue:
@@ -2013,57 +2037,36 @@ class BaseMonitorSet(object):
     scylla_version = ''
     is_enterprise = None
 
-    def wait_for_init(self, targets, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
-        self.log.debug('wait_for_init kwargs: %s', kwargs)
-        queue = Queue.Queue()
+    def node_setup(self, node, targets=None, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
+        self.log.info('Setup in BaseMonitorSet')
+        node.wait_ssh_up(verbose=verbose)
+        # The init scripts should install/update c-s, so
+        # let's try to guarantee it will be there before
+        # proceeding
+        node.install_prometheus()
+        node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
+        node.install_grafana()
+        self.scylla_version = scylla_version
+        self.is_enterprise = is_enterprise
+        node.setup_grafana(scylla_version)
+        # The time will be used in url of Grafana monitor,
+        # the data from this point to the end of test will
+        # be captured.
+        self.grafana_start_time = time.time()
+        node.remoter.run('sudo yum install screen -y')
+        if 'scylla_repo' in kwargs and 'scylla_mgmt_repo' in kwargs:
+            if kwargs.get('mgmt_db_local') is True:
+                mgmt_db_hosts = ['127.0.0.1']
+            else:
+                mgmt_db_hosts = [str(trg) for trg in targets['db_nodes']]
+            node.install_mgmt(scylla_repo=kwargs.get('scylla_repo'),
+                              scylla_mgmt_repo=kwargs.get('scylla_mgmt_repo'),
+                              mgmt_port=kwargs.get('mgmt_port'),
+                              db_hosts=mgmt_db_hosts)
 
-        def node_setup(node):
-            self.log.info('Setup in BaseMonitorSet')
-            node.wait_ssh_up(verbose=verbose)
-            # The init scripts should install/update c-s, so
-            # let's try to guarantee it will be there before
-            # proceeding
-            node.install_prometheus()
-            node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
-            node.install_grafana()
-            self.scylla_version = scylla_version
-            self.is_enterprise = is_enterprise
-            node.setup_grafana(scylla_version)
-            # The time will be used in url of Grafana monitor,
-            # the data from this point to the end of test will
-            # be captured.
-            self.grafana_start_time = time.time()
-            node.remoter.run('sudo yum install screen -y')
-            if 'scylla_repo' in kwargs and 'scylla_mgmt_repo' in kwargs:
-                if kwargs.get('mgmt_db_local') is True:
-                    mgmt_db_hosts = ['127.0.0.1']
-                else:
-                    mgmt_db_hosts = [str(trg) for trg in targets['db_nodes']]
-                node.install_mgmt(scylla_repo=kwargs.get('scylla_repo'),
-                                  scylla_mgmt_repo=kwargs.get('scylla_mgmt_repo'),
-                                  mgmt_port=kwargs.get('mgmt_port'),
-                                  db_hosts=mgmt_db_hosts)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for node in self.nodes:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
-
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+    @wait_for_init_wrap
+    def wait_for_init(self, targets=None, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
+        pass
 
     def get_monitor_snapshot(self):
         """
