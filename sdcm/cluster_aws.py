@@ -1,9 +1,6 @@
 import logging
 import time
 import uuid
-import threading
-import Queue
-import re
 import os
 import tempfile
 import yaml
@@ -370,7 +367,8 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                                                               dc_idx=dc_idx)
         return added_nodes
 
-    def _node_setup(self, node):
+    def node_setup(self, node, verbose=False):
+        node.wait_ssh_up(verbose=verbose)
         authenticator = self.params.get('authenticator')
         endpoint_snitch = ''
         if len(self.datacenter) > 1:
@@ -390,25 +388,10 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                               server_encrypt=self._param_enabled('server_encrypt'),
                               client_encrypt=self._param_enabled('client_encrypt'))
         node.remoter.run('sudo systemctl restart scylla-server.service')
-        try:
-            node.remoter.run('nodetool status', verbose=True)
-        except Exception as ex:
-            self.log.error('Failed running nodetool status, error: %s. Retrying...', ex)
-            time.sleep(5)
-            node.remoter.run('nodetool status', verbose=True)
-
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
-        if node_list is None:
-            node_list = self.nodes
-        res = self._wait_for_node_setup(node_list, verbose, timeout)
-        assert res is True, 'Node setup has failed!'
-
-        if not node_list[0].scylla_version:
-            result = node_list[0].remoter.run("rpm -q {}".format(node_list[0].scylla_pkg()))
-            match = re.findall("scylla-(.*).el7.centos", result.stdout)
-            node_list[0].scylla_version = match[0] if match else ''
-            for node in node_list:
-                node.scylla_version = result.stdout
+        node.wait_db_up(verbose=verbose)
+        node.remoter.run('nodetool status', verbose=True, retry=5)
+        node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
+                         verbose=verbose, ignore_status=True)
 
     def destroy(self):
         self.stop_nemesis()
@@ -480,50 +463,19 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                               ec2_user_data=ec2_user_data)
         return added_nodes
 
+    def node_setup(self, node, verbose=False):
+        node.wait_ssh_up(verbose=verbose)
+        node.wait_db_up(verbose=verbose)
+
+        node.wait_apt_not_running()
+        node.remoter.run('sudo apt-get update')
+        node.remoter.run('sudo apt-get install -y collectd collectd-utils')
+        node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
+        self.collectd_setup.install(node)
+
+    @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False):
-        if node_list is None:
-            node_list = self.nodes
-
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            node.wait_ssh_up(verbose=verbose)
-            node.wait_db_up(verbose=verbose)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        # We cannot run this in a thread since our SSH connection
-        # is not thread safe
-        for node in node_list:
-            node.wait_ssh_up(verbose=verbose)
-            node.wait_apt_not_running()
-            node.remoter.run('sudo apt-get update')
-            node.remoter.run('sudo apt-get install -y collectd collectd-utils')
-            node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
-            self.collectd_setup.install(node)
-
-        for node in node_list:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list),
-                              int(time_elapsed))
-            except Queue.Empty:
-                pass
-
         self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
 class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):

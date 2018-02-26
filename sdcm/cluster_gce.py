@@ -287,7 +287,13 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                               dc_idx=dc_idx)
         return added_nodes
 
-    def _node_setup(self, node):
+    def node_setup(self, node, verbose=False):
+        """
+        Configure scylla.yaml on cluster nodes.
+        We have to modify scylla.yaml on our own because we are not on AWS,
+        where there are auto config scripts in place.
+        """
+        node.wait_ssh_up(verbose=verbose)
         node.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
                                      'scylla.yaml')
@@ -359,35 +365,16 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
         node.remoter.run('sudo cat /etc/scylla.d/io.conf')
         node.wait_db_up()
         node.wait_jmx_up()
+        node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
+                         verbose=verbose, ignore_status=True)
 
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
-        """
-        Configure scylla.yaml on all cluster nodes.
+        super(ScyllaGCECluster, self).wait_for_init(node_list=node_list, verbose=verbose, timeout=timeout)
 
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-
-        :param node_list: List of nodes to watch for init.
-        :param verbose: Whether to print extra info while watching for init.
-        :param timeout: timeout in minutes to wait for init to be finished
-        :return:
-        """
-        if node_list is None:
-            node_list = self.nodes
-        res = self._wait_for_node_setup(node_list, verbose, timeout)
-        assert res is True, 'Node setup has failed!'
-
-        if not node_list[0].scylla_version:
-            result = node_list[0].remoter.run("rpm -q {}".format(node_list[0].scylla_pkg()))
-            match = re.findall("scylla-(.*).el7.centos", result.stdout)
-            node_list[0].scylla_version = match[0] if match else ''
-            for node in node_list:
-                node.scylla_version = result.stdout
-
-        for node in node_list:
-            dst_nodes = [n for n in node_list if n.dc_idx != node.dc_idx]
-            local_nodes = [n for n in node_list if n.dc_idx == node.dc_idx and n != node]
-            if self._param_enabled('enable_tc'):
+        if self._param_enabled('enable_tc'):
+            for node in self.nodes:
+                dst_nodes = [n for n in self.nodes if n.dc_idx != node.dc_idx]
+                local_nodes = [n for n in self.nodes if n.dc_idx == node.dc_idx and n != node]
                 self.set_tc(node, dst_nodes, local_nodes)
 
     def destroy(self):
@@ -419,45 +406,21 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
                                            params=params)
         self.scylla_repo = scylla_repo
 
-    def wait_for_init(self, verbose=False, db_node_address=None):
-        queue = Queue.Queue()
+    def node_setup(self, node, verbose=False, db_node_address=None):
+        self.log.info('Setup in LoaderSetGCE')
+        node.wait_ssh_up(verbose=verbose)
+        yum_config_path = '/etc/yum.repos.d/scylla.repo'
+        node.remoter.run('sudo curl %s -o %s' %
+                         (self.params.get('scylla_repo'), yum_config_path))
+        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        node.wait_cs_installed(verbose=verbose)
+        node.remoter.run('sudo yum install -y screen')
+        if db_node_address is not None:
+            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
+                             db_node_address)
 
-        def node_setup(node):
-            self.log.info('Setup in LoaderSetGCE')
-            node.wait_ssh_up(verbose=verbose)
-            yum_config_path = '/etc/yum.repos.d/scylla.repo'
-            node.remoter.run('sudo curl %s -o %s' %
-                             (self.params.get('scylla_repo'), yum_config_path))
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-            node.wait_cs_installed(verbose=verbose)
-            node.remoter.run('sudo yum install -y screen')
-            if db_node_address is not None:
-                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
-                                 db_node_address)
-
-            cs_exporter_setup = CassandraStressExporterSetup()
-            cs_exporter_setup.install(node)
-
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
-
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
+        cs_exporter_setup = CassandraStressExporterSetup()
+        cs_exporter_setup.install(node)
 
 
 class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
