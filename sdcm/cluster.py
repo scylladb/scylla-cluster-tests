@@ -1063,6 +1063,9 @@ client_encryption_options:
                                 dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
+    def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
+        self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
@@ -1071,8 +1074,8 @@ client_encryption_options:
         mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
         self.remoter.run('sudo yum install -y epel-release', retry=3)
-        self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla.repo -L {}'.format(scylla_repo))
-        self.remoter.run('sudo curl -o /etc/yum.repos.d/scylla-manager.repo -L {}'.format(scylla_mgmt_repo))
+        self.download_scylla_repo(scylla_repo)
+        self.download_scylla_repo(scylla_mgmt_repo, repo_path='/etc/yum.repos.d/scylla-manager.repo')
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
