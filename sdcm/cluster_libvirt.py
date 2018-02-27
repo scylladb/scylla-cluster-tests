@@ -219,9 +219,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
         node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum update -y --skip-broken')
         node.remoter.run('sudo yum install -y rsync tcpdump screen')
-        yum_config_path = '/etc/yum.repos.d/scylla.repo'
-        node.remoter.run('sudo curl %s -o %s -L' %
-                         (self.params.get('scylla_repo'), yum_config_path))
+        node.download_scylla_repo(self.params.get('scylla_repo'))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
         node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                           cluster_name=self.name,
@@ -330,9 +328,7 @@ class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):
         def node_setup(node):
             self.log.info('Setup in LoaderSetLibvirt')
             node.wait_ssh_up(verbose=verbose)
-            yum_config_path = '/etc/yum.repos.d/scylla.repo'
-            node.remoter.run('sudo curl %s -o %s -L' %
-                             (self.params.get('scylla_repo'), yum_config_path))
+            node.download_scylla_repo(self.params.get('scylla_repo'))
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.wait_cs_installed(verbose=verbose)
             node.remoter.run('sudo yum install -y screen')
