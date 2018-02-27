@@ -311,7 +311,7 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
             node.remoter.run('sudo yum update -y --skip-broken', retry=3)
         node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
-        node.remoter.run('sudo curl %s -o %s' %
+        node.remoter.run('sudo curl %s -o %s -L' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
 
@@ -410,7 +410,7 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
         self.log.info('Setup in LoaderSetGCE')
         node.wait_ssh_up(verbose=verbose)
         yum_config_path = '/etc/yum.repos.d/scylla.repo'
-        node.remoter.run('sudo curl %s -o %s' %
+        node.remoter.run('sudo curl %s -o %s -L' %
                          (self.params.get('scylla_repo'), yum_config_path))
         node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
         node.wait_cs_installed(verbose=verbose)
