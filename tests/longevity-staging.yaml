@@ -69,3 +69,6 @@ databases: !mux
     scylla:
         db_type: scylla
         instance_type_db: 'i2.4xlarge'
+    mixed:
+        db_type: mixed
+        instance_type_db: 'i2.4xlarge'
