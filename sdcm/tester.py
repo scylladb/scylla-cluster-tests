@@ -237,6 +237,7 @@ class ClusterTester(Test):
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
+        self.cs_db_cluster = None
         self.loaders = None
         self.monitors = None
         self.connections = []
@@ -244,6 +245,8 @@ class ClusterTester(Test):
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         self.init_resources()
         self.db_cluster.wait_for_init()
+        if self.cs_db_cluster:
+            self.cs_db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
         if self.params.get('cluster_backend') not in ['gce', 'docker'] and len(self.db_cluster.datacenter) > 1:
@@ -502,61 +505,61 @@ class ClusterTester(Test):
             ec2_security_group_ids.append(i.split(','))
         ec2_subnet_id = self.params.get('subnet_id').split()
 
-        if self.params.get('db_type') == 'scylla':
-            self.db_cluster = ScyllaAWSCluster(ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
-                                               ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                                               ec2_security_group_ids=ec2_security_group_ids,
-                                               ec2_subnet_id=ec2_subnet_id,
-                                               ec2_instance_type=db_info['type'],
-                                               services=services,
-                                               credentials=self.credentials,
-                                               ec2_block_device_mappings=db_info['device_mappings'],
-                                               user_prefix=user_prefix,
-                                               n_nodes=db_info['n_nodes'],
-                                               params=self.params)
-        elif self.params.get('db_type') == 'cassandra':
-            self.db_cluster = CassandraAWSCluster(ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
-                                                  ec2_ami_username=self.params.get('ami_db_cassandra_user'),
-                                                  ec2_security_group_ids=ec2_security_group_ids,
-                                                  ec2_subnet_id=ec2_subnet_id,
-                                                  ec2_instance_type=db_info['type'],
-                                                  service=services[:1],
-                                                  ec2_block_device_mappings=db_info['device_mappings'],
-                                                  credentials=self.credentials,
-                                                  user_prefix=user_prefix,
-                                                  n_nodes=db_info['n_nodes'],
-                                                  params=self.params)
+        common_params = dict(ec2_security_group_ids=ec2_security_group_ids,
+                             ec2_subnet_id=ec2_subnet_id,
+                             services=services,
+                             credentials=self.credentials,
+                             user_prefix=user_prefix,
+                             params=self.params
+                             )
+
+        def create_cluster(db_type='scylla'):
+            cl_params = dict(
+                ec2_instance_type=db_info['type'],
+                ec2_block_device_mappings=db_info['device_mappings'],
+                n_nodes=db_info['n_nodes']
+            )
+            cl_params.update(common_params)
+            if db_type == 'scylla':
+                return ScyllaAWSCluster(
+                    ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
+                    ec2_ami_username=self.params.get('ami_db_scylla_user'),
+                    **cl_params)
+            elif db_type == 'cassandra':
+                return CassandraAWSCluster(
+                    ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
+                    ec2_ami_username=self.params.get('ami_db_cassandra_user'),
+                    **cl_params)
+
+        db_type = self.params.get('db_type')
+        if db_type in ('scylla', 'cassandra'):
+            self.db_cluster = create_cluster(db_type)
+        elif db_type == 'mixed':
+            self.db_cluster = create_cluster('scylla')
+            self.cs_db_cluster = create_cluster('cassandra')
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
 
         scylla_repo = get_data_path('scylla.repo')
-        self.loaders = LoaderSetAWS(ec2_ami_id=self.params.get('ami_id_loader').split(),
-                                    ec2_ami_username=self.params.get('ami_loader_user'),
-                                    ec2_security_group_ids=ec2_security_group_ids,
-                                    ec2_subnet_id=ec2_subnet_id,
-                                    ec2_instance_type=loader_info['type'],
-                                    service=services[:1],
-                                    ec2_block_device_mappings=loader_info['device_mappings'],
-                                    credentials=self.credentials,
-                                    scylla_repo=scylla_repo,
-                                    user_prefix=user_prefix,
-                                    n_nodes=loader_info['n_nodes'],
-                                    params=self.params)
+        self.loaders = LoaderSetAWS(
+            ec2_ami_id=self.params.get('ami_id_loader').split(),
+            ec2_ami_username=self.params.get('ami_loader_user'),
+            ec2_instance_type=loader_info['type'],
+            ec2_block_device_mappings=loader_info['device_mappings'],
+            scylla_repo=scylla_repo,
+            n_nodes=loader_info['n_nodes'],
+            **common_params)
 
         if monitor_info['n_nodes'] > 0:
-            self.monitors = MonitorSetAWS(ec2_ami_id=self.params.get('ami_id_monitor').split(),
-                                          ec2_ami_username=self.params.get('ami_monitor_user'),
-                                          ec2_security_group_ids=ec2_security_group_ids,
-                                          ec2_subnet_id=ec2_subnet_id,
-                                          ec2_instance_type=monitor_info['type'],
-                                          service=services[:1],
-                                          ec2_block_device_mappings=monitor_info['device_mappings'],
-                                          credentials=self.credentials,
-                                          scylla_repo=scylla_repo,
-                                          user_prefix=user_prefix,
-                                          n_nodes=monitor_info['n_nodes'],
-                                          params=self.params)
+            self.monitors = MonitorSetAWS(
+                ec2_ami_id=self.params.get('ami_id_monitor').split(),
+                ec2_ami_username=self.params.get('ami_monitor_user'),
+                ec2_instance_type=monitor_info['type'],
+                ec2_block_device_mappings=monitor_info['device_mappings'],
+                scylla_repo=scylla_repo,
+                n_nodes=monitor_info['n_nodes'],
+                **common_params)
         else:
             self.monitors = NoMonitorSet()
 
@@ -957,6 +960,8 @@ class ClusterTester(Test):
             if self._failure_post_behavior == 'destroy':
                 self.db_cluster.destroy()
                 self.db_cluster = None
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.destroy()
             elif self._failure_post_behavior == 'stop':
                 for node in self.db_cluster.nodes:
                     node.instance.stop()

@@ -401,11 +401,11 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
 class CassandraAWSCluster(ScyllaAWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=10,
+                 n_nodes=[10],
                  params=None):
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
@@ -418,7 +418,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
-                     '--release 2.1.15' % (name, n_nodes))
+                     '--release 2.1.15' % (name, sum(n_nodes)))
 
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
@@ -428,13 +428,12 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                ec2_user_data=user_data,
                                                ec2_block_device_mappings=ec2_block_device_mappings,
                                                cluster_uuid=cluster_uuid,
-                                               services=service,
+                                               services=services,
                                                credentials=credentials,
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
-        self.collectd_setup = CassandraCollectdSetup()
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -449,7 +448,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError('Unexpected cassandra.yaml '
                                  'contents:\n%s' % yaml_stream.read())
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
@@ -460,7 +459,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                        count,
                                                        seeds))
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data)
+                                                              ec2_user_data=ec2_user_data,
+                                                              dc_idx=dc_idx)
         return added_nodes
 
     def node_setup(self, node, verbose=False):
@@ -471,7 +471,6 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.run('sudo apt-get update')
         node.remoter.run('sudo apt-get install -y collectd collectd-utils')
         node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
-        self.collectd_setup.install(node)
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False):
@@ -481,7 +480,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
 class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
@@ -495,7 +494,7 @@ class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
                                            ec2_instance_type=ec2_instance_type,
                                            ec2_ami_username=ec2_ami_username,
                                            ec2_user_data=user_data,
-                                           services=service,
+                                           services=services,
                                            ec2_block_device_mappings=ec2_block_device_mappings,
                                            credentials=credentials,
                                            cluster_prefix=cluster_prefix,
@@ -508,7 +507,7 @@ class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
 class MonitorSetAWS(AWSCluster, cluster.BaseMonitorSet):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
-                 service, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
@@ -522,7 +521,7 @@ class MonitorSetAWS(AWSCluster, cluster.BaseMonitorSet):
                                             ec2_instance_type=ec2_instance_type,
                                             ec2_ami_username=ec2_ami_username,
                                             ec2_user_data=user_data,
-                                            services=service,
+                                            services=services,
                                             ec2_block_device_mappings=ec2_block_device_mappings,
                                             credentials=credentials,
                                             cluster_prefix=cluster_prefix,
