@@ -18,6 +18,7 @@ import os
 
 from avocado import main
 from sdcm.tester import ClusterTester
+import time
 
 
 class PerformanceRegressionTest(ClusterTester):
@@ -228,6 +229,8 @@ class PerformanceRegressionTest(ClusterTester):
         for stress in stress_queue:
             self.get_stress_results(queue=stress, store_results=False)
 
+        time.sleep(60)
+
         # Run WRITE workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
@@ -236,6 +239,8 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
+        time.sleep(60)
+
         # Run READ workload
         self.create_test_stats()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
@@ -243,6 +248,8 @@ class PerformanceRegressionTest(ClusterTester):
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
         self.check_regression()
+
+        time.sleep(60)
 
         # run MIXED workload
         self.create_test_stats()
