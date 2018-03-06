@@ -74,11 +74,9 @@ class Nemesis(object):
             self.db_stats.update({'nemesis': self.stats})
 
     def save_event(self, disrupt, status=True, data={}):
-        event_log = event.get_event_log()
-        event_name = 'disrupt'
         event_msg = '{} status: {}, {}'.format(disrupt, status, data)
-        evt = event.SCTError(event_name, event_msg) if not status else event.SCTInfo(event_name, event_msg)
-        event_log.save(evt)
+        event.DisruptionInfoEvent(event_msg)() if status else \
+            event.DisruptionErrorEvent(event_msg)(disrupt)
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
@@ -719,7 +717,6 @@ def log_time_elapsed_and_status(method):
             if error:
                 log_info.update({'error': error})
                 status = False
-                args[0].metrics_srv.nemesis_error_event(disrupt)
 
             args[0].update_stats(disrupt, status, log_info)
             args[0].save_event(disrupt, status, log_info)

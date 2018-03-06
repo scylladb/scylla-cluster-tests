@@ -9,6 +9,8 @@ import json
 from prometheus import SCTMetrics
 from avocado.utils import process
 
+import prometheus
+
 logger = logging.getLogger(__name__)
 
 COLOR = {'white':   "\033[0;37;60m",
@@ -24,26 +26,40 @@ event_log = None
 
 
 class SCTEvent(object):
+    """
+    SCT event base class.
+    When the event created, it's saved in events log file and sent to prometheus,
+    if corresponding prometheus event exists.
+    """
 
     _COLOR = COLOR['white']
+    _NAME = 'COMMON'
+    _METRIC = None
 
-    def __init__(self, name='common', msg=''):
-        self._name = name.upper()
+    def __init__(self, msg='', log_dir='/tmp'):
         self._mgs = msg
         self._timestamp = self._timestamp()
-        self._max_name_len = 10
+        self._max_name_len = 16
+        self._log_dir = log_dir
+        self.metrics_srv = prometheus.sct_metrics_obj()
 
     def _timestamp(self):
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     def __str__(self):
-        return '%-20s %s%-8s %10s%s %s\n' % (self._timestamp,
-                                             self._COLOR,
-                                             self.__class__.__name__.upper().lstrip('SCT'),
-                                             self._name if len(self._name) <= 10 else self._name[:10],
-                                             COLOR['end'],
-                                             self._mgs
-                                             )
+        return '%-20s %s%-16s %16s%s %s\n' % (self._timestamp,
+                                              self._COLOR,
+                                              self.__class__.__name__.rstrip('Event'),
+                                              self._NAME if len(self._NAME) <= 16 else self._NAME[:16],
+                                              COLOR['end'],
+                                              self._mgs
+                                              )
+
+    def __call__(self, metrics_param=None, **kwargs):
+        elog = get_event_log(self._log_dir)
+        elog.save(self)
+        if metrics_param and self._METRIC:
+            getattr(self.metrics_srv, self._METRIC)(metrics_param)
 
 
 class SCTAlert(SCTEvent):
@@ -88,6 +104,60 @@ def get_event_log(log_file_dir='/tmp'):
     return event_log
 
 
+class CStressInfoEvent(SCTInfo):
+    _NAME = 'C-STRESS'
+
+
+class DisruptionInfoEvent(SCTInfo):
+    _NAME = 'DISRUPT'
+
+
+class DisruptionErrorEvent(SCTError):
+    _NAME = 'DISRUPT'
+    _METRIC = 'nemesis_error_event'
+
+
+class CoredumpErrorEvent(SCTError):
+    _NAME = 'COREDUMP'
+    _METRIC = 'coredump_event'
+
+
+class DatabaseErrorEvent(SCTError):
+    _NAME = 'DATABASE_ERROR'
+    _METRIC = 'database_error_event'
+    PATTERN = 'Exception'
+
+
+class BadAllocErrorEvent(DatabaseErrorEvent):
+    _NAME = 'BAD_ALLOC'
+    PATTERN = 'std::bad_alloc'
+
+
+class RuntimeErrorEvent(DatabaseErrorEvent):
+    _NAME = 'RUNTIME_ERROR'
+    PATTERN = 'std::runtime_error'
+
+
+class StacktraceErrorEvent(DatabaseErrorEvent):
+    _NAME = 'STACKTRACE'
+    PATTERN = 'stacktrace'
+
+
+class BacktraceErrorEvent(DatabaseErrorEvent):
+    _NAME = 'BACKTRACE'
+    PATTERN = 'backtrace'
+
+
+class SegmentationErrorEvent(DatabaseErrorEvent):
+    _NAME = 'SEGMENTATION'
+    PATTERN = 'segmentation'
+
+
+class IntegrityCheckErrorEvent(DatabaseErrorEvent):
+    _NAME = 'INTEGRITY_CHECK'
+    PATTERN = 'integrity check failed'
+
+
 class EventHandler(Process):
     """
     Check error counters on prometheus,
@@ -96,7 +166,8 @@ class EventHandler(Process):
     """
     CRITICAL_EVENTS = []
     ERROR_EVENTS = [(SCTMetrics.COREDUMP_COUNTER, 'node'),
-                    (SCTMetrics.DISRUPT_ERROR_COUNTER, 'method')]
+                    (SCTMetrics.DISRUPT_ERROR_COUNTER, 'method'),
+                    (SCTMetrics.DATABASE_ERROR_COUNTER, 'error')]
     EXCLUDED_EVENTS = []
     alive = True
 
