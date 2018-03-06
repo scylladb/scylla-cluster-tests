@@ -54,6 +54,7 @@ class SCTMetrics(object):
     DISRUPT_GAUGE = 'nemesis_disruptions_gauge'
     DISRUPT_ERROR_COUNTER = 'nemesis_disruption_error_counter'
     COREDUMP_COUNTER = 'coredump_counter'
+    DATABASE_ERROR_COUNTER = 'database_error_counter'
 
     def __init__(self):
         super(SCTMetrics, self).__init__()
@@ -69,6 +70,9 @@ class SCTMetrics(object):
         self._coredump_counter = self._create_counter(self.COREDUMP_COUNTER,
                                                       'Counter for coredumps',
                                                       ['node', 'event'])
+        self._database_error_counter = self._create_counter(self.DATABASE_ERROR_COUNTER,
+                                                            'Counter for database errors',
+                                                            ['error', 'event'])
 
     @staticmethod
     def _create_counter(name, desc, param_list):
@@ -103,3 +107,7 @@ class SCTMetrics(object):
     @log_error
     def coredump_event(self, node):
         self._coredump_counter.labels(node, ERROR).inc()
+
+    @log_error
+    def database_error_event(self, error):
+        self._database_error_counter.labels(error, ERROR).inc()

@@ -225,8 +225,7 @@ class ClusterTester(Test):
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
         cluster.set_duration(self._duration)
-        self.event_log = event.get_event_log(self.logdir)
-        self.event_log.save('TEST START')
+        event.SCTEvent('TEST START', log_dir=self.logdir)()
 
         # for saving test details in DB
         self.test_index = self.__class__.__name__.lower()
@@ -726,7 +725,7 @@ class ClusterTester(Test):
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         self.update_stress_cmd_details(stress_cmd, prefix)
-        self.event_log.save(event.SCTInfo('c-stress', 'Start cassandra stress, cmd: %s' % stress_cmd))
+        event.CStressInfoEvent('Start cassandra stress, cmd: %s' % stress_cmd)()
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -742,7 +741,7 @@ class ClusterTester(Test):
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
         self.update_bench_stress_cmd_details(stress_cmd)
-        self.event_log.save(event.SCTInfo('c-stress', 'Start cassandra stress bench, cmd: %s' % stress_cmd))
+        event.CStressInfoEvent('Start cassandra stress bench, cmd: %s' % stress_cmd)()
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -1048,7 +1047,7 @@ class ClusterTester(Test):
     def tearDown(self):
         event.stop_event_handler()
         self.clean_resources()
-        self.event_log.save('TEST END')
+        event.SCTEvent('TEST END')()
 
     def get_scylla_versions(self):
         versions = {}

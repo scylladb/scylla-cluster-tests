@@ -287,7 +287,6 @@ class BaseNode(object):
         self._ssh_login_info = ssh_login_info
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
-        self.event_log = event.get_event_log()
         self.metrics_srv = prometheus.sct_metrics_obj()
 
         self._journal_thread = None
@@ -303,7 +302,11 @@ class BaseNode(object):
         self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
-        self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
+        self._database_error_events = [event.BadAllocErrorEvent, event.RuntimeErrorEvent, event.StacktraceErrorEvent,
+                                       event.BacktraceErrorEvent, event.SegmentationErrorEvent,
+                                       event.IntegrityCheckErrorEvent]
+        self._database_log_offset = 0
+        self._database_log_line_cnt = 0
         self.termination_event = threading.Event()
         if node_prefix is not None and 'db-node' in node_prefix:
             self.start_journal_thread()
@@ -704,9 +707,7 @@ WantedBy=multi-user.target
             if line.startswith('Coredump:'):
                 coredump = line.split()[-1]
                 self.log.debug('Found coredump file: {}'.format(coredump))
-                self.event_log.save(event.SCTError('coredump',
-                                                   'Coredump file on node {}: {}'.format(self.name, coredump)))
-                self.metrics_srv.coredump_event(str(self))
+                event.CoredumpErrorEvent('Coredump file on node {}: {}'.format(self.name, coredump))(str(self))
                 coredump_files = self._try_split_coredump(coredump)
                 for f in coredump_files:
                     self._upload_coredump(f)
@@ -760,6 +761,7 @@ WantedBy=multi-user.target
             if self.termination_event.isSet():
                 break
             self.get_backtraces()
+            self.search_database_log_errors()
             time.sleep(30)
 
     def start_backtrace_thread(self):
@@ -939,26 +941,30 @@ WantedBy=multi-user.target
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
 
-    def search_database_log(self, expression):
+    def search_database_log_errors(self):
         matches = []
-        pattern = re.compile(expression, re.IGNORECASE)
 
         if not os.path.exists(self.database_log):
             return matches
         with open(self.database_log, 'r') as f:
+            f.seek(self._database_log_offset)
+            index = 0
             for index, line in enumerate(f):
-                if index not in self._database_log_errors_index:
+                curr_index = index + self._database_log_line_cnt
+                for event_cls in self._database_error_events:
+                    pattern = re.compile(event_cls.PATTERN, re.IGNORECASE)
                     m = pattern.search(line)
                     if m:
-                        self._database_log_errors_index.append(index)
-                        matches.append((index, line))
+                        self.log.debug('Error found in database log: %s %s, ind: %s',
+                                       event_cls.PATTERN, line, curr_index)
+                        event_cls('{} error on node {}: {}'.format(event_cls.PATTERN, self.name, line))(
+                            '{}, {}'.format(event_cls.PATTERN, self.name))
+                        self._database_log_errors_index.append(curr_index)
+                        matches.append((curr_index, line))
+            if index > 0:
+                self._database_log_line_cnt += index + 1
+            self._database_log_offset = f.tell()
         return matches
-
-    def search_database_log_errors(self):
-        errors = []
-        for expression in self._database_error_patterns:
-            errors += self.search_database_log(expression)
-        return errors
 
     def datacenter_setup(self, datacenters):
         cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\n\" >> /etc/scylla/cassandra-rackdc.properties'"
@@ -1590,7 +1596,6 @@ class BaseLoaderSet(object):
     def __init__(self, *args, **kwargs):
         self._loader_queue = []
         self.params = kwargs.get('params', {})
-        self.event_log = event.get_event_log()
 
     def node_setup(self, node, verbose=False, db_node_address=None):
         self.log.info('Setup in BaseLoaderSet')
@@ -1645,8 +1650,7 @@ class BaseLoaderSet(object):
         def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
             queue[TASK_QUEUE].put(node)
 
-            self.event_log.save(event.SCTInfo('c-stress',
-                                              'Run s-c on loader {}, cmd: {}'.format(node.name, stress_cmd)))
+            event.CStressInfoEvent('Run s-c on loader {}, cmd: {}'.format(node.name, stress_cmd))()
 
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
@@ -1699,8 +1703,7 @@ class BaseLoaderSet(object):
                                       log_file=log_file_name)
             node.cs_start_time = result.stdout_pattern_found_at
 
-            self.event_log.save(event.SCTInfo('c-stress',
-                                              'Finished s-c on loader {}, cmd: {}'.format(node.name, stress_cmd)))
+            event.CStressInfoEvent('Finished s-c on loader {}, cmd: {}'.format(node.name, stress_cmd))()
 
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
