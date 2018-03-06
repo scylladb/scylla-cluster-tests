@@ -1,11 +1,16 @@
-test_duration: 40
-n_db_nodes: 3
+test_duration: 10080
+stress_write_cmd: "cassandra-stress write cl=QUORUM n=10000 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..300300300"
+stress_read_cmd:  "cassandra-stress read cl=ONE n=10000 -mode cql3 native -rate threads=10 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300 -port jmx=6868 -log interval=5"
+n_db_nodes: 4
 n_loaders: 4
 n_monitor_nodes: 1
-user_prefix: 'cases-enospc-VERSION'
+user_prefix: 'cases-rebuild-VERSION'
 failure_post_behavior: destroy
-stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -errors ignore -pop seq=1..10000000
+ip_ssh_connections: 'private'
+experimental: 'true'
+round_robin: 'true'
 instance_provision: 'spot_low_price'
+
 
 backends: !mux
     gce: !mux
@@ -46,10 +51,12 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
 
+    docker: !mux
+        cluster_backend: 'docker'
+        docker_image: 'scylladb/scylla'
+        user_credentials_path: '~/.ssh/scylla-test'
+
 databases: !mux
-    cassandra:
-        db_type: cassandra
-        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        instance_type_db: 'c3.large'
+        instance_type_db: 'i3.2xlarge'
