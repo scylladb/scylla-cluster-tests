@@ -158,6 +158,11 @@ class IntegrityCheckErrorEvent(DatabaseErrorEvent):
     PATTERN = 'integrity check failed'
 
 
+class ReactorStalledErrorEvent(DatabaseErrorEvent):
+    _NAME = 'REACTOR_STALLED'
+    PATTERN = 'Reactor stalled'
+
+
 class EventHandler(Process):
     """
     Check error counters on prometheus,
