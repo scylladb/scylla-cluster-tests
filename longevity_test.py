@@ -47,9 +47,6 @@ class LongevityTest(ClusterTester):
             if 'profile' in params:
                 del params['profile']
 
-            if 'keyspace_name' in params:
-                del params['keyspace_name']
-
         return stress_queue
 
     def _parse_stress_cmd(self, stress_cmd, params):
@@ -62,11 +59,6 @@ class LongevityTest(ClusterTester):
             cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
             cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
             params.update({'profile': cs_profile})
-
-        if 'compression' in stress_cmd:
-            if 'keyspace_name' not in params:
-                    keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
-                    params.update({'keyspace_name': keyspace_name})
 
         return params
 
@@ -121,7 +113,7 @@ class LongevityTest(ClusterTester):
             for stress in write_queue:
                 self.verify_stress_thread(queue=stress)
 
-        # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
+        # Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
         if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
@@ -135,7 +127,6 @@ class LongevityTest(ClusterTester):
                 params = {'keyspace_num': keyspace_num}
                 self._run_all_stress_cmds(stress_queue, params)
 
-        # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
             self.db_cluster.wait_total_space_used_per_node()
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
@@ -144,11 +135,7 @@ class LongevityTest(ClusterTester):
         if stress_read_cmd:
             for stress_cmd in stress_read_cmd:
                 self.log.debug('stress read cmd: {}'.format(stress_cmd))
-                if 'compression' in stress_cmd:
-                    keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
-                    stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=keyspace_name))
-                else:
-                    stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
+                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
 
         for stress in stress_queue:
             self.verify_stress_thread(queue=stress)
