@@ -1507,10 +1507,10 @@ class BaseScyllaCluster(object):
         """
         tcpdump = self.params.get('tcpdump')
         cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
+        self.log.debug("Current cfstats: %s" % cfstats)
         reached_threshold = True
-        for value in cfstats:
-            if value < threshold:
-                reached_threshold = False
+        if max(cfstats) < threshold:
+            reached_threshold = False
         if reached_threshold:
             self.log.debug("Done waiting on cfstats: %s" % cfstats)
         return reached_threshold
