@@ -15,7 +15,6 @@ backends: !mux
         cluster_backend: 'aws'
         instance_type_loader: 'c4.4xlarge'
         instance_type_monitor: 't2.small'
-        instance_type_db: 'i3.2xlarge'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
@@ -30,3 +29,4 @@ backends: !mux
 databases: !mux
     scylla:
         db_type: scylla
+        instance_type_db: 'i3.2xlarge'
