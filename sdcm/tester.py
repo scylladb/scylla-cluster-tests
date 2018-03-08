@@ -1197,8 +1197,10 @@ class ClusterTester(Test):
         except Exception as ex:
             self.log.exception('Failed to check regression: %s', ex)
 
-    def populate_data_parallel(self, size_in_gb, blocking=True):
+    def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
+        if read:
+            base_cmd = "cassandra-stress read cl=ONE "
         stress_fixed_params = " -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' " \
                               "-port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="

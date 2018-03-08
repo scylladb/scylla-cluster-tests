@@ -8,6 +8,7 @@ failure_post_behavior: destory
 ip_ssh_connections: 'public'
 experimental: 'true'
 stop_services: 'true'
+instance_provision: 'spot_low_price'
 
 
 backends: !mux
@@ -28,5 +29,8 @@ backends: !mux
             ami_monitor_user: 'centos'
 
 databases: !mux
+    cassandra:
+        db_type: cassandra
+        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
