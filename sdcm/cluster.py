@@ -1741,6 +1741,10 @@ class BaseLoaderSet(object):
             key = line[:split_idx].strip()
             value = line[split_idx + 1:].split()[0]
             results[key] = value
+            m = re.findall('.*READ:(\d+), WRITE:(\d+)]', line)
+            if m:  # parse results for mixed workload
+                results['%s read' % key] = m[0][0]
+                results['%s write' % key] = m[0][1]
 
         if not enable_parse:
             logger.warning('Cannot find summary in c-stress results: %s', lines)
