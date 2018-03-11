@@ -87,7 +87,7 @@ class DockerNode(cluster.BaseNode):
 
     def destroy(self, force=False):
         force_param = '-f' if force else ''
-        _cmd('rm {} {}'.format(force_param, self.name))
+        _cmd('rm {} -v {}'.format(force_param, self.name))
 
 
 class DockerCluster(cluster.BaseCluster):
@@ -115,7 +115,7 @@ class DockerCluster(cluster.BaseCluster):
 
     def _update_image(self):
         logger.debug('update scylla image')
-        _cmd('pull {}'.format(self._image), timeout=120)
+        _cmd('pull {}'.format(self._image), timeout=300)
         self._clean_old_images()
 
     def _create_node(self, node_name, is_seed=False, seed_ip=None):

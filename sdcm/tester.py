@@ -638,26 +638,22 @@ class ClusterTester(Test):
             self.monitors = NoMonitorSet()
 
     def get_cluster_docker(self):
-        user_prefix = self.params.get('user_prefix', None)
-        docker_image = self.params.get('docker_image', None)
-        n_nodes = self.params.get('n_db_nodes')
         user_credentials = self.params.get('user_credentials_path', None)
         self.credentials.append(GCECredentials(key_file=user_credentials))
-        self.db_cluster = docker.ScyllaDockerCluster(docker_image=docker_image,
-                                                     n_nodes=[n_nodes],
-                                                     user_prefix=user_prefix,
-                                                     credentials=self.credentials,
-                                                     params=self.params)
-        self.loaders = docker.LoaderSetDocker(docker_image=docker_image,
-                                              n_nodes=self.params.get('n_loaders'),
-                                              user_prefix=user_prefix,
-                                              credentials=self.credentials,
-                                              params=self.params)
-        self.monitors = docker.MonitorSetDocker(docker_image=docker_image,
-                                                n_nodes=self.params.get('n_monitor_nodes'),
-                                                user_prefix=user_prefix,
-                                                credentials=self.credentials,
-                                                params=self.params)
+        params = dict(
+            docker_image=self.params.get('docker_image', None),
+            n_nodes=[self.params.get('n_db_nodes')],
+            user_prefix=self.params.get('user_prefix', None),
+            credentials=self.credentials,
+            params=self.params
+        )
+        self.db_cluster = docker.ScyllaDockerCluster(**params)
+
+        params['n_nodes'] = self.params.get('n_loaders')
+        self.loaders = docker.LoaderSetDocker(**params)
+
+        params['n_nodes'] = self.params.get('n_monitor_nodes')
+        self.monitors = docker.MonitorSetDocker(**params)
 
     @clean_aws_resources
     def init_resources(self, loader_info=None, db_info=None,
