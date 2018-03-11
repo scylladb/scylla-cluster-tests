@@ -32,7 +32,7 @@ backends: !mux
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
-        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/30/scylla.repo'
+        scylla_repo: 'SCYLLA_REPO_FILE_URL'
         us_east_1:
           gce_datacenter: 'us-east1-b'
 

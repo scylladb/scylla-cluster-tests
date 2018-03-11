@@ -34,11 +34,24 @@ backends: !mux
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
-        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/30/scylla.repo'
+        scylla_repo: 'SCYLLA_REPO_FILE_URL'
         us_east_1:
           gce_datacenter: 'us-east1-b'
 
-
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 't2.small'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-d934e980'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_monitor: 'AMI_ID'
+            ami_id_loader: 'AMI_ID'
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
