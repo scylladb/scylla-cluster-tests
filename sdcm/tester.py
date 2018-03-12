@@ -991,6 +991,7 @@ class ClusterTester(Test):
                     self.log.info(response.text)
 
             grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
+            snapshot_uploaded = False
             if grafana_snapshots:
                 result_path = '%s.png' % file_path
                 with open(grafana_snapshots[0]) as fh:
@@ -998,6 +999,7 @@ class ClusterTester(Test):
                     url_s3 = ClusterTester.get_s3_url(result_path)
                     self.log.info("uploading grafana snapshot data on %s" % url_s3)
                     response = requests.put(url_s3, data=mydata)
+                    snapshot_uploaded = response.ok
                     self.log.info(response.text)
 
             if self._failure_post_behavior == 'destroy':
@@ -1019,7 +1021,7 @@ class ClusterTester(Test):
                 self.stats['errors'] = db_cluster_errors
             if db_cluster_coredumps:
                 self.stats['coredumps'] = db_cluster_coredumps
-            self.update_test_details()
+            self.update_test_details(snapshot_uploaded)
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
@@ -1148,12 +1150,14 @@ class ClusterTester(Test):
         if total_stats:
             self.stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self):
+    def update_test_details(self, snapshot_uploaded=False):
         self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if self.monitors:
             url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
             self.stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+            # setup grafana_snapshot value only when snapshot is successfully uploaded
+            if snapshot_uploaded:
+                self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
         self.stats['status'] = self.status
         update_data = {'status': self.stats['status'], 'test_details': self.stats['test_details']}
         if self.stats['errors']:
