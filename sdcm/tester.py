@@ -58,6 +58,7 @@ from .data_path import get_data_path
 from . import es
 from results_analyze import ResultsAnalyzer
 from . import docker
+from . import cluster_baremetal
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -655,6 +656,29 @@ class ClusterTester(Test):
         params['n_nodes'] = self.params.get('n_monitor_nodes')
         self.monitors = docker.MonitorSetDocker(**params)
 
+    def get_cluster_baremetal(self):
+        user_credentials = self.params.get('user_credentials_path', None)
+        self.credentials.append(GCECredentials(key_file=user_credentials))
+        params = dict(
+            n_nodes=[self.params.get('n_db_nodes')],
+            public_ips=self.params.get('db_nodes_public_ip', None),
+            private_ips=self.params.get('db_nodes_private_ip', None),
+            user_prefix=self.params.get('user_prefix', None),
+            credentials=self.credentials,
+            params=self.params
+        )
+        self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
+
+        params['n_nodes'] = self.params.get('n_loaders')
+        params['public_ips'] = self.params.get('loaders_public_ip')
+        params['private_ips'] = self.params.get('loaders_private_ip')
+        self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
+
+        params['n_nodes'] = self.params.get('n_monitor_nodes')
+        params['public_ips'] = self.params.get('monitor_nodes_public_ip')
+        params['private_ips'] = self.params.get('monitor_nodes_private_ip')
+        self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
+
     @clean_aws_resources
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -687,6 +711,8 @@ class ClusterTester(Test):
                                  monitor_info=monitor_info)
         elif cluster_backend == 'docker':
             self.get_cluster_docker()
+        elif cluster_backend == 'baremetal':
+            self.get_cluster_baremetal()
 
         seeds_num = self.params.get('seeds_num', default=1)
         for i in range(seeds_num):

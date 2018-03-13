@@ -377,8 +377,7 @@ class BaseNode(object):
                            details)
 
     def install_sct_log_formatter(self):
-        result = self.remoter.run('test -e /var/tmp/sct_log_formatter',
-                                  ignore_status=True)
+        result = self.remoter.run('test -e /var/tmp/sct_log_formatter', verbose=False, ignore_status=True)
         if result.exit_status != 0:
             sct_log_formatter = data_path.get_data_path('sct_log_formatter')
             self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
@@ -427,7 +426,9 @@ class BaseNode(object):
 
     def install_grafana(self):
         self.remoter.run('sudo yum install rsync -y')
-        self.remoter.run('sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y')
+        self.remoter.run(
+            'sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y',
+            ignore_status=True)
         self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
 
     def setup_grafana(self, scylla_version=''):
@@ -881,7 +882,7 @@ WantedBy=multi-user.target
             text = '%s: Waiting for JMX service to be down' % self
         wait.wait_for(func=lambda: not self.jmx_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
-    def _report_housekeeping_uuid(self, verbose=True):
+    def _report_housekeeping_uuid(self, verbose=False):
         """
         report uuid of test db nodes to ScyllaDB
         """
@@ -1066,6 +1067,55 @@ client_encryption_options:
     def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
 
+    def clean_scylla(self):
+        """
+        Uninstall scylla
+        """
+        self.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
+        self.remoter.run('sudo yum remove -y "scylla*"')
+        self.remoter.run('sudo yum clean all')
+        self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
+        self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
+
+    def install_scylla(self, scylla_repo):
+        """
+        Download and install scylla on node
+        :param scylla_repo: scylla repo file URL
+        """
+        result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+        if result.exit_status == 0:
+            self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+        else:
+            self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+        self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+        self.download_scylla_repo(scylla_repo)
+        self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+        self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
+
+    def detect_disks(self, nvme=True):
+        """
+        Detect local disks
+        :param nvme: NVMe(True) or SCSI(False) disk
+        :return: list of disk names
+        """
+        patt = ('nvme0n*', 'nvme0n\w+') if nvme else ('sd[b-z]', 'sd\w+')
+        result = self.remoter.run('ls /dev/{}'.format(patt[0]))
+        disks = re.findall('/dev/{}'.format(patt[1]), result.stdout)
+        assert disks, 'Failed to find disks!'
+        return disks
+
+    def scylla_setup(self, disks):
+        """
+        Setup scylla
+        :param disks: list of disk names
+        """
+        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(','.join(disks)))
+        self.remoter.run('sudo sync')
+        self.log.info('io.conf right after setup')
+        self.remoter.run('sudo cat /etc/scylla.d/io.conf')
+        self.remoter.run('sudo systemctl enable scylla-server.service')
+        self.remoter.run('sudo systemctl enable scylla-jmx.service')
+
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
@@ -1142,7 +1192,7 @@ class BaseCluster(object):
         self.nodes = []
         self.nemesis = []
         self.params = params
-        self.datacenter = region_names
+        self.datacenter = region_names or []
         if isinstance(n_nodes, list):
             for dc_idx, num in enumerate(n_nodes):
                 self.add_nodes(num, dc_idx=dc_idx)
@@ -1283,6 +1333,8 @@ class BaseScyllaCluster(object):
         self.termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
+        self._seed_node_rebooted = False
+        self.seed_nodes_private_ips = None
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -1564,6 +1616,53 @@ class BaseScyllaCluster(object):
             return False
         else:
             raise ValueError('Unsupported type: {}'.format(type(param)))
+
+    def _node_setup(self, node, verbose=False):
+        """
+        Install, configure and run scylla on node
+        :param node: scylla node object
+        :param verbose:
+        """
+        node.wait_ssh_up(verbose=verbose)
+        node.clean_scylla()
+        node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+
+        endpoint_snitch = ''
+        if len(self.datacenter) > 1:
+            endpoint_snitch = 'GossipingPropertyFileSnitch'
+            node.datacenter_setup(self.datacenter)
+        authenticator = self.params.get('authenticator')
+        seed_address = self.get_seed_nodes_by_flag()
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,
+                          enable_exp=self._param_enabled('experimental'),
+                          endpoint_snitch=endpoint_snitch,
+                          authenticator=authenticator,
+                          server_encrypt=self._param_enabled('server_encrypt'),
+                          client_encrypt=self._param_enabled('client_encrypt'),
+                          append_conf=self.params.get('append_conf'))
+
+        try:
+            disks = node.detect_disks()
+        except AssertionError:
+            disks = node.detect_disks(nvme=False)
+        node.scylla_setup(disks)
+
+        seed_address_list = seed_address.split(',')
+        if node.private_ip_address not in seed_address_list:
+            wait.wait_for(func=lambda: self._seed_node_rebooted is True,
+                          step=30,
+                          text='Wait for seed node to be up after reboot')
+        node.restart()
+        node.wait_ssh_up()
+        if node.private_ip_address in seed_address_list:
+            self.log.info('Seed node is up after reboot')
+            self._seed_node_rebooted = True
+
+        self.log.info('io.conf right after reboot')
+        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+        node.wait_db_up()
+        node.wait_jmx_up()
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
