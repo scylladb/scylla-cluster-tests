@@ -673,8 +673,11 @@ class ClusterTester(Test):
         params['n_nodes'] = self.params.get('n_loaders')
         self.loaders = docker.LoaderSetDocker(**params)
 
-        params['n_nodes'] = self.params.get('n_monitor_nodes')
-        self.monitors = docker.MonitorSetDocker(**params)
+        params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
+        if params['n_nodes']:
+            self.monitors = docker.MonitorSetDocker(**params)
+        else:
+            self.monitors = NoMonitorSet()
 
     def get_cluster_baremetal(self):
         user_credentials = self.params.get('user_credentials_path', None)
