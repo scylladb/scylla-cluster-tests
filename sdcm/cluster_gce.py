@@ -1,9 +1,6 @@
 import os
 import re
 import time
-import threading
-import tempfile
-import Queue
 
 import cluster
 from . import wait
@@ -277,9 +274,7 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                add_disks=add_disks,
                                                params=params,
                                                gce_region_names=gce_datacenter)
-        self.seed_nodes_private_ips = None
         self.version = '2.1'
-        self._seed_node_rebooted = False
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
@@ -293,78 +288,7 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
         We have to modify scylla.yaml on our own because we are not on AWS,
         where there are auto config scripts in place.
         """
-        node.wait_ssh_up(verbose=verbose)
-        node.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
-        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'),
-                                     'scylla.yaml')
-        # Sometimes people might set up base images with
-        # previous versions of scylla installed (they shouldn't).
-        # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y "scylla*"')
-        node.remoter.run('sudo yum remove -y abrt')
-        # Let's re-create the yum database upon update
-        node.remoter.run('sudo yum clean all')
-        result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-        if result.exit_status == 0:
-            node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-        else:
-            node.remoter.run('sudo yum update -y --skip-broken', retry=3)
-        node.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
-        node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-
-        endpoint_snitch = ''
-        if len(self.datacenter) > 1:
-            endpoint_snitch = "GossipingPropertyFileSnitch"
-            node.datacenter_setup(self.datacenter)
-        authenticator = self.params.get('authenticator')
-        seed_address = self.get_seed_nodes_by_flag()
-        seed_address_list = seed_address.split(',')
-        node.config_setup(seed_address=seed_address,
-                          cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'),
-                          endpoint_snitch=endpoint_snitch,
-                          authenticator=authenticator,
-                          server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=self._param_enabled('client_encrypt'),
-                          append_conf=self.params.get('append_conf'))
-
-        if self._gce_n_local_ssd:
-            # detect local-ssd disks
-            result = node.remoter.run('ls /dev/nvme0n*')
-            disks_str = ",".join(re.findall('/dev/nvme0n\w+', result.stdout))
-        if self._add_disks and ('pd-ssd' in self._add_disks and int(self._add_disks['pd-ssd'])) or\
-                ('pd-standard' in self._add_disks and int(self._add_disks['pd-standard'])):
-            # detect pd-ssd and pd-standard disks
-            result = node.remoter.run('ls /dev/sd[b-z]')
-            disks_str = ",".join(re.findall('/dev/sd\w+', result.stdout))
-        assert disks_str != ""
-        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(disks_str))
-        node.remoter.run('sudo sync')
-        self.log.info('io.conf right after setup')
-        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
-        node.remoter.run('sudo systemctl enable scylla-server.service')
-        node.remoter.run('sudo systemctl enable scylla-jmx.service')
-        node.remoter.run('sudo sync')
-        node.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
-        node.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
-
-        if node.private_ip_address not in seed_address_list:
-            wait.wait_for(func=lambda: self._seed_node_rebooted is True,
-                          step=30,
-                          text='Wait for seed node to be up after reboot')
-        node.restart()
-        node.wait_ssh_up()
-        if node.private_ip_address in seed_address_list:
-            self.log.info('Seed node is up after reboot')
-            self._seed_node_rebooted = True
-
-        self.log.info('io.conf right after reboot')
-        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
-        node.wait_db_up()
-        node.wait_jmx_up()
-        node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                         verbose=verbose, ignore_status=True)
+        self._node_setup(node, verbose)
 
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
         super(ScyllaGCECluster, self).wait_for_init(node_list=node_list, verbose=verbose, timeout=timeout)
