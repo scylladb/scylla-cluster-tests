@@ -5,6 +5,7 @@ import os
 from avocado.utils import process
 
 import cluster
+from sdcm.utils import retrying
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,10 @@ class DockerCommandError(Exception):
 
 
 class DockerContainerNotExists(Exception):
+    pass
+
+
+class DockerContainerNotRunning(Exception):
     pass
 
 
@@ -49,9 +54,12 @@ class DockerNode(cluster.BaseNode):
             self._public_ip_address = out.strip()
         return self._public_ip_address
 
-    def _is_running(self):
+    @retrying(n=10, sleep_time=2, allowed_exceptions=(DockerContainerNotRunning,))
+    def wait_for_status_running(self):
         out = _cmd("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name))
-        return json.loads(out)
+        state = json.loads(out)
+        if not state:
+            raise DockerContainerNotRunning(self.name)
 
     @property
     def public_ip_address(self):
@@ -64,12 +72,6 @@ class DockerNode(cluster.BaseNode):
     def run_nodetool(self, cmd):
         logger.debug('run nodetool %s' % cmd)
         return _cmd('exec {} nodetool {}'.format(self.name, cmd))
-
-    def wait_for_status_running(self):
-        try_cnt = 0
-        while not self._is_running() and try_cnt < 10:
-            time.sleep(2)
-            try_cnt += 1
 
     def wait_public_ip(self):
         while not self._public_ip_address:
@@ -85,7 +87,7 @@ class DockerNode(cluster.BaseNode):
     def stop(self, timeout=30):
         _cmd('stop {}'.format(self.name), timeout=timeout)
 
-    def destroy(self, force=False):
+    def destroy(self, force=True):
         force_param = '-f' if force else ''
         _cmd('rm {} -v {}'.format(force_param, self.name))
 
@@ -101,7 +103,8 @@ class DockerCluster(cluster.BaseCluster):
         self._create_node_image()
         super(DockerCluster, self).__init__(node_prefix=kwargs.get('node_prefix'),
                                             n_nodes=kwargs.get('n_nodes'),
-                                            params=kwargs.get('params'))
+                                            params=kwargs.get('params'),
+                                            region_names=["localhost-dc"])  # no multi dc currently supported
 
     def _create_node_image(self):
         self._update_image()
@@ -128,12 +131,27 @@ class DockerCluster(cluster.BaseCluster):
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix)
 
-    def add_nodes(self, count, dc_idx=0):
-        for node_index in xrange(count):
+    def _get_node_name_and_index(self):
+        """Is important when node is added to replace some dead node"""
+        node_names = [node.name for node in self.nodes]
+        node_index = 0
+        while True:
             node_name = '%s-%s' % (self.node_prefix, node_index)
+            if node_name not in node_names:
+                return node_name, node_index
+            else:
+                node_index += 1
+
+    def add_nodes(self, count, dc_idx=0):
+        new_nodes = []
+        for _ in xrange(count):
+            node_name, node_index = self._get_node_name_and_index()
             is_seed = (node_index == 0)
             seed_ip = self.nodes[0].public_ip_address if not is_seed else None
-            self.nodes.append(self._create_node(node_name, is_seed, seed_ip))
+            new_node = self._create_node(node_name, is_seed, seed_ip)
+            self.nodes.append(new_node)
+            new_nodes.append(new_node)
+        return new_nodes
 
     def destroy(self):
         logger.info('Destroy nodes')
@@ -149,25 +167,12 @@ class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):
         super(ScyllaDockerCluster, self).__init__(node_prefix=kwargs.get('node_prefix', self._node_prefix),
                                                   **kwargs)
 
-    def wait_for_init(self):
-        self.nodes[0].wait_for_status_running()
-        node_ips = [node.public_ip_address for node in self.nodes]
-        up_nodes = list()
-        try_cnt = 0
-        while len(up_nodes) < len(node_ips) and try_cnt < 30:
-            try:
-                res = node.run_nodetool('status')
-                for line in res.splitlines():
-                    for ip in node_ips:
-                        if ip in line and ip not in up_nodes:
-                            if line.split()[0].strip() == 'UN':
-                                up_nodes.append(ip)
-            except Exception as ex:
-                logger.debug('Failed getting node status: %s', ex)
-                pass
-            time.sleep(2)
-            try_cnt += 1
-        return len(up_nodes) == len(node_ips)
+    @retrying(n=30, sleep_time=3, allowed_exceptions=(cluster.ClusterNodesNotReady, DockerCommandError))
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
+        node_list = node_list if node_list else self.nodes
+        for node in node_list:
+            node.wait_for_status_running()
+        return self.check_nodes_up_and_normal(node_list)
 
 
 class LoaderSetDocker(DockerCluster, cluster.BaseLoaderSet):
