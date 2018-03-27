@@ -1401,7 +1401,7 @@ class BaseScyllaCluster(object):
         if not seeds:
             # use first node as seed by default
             seeds = self.nodes[0].private_ip_address
-            seeds = self.nodes[0].is_seed = True
+            self.nodes[0].is_seed = True
         return seeds
 
     def _update_db_binary(self, new_scylla_bin, node_list):
