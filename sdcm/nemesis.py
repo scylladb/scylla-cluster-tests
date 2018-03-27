@@ -27,6 +27,7 @@ import json
 
 from avocado.utils import process
 
+from sdcm.cluster import SCYLLA_YAML_PATH
 from .data_path import get_data_path
 from .log import SDCMAdapter
 from . import es
@@ -91,6 +92,7 @@ class Nemesis(object):
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while True:
+            self._set_current_disruption()
             self.disrupt()
             if self.termination_event is not None:
                 if self.termination_event.isSet():
@@ -190,7 +192,9 @@ class Nemesis(object):
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
-    def _set_current_disruption(self, label):
+    def _set_current_disruption(self, label=None):
+        if not label:
+            label = "%s on target node %s" % (self.__class__.__name__, self.target_node)
         self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
         self.log.info(label)
