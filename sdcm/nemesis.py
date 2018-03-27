@@ -229,6 +229,7 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
+        self.log.info("Reconfiguring monitoring")
         if self.cluster.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
             ip_addr_attr = 'public_ip_address'
         else:
@@ -238,6 +239,18 @@ class Nemesis(object):
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
             monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
+
+    def _add_and_init_new_cluster_node(self, old_node_private_ip):
+        self.log.info("Adding new node to cluster...")
+        new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)[0]
+        new_node.replacement_node_ip = old_node_private_ip
+        self.cluster.wait_for_init(node_list=[new_node], timeout=30)
+        self.reconfigure_monitoring()
+        return new_node
+
+    def _terminate_cluster_node(self, node):
+        self.cluster.terminate_node(node)
+        self.reconfigure_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True):
         def get_node_info_list(verification_node):
@@ -266,21 +279,17 @@ class Nemesis(object):
                 self.log.error(error_msg)
             else:
                 self.log.info('Decommission %s PASS', self.target_node)
-                self.cluster.nodes.remove(self.target_node)
-                self.target_node.destroy()
-                self.reconfigure_monitoring()
+                self._terminate_cluster_node(self.target_node)
                 # Replace the node that was terminated.
                 if add_node:
-                    # retry in case of failure
-                    for i in range(2):
-                        new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
-                        try:
-                            self.cluster.wait_for_init(node_list=new_nodes, timeout=30)
-                        except Exception as ex:
-                            self.log.error('Failed adding new node %s, error: %s', new_nodes, ex)
-                        else:
-                            self.reconfigure_monitoring()
-                            break
+                    self._add_and_init_new_cluster_node(target_node_ip)
+
+    def disrupt_terminate_and_replace_node(self):
+        # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
+        old_node_private_ip = self.target_node.private_ip_address
+        self._terminate_cluster_node(self.target_node)
+        new_node = self._add_and_init_new_cluster_node(old_node_private_ip)
+        self.repair_nodetool_repair(new_node)
 
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
@@ -985,3 +994,9 @@ class AbortRepairMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_abort_repair()
+
+
+class NodeTerminateAndReplace(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_terminate_and_replace_node()

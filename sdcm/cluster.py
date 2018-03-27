@@ -1061,7 +1061,7 @@ client_encryption_options:
             logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
             scylla_yaml_contents += "\nreplace_address: %s" % self.replacement_node_ip
         else:
-            scylla_yaml_contents = scylla_yaml_contents.repace("replace_address", "#replace_address")
+            scylla_yaml_contents = scylla_yaml_contents.replace("replace_address", "#replace_address")
 
         if append_conf:
             scylla_yaml_contents += append_conf
