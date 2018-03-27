@@ -1564,6 +1564,66 @@ class BaseScyllaCluster(object):
                     pass
         return node_info_list
 
+    def get_nodetool_status(self, verification_node=None):
+        """
+            Runs nodetool status and generates status structure.
+            Status format:
+            status = {
+                "datacenter1": {
+                    "ip1": {
+                        'state': state,
+                        'load': load,
+                        'tokens': tokens,
+                        'owns': owns,
+                        'host_id': host_id,
+                        'rack': rack
+                    }
+                }
+            }
+        :param verification_node: node to run the nodetool on
+        :return: dict
+        """
+        if not verification_node:
+            verification_node = random.choice(self.nodes)
+        status = {}
+        res = verification_node.run_nodetool('status')
+        data_centers = res.strip().split("Data center: ")
+        for dc in data_centers:
+            if dc:
+                lines = dc.splitlines()
+                dc_name = lines[0]
+                status[dc_name] = {}
+                for line in lines[1:]:
+                    try:
+                        state, ip, load, _, tokens, owns, host_id, rack = line.split()
+                        node_info = {'state': state,
+                                     'load': load,
+                                     'tokens': tokens,
+                                     'owns': owns,
+                                     'host_id': host_id,
+                                     'rack': rack,
+                                     }
+                        status[dc_name][ip] = node_info
+                    except ValueError as e:
+                        pass
+        return status
+
+    def check_nodes_up_and_normal(self, nodes=[]):
+        """Checks via nodetool that node joined the cluster and reached 'UN' state"""
+        if not nodes:
+            nodes = self.nodes
+        status = self.get_nodetool_status()
+        up_statuses = []
+        for node in nodes:
+            for dc, dc_status in status.iteritems():
+                ip_status = dc_status.get(node.private_ip_address)
+                if ip_status and ip_status["state"] == "UN":
+                    up_statuses.append(True)
+                else:
+                    up_statuses.append(False)
+        if not all(up_statuses):
+            raise ClusterNodesNotReady("Not all nodes joined the cluster")
+
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
             try:
