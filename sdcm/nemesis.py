@@ -436,9 +436,10 @@ class Nemesis(object):
         self.metrics_srv.event_stop(disrupt_method_name)
         self.log.info("<<<<<<<<<<<<<Finished disrupt_method %s" % disrupt_method_name)
 
-    def repair_nodetool_repair(self):
+    def repair_nodetool_repair(self, node=None):
+        node = node if node else self.target_node
         repair_cmd = 'nodetool -h localhost repair'
-        self._run_nodetool(repair_cmd, self.target_node)
+        self._run_nodetool(repair_cmd, node)
 
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
@@ -637,13 +638,9 @@ class Nemesis(object):
         """
         Start repair target_node in background, then try to abort the repair streaming.
         """
-        def repair_thread():
-            repair_cmd = 'nodetool -h localhost repair'
-            self._run_nodetool(repair_cmd, self.target_node)
-
         self._set_current_disruption('AbortRepairMonkey')
         self.log.debug("Start repair target_node in background")
-        thread1 = threading.Thread(target=repair_thread)
+        thread1 = threading.Thread(target=self.repair_nodetool_repair)
         thread1.start()
 
         def repair_streaming_exists():
@@ -663,8 +660,7 @@ class Nemesis(object):
         thread1.join(timeout=120)
 
         self.log.debug("Execute a complete repair for target node")
-        repair_cmd = 'nodetool -h localhost repair'
-        self._run_nodetool(repair_cmd, self.target_node)
+        self.repair_nodetool_repair()
 
 
 def log_time_elapsed_and_status(method):
@@ -944,7 +940,7 @@ class RollbackNemesis(Nemesis):
         node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
         node.remoter.run('nodetool drain')
-        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
         new_ver = node.remoter.run('rpm -qa scylla-server')
