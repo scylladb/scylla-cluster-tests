@@ -445,18 +445,168 @@ class Nemesis(object):
         cmd = 'nodetool -h localhost cleanup keyspace1'
         self._run_nodetool(cmd, self.target_node)
 
-    def disrupt_modify_table_comment(self):
-        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
-        comment = ''.join(random.choice(string.ascii_letters) for i in xrange(24))
-        cmd = "ALTER TABLE keyspace1.standard1 with comment = '{}';".format(comment)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+    def _run_in_cqlsh(self, cmd, node=None):
+        if not node:
+            node = self.target_node
+        node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
 
-    def disrupt_modify_table_gc_grace_time(self):
-        self._set_current_disruption('ModifyTableProperties %s' % self.target_node)
-        gc_grace_seconds = random.choice(xrange(216000, 864000))
-        cmd = "ALTER TABLE keyspace1.standard1 with comment = 'gc_grace_seconds changed' AND" \
-              " gc_grace_seconds = {};".format(gc_grace_seconds)
-        self.target_node.remoter.run('cqlsh -e "{}" {}'.format(cmd, self.target_node.private_ip_address), verbose=True)
+    def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
+        name = "".join([p.strip().capitalize() for p in name.split("_")])
+        self._set_current_disruption('ModifyTableProperties%s %s' % (name, self.target_node))
+        cmd = "ALTER TABLE {keyspace}.{table} WITH {name} = {val};".format(**locals())
+        self._run_in_cqlsh(cmd)
+
+    def modify_table_comment(self):
+        # default: comment = ''
+        prop_val = ''.join(random.choice(string.ascii_letters) for _ in xrange(24))
+        self._modify_table_property(name="comment", val="'%s'" % prop_val)
+
+    def modify_table_gc_grace_time(self):
+        """
+            The number of seconds after data is marked with a tombstone (deletion marker)
+            before it is eligible for garbage-collection.
+            default: gc_grace_seconds = 864000
+        """
+        self._modify_table_property(name="gc_grace_seconds", val=random.randint(216000, 864000))
+
+    def modify_table_caching(self):
+        """
+           Caching optimizes the use of cache memory by a table without manual tuning.
+           Cassandra weighs the cached data by size and access frequency.
+           default: caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+        """
+        prop_val = dict(
+            keys=random.choice(["NONE", "ALL"]),
+            rows_per_partition=random.choice(["NONE", "ALL", random.randint(1, 10000)])
+        )
+        self._modify_table_property(name="caching", val=str(prop_val))
+
+    def modify_table_bloom_filter_fp_chance(self):
+        """
+            The Bloom filter sets the false-positive probability for SSTable Bloom filters.
+            When a client requests data, Cassandra uses the Bloom filter to check if the row
+            exists before doing disk I/O. Bloom filter property value ranges from 0 to 1.0.
+            Lower Bloom filter property probabilities result in larger Bloom filters that use more memory.
+            The effects of the minimum and maximum values:
+                0: Enables the unmodified, effectively the largest possible, Bloom filter.
+                1.0: Disables the Bloom filter.
+            default: bloom_filter_fp_chance = 0.01
+        """
+        self._modify_table_property(name="bloom_filter_fp_chance", val=random.random()/2)
+
+    def modify_table_compaction(self):
+        """
+            The compaction property defines the compaction strategy class for this table.
+            default: compaction = {'class': 'SizeTieredCompactionStrategy'}
+        """
+        # TODO: Sub-properties for each of compaction strategies should also be tested
+        strategies = ("SizeTieredCompactionStrategy", "DateTieredCompactionStrategy",
+                      "TimeWindowCompactionStrategy", "LeveledCompactionStrategy")
+        prop_val = {"class": random.choice(strategies)}
+        self._modify_table_property(name="compaction", val=str(prop_val))
+
+    def modify_table_compression(self):
+        """
+            The compression algorithm. Valid values are LZ4Compressor), SnappyCompressor, and DeflateCompressor
+            default: compression = {}
+        """
+        algos = ("",  # no compression
+                 "LZ4Compressor",
+                 "SnappyCompressor",
+                 "DeflateCompressor")
+        algo = random.choice(algos)
+        prop_val = {"sstable_compression": algo}
+        if algo:
+            prop_val["chunk_length_kb"] = random.choice(["4K", "64KB", "1M"])
+            prop_val["crc_check_chance"] = random.random()
+        self._modify_table_property(name="compression", val=str(prop_val))
+
+    def modify_table_crc_check_chance(self):
+        """
+            default: crc_check_chance = 1.0
+        """
+        self._modify_table_property(name="crc_check_chance", val=random.random())
+
+    def modify_table_dclocal_read_repair_chance(self):
+        """
+            The probability that a successful read operation triggers a read repair.
+            Unlike the repair controlled by read_repair_chance, this repair is limited to
+            replicas in the same DC as the coordinator. The value must be between 0 and 1
+            default: dclocal_read_repair_chance = 0.1
+        """
+        self._modify_table_property(name="dclocal_read_repair_chance", val=random.random())
+
+    def modify_table_default_time_to_live(self):
+        """
+            The value of this property is a number of seconds. If it is set, Cassandra applies a
+            default TTL marker to each column in the table, set to this value. When the table TTL
+            is exceeded, Cassandra tombstones the table.
+            default: default_time_to_live = 0
+        """
+        self._modify_table_property(name="default_time_to_live", val=random.randint(60, 600))  # max allowed TTL - 20 years (630720000)
+
+    def modify_table_max_index_interval(self):
+        """
+            If the total memory usage of all index summaries reaches this value, Cassandra decreases
+            the index summaries for the coldest SSTables to the maximum set by max_index_interval.
+            The max_index_interval is the sparsest possible sampling in relation to memory pressure.
+            default: max_index_interval = 2048
+        """
+        self._modify_table_property(name="max_index_interval", val=random.choice([1024, 4096, 8192]))
+
+    def modify_table_min_index_interval(self):
+        """
+            The minimum gap between index entries in the index summary. A lower min_index_interval
+            means the index summary contains more entries from the index, which allows Cassandra
+            to search fewer index entries to execute a read. A larger index summary may also use
+            more memory. The value for min_index_interval is the densest possible sampling of the index.
+            default: min_index_interval = 128
+        """
+        self._modify_table_property(name="min_index_interval", val=random.choice([128, 256, 512]))
+
+    def modify_table_memtable_flush_period_in_ms(self):
+        """
+            The number of milliseconds before Cassandra flushes memtables associated with this table.
+            default: memtable_flush_period_in_ms = 0
+        """
+        self._modify_table_property(name="memtable_flush_period_in_ms", val=random.randint(1, 5000))
+
+    def modify_table_read_repair_chance(self):
+        """
+            The probability that a successful read operation will trigger a read repair.of read repairs
+            being invoked. Unlike the repair controlled by dc_local_read_repair_chance, this repair is
+            not limited to replicas in the same DC as the coordinator. The value must be between 0 and 1
+            default: read_repair_chance = 0.0
+        """
+        self._modify_table_property(name="read_repair_chance", val=random.random())
+
+    def modify_table_speculative_retry(self):
+        """
+            Use the speculative retry property to configure rapid read protection. In a normal read,
+            Cassandra sends data requests to just enough replica nodes to satisfy the consistency
+            level. In rapid read protection, Cassandra sends out extra read requests to other replicas,
+            even after the consistency level has been met. The speculative retry property specifies
+            the trigger for these extra read requests.
+                ALWAYS: Send extra read requests to all other replicas after every read.
+                Xpercentile: Cassandra constantly tracks each table's typical read latency (in milliseconds).
+                             If you set speculative retry to Xpercentile, Cassandra sends redundant read
+                             requests if the coordinator has not received a response after X percent of the
+                             table's typical latency time.
+                Nms: Send extra read requests to all other replicas if the coordinator node has not received
+                     any responses within N milliseconds.
+                NONE: Do not send extra read requests after any read.
+            default: speculative_retry = '99.0PERCENTILE';
+        """
+        options = ("'ALWAYS'",
+                   "'%spercentile'" % random.randint(1, 99),
+                   "'%sms'" % random.randint(1, 1000))
+        self._modify_table_property(name="speculative_retry", val=random.choice(options))
+
+    def disrupt_modify_table(self):
+        # randomly select and run one of disrupt_modify_table* methods
+        disrupt_func_name = random.choice([dm for dm in dir(self) if dm.startswith("modify_table")])
+        disrupt_func = getattr(self, disrupt_func_name)
+        disrupt_func()
 
     def disrupt_mgmt_repair(self):
         self._set_current_disruption('ManagementRepair')
@@ -684,11 +834,13 @@ class ChaosMonkey(Nemesis):
     def disrupt(self):
         self.call_random_disrupt_method()
 
+
 class AllMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.random_order_call_disrupt_methods()
+
 
 class MdcChaosMonkey(Nemesis):
 
@@ -815,19 +967,11 @@ class RollbackNemesis(Nemesis):
         self.log.info('Rollback Nemesis end')
 
 
-class ModifyTableCommentMonkey(Nemesis):
+class ModifyTableMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_modify_table_comment()
-
-
-class ModifyTableGCGraceTimeMonkey(Nemesis):
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_modify_table_gc_grace_time()
-
+        self.disrupt_modify_table()
 
 class MgmtRepair(Nemesis):
 

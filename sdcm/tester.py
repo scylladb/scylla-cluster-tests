@@ -21,6 +21,7 @@ import re
 import subprocess
 import datetime
 import platform
+from textwrap import dedent
 
 import boto3.session
 import libvirt
@@ -137,6 +138,20 @@ def clean_aws_resources(method):
     return wrapper
 
 
+class CassandraStressCmdParseError(Exception):
+    def __init__(self, cmd, ex):
+        self.command = cmd
+        self.exception = repr(ex)
+
+    def __str__(self):
+        return dedent("""
+            Stress command: '{0.command}'
+            Error: {0.exception}""".format(self))
+
+    def __repr__(self):
+        return self.__str__()
+
+
 def get_stress_cmd_params(cmd):
     """
     Parsing cassandra stress command
@@ -144,49 +159,54 @@ def get_stress_cmd_params(cmd):
     :return: dict with params
     """
     cmd_params = {}
-    cmd = cmd.strip().split('cassandra-stress')[1].strip()
-    if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
-        cmd_params['command'] = cmd.split(' ')[0]
-        if 'no-warmup' in cmd:
-            cmd_params['no-warmup'] = True
+    try:
+        cmd = cmd.strip().split('cassandra-stress')[1].strip()
+        if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
+            cmd_params['command'] = cmd.split(' ')[0]
+            if 'no-warmup' in cmd:
+                cmd_params['no-warmup'] = True
 
-        match = re.search('(cl\s?=\s?\w+)', cmd)
-        if match:
-            cmd_params['cl'] = match.group(0).split('=')[1].strip()
-
-        match = re.search('(duration\s?=\s?\w+)', cmd)
-        if match:
-            cmd_params['duration'] = match.group(0).split('=')[1].strip()
-
-        match = re.search('( n\s?=\s?\w+)', cmd)
-        if match:
-            cmd_params['n'] = match.group(0).split('=')[1].strip()
-        match = re.search('profile=(\S+)\s+', cmd)
-        if match:
-            cmd_params['profile'] = match.group(1).strip()
-            match = re.search('ops(\S+)\s+', cmd)
+            match = re.search('(cl\s?=\s?\w+)', cmd)
             if match:
-                cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
+                cmd_params['cl'] = match.group(0).split('=')[1].strip()
 
-        for temp in cmd.split(' -')[1:]:
-            k = temp.split()[0]
-            match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
+            match = re.search('(duration\s?=\s?\w+)', cmd)
             if match:
-                cmd_params[k] = match.group(2).strip()
-        if 'rate' in cmd_params:
-            # split rate section on separate items
-            if 'threads' in cmd_params['rate']:
-                cmd_params['rate threads'] = \
-                    re.search('(threads\s?=\s?(\w+))', cmd_params['rate']).group(2)
-            if 'throttle' in cmd_params['rate']:
-                cmd_params['throttle threads'] =\
-                    re.search('(throttle\s?=\s?(\w+))', cmd_params['rate']).group(2)
-            if 'fixed' in cmd_params['rate']:
-                cmd_params['fixed threads'] =\
-                    re.search('(fixed\s?=\s?(\w+))', cmd_params['rate']).group(2)
-            del cmd_params['rate']
+                cmd_params['duration'] = match.group(0).split('=')[1].strip()
 
-    return cmd_params
+            match = re.search('( n\s?=\s?\w+)', cmd)
+            if match:
+                cmd_params['n'] = match.group(0).split('=')[1].strip()
+            match = re.search('profile=(\S+)\s+', cmd)
+            if match:
+                cmd_params['profile'] = match.group(1).strip()
+                match = re.search('ops(\S+)\s+', cmd)
+                if match:
+                    cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
+
+            for temp in cmd.split(' -')[1:]:
+                k = temp.split()[0]
+                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
+                if match:
+                    cmd_params[k] = match.group(2).strip()
+            if 'rate' in cmd_params:
+                # split rate section on separate items
+                if 'threads' in cmd_params['rate']:
+                    cmd_params['rate threads'] = \
+                        re.search('(threads\s?=\s?(\w+))', cmd_params['rate']).group(2)
+                if 'throttle' in cmd_params['rate']:
+                    cmd_params['throttle threads'] =\
+                        re.search('(throttle\s?=\s?(\w+))', cmd_params['rate']).group(2)
+                if 'fixed' in cmd_params['rate']:
+                    cmd_params['fixed threads'] =\
+                        re.search('(fixed\s?=\s?(\w+))', cmd_params['rate']).group(2)
+                del cmd_params['rate']
+
+        return cmd_params
+    except Exception as e:
+        raise CassandraStressCmdParseError(cmd=cmd, ex=e)
+
+
 
 
 def get_stress_bench_cmd_params(cmd):
@@ -653,8 +673,11 @@ class ClusterTester(Test):
         params['n_nodes'] = self.params.get('n_loaders')
         self.loaders = docker.LoaderSetDocker(**params)
 
-        params['n_nodes'] = self.params.get('n_monitor_nodes')
-        self.monitors = docker.MonitorSetDocker(**params)
+        params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
+        if params['n_nodes']:
+            self.monitors = docker.MonitorSetDocker(**params)
+        else:
+            self.monitors = NoMonitorSet()
 
     def get_cluster_baremetal(self):
         user_credentials = self.params.get('user_credentials_path', None)
