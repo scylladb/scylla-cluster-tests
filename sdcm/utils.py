@@ -16,7 +16,12 @@ import re
 import os
 import glob
 
+import time
+from functools import wraps
+
 from avocado.utils import process
+
+logger = logging.getLogger('avocado.test')
 
 
 def _remote_get_hash(remoter, file_path):
@@ -75,3 +80,27 @@ def get_monitor_version(full_version, clone=False):
         ret = 'master'
 
     return ret
+
+
+class retrying(object):
+    """
+        Used as a decorator to retry function run that can posiibly fail with allowed exceptions list
+    """
+    def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,)):
+        self.n = n  # number of times to retry
+        self.sleep_time = sleep_time  # number seconds to sleep between retries
+        self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
+
+    def __call__(self, func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            for i in xrange(self.n):
+                try:
+                    return func(*args, **kwargs)
+                except self.allowed_exceptions as e:
+                    logger.debug("retrying: %r" % e)
+                    time.sleep(self.sleep_time)
+                    if i == self.n - 1:
+                        logger.error("Number of retries exceeded!")
+                        raise
+        return inner
