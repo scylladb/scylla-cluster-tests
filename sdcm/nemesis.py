@@ -451,8 +451,8 @@ class Nemesis(object):
         node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
 
     def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
-        name = "".join([p.strip().capitalize() for p in name.split("_")])
-        self._set_current_disruption('ModifyTableProperties%s %s' % (name, self.target_node))
+        disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
+        self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
         cmd = "ALTER TABLE {keyspace}.{table} WITH {name} = {val};".format(**locals())
         self._run_in_cqlsh(cmd)
 
