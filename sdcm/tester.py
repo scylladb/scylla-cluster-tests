@@ -21,6 +21,7 @@ import re
 import subprocess
 import datetime
 import platform
+from functools import wraps
 from textwrap import dedent
 
 import boto3.session
@@ -121,18 +122,19 @@ def retry_till_success(fun, *args, **kwargs):
                 time.sleep(0.25)
 
 
-def clean_aws_resources(method):
+def clean_resources_on_exception(method):
     """
-    Ensure that AWS resources are cleaned upon unhandled exceptions.
+    Ensure that resources used in test are cleaned upon unhandled exceptions.
 
     :param method: ScyllaClusterTester method to wrap.
     :return: Wrapped method.
     """
+    @wraps(method)
     def wrapper(*args, **kwargs):
         try:
             return method(*args, **kwargs)
         except Exception:
-            TEST_LOG.exception('Exception in wrapped method %s', method.__name__)
+            TEST_LOG.exception("Exception in %s. Will clean resources", method.__name__)
             args[0].clean_resources()
             raise
     return wrapper
@@ -254,7 +256,7 @@ class ClusterTester(Test):
                                       'errors', 'coredumps']}
         self.create_stats = True
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
@@ -702,7 +704,7 @@ class ClusterTester(Test):
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
         if loader_info is None:
@@ -751,14 +753,14 @@ class ClusterTester(Test):
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
         return stress_cmd
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def run_stress(self, stress_cmd, duration=None):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
         self.verify_stress_thread(stress_queue)
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           keyspace_name='', round_robin=False):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
@@ -775,7 +777,7 @@ class ClusterTester(Test):
                                               node_list=self.db_cluster.nodes,
                                               round_robin=round_robin)
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def run_stress_thread_bench(self, stress_cmd, duration=None):
         if duration is None:
             duration = self.params.get('test_duration')
@@ -786,11 +788,11 @@ class ClusterTester(Test):
                                               node_list=self.db_cluster.nodes)
 
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def kill_stress_thread(self):
         self.loaders.kill_stress_thread()
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def verify_stress_thread(self, queue):
         results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
         # Sometimes, we might have an epic error messages list
@@ -807,14 +809,14 @@ class ClusterTester(Test):
             self.fail("cassandra-stress errors on "
                       "nodes:\n%s" % "\n".join(errors))
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
         if store_results:
             self.update_stress_results(results)
         return results
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
         self.update_stress_results(results)
