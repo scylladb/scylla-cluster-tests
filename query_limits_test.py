@@ -18,7 +18,7 @@ import logging
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_aws_resources
+from sdcm.tester import clean_resources_on_exception
 
 
 class QueryLimitsTest(ClusterTester):
@@ -29,7 +29,7 @@ class QueryLimitsTest(ClusterTester):
     :avocado: enable
     """
 
-    @clean_aws_resources
+    @clean_resources_on_exception
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
