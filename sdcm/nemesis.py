@@ -27,6 +27,7 @@ import json
 
 from avocado.utils import process
 
+from sdcm.cluster import SCYLLA_YAML_PATH
 from .data_path import get_data_path
 from .log import SDCMAdapter
 from . import es
@@ -91,6 +92,7 @@ class Nemesis(object):
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while True:
+            self._set_current_disruption()
             self.disrupt()
             if self.termination_event is not None:
                 if self.termination_event.isSet():
@@ -190,7 +192,9 @@ class Nemesis(object):
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
-    def _set_current_disruption(self, label):
+    def _set_current_disruption(self, label=None):
+        if not label:
+            label = "%s on target node %s" % (self.__class__.__name__, self.target_node)
         self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
         self.log.info(label)
@@ -225,6 +229,7 @@ class Nemesis(object):
             self.target_node.wait_db_up()
 
     def reconfigure_monitoring(self):
+        self.log.info("Reconfiguring monitoring")
         if self.cluster.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
             ip_addr_attr = 'public_ip_address'
         else:
@@ -234,6 +239,18 @@ class Nemesis(object):
         for monitoring_node in self.monitoring_set.nodes:
             self.log.info('Monitoring node: %s', str(monitoring_node))
             monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
+
+    def _add_and_init_new_cluster_node(self, old_node_private_ip):
+        self.log.info("Adding new node to cluster...")
+        new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)[0]
+        new_node.replacement_node_ip = old_node_private_ip
+        self.cluster.wait_for_init(node_list=[new_node], timeout=30)
+        self.reconfigure_monitoring()
+        return new_node
+
+    def _terminate_cluster_node(self, node):
+        self.cluster.terminate_node(node)
+        self.reconfigure_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True):
         def get_node_info_list(verification_node):
@@ -262,21 +279,17 @@ class Nemesis(object):
                 self.log.error(error_msg)
             else:
                 self.log.info('Decommission %s PASS', self.target_node)
-                self.cluster.nodes.remove(self.target_node)
-                self.target_node.destroy()
-                self.reconfigure_monitoring()
+                self._terminate_cluster_node(self.target_node)
                 # Replace the node that was terminated.
                 if add_node:
-                    # retry in case of failure
-                    for i in range(2):
-                        new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
-                        try:
-                            self.cluster.wait_for_init(node_list=new_nodes, timeout=30)
-                        except Exception as ex:
-                            self.log.error('Failed adding new node %s, error: %s', new_nodes, ex)
-                        else:
-                            self.reconfigure_monitoring()
-                            break
+                    self._add_and_init_new_cluster_node(target_node_ip)
+
+    def disrupt_terminate_and_replace_node(self):
+        # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
+        old_node_private_ip = self.target_node.private_ip_address
+        self._terminate_cluster_node(self.target_node)
+        new_node = self._add_and_init_new_cluster_node(old_node_private_ip)
+        self.repair_nodetool_repair(new_node)
 
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
@@ -432,9 +445,10 @@ class Nemesis(object):
         self.metrics_srv.event_stop(disrupt_method_name)
         self.log.info("<<<<<<<<<<<<<Finished disrupt_method %s" % disrupt_method_name)
 
-    def repair_nodetool_repair(self):
+    def repair_nodetool_repair(self, node=None):
+        node = node if node else self.target_node
         repair_cmd = 'nodetool -h localhost repair'
-        self._run_nodetool(repair_cmd, self.target_node)
+        self._run_nodetool(repair_cmd, node)
 
     def repair_nodetool_rebuild(self):
         rebuild_cmd = 'nodetool -h localhost rebuild'
@@ -633,13 +647,9 @@ class Nemesis(object):
         """
         Start repair target_node in background, then try to abort the repair streaming.
         """
-        def repair_thread():
-            repair_cmd = 'nodetool -h localhost repair'
-            self._run_nodetool(repair_cmd, self.target_node)
-
         self._set_current_disruption('AbortRepairMonkey')
         self.log.debug("Start repair target_node in background")
-        thread1 = threading.Thread(target=repair_thread)
+        thread1 = threading.Thread(target=self.repair_nodetool_repair)
         thread1.start()
 
         def repair_streaming_exists():
@@ -659,8 +669,7 @@ class Nemesis(object):
         thread1.join(timeout=120)
 
         self.log.debug("Execute a complete repair for target node")
-        repair_cmd = 'nodetool -h localhost repair'
-        self._run_nodetool(repair_cmd, self.target_node)
+        self.repair_nodetool_repair()
 
 
 def log_time_elapsed_and_status(method):
@@ -940,7 +949,7 @@ class RollbackNemesis(Nemesis):
         node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
         node.remoter.run('nodetool drain')
-        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+        node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
         new_ver = node.remoter.run('rpm -qa scylla-server')
@@ -985,3 +994,9 @@ class AbortRepairMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_abort_repair()
+
+
+class NodeTerminateAndReplace(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_terminate_and_replace_node()

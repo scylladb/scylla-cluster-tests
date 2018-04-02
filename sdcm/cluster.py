@@ -17,6 +17,7 @@ import atexit
 import getpass
 import logging
 import os
+import random
 import re
 import tempfile
 import threading
@@ -74,6 +75,7 @@ IP_SSH_CONNECTIONS = 'public'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +314,7 @@ class BaseNode(object):
         self.is_addition = False
         self.scylla_version = ''
         self.is_enterprise = None
+        self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
@@ -962,7 +965,7 @@ WantedBy=multi-user.target
         self.remoter.run(cmd)
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
-                     yaml_file='/etc/scylla/scylla.yaml', broadcast=None, authenticator=None,
+                     yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
                      server_encrypt=None, client_encrypt=None, append_conf=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
@@ -1053,6 +1056,12 @@ client_encryption_options:
    certificate: /etc/scylla/db.crt
    keyfile: /etc/scylla/db.key
 """
+
+        if self.replacement_node_ip:
+            logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
+            scylla_yaml_contents += "\nreplace_address: %s" % self.replacement_node_ip
+        else:
+            scylla_yaml_contents = scylla_yaml_contents.replace("replace_address", "#replace_address")
 
         if append_conf:
             scylla_yaml_contents += append_conf
@@ -1234,7 +1243,13 @@ class BaseCluster(object):
                 self.coredumps[node.name] = node.n_coredumps
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
-        pass
+        """
+        :param count: number of nodes to add
+        :param ec2_user_data:
+        :param dc_idx: datacenter index, used as an index for self.datacenter list
+        :return: list of Nodes
+        """
+        raise NotImplementedError("Derived class must implement 'add_nodes' method!")
 
     def get_node_private_ips(self):
         return [node.private_ip_address for node in self.nodes]
@@ -1265,6 +1280,10 @@ class BaseCluster(object):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
+
+    def terminate_node(self, node):
+        self.nodes.remove(node)
+        node.destroy()
 
 
 def wait_for_init_wrap(method):
@@ -1315,8 +1334,8 @@ def wait_for_init_wrap(method):
             except Queue.Empty:
                 pass
             if timeout and time_elapsed / 60 > timeout:
-                msg = 'Stop waiting for node(-s) setup(%d/%d): timeout - %d min - has expired'.format(
-                    len(results), len(node_list), timeout)
+                msg = 'TIMEOUT [%d min]: Waiting for node(-s) setup(%d/%d) expired!' % (
+                    timeout, len(results), len(node_list))
                 cl_inst.log.error(msg)
                 raise Exception(msg)
 
@@ -1325,6 +1344,10 @@ def wait_for_init_wrap(method):
 
         method(*args, **kwargs)
     return wrapper
+
+
+class ClusterNodesNotReady(Exception):
+    pass
 
 
 class BaseScyllaCluster(object):
@@ -1341,7 +1364,7 @@ class BaseScyllaCluster(object):
             node = self.nodes[0]
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                          'scylla.yaml')
-            node.remoter.receive_files(src='/etc/scylla/scylla.yaml',
+            node.remoter.receive_files(src=SCYLLA_YAML_PATH,
                                        dst=yaml_dst_path)
             with open(yaml_dst_path, 'r') as yaml_stream:
                 conf_dict = yaml.safe_load(yaml_stream)
@@ -1378,7 +1401,7 @@ class BaseScyllaCluster(object):
         if not seeds:
             # use first node as seed by default
             seeds = self.nodes[0].private_ip_address
-            seeds = self.nodes[0].is_seed = True
+            self.nodes[0].is_seed = True
         return seeds
 
     def _update_db_binary(self, new_scylla_bin, node_list):
@@ -1512,6 +1535,10 @@ class BaseScyllaCluster(object):
             self._update_db_packages(new_scylla_bin, node_list)
 
     def get_node_info_list(self, verification_node):
+        """
+            !!! Deprecated !!!!
+            use self.get_nodetool_status instead
+        """
         assert verification_node in self.nodes
         cmd_result = verification_node.remoter.run('nodetool status')
         node_info_list = []
@@ -1536,6 +1563,66 @@ class BaseScyllaCluster(object):
                 except ValueError:
                     pass
         return node_info_list
+
+    def get_nodetool_status(self, verification_node=None):
+        """
+            Runs nodetool status and generates status structure.
+            Status format:
+            status = {
+                "datacenter1": {
+                    "ip1": {
+                        'state': state,
+                        'load': load,
+                        'tokens': tokens,
+                        'owns': owns,
+                        'host_id': host_id,
+                        'rack': rack
+                    }
+                }
+            }
+        :param verification_node: node to run the nodetool on
+        :return: dict
+        """
+        if not verification_node:
+            verification_node = random.choice(self.nodes)
+        status = {}
+        res = verification_node.run_nodetool('status')
+        data_centers = res.strip().split("Data center: ")
+        for dc in data_centers:
+            if dc:
+                lines = dc.splitlines()
+                dc_name = lines[0]
+                status[dc_name] = {}
+                for line in lines[1:]:
+                    try:
+                        state, ip, load, _, tokens, owns, host_id, rack = line.split()
+                        node_info = {'state': state,
+                                     'load': load,
+                                     'tokens': tokens,
+                                     'owns': owns,
+                                     'host_id': host_id,
+                                     'rack': rack,
+                                     }
+                        status[dc_name][ip] = node_info
+                    except ValueError as e:
+                        pass
+        return status
+
+    def check_nodes_up_and_normal(self, nodes=[]):
+        """Checks via nodetool that node joined the cluster and reached 'UN' state"""
+        if not nodes:
+            nodes = self.nodes
+        status = self.get_nodetool_status()
+        up_statuses = []
+        for node in nodes:
+            for dc, dc_status in status.iteritems():
+                ip_status = dc_status.get(node.private_ip_address)
+                if ip_status and ip_status["state"] == "UN":
+                    up_statuses.append(True)
+                else:
+                    up_statuses.append(False)
+        if not all(up_statuses):
+            raise ClusterNodesNotReady("Not all nodes joined the cluster")
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
@@ -1633,15 +1720,18 @@ class BaseScyllaCluster(object):
             node.datacenter_setup(self.datacenter)
         authenticator = self.params.get('authenticator')
         seed_address = self.get_seed_nodes_by_flag()
-        node.config_setup(seed_address=seed_address,
-                          cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'),
-                          endpoint_snitch=endpoint_snitch,
-                          authenticator=authenticator,
-                          server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=self._param_enabled('client_encrypt'),
-                          append_conf=self.params.get('append_conf'))
 
+        def node_config_setup():
+            node.config_setup(seed_address=seed_address,
+                              cluster_name=self.name,
+                              enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              authenticator=authenticator,
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'),
+                              append_conf=self.params.get('append_conf'))
+
+        node_config_setup()
         try:
             disks = node.detect_disks()
         except AssertionError:
@@ -1663,6 +1753,13 @@ class BaseScyllaCluster(object):
         node.remoter.run('sudo cat /etc/scylla.d/io.conf')
         node.wait_db_up()
         node.wait_jmx_up()
+        if node.replacement_node_ip:
+            # If this is a replacement node, we need to set back configuration in case
+            # when scylla-server process will be restarted
+            node.replacement_node_ip = None
+            node_config_setup()
+
+
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
