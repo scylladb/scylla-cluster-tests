@@ -110,8 +110,8 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._instance.reboot)
 
     def destroy(self):
-        self._instance_wait_safe(self._instance.destroy)
         self.stop_task_threads()
+        self._instance_wait_safe(self._instance.destroy)
         self.log.info('Destroyed')
 
 

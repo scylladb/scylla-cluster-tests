@@ -109,8 +109,8 @@ class OpenStackNode(cluster.BaseNode):
         self._instance.reboot()
 
     def destroy(self):
-        self._instance.destroy()
         self.stop_task_threads()
+        self._instance.destroy()
         self.log.info('Destroyed')
 
 

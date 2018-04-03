@@ -775,12 +775,12 @@ WantedBy=multi-user.target
         raise NotImplementedError('Derived classes must implement restart')
 
     def stop_task_threads(self, timeout=10):
-        del(self.remoter)
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
         if self._journal_thread:
             self._journal_thread.join(timeout)
+        self.remoter.close()
 
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')

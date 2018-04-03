@@ -736,7 +736,10 @@ class BaseRemote(object):
     def close(self):
         global splist
         for sp in splist:
-            sp.kill()
+            try:
+                sp.kill()
+            except OSError as e:
+                self.log.warning("Unable to kill [%s]: %r" % (sp, e))
         self._cleanup_master_ssh()
         os.remove(self.known_hosts_file)
 
