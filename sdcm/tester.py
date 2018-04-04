@@ -209,8 +209,6 @@ def get_stress_cmd_params(cmd):
         raise CassandraStressCmdParseError(cmd=cmd, ex=e)
 
 
-
-
 def get_stress_bench_cmd_params(cmd):
     """
     Parsing bench stress command
@@ -247,6 +245,8 @@ class ClusterTester(Test):
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
         cluster.set_duration(self._duration)
+
+        cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
 
         # for saving test details in DB
         self.test_index = self.__class__.__name__.lower()
@@ -289,6 +289,10 @@ class ClusterTester(Test):
                                              'loaders': [getattr(n, ip_addr_attr) for n in self.loaders.nodes]},
                                     scylla_version=self.db_cluster.nodes[0].scylla_version,
                                     **mgmt_params)
+
+        # cancel reuse cluster - for new nodes added during the test
+        cluster.Setup.reuse_cluster(False)
+
         if self.create_stats:
             self.create_test_stats()
 
@@ -438,37 +442,33 @@ class ClusterTester(Test):
             gce_image_db = self.params.get('gce_image')
         cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db', default=0),
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db', default=0)}
+        common_params = dict(gce_image_username=self.params.get('gce_image_username'),
+                             gce_network=self.params.get('gce_network', default='default'),
+                             credentials=self.credentials,
+                             user_prefix=user_prefix,
+                             params=self.params,
+                             )
         self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
                                            gce_image_type=db_info['disk_type'],
                                            gce_image_size=db_info['disk_size'],
                                            gce_n_local_ssd=db_info['n_local_ssd'],
-                                           gce_image_username=self.params.get('gce_image_username'),
-                                           gce_network=self.params.get('gce_network', default='default'),
                                            gce_instance_type=db_info['type'],
                                            services=services,
-                                           credentials=self.credentials,
-                                           user_prefix=user_prefix,
                                            n_nodes=db_info['n_nodes'],
                                            add_disks=cluster_additional_disks,
-                                           params=self.params,
-                                           gce_datacenter=gce_datacenter)
+                                           gce_datacenter=gce_datacenter,
+                                           **common_params)
 
-        scylla_repo = get_data_path('scylla.repo')
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image'),
                                     gce_image_type=loader_info['disk_type'],
                                     gce_image_size=loader_info['disk_size'],
                                     gce_n_local_ssd=loader_info['n_local_ssd'],
-                                    gce_image_username=self.params.get('gce_image_username'),
-                                    gce_network=self.params.get('gce_network', default='default'),
                                     gce_instance_type=loader_info['type'],
                                     service=services[:1],
-                                    credentials=self.credentials,
-                                    scylla_repo=scylla_repo,
-                                    user_prefix=user_prefix,
                                     n_nodes=loader_info['n_nodes'],
                                     add_disks=loader_additional_disks,
-                                    params=self.params)
+                                    **common_params)
 
         if monitor_info['n_nodes'] > 0:
             monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor', default=0)}
@@ -476,16 +476,11 @@ class ClusterTester(Test):
                                           gce_image_type=monitor_info['disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
                                           gce_n_local_ssd=monitor_info['n_local_ssd'],
-                                          gce_image_username=self.params.get('gce_image_username'),
-                                          gce_network=self.params.get('gce_network', default='default'),
                                           gce_instance_type=monitor_info['type'],
                                           service=services[:1],
-                                          credentials=self.credentials,
-                                          scylla_repo=scylla_repo,
-                                          user_prefix=user_prefix,
                                           n_nodes=monitor_info['n_nodes'],
                                           add_disks=monitor_additional_disks,
-                                          params=self.params)
+                                          **common_params)
         else:
             self.monitors = NoMonitorSet()
 
@@ -564,13 +559,11 @@ class ClusterTester(Test):
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
 
-        scylla_repo = get_data_path('scylla.repo')
         self.loaders = LoaderSetAWS(
             ec2_ami_id=self.params.get('ami_id_loader').split(),
             ec2_ami_username=self.params.get('ami_loader_user'),
             ec2_instance_type=loader_info['type'],
             ec2_block_device_mappings=loader_info['device_mappings'],
-            scylla_repo=scylla_repo,
             n_nodes=loader_info['n_nodes'],
             **common_params)
 
@@ -580,7 +573,6 @@ class ClusterTester(Test):
                 ec2_ami_username=self.params.get('ami_monitor_user'),
                 ec2_instance_type=monitor_info['type'],
                 ec2_block_device_mappings=monitor_info['device_mappings'],
-                scylla_repo=scylla_repo,
                 n_nodes=monitor_info['n_nodes'],
                 **common_params)
         else:

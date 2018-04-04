@@ -60,8 +60,6 @@ CREDENTIALS = []
 EC2_INSTANCES = []
 OPENSTACK_INSTANCES = []
 OPENSTACK_SERVICE = None
-GCE_INSTANCES = []
-GCE_SERVICE = None
 LIBVIRT_DOMAINS = []
 LIBVIRT_IMAGES = []
 LIBVIRT_URI = 'qemu:///system'
@@ -163,6 +161,14 @@ def register_cleanup(cleanup='destroy'):
         atexit.register(destroy_instances)
     elif cleanup == 'stop':
         atexit.register(stop_instances)
+
+
+class Setup(object):
+    REUSE_CLUSTER = False
+
+    @classmethod
+    def reuse_cluster(cls, val=False):
+        cls.REUSE_CLUSTER = val
 
 
 class NodeError(Exception):
@@ -1202,6 +1208,11 @@ class BaseCluster(object):
         self.nemesis = []
         self.params = params
         self.datacenter = region_names or []
+        if Setup.REUSE_CLUSTER:
+            self._node_public_ips = self.params.get(self._get_node_ips_param(), None) or []
+            self._node_private_ips = self.params.get(self._get_node_ips_param('private'), None) or []
+            self.log.debug('Node public IPs: {}, private IPs: {}'.format(self._node_public_ips, self._node_private_ips))
+
         if isinstance(n_nodes, list):
             for dc_idx, num in enumerate(n_nodes):
                 self.add_nodes(num, dc_idx=dc_idx)
@@ -1210,6 +1221,10 @@ class BaseCluster(object):
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
+
+    @classmethod
+    def _get_node_ips_param(cls, ip_type='public'):
+        return 'db_nodes_public_ip' if ip_type == 'public' else 'db_nodes_private_ip'
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
@@ -1711,46 +1726,50 @@ class BaseScyllaCluster(object):
         :param verbose:
         """
         node.wait_ssh_up(verbose=verbose)
-        node.clean_scylla()
-        node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
-        endpoint_snitch = ''
-        if len(self.datacenter) > 1:
-            endpoint_snitch = 'GossipingPropertyFileSnitch'
-            node.datacenter_setup(self.datacenter)
-        authenticator = self.params.get('authenticator')
-        seed_address = self.get_seed_nodes_by_flag()
+        if not Setup.REUSE_CLUSTER:
+            node.clean_scylla()
+            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
-        def node_config_setup():
-            node.config_setup(seed_address=seed_address,
-                              cluster_name=self.name,
-                              enable_exp=self._param_enabled('experimental'),
-                              endpoint_snitch=endpoint_snitch,
-                              authenticator=authenticator,
-                              server_encrypt=self._param_enabled('server_encrypt'),
-                              client_encrypt=self._param_enabled('client_encrypt'),
-                              append_conf=self.params.get('append_conf'))
+            endpoint_snitch = ''
+            if len(self.datacenter) > 1:
+                endpoint_snitch = 'GossipingPropertyFileSnitch'
+                node.datacenter_setup(self.datacenter)
+            authenticator = self.params.get('authenticator')
+            seed_address = self.get_seed_nodes_by_flag()
 
-        node_config_setup()
-        try:
-            disks = node.detect_disks()
-        except AssertionError:
-            disks = node.detect_disks(nvme=False)
-        node.scylla_setup(disks)
+            def node_config_setup():
+                node.config_setup(seed_address=seed_address,
+                                  cluster_name=self.name,
+                                  enable_exp=self._param_enabled('experimental'),
+                                  endpoint_snitch=endpoint_snitch,
+                                  authenticator=authenticator,
+                                  server_encrypt=self._param_enabled('server_encrypt'),
+                                  client_encrypt=self._param_enabled('client_encrypt'),
+                                  append_conf=self.params.get('append_conf'))
 
-        seed_address_list = seed_address.split(',')
-        if node.private_ip_address not in seed_address_list:
-            wait.wait_for(func=lambda: self._seed_node_rebooted is True,
-                          step=30,
-                          text='Wait for seed node to be up after reboot')
-        node.restart()
-        node.wait_ssh_up()
-        if node.private_ip_address in seed_address_list:
-            self.log.info('Seed node is up after reboot')
-            self._seed_node_rebooted = True
+            node_config_setup()
+            try:
+                disks = node.detect_disks()
+            except AssertionError:
+                disks = node.detect_disks(nvme=False)
+            node.scylla_setup(disks)
 
-        self.log.info('io.conf right after reboot')
-        node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+            seed_address_list = seed_address.split(',')
+            if node.private_ip_address not in seed_address_list:
+                wait.wait_for(func=lambda: self._seed_node_rebooted is True,
+                              step=30,
+                              text='Wait for seed node to be up after reboot')
+            node.restart()
+            node.wait_ssh_up()
+
+            if node.private_ip_address in seed_address_list:
+                self.log.info('Seed node is up after reboot')
+                self._seed_node_rebooted = True
+
+            self.log.info('io.conf right after reboot')
+            node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+
         node.wait_db_up()
         node.wait_jmx_up()
         if node.replacement_node_ip:
@@ -1787,6 +1806,9 @@ class BaseLoaderSet(object):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
 
+        if Setup.REUSE_CLUSTER:
+            return
+
         # The init scripts should install/update cs, so
         # let's try to guarantee it will be there before
         # proceeding
@@ -1812,6 +1834,10 @@ class BaseLoaderSet(object):
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
+
+    @classmethod
+    def get_node_ips_param(cls, ip_type='public'):
+        return 'loaders_public_ip' if ip_type == 'public' else 'loaders_private_ip'
 
     def get_loader(self):
         if not self._loader_queue:
@@ -2240,9 +2266,17 @@ class BaseMonitorSet(object):
     scylla_version = ''
     is_enterprise = None
 
+    @classmethod
+    def get_node_ips_param(cls, ip_type='public'):
+        return 'monitor_nodes_public_ip' if ip_type == 'public' else 'monitor_nodes_private_ip'
+
     def node_setup(self, node, targets=None, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
         self.log.info('Setup in BaseMonitorSet')
         node.wait_ssh_up(verbose=verbose)
+
+        if Setup.REUSE_CLUSTER:
+            return
+
         # The init scripts should install/update c-s, so
         # let's try to guarantee it will be there before
         # proceeding
