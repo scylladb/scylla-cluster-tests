@@ -3,7 +3,7 @@ import datetime
 import time
 import boto3
 import base64
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoRegionError
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +15,44 @@ MAX_SPOT_EXCEEDED_ERROR = 'MaxSpotInstanceCountExceeded'
 REQUEST_TIMEOUT = 300
 
 
+class GetSpotPriceHistoryError(Exception):
+    pass
+
+
+class CreateSpotInstancesError(Exception):
+    pass
+
+
+class GetInstanceByPrivateIpError(Exception):
+    pass
+
+
+class CreateEC2ClientNoRegionError(NoRegionError):
+    pass
+
+
+class CreateSpotFleetError(ClientError):
+    pass
+
+
 class EC2Client(object):
 
-    def __init__(self, timeout=REQUEST_TIMEOUT):
-        self._client = boto3.client('ec2')
+    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None):
+        self._client = self._get_ec2_client(region_name)
         self._resource = boto3.resource('ec2')
         self._timeout = timeout  # request timeout in seconds
         self._price_index = 1.5
         self._wait_interval = 5  # seconds
+
+    def _get_ec2_client(self, region_name=None):
+            try:
+                return boto3.client('ec2')
+            except NoRegionError:
+                if not region_name:
+                    raise CreateEC2ClientNoRegionError()
+                # next class instance could be created without region_name parameter
+                boto3.setup_default_session(region_name=region_name)
+                return self._get_ec2_client()
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
                                user_data='', count=1, duration=0, request_type='one-time'):
@@ -91,7 +121,7 @@ class EC2Client(object):
         logger.info('Calculating spot price for bidding')
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
         if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
-            raise Exception("Failed getting spot price history for instance type %s", instance_type)
+            raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
         prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
         price_avg = round(sum(prices) / len(prices), 4)
         price_desired = (price_avg + min(prices)) / 4
@@ -220,7 +250,7 @@ class EC2Client(object):
                     logger.info('Got price-too-low, retrying with higher price %s', price_desired)
                     continue
         if not instance_ids:
-            raise Exception("Failed to get spot instances: %s" % resp)
+            raise CreateSpotInstancesError("Failed to get spot instances: %s" % resp)
 
         logger.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
@@ -248,8 +278,8 @@ class EC2Client(object):
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR
-            raise ClientError(error_response={'Error': {'Code': err_code, 'Message': resp}},
-                              operation_name='create_spot_fleet')
+            raise CreateSpotFleetError(error_response={'Error': {'Code': err_code, 'Message': resp}},
+                                       operation_name='create_spot_fleet')
 
         logger.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
@@ -269,6 +299,21 @@ class EC2Client(object):
     def get_subnet_info(self, subnet_id):
         resp = self._client.describe_subnets(SubnetIds=[subnet_id])
         return [subnet for subnet in resp['Subnets'] if subnet['SubnetId'] == subnet_id][0]
+
+    def get_instance_by_private_ip(self, private_ip):
+        """
+        Find instance by private IP address
+        :param private_ip: private IP address
+        :return: EC2.Instance object
+        """
+        instances = self._client.describe_instances(Filters=[
+            {'Name': 'private-ip-address',
+             'Values': [private_ip]}
+        ])
+        if not instances['Reservations']:
+            raise GetInstanceByPrivateIpError("Cannot find instance by private ip: %s" % private_ip)
+
+        return self.get_instance(instances['Reservations'][0]['Instances'][0]['InstanceId'])
 
 
 if __name__ == '__main__':
