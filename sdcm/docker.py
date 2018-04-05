@@ -26,6 +26,10 @@ class DockerContainerNotRunning(Exception):
     pass
 
 
+class CannotFindContainers(Exception):
+    pass
+
+
 def _cmd(cmd, timeout=10, sudo=False):
     res = process.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
     if res.exit_status:
@@ -54,11 +58,13 @@ class DockerNode(cluster.BaseNode):
             self._public_ip_address = out.strip()
         return self._public_ip_address
 
+    def is_running(self):
+        out = _cmd("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name))
+        return json.loads(out)
+
     @retrying(n=10, sleep_time=2, allowed_exceptions=(DockerContainerNotRunning,))
     def wait_for_status_running(self):
-        out = _cmd("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name))
-        state = json.loads(out)
-        if not state:
+        if not self.is_running():
             raise DockerContainerNotRunning(self.name)
 
     @property
@@ -98,10 +104,11 @@ class DockerCluster(cluster.BaseCluster):
         self._image = kwargs.get('docker_image', 'scylladb/scylla-nightly')
         self.nodes = []
         self.credentials = kwargs.get('credentials')
+        self._node_prefix = kwargs.get('node_prefix')
         self._node_img_tag = 'scylla-sct-img'
         self._context_path = os.path.join(os.path.dirname(__file__), '../docker/scylla-sct')
         self._create_node_image()
-        super(DockerCluster, self).__init__(node_prefix=kwargs.get('node_prefix'),
+        super(DockerCluster, self).__init__(node_prefix=self._node_prefix,
                                             n_nodes=kwargs.get('n_nodes'),
                                             params=kwargs.get('params'),
                                             region_names=["localhost-dc"])  # no multi dc currently supported
@@ -121,11 +128,23 @@ class DockerCluster(cluster.BaseCluster):
         _cmd('pull {}'.format(self._image), timeout=300)
         self._clean_old_images()
 
-    def _create_node(self, node_name, is_seed=False, seed_ip=None):
+    def _create_container(self, node_name, is_seed=False, seed_ip=None):
         cmd = 'run --name {} -d {}'.format(node_name, self._node_img_tag)
         if not is_seed and seed_ip:
             cmd = '{} --seeds="{}"'.format(cmd, seed_ip)
         _cmd(cmd, timeout=30)
+
+    def _get_containers_by_prefix(self):
+        c_ids = _cmd('container ls -a -q --filter name={}'.format(self._node_prefix))
+        if not c_ids:
+            raise CannotFindContainers('name prefix: %s' % self._node_prefix)
+        return [_ for _ in c_ids.split('\n') if _]
+
+    @staticmethod
+    def _get_connainer_name_by_id(c_id):
+        return json.loads(_cmd("inspect --format='{{{{json .Name}}}}' {}".format(c_id))).lstrip('/')
+
+    def _create_node(self, node_name):
         return DockerNode(node_name,
                           credentials=self.credentials[0],
                           base_logdir=self.logdir,
@@ -139,19 +158,48 @@ class DockerCluster(cluster.BaseCluster):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             if node_name not in node_names:
                 return node_name, node_index
-            else:
-                node_index += 1
+            node_index += 1
 
-    def add_nodes(self, count, dc_idx=0):
+    def _create_nodes(self, count, dc_idx=0):
+        """
+        Create nodes from docker containers
+        :param count: count of nodes to create
+        :param dc_idx: datacenter index
+        :return: list of DockerNode objects
+        """
         new_nodes = []
         for _ in xrange(count):
             node_name, node_index = self._get_node_name_and_index()
             is_seed = (node_index == 0)
             seed_ip = self.nodes[0].public_ip_address if not is_seed else None
-            new_node = self._create_node(node_name, is_seed, seed_ip)
+            self._create_container(node_name, is_seed, seed_ip)
+            new_node = self._create_node(node_name)
             self.nodes.append(new_node)
             new_nodes.append(new_node)
         return new_nodes
+
+    def _get_nodes(self):
+        """
+        Find the existing containers by node name prefix
+        and create nodes from it.
+        :return: list of DockerNode objects
+        """
+        c_ids = self._get_containers_by_prefix()
+        for c_id in c_ids:
+            node_name = self._get_connainer_name_by_id(c_id)
+            logger.debug('Node name: %s' % node_name)
+            new_node = self._create_node(node_name)
+            if not new_node.is_running():
+                new_node.start()
+                new_node.wait_for_status_running()
+            self.nodes.append(new_node)
+        return self.nodes
+
+    def add_nodes(self, count, dc_idx=0):
+        if cluster.Setup.REUSE_CLUSTER:
+            return self._get_nodes()
+        else:
+            return self._create_nodes(count, dc_idx)
 
     def destroy(self):
         logger.info('Destroy nodes')
