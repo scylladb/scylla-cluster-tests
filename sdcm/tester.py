@@ -996,6 +996,7 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
+        self.kill_stress_thread()
         db_cluster_errors = None
         db_cluster_coredumps = None
         if self.db_cluster is not None:
