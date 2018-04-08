@@ -1014,6 +1014,12 @@ class ClusterTester(Test):
                 for node in self.db_cluster.nodes:
                     node.instance.stop()
                 self.db_cluster = None
+            elif self._failure_post_behavior == 'keep':
+                # Stopping nemesis, using timeout of 30 minutes, since replace/decomission node can take time
+                self.db_cluster.stop_nemesis(timeout=1800)
+                for node in self.db_cluster.nodes:
+                    node.stop_task_threads(timeout=600)
+
         if self.loaders is not None:
             self.loaders.get_backtraces()
             if self._failure_post_behavior == 'destroy':
