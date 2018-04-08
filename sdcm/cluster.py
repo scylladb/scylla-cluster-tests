@@ -786,7 +786,7 @@ WantedBy=multi-user.target
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
-    def wait_ssh_up(self, verbose=True, timeout=None):
+    def wait_ssh_up(self, verbose=True, timeout=300):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
