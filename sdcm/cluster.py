@@ -1807,6 +1807,7 @@ class BaseLoaderSet(object):
         node.wait_ssh_up(verbose=verbose)
 
         if Setup.REUSE_CLUSTER:
+            self.kill_stress_thread()
             return
 
         # The init scripts should install/update cs, so
