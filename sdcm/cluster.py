@@ -994,10 +994,6 @@ WantedBy=multi-user.target
             p = re.compile('\n[# ]*rpc_address:.*')
             scylla_yaml_contents = p.sub('\nrpc_address: {0}'.format(self.private_ip_address),
                                          scylla_yaml_contents)
-            # Set api_address
-            p = re.compile('\n[# ]*api_address:.*')
-            scylla_yaml_contents = p.sub('\napi_address: {0}'.format(self.private_ip_address),
-                                         scylla_yaml_contents)
         if broadcast:
             # Set broadcast_address
             p = re.compile('[# ]*broadcast_address:.*')
