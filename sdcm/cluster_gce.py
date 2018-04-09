@@ -1,9 +1,7 @@
 import os
-import re
 import time
 
 import cluster
-from . import wait
 from .loader import CassandraStressExporterSetup
 
 
@@ -11,6 +9,10 @@ def _prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = cluster.DEFAULT_USER_PREFIX
     return '%s-%s' % (user_prefix, base_name)
+
+
+class CreateGCENodeError(Exception):
+    pass
 
 
 class GCENode(cluster.BaseNode):
@@ -137,6 +139,8 @@ class GCECluster(cluster.BaseCluster):
         self._gce_region_names = gce_region_names
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
+        # the full node prefix will contain unique uuid, so use this for search of existing nodes
+        self._node_prefix = node_prefix
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -197,56 +201,82 @@ class GCECluster(cluster.BaseCluster):
                 },
                 "autoDelete": True}
 
+    def _create_instance(self, node_index, dc_idx):
+        name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
+        gce_disk_struct = list()
+        gce_disk_struct.append(self._get_root_disk_struct(name=name,
+                                                          disk_type=self._gce_image_type,
+                                                          dc_idx=dc_idx))
+        for i in range(self._gce_n_local_ssd):
+            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
+        if self._add_disks:
+            for disk_type, disk_size in self._add_disks.iteritems():
+                disk_size = int(disk_size)
+                if disk_size:
+                    gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
+                                                                            disk_type=disk_type, dc_idx=dc_idx))
+        self.log.info(gce_disk_struct)
+        # Name must start with a lowercase letter followed by up to 63
+        # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
+        assert len(name) <= 63, "Max length of instance name is 63"
+        instance = self._gce_services[dc_idx].create_node(name=name,
+                                                          size=self._gce_instance_type,
+                                                          image=self._gce_image,
+                                                          ex_network=self._gce_network,
+                                                          ex_disks_gce_struct=gce_disk_struct)
+        self.log.info('Created instance %s', instance)
+        return instance
+
+    def _create_instances(self, count, dc_idx=0):
+        instances = []
+        for node_index in range(self._node_index + 1, self._node_index + count + 1):
+            instances.append(self._create_instance(node_index, dc_idx))
+        return instances
+
+    def _get_instances_by_prefix(self, dc_idx=0):
+        instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
+        return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
+
+    def _get_instances(self):
+        instances = self._get_instances_by_prefix()
+        ips = self._node_public_ips or self._node_private_ips
+        attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
+        return [node for node in instances if getattr(node, attr_name)[0] in ips]
+
+    def _create_node(self, instance, node_index, dc_idx):
+        try:
+            return GCENode(gce_instance=instance,
+                           gce_service=self._gce_services[dc_idx],
+                           credentials=self._credentials[0],
+                           gce_image_username=self._gce_image_username,
+                           node_prefix=self.node_prefix,
+                           node_index=node_index,
+                           base_logdir=self.logdir,
+                           dc_idx=dc_idx)
+        except Exception as ex:
+            raise CreateGCENodeError('Failed to create node: %s', ex)
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         nodes = []
-        for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
-            gce_disk_struct = list()
-            gce_disk_struct.append(self._get_root_disk_struct(name=name,
-                                                              disk_type=self._gce_image_type,
-                                                              dc_idx=dc_idx))
-            for i in range(self._gce_n_local_ssd):
-                gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
-            if self._add_disks:
-                for disk_type, disk_size in self._add_disks.iteritems():
-                    disk_size = int(disk_size)
-                    if disk_size:
-                        gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
-                                                                                disk_type=disk_type, dc_idx=dc_idx))
-            self.log.info(gce_disk_struct)
-            # Name must start with a lowercase letter followed by up to 63
-            # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
-            assert len(name) <= 63, "Max length of instance name is 63"
-            instance = self._gce_services[dc_idx].create_node(name=name,
-                                                              size=self._gce_instance_type,
-                                                              image=self._gce_image,
-                                                              ex_network=self._gce_network,
-                                                              ex_disks_gce_struct=gce_disk_struct)
-            self.log.info('Created instance %s', instance)
-            cluster.GCE_INSTANCES.append(instance)
-            try:
-                n = GCENode(gce_instance=instance,
-                            gce_service=self._gce_services[dc_idx],
-                            credentials=self._credentials[0],
-                            gce_image_username=self._gce_image_username,
-                            node_prefix=self.node_prefix,
-                            node_index=node_index,
-                            base_logdir=self.logdir,
-                            dc_idx=dc_idx)
-                nodes.append(n)
-            except Exception as ex:
-                self.log.exception('Failed to create node: %s', ex)
-            else:
-                self._node_index += 1
-                self.nodes += [n]
+        if cluster.Setup.REUSE_CLUSTER:
+            instances = self._get_instances()
+        else:
+            instances = self._create_instances(count, dc_idx)
 
-                local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
-                if len(local_nodes) > len(nodes):
-                    n.is_addition = True
+        self.log.debug('instances: %s', instances)
+        for ind, instance in enumerate(instances):
+            node_index = ind + self._node_index + 1
+            node = self._create_node(instance, node_index, dc_idx)
 
-        assert len(nodes) == count, 'Fail to create {} instances'.format(count)
+            nodes.append(node)
+            self.nodes.append(node)
+
+            local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
+            if len(local_nodes) > len(nodes):
+                node.is_addition = True
+
+        self._node_index += count
         self.log.info('added nodes: %s', nodes)
-
         return nodes
 
 
@@ -254,7 +284,7 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
-                 gce_image_username='centos', scylla_repo=None,
+                 gce_image_username='centos',
                  user_prefix=None, n_nodes=[10], add_disks=None, params=None, gce_datacenter=None):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
@@ -308,7 +338,7 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
-                 gce_image_username='centos', scylla_repo=None,
+                 gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
@@ -326,11 +356,16 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
                                            n_nodes=n_nodes,
                                            add_disks=add_disks,
                                            params=params)
-        self.scylla_repo = scylla_repo
+
+    @classmethod
+    def _get_node_ips_param(cls, ip_type='public'):
+        return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
     def node_setup(self, node, verbose=False, db_node_address=None):
         self.log.info('Setup in LoaderSetGCE')
         node.wait_ssh_up(verbose=verbose)
+        if cluster.Setup.REUSE_CLUSTER:
+            return
         node.download_scylla_repo(self.params.get('scylla_repo'))
         node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
         node.wait_cs_installed(verbose=verbose)
@@ -347,7 +382,7 @@ class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
-                 gce_image_username='centos', scylla_repo=None,
+                 gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
@@ -365,7 +400,10 @@ class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
                                             n_nodes=n_nodes,
                                             add_disks=add_disks,
                                             params=params)
-        self.scylla_repo = scylla_repo
+
+    @classmethod
+    def _get_node_ips_param(cls, ip_type='public'):
+        return cluster.BaseMonitorSet.get_node_ips_param(ip_type)
 
     def destroy(self):
         self.log.info('Destroy nodes')
