@@ -25,16 +25,10 @@ class MultipleDcTest(ClusterTester):
     """
 
     def stop_scylla(self, node):
-        node.wait_db_up()
-        node.remoter.run('sudo systemctl stop scylla-server.service')
-        node.remoter.run('sudo systemctl stop scylla-jmx.service')
-        node.wait_db_down()
+        node.stop_scylla(verify_up=True, verify_down=True)
 
     def start_scylla(self, node):
-        node.wait_db_down()
-        node.remoter.run('sudo systemctl start scylla-server.service')
-        node.remoter.run('sudo systemctl start scylla-jmx.service')
-        node.wait_db_up()
+        node.start_scylla(verify_up=True, verify_down=True)
 
     def test_shutdown(self):
         """
@@ -52,14 +46,14 @@ class MultipleDcTest(ClusterTester):
 
         # stop old node
         old_node = nodes[-1]
-        self.stop_scylla(old_node)
+        old_node.stop_scylla(verify_up=True, verify_down=True)
 
         # stop new node
-        self.stop_scylla(new_node)
+        new_node.stop_scylla(verify_up=True, verify_down=True)
 
         # restart the service
-        self.start_scylla(old_node)
-        self.start_scylla(new_node)
+        old_node.start_scylla(verify_up=True, verify_down=True)
+        new_node.start_scylla(verify_up=True, verify_down=True)
 
         results = self.get_stress_results(queue=stress_queue)
 
@@ -71,10 +65,10 @@ class MultipleDcTest(ClusterTester):
                                               keyspace_num=1)
         nodes_2nd_dc = [n for n in node_list if n.dc_idx == 1]
         for node in nodes_2nd_dc:
-            self.stop_scylla(node)
+            node.stop_scylla(verify_up=True, verify_down=True)
 
         for node in nodes_2nd_dc:
-            self.start_scylla(node)
+            node.start_scylla(verify_up=True, verify_down=True)
 
         results = self.get_stress_results(queue=stress_queue)
 

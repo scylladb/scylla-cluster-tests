@@ -158,19 +158,15 @@ class Nemesis(object):
 
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
         self._set_current_disruption('StopWaitStartService %s' % self.target_node)
-        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
-        self.target_node.wait_db_down()
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.log.info("Sleep for %s seconds", sleep_time)
         time.sleep(sleep_time)
-        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
-        self.target_node.wait_db_up()
+        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt_stop_start_scylla_server(self):
         self._set_current_disruption('StopStartService %s' % self.target_node)
-        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
-        self.target_node.wait_db_down()
-        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
-        self.target_node.wait_db_up()
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
@@ -179,15 +175,13 @@ class Nemesis(object):
                                             "/tmp/break_scylla.sh")
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
-        self.target_node.wait_db_down()
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         # corrupt the DB
         self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
         self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # corrupt the DB
 
-        self.target_node.remoter.run('sudo systemctl start scylla-server.service')
-        self.target_node.wait_db_up()
+        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
@@ -223,10 +217,8 @@ class Nemesis(object):
                 self.log.info('Status for regular %s: %s', node,
                               self._run_nodetool('nodetool status', node))
         if result is not None:
-            self.target_node.remoter.run('sudo systemctl stop scylla-server.service')
-            self.target_node.wait_db_down()
-            self.target_node.remoter.run('sudo systemctl start scylla-server.service')
-            self.target_node.wait_db_up()
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def reconfigure_monitoring(self):
         self.log.info("Reconfiguring monitoring")

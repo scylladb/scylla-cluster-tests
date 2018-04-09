@@ -910,7 +910,7 @@ WantedBy=multi-user.target
             self.remoter.run('sudo -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
-    def wait_db_up(self, verbose=True, timeout=None):
+    def wait_db_up(self, verbose=True, timeout=600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
@@ -932,7 +932,7 @@ WantedBy=multi-user.target
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
-    def wait_db_down(self, verbose=True, timeout=None):
+    def wait_db_down(self, verbose=True, timeout=600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
@@ -1174,6 +1174,42 @@ client_encryption_options:
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
+        if verify_down:
+            self.wait_db_down(timeout=timeout)
+        self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+        if verify_up:
+            self.wait_db_up(timeout=timeout)
+
+    def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300):
+        if verify_down:
+            self.wait_jmx_down(timeout=timeout)
+        self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+        if verify_up:
+            self.wait_jmx_up(timeout=timeout)
+
+    def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
+        self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+
+    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300):
+        if verify_up:
+            self.wait_db_up(timeout=timeout)
+        self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout)
+        if verify_down:
+            self.wait_db_down(timeout=timeout)
+
+    def stop_scylla_jmx(self, verify_up=False, verify_down=True, timeout=300):
+        if verify_up:
+            self.wait_jmx_up(timeout=timeout)
+        self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+        if verify_down:
+            self.wait_jmx_down(timeout=timeout)
+
+    def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
+        self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
 
 class BaseCluster(object):
@@ -1438,18 +1474,12 @@ class BaseScyllaCluster(object):
             queue.task_done()
 
         def stop_scylla(node, queue):
-            node.wait_db_up()
-            node.remoter.run('sudo systemctl stop scylla-server.service')
-            node.remoter.run('sudo systemctl stop scylla-jmx.service')
-            node.wait_db_down()
+            node.stop_scylla(verify_down=True, verify_up=True)
             queue.put(node)
             queue.task_done()
 
         def start_scylla(node, queue):
-            node.wait_db_down()
-            node.remoter.run('sudo systemctl start scylla-server.service')
-            node.remoter.run('sudo systemctl start scylla-jmx.service')
-            node.wait_db_up()
+            node.start_scylla(verify_down=True, verify_up=True)
             queue.put(node)
             queue.task_done()
 
@@ -1491,23 +1521,12 @@ class BaseScyllaCluster(object):
             queue.task_done()
 
         def stop_scylla(node, queue):
-            node.wait_db_up()
-            node.remoter.run('sudo systemctl stop scylla-server.service')
-            node.remoter.run('sudo systemctl stop scylla-jmx.service')
-            node.wait_db_down()
+            node.stop_scylla(verify_down=True, verify_up=True)
             queue.put(node)
             queue.task_done()
 
         def start_scylla(node, queue):
-            node.wait_db_down()
-            try:
-                node.remoter.run('sudo systemctl start scylla-server.service')
-                node.remoter.run('sudo systemctl start scylla-jmx.service')
-            except Exception as e:
-                node.remoter.run('sudo systemctl status scylla-server.service | true')
-                node.remoter.run('sudo systemctl status scylla-jmx.service | true')
-                print e
-            node.wait_db_up()
+            node.start_scylla(verify_down=True, verify_up=True)
             queue.put(node)
             queue.task_done()
 
