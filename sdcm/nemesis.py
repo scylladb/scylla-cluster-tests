@@ -22,8 +22,6 @@ import time
 import datetime
 import string
 import threading
-import requests
-import json
 
 from avocado.utils import process
 
@@ -653,9 +651,8 @@ class Nemesis(object):
         thread1.start()
 
         def repair_streaming_exists():
-            resp = requests.get('http://%s:10000/stream_manager/' % self.target_node.public_ip_address)
-            assert resp.status_code == 200
-            return 'repair-' in resp.content
+            result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/stream_manager/"')
+            return 'repair-' in result.stdout
 
         wait.wait_for(func=repair_streaming_exists,
                       timeout=10,
@@ -663,9 +660,7 @@ class Nemesis(object):
                       text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        url = "http://%s:10000/storage_service/force_terminate_repair" % self.target_node.public_ip_address
-        resp = requests.post(url, data=json.dumps({'Accept': 'application/json'}))
-        assert resp.status_code in [200, 201, 202]
+        self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
         thread1.join(timeout=120)
 
         self.log.debug("Execute a complete repair for target node")
