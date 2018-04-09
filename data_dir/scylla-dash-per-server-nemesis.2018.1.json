@@ -435,7 +435,12 @@
                         "points": false,
                         "renderer": "flot",
                         "seriesOverrides": [
-                            {}
+                             {
+                                 "alias": "/method=\"[a-z]/",
+                                 "fill": 2,
+                                 "lines": true,
+                                 "yaxis": 2
+                             }
                         ],
                         "span": 5,
                         "stack": false,
@@ -448,6 +453,13 @@
                                 "metric": "",
                                 "refId": "A",
                                 "step": 1
+                            },
+                            {
+                              "expr": "nemesis_disruptions_gauge",
+                              "intervalFactor": 2,
+                              "legendFormat": "",
+                              "refId": "B",
+                              "step": 2
                             }
                         ],
                         "timeFrom": null,
@@ -473,8 +485,9 @@
                             },
                             {
                                 "format": "short",
+                                "label": "Nemesis",
                                 "logBase": 1,
-                                "max": null,
+                                "max": 1,
                                 "min": null,
                                 "show": true
                             }
@@ -4745,7 +4758,7 @@
             ]
         },
         "timezone": "browser",
-        "title": "Scylla Per Server Metrics 2018.1",
+        "title": "Scylla Per Server Metrics Nemesis 2018.1",
         "version": 5
     }
 }
