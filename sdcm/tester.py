@@ -988,6 +988,7 @@ class ClusterTester(Test):
 
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
+        self.kill_stress_thread()
         db_cluster_errors = None
         db_cluster_coredumps = None
         if self.db_cluster is not None:
@@ -1005,6 +1006,12 @@ class ClusterTester(Test):
                 for node in self.db_cluster.nodes:
                     node.instance.stop()
                 self.db_cluster = None
+            elif self._failure_post_behavior == 'keep':
+                # Stopping nemesis, using timeout of 30 minutes, since replace/decomission node can take time
+                self.db_cluster.stop_nemesis(timeout=1800)
+                for node in self.db_cluster.nodes:
+                    node.stop_task_threads(timeout=600)
+
         if self.loaders is not None:
             self.loaders.get_backtraces()
             if self._failure_post_behavior == 'destroy':

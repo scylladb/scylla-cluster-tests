@@ -42,7 +42,7 @@ from .remote import Remote
 from .remote import disable_master_ssh
 from . import data_path
 from . import wait
-from .utils import get_monitor_version
+from .utils import get_monitor_version, log_run_info
 
 from .loader import CassandraStressExporterSetup
 from .prometheus import start_metrics_server
@@ -780,6 +780,7 @@ WantedBy=multi-user.target
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
 
+    @log_run_info
     def stop_task_threads(self, timeout=10):
         self.termination_event.set()
         if self._backtrace_thread:
@@ -791,7 +792,7 @@ WantedBy=multi-user.target
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
-    def wait_ssh_up(self, verbose=True, timeout=None):
+    def wait_ssh_up(self, verbose=True, timeout=300):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
@@ -1689,8 +1690,8 @@ class BaseScyllaCluster(object):
     def clean_nemesis(self):
         self.nemesis = []
 
+    @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=30):
-        self.log.debug('Start nemesis begin')
         for nemesis in self.nemesis:
             nemesis.set_termination_event(self.termination_event)
             nemesis.set_target_node()
@@ -1698,15 +1699,13 @@ class BaseScyllaCluster(object):
                                               args=(interval,), verbose=True)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
-        self.log.debug('Start nemesis end')
 
+    @log_run_info("Stop nemesis threads on cluster")
     def stop_nemesis(self, timeout=10):
-        self.log.debug('Stop nemesis begin')
         self.termination_event.set()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
-        self.log.debug('Stop nemesis end')
 
     def _param_enabled(self, param):
         param = self.params.get(param)

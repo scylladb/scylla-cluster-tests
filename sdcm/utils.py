@@ -15,8 +15,8 @@ import logging
 import re
 import os
 import glob
-
 import time
+import datetime
 from functools import wraps
 
 from avocado.utils import process
@@ -84,7 +84,7 @@ def get_monitor_version(full_version, clone=False):
 
 class retrying(object):
     """
-        Used as a decorator to retry function run that can posiibly fail with allowed exceptions list
+        Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
     def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,)):
         self.n = n  # number of times to retry
@@ -104,3 +104,47 @@ class retrying(object):
                         logger.error("Number of retries exceeded!")
                         raise
         return inner
+
+
+def log_run_info(arg):
+    """
+        Decorator that prints BEGIN before the function runs and END when function finished running.
+        Uses function name as a name of action or string that can be given to the decorator.
+        If the function is a method of a class object, the class name will be printed out.
+
+        Usage examples:
+            @log_run_info
+            def foo(x, y=1):
+                pass
+            In: foo(1)
+            Out:
+                BEGIN: foo
+                END: foo (ran 0.000164)s
+
+            @log_run_info("Execute nemesis")
+            def disrupt():
+                pass
+            In: disrupt()
+            Out:
+                BEGIN: Execute nemesis
+                END: Execute nemesis (ran 0.000271)s
+    """
+    def _inner(func, msg=None):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            class_name = ""
+            if len(args) > 0 and func.__name__ in dir(args[0]):
+                class_name = " <%s>" % args[0].__class__.__name__
+            action = "%s%s" % (msg, class_name)
+            start_time = datetime.datetime.now()
+            logger.info("BEGIN: %s", action)
+            res = func(*args, **kwargs)
+            end_time = datetime.datetime.now()
+            logger.info("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
+            return res
+        return inner
+
+    if callable(arg):  # when decorator is used without a string message
+        return _inner(arg, arg.__name__)
+    else:
+        return lambda f: _inner(f, arg)
