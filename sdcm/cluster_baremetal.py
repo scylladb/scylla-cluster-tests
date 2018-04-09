@@ -54,8 +54,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         self.remoter.run('sudo reboot -h now', ignore_status=True)
 
     def destroy(self):
-        # do nothing
-        pass
+        self.stop_task_threads()  # For future implementation of destroy
 
 
 class PhysicalMachineCluster(cluster.BaseCluster):

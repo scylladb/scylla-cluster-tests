@@ -94,10 +94,10 @@ class LibvirtNode(cluster.BaseNode):
         self.wait_db_up()
 
     def destroy(self):
+        self.stop_task_threads()
         self._domain.destroy()
         self._domain.undefine()
         cluster.remove_if_exists(self._backing_image)
-        self.stop_task_threads()
         self.log.info('Destroyed')
 
 

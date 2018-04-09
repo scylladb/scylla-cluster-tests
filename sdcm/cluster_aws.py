@@ -300,9 +300,9 @@ class AWSNode(cluster.BaseNode):
         self.wait_db_up()
 
     def destroy(self):
+        self.stop_task_threads()
         self._instance.terminate()
         cluster.EC2_INSTANCES.remove(self._instance)
-        self.stop_task_threads()
         self.log.info('Destroyed')
 
 
