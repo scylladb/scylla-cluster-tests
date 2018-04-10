@@ -116,6 +116,7 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
         super(LoaderSetPhysical, self).__init__(node_prefix=self._node_prefix, **kwargs)
+        self._install_cs = True
 
 
 class MonitorSetPhysical(PhysicalMachineCluster, cluster.BaseMonitorSet):
