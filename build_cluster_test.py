@@ -60,9 +60,7 @@ class BuildClusterTest(ClusterTester):
 
         self.log.info('DB cluster is: %s', self.db_cluster)
         for node in self.db_cluster.nodes:
-            node.remoter.run('sudo systemctl stop scylla-server.service')
-            node.remoter.run('sudo systemctl stop scylla-jmx.service')
-            node.wait_db_down()
+            node.stop_scylla(verify_up=False, verify_down=True)
 
         addresses = {}
         seeds = []
@@ -86,18 +84,10 @@ class BuildClusterTest(ClusterTester):
 
         for node in self.db_cluster.nodes:
             if node.is_seed:
-                node.remoter.run('sudo systemctl start scylla-server.service')
-                node.remoter.run('sudo systemctl start scylla-jmx.service')
-                node.wait_db_up(timeout=300)
-                node.wait_jmx_up()
-
+                node.start_scylla(verify_down=False, verify_up=True)
         for node in self.db_cluster.nodes:
             if not node.is_seed:
-                node.remoter.run('sudo systemctl start scylla-server.service')
-                node.remoter.run('sudo systemctl start scylla-jmx.service')
-                node.wait_db_up(timeout=300)
-                node.wait_jmx_up()
-
+                node.start_scylla(verify_down=False, verify_up=True)
         base_cmd_w = self.params.get('stress_cmd')
 
         # run a workload
