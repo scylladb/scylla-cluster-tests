@@ -332,45 +332,8 @@ class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):
                                                  node_prefix=node_prefix,
                                                  n_nodes=n_nodes,
                                                  params=params)
+        self._install_cs = True
         self.scylla_repo = scylla_repo
-
-    def wait_for_init(self, verbose=False, db_node_address=None):
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            self.log.info('Setup in LoaderSetOpenStack')
-            node.wait_ssh_up(verbose=verbose)
-            node.download_scylla_repo(self.params.get('scylla_repo'))
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-            node.wait_cs_installed(verbose=verbose)
-            node.remoter.run('sudo yum install -y screen')
-            if db_node_address is not None:
-                node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
-                                 db_node_address)
-
-            cs_exporter_setup = CassandraStressExporterSetup()
-            cs_exporter_setup.install(node)
-
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        for loader in self.nodes:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(loader,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
-
-        results = []
-        while len(results) != len(self.nodes):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-            except Queue.Empty:
-                pass
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
 
 
 class MonitorSetOpenStack(OpenStackCluster, cluster.BaseMonitorSet):
@@ -385,7 +348,7 @@ class MonitorSetOpenStack(OpenStackCluster, cluster.BaseMonitorSet):
                                                   openstack_network=openstack_network,
                                                   openstack_instance_type=openstack_instance_type,
                                                   openstack_image_username=openstack_image_username,
-                                                  services=service,
+                                                  service=service,
                                                   credentials=credentials,
                                                   cluster_prefix=cluster_prefix,
                                                   node_prefix=node_prefix,

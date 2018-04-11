@@ -44,8 +44,8 @@ class PhysicalMachineNode(cluster.BaseNode):
         Detect local disks
         """
         min_size = 50 * 1024 * 1024 * 1024  # 50gb
-        result = self.remoter.run('lsblk -bo KNAME,SIZE |grep -v KNAME')
-        lines = [line.split() for line in result.stdout]
+        result = self.remoter.run('lsblk -nbo KNAME,SIZE -r')
+        lines = [line.split() for line in result.stdout.splitlines()]
         disks = ['/dev/{}'.format(l[0]) for l in lines if l and int(l[1]) > min_size and re.search('\d$', l[0])]
         assert disks, 'Failed to find disks!'
         return disks
@@ -116,6 +116,7 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
         super(LoaderSetPhysical, self).__init__(node_prefix=self._node_prefix, **kwargs)
+        self._install_cs = True
 
 
 class MonitorSetPhysical(PhysicalMachineCluster, cluster.BaseMonitorSet):

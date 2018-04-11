@@ -356,26 +356,11 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
                                            n_nodes=n_nodes,
                                            add_disks=add_disks,
                                            params=params)
+        self._install_cs = True
 
     @classmethod
     def _get_node_ips_param(cls, ip_type='public'):
         return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
-
-    def node_setup(self, node, verbose=False, db_node_address=None):
-        self.log.info('Setup in LoaderSetGCE')
-        node.wait_ssh_up(verbose=verbose)
-        if cluster.Setup.REUSE_CLUSTER:
-            return
-        node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-        node.wait_cs_installed(verbose=verbose)
-        node.remoter.run('sudo yum install -y screen')
-        if db_node_address is not None:
-            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
-                             db_node_address)
-
-        cs_exporter_setup = CassandraStressExporterSetup()
-        cs_exporter_setup.install(node)
 
 
 class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):

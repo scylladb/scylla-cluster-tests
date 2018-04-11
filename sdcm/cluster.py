@@ -1814,6 +1814,7 @@ class BaseLoaderSet(object):
 
     def __init__(self, *args, **kwargs):
         self._loader_queue = []
+        self._install_cs = False
         self.params = kwargs.get('params', {})
 
     def node_setup(self, node, verbose=False, db_node_address=None):
@@ -1824,9 +1825,10 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
-        # The init scripts should install/update cs, so
-        # let's try to guarantee it will be there before
-        # proceeding
+        if self._install_cs:
+            node.download_scylla_repo(self.params.get('scylla_repo'))
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+
         node.wait_cs_installed(verbose=verbose)
         node.remoter.run('sudo yum install -y screen')
         if db_node_address is not None:
