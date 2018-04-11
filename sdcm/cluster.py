@@ -321,6 +321,7 @@ class BaseNode(object):
         self.scylla_version = ''
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
+        self._set_prometheus_paths()
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
@@ -513,7 +514,6 @@ class BaseNode(object):
         self.prometheus_service_path = '/etc/systemd/system/prometheus.service'
 
     def install_prometheus(self):
-        self._set_prometheus_paths()
         self.remoter.run('curl %s/%s -o %s/%s -L' %
                          (self.prometheus_base_url, self.prometheus_tarball,
                           self.prometheus_system_base_dir, self.prometheus_tarball))
