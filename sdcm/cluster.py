@@ -2292,6 +2292,8 @@ class BaseMonitorSet(object):
         node.wait_ssh_up(verbose=verbose)
 
         if Setup.REUSE_CLUSTER:
+            # We have to start http server to expose the metrics via prometheus client
+            node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
             return
 
         # The init scripts should install/update c-s, so
