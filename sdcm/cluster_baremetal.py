@@ -44,9 +44,9 @@ class PhysicalMachineNode(cluster.BaseNode):
         Detect local disks
         """
         min_size = 50 * 1024 * 1024 * 1024  # 50gb
-        result = self.remoter.run('lsblk -nbo KNAME,SIZE -r')
+        result = self.remoter.run('lsblk -nbo KNAME,SIZE,MOUNTPOINT -s -d')
         lines = [line.split() for line in result.stdout.splitlines()]
-        disks = ['/dev/{}'.format(l[0]) for l in lines if l and int(l[1]) > min_size and re.search('\d$', l[0])]
+        disks = ['/dev/{}'.format(l[0]) for l in lines if l and int(l[1]) > min_size and len(l) == 2]
         assert disks, 'Failed to find disks!'
         return disks
 
