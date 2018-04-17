@@ -201,7 +201,7 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_r = self.params.get('stress_cmd_r')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        self.create_test_stats()
+        self.create_test_stats(sub_type='write')
 
         stress_queue = list()
         # if test require a pre-population of data
@@ -242,7 +242,7 @@ class PerformanceRegressionTest(ClusterTester):
         time.sleep(60)
 
         # Run READ workload
-        self.create_test_stats()
+        self.create_test_stats(sub_type='read')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -252,7 +252,7 @@ class PerformanceRegressionTest(ClusterTester):
         time.sleep(60)
 
         # run MIXED workload
-        self.create_test_stats()
+        self.create_test_stats(sub_type='mixed')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
