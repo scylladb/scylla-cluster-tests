@@ -80,9 +80,6 @@ class LongevityTest(ClusterTester):
                                     loaders=self.loaders,
                                     monitoring_set=self.monitors,
                                     db_stats=self.db_stats)
-                                    # test_index=self.test_index,
-                                    # test_type=self.test_type,
-                                    # test_id=self.test_id)
         stress_queue = list()
         write_queue = list()
 
