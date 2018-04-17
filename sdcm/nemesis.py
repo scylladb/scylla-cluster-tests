@@ -28,7 +28,6 @@ from avocado.utils import process
 from sdcm.cluster import SCYLLA_YAML_PATH
 from .data_path import get_data_path
 from .log import SDCMAdapter
-from . import es
 from . import prometheus
 from . import mgmt
 from avocado.utils import wait
@@ -59,9 +58,7 @@ class Nemesis(object):
         self.interval = 0
         self.start_time = time.time()
         self.stats = {}
-        self.test_index = kwargs.get('test_index', None)
-        self.test_type = kwargs.get('test_type', None)
-        self.test_id = kwargs.get('test_id', None)
+        self.db_stats = kwargs.get('db_stats', None)
         self.metrics_srv = prometheus.nemesis_metrics_obj()
         self._random_sequence = None
 
@@ -71,11 +68,9 @@ class Nemesis(object):
             self.stats[disrupt] = {'runs': [], 'failures': [], 'cnt': 0}
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]['cnt'] += 1
-        self.log.info('STATS: %s', self.stats)
-        self.log.info('Update nemesis info for test %s', self.test_id)
-        if self.test_index:
-            db = es.ES()
-            db.update(self.test_index, self.test_type, self.test_id, {'nemesis': self.stats})
+        self.log.info('Update nemesis info: %s', self.stats)
+        if self.db_stats:
+            self.db_stats.update({'nemesis': self.stats})
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]

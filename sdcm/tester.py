@@ -19,10 +19,8 @@ import time
 import types
 import re
 import subprocess
-import datetime
 import platform
 from functools import wraps
-from textwrap import dedent
 
 import boto3.session
 import libvirt
@@ -57,10 +55,9 @@ from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
 from .data_path import get_data_path
-from . import es
-from results_analyze import ResultsAnalyzer
 from . import docker
 from . import cluster_baremetal
+from . import db_stats
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -140,92 +137,6 @@ def clean_resources_on_exception(method):
     return wrapper
 
 
-class CassandraStressCmdParseError(Exception):
-    def __init__(self, cmd, ex):
-        self.command = cmd
-        self.exception = repr(ex)
-
-    def __str__(self):
-        return dedent("""
-            Stress command: '{0.command}'
-            Error: {0.exception}""".format(self))
-
-    def __repr__(self):
-        return self.__str__()
-
-
-def get_stress_cmd_params(cmd):
-    """
-    Parsing cassandra stress command
-    :param cmd: stress cmd
-    :return: dict with params
-    """
-    cmd_params = {}
-    try:
-        cmd = cmd.strip().split('cassandra-stress')[1].strip()
-        if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
-            cmd_params['command'] = cmd.split(' ')[0]
-            if 'no-warmup' in cmd:
-                cmd_params['no-warmup'] = True
-
-            match = re.search('(cl\s?=\s?\w+)', cmd)
-            if match:
-                cmd_params['cl'] = match.group(0).split('=')[1].strip()
-
-            match = re.search('(duration\s?=\s?\w+)', cmd)
-            if match:
-                cmd_params['duration'] = match.group(0).split('=')[1].strip()
-
-            match = re.search('( n\s?=\s?\w+)', cmd)
-            if match:
-                cmd_params['n'] = match.group(0).split('=')[1].strip()
-            match = re.search('profile=(\S+)\s+', cmd)
-            if match:
-                cmd_params['profile'] = match.group(1).strip()
-                match = re.search('ops(\S+)\s+', cmd)
-                if match:
-                    cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
-
-            for temp in cmd.split(' -')[1:]:
-                k = temp.split()[0]
-                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
-                if match:
-                    cmd_params[k] = match.group(2).strip()
-            if 'rate' in cmd_params:
-                # split rate section on separate items
-                if 'threads' in cmd_params['rate']:
-                    cmd_params['rate threads'] = \
-                        re.search('(threads\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                if 'throttle' in cmd_params['rate']:
-                    cmd_params['throttle threads'] =\
-                        re.search('(throttle\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                if 'fixed' in cmd_params['rate']:
-                    cmd_params['fixed threads'] =\
-                        re.search('(fixed\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                del cmd_params['rate']
-
-        return cmd_params
-    except Exception as e:
-        raise CassandraStressCmdParseError(cmd=cmd, ex=e)
-
-
-def get_stress_bench_cmd_params(cmd):
-    """
-    Parsing bench stress command
-    :param cmd: stress cmd
-    :return: dict with params
-    """
-    cmd = cmd.strip().split('scylla-bench')[1].strip()
-    cmd_params = {}
-    for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
-                'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
-                'timeout', 'client-compression']:
-        match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
-        if match:
-            cmd_params[key] = match.group(2).strip()
-    return cmd_params
-
-
 class ClusterTester(Test):
 
     def __init__(self, methodName='test', name=None, params=None,
@@ -249,12 +160,12 @@ class ClusterTester(Test):
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
 
         # for saving test details in DB
-        self.test_index = self.__class__.__name__.lower()
-        self.test_type = self.params.id.name
-        self.test_id = None
-        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
-                                      'errors', 'coredumps']}
+        self._db_stats = db_stats.TestStats(self)
         self.create_stats = True
+
+    @property
+    def db_stats(self):
+        return self._db_stats
 
     @clean_resources_on_exception
     def setUp(self):
@@ -759,7 +670,7 @@ class ClusterTester(Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_stress_cmd_details(stress_cmd, prefix)
+        self._db_stats.update_stress_cmd_details(stress_cmd, prefix)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -774,7 +685,7 @@ class ClusterTester(Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_bench_stress_cmd_details(stress_cmd)
+        self._db_stats.update_bench_stress_cmd_details(stress_cmd)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -792,7 +703,7 @@ class ClusterTester(Test):
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
         if results:
-            self.update_stress_results(results)
+            self._db_stats.update_stress_results(results)
         else:
             self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
@@ -804,13 +715,13 @@ class ClusterTester(Test):
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
         if store_results:
-            self.update_stress_results(results)
+            self._db_stats.update_stress_results(results)
         return results
 
     @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
-        self.update_stress_results(results)
+        self._db_stats.update_stress_results(results)
         return results
 
     def get_auth_provider(self, user, password):
@@ -1089,163 +1000,14 @@ class ClusterTester(Test):
     def tearDown(self):
         self.clean_resources()
 
-    def get_scylla_versions(self):
-        versions = {}
-        try:
-            versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
-            for line in versions_output:
-                for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
-                                'scylla-enterprise-server', 'scylla-enterprise-tools']:
-                    match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
-                    if match:
-                        versions[package] = {'version': match.group(2),
-                                             'date': match.group(4),
-                                             'commit_id': match.group(5)}
-        except Exception as ex:
-            self.log.error('Failed getting scylla versions: %s', ex)
-
-        return versions
-
-    def get_setup_details(self):
-        exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
-        setup_details = {}
-        is_gce = False
-        for p in self.params.iteritems():
-            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
-                is_gce = True
-        for p in self.params.iteritems():
-            if p[1] in exclude_details or p[1].startswith('stress_cmd'):
-                continue
-            else:
-                if is_gce and (p[0], p[1]) in \
-                        [('/run', 'instance_type_loader'),
-                         ('/run', 'instance_type_monitor'),
-                         ('/run/databases/scylla', 'instance_type_db')]:
-                    # exclude these params from gce run
-                    continue
-                elif p[1] == 'n_db_nodes' and isinstance(p[2], str) and re.search('\s', p[2]):  # multidc
-                    setup_details['n_db_nodes'] = re.sub('\s', '_', p[2])
-                else:
-                    setup_details[p[1]] = p[2]
-
-        new_scylla_packages = self.params.get('update_db_packages')
-        setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
-
-        return setup_details
-
-    def get_test_details(self):
-        test_details = {}
-        test_details['test_name'] = self.params.id.name
-        test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        test_details['job_name'] = os.environ.get('JOB_NAME', 'local_run')
-        if os.environ.get('BUILD_URL'):
-            test_details['job_url'] = os.environ.get('BUILD_URL', '')
-
-        test_details['start_host'] = platform.node()
-        test_details['test_duration'] = self._duration
-
-        return test_details
-
-    def update_stress_cmd_details(self, cmd, prefix=''):
-        section = '{0}cassandra-stress'.format(prefix)
-        if section not in self.stats['test_details']:
-            self.stats['test_details'][section] = [] if self.create_stats else {}
-        cmd_params = get_stress_cmd_params(cmd)
-        if cmd_params:
-            self.stats['test_details'][section].append(cmd_params) if self.create_stats else\
-                self.stats['test_details'][section].update(cmd_params)
-            self.update_test_stats(dict(test_details=self.stats['test_details']))
-
-    def update_bench_stress_cmd_details(self, cmd, prefix=''):
-        section = '{0}scylla-bench'.format(prefix)
-        if section not in self.stats['test_details']:
-            self.stats['test_details'][section] = [] if self.create_stats else {}
-        cmd_params = get_stress_bench_cmd_params(cmd)
-        if cmd_params:
-            self.stats['test_details'][section].append(cmd_params) if self.create_stats else\
-                self.stats['test_details'][section].update(cmd_params)
-            self.update_test_stats(dict(test_details=self.stats['test_details']))
-
-    def update_stress_results(self, results):
-        if 'stats' not in self.stats['results']:
-            self.stats['results']['stats'] = results
-        else:
-            self.stats['results']['stats'].extend(results)
-        self.calculate_stats_average()
-        self.update_test_stats(dict(results=self.stats['results']))
-
-    def calculate_stats_average(self):
-        average_stats = {}
-        total_stats = {}
-
-        for key in self.stats['results']['stats'][0].keys():
-            # exclude loader info from statistics
-            if key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
-                continue
-            summary = 0
-            for stat in self.stats['results']['stats']:
-                if key not in stat or stat[key] == 'NaN':
-                    continue
-                try:
-                    summary += float(stat[key])
-                except:
-                    average_stats[key] = stat[key]
-            if key not in average_stats:
-                average_stats[key] = round(summary / len(self.stats['results']['stats']), 1)
-                if key in ['op rate', 'Total errors']:
-                    total_stats.update({key: summary})
-        if average_stats:
-            self.stats['results']['stats_average'] = average_stats
-        if total_stats:
-            self.stats['results']['stats_total'] = total_stats
+    def create_test_stats(self, sub_type=None):
+        self._db_stats.create(sub_type)
 
     def update_test_details(self, snapshot_uploaded=False):
-        self.stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self.monitors:
-            url_s3 = ClusterTester.get_s3_url(os.path.normpath(self.job.logdir))
-            self.stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            # setup grafana_snapshot value only when snapshot is successfully uploaded
-            if snapshot_uploaded:
-                self.stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
-        self.stats['status'] = self.status
-        update_data = {'status': self.stats['status'], 'test_details': self.stats['test_details']}
-        if self.stats['errors']:
-            update_data.update({'errors': self.stats['errors']})
-        if self.stats['coredumps']:
-            update_data.update({'coredumps': self.stats['coredumps']})
-        self.update_test_stats(update_data)
-
-    def create_test_stats(self):
-        self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
-                                      'errors', 'coredumps']}
-        self.stats['setup_details'] = self.get_setup_details()
-        self.stats['versions'] = self.get_scylla_versions()
-        self.stats['test_details'] = self.get_test_details()
-        db = es.ES()
-        db.create(self.test_index, self.test_type, self.test_id, self.stats)
-
-    def update_test_stats(self, data=None):
-        db = es.ES()
-        if not data:
-            data = self.stats
-        if self.test_id:
-            try:
-                self.log.info('Update info for test %s: %s', self.test_id, data)
-                db.update(self.test_index, self.test_type, self.test_id, data)
-            except Exception as ex:
-                self.log.error('Failed to update test stats: test_id: %s, error: %s', self.test_id, ex)
+        self._db_stats.update_test_details(snapshot_uploaded)
 
     def check_regression(self):
-        ra = ResultsAnalyzer(index=self.test_index,
-                             send_email=self.params.get('send_email', default=True),
-                             email_recipients=self.params.get('email_recipients', default=None))
-        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
-        try:
-            ra.check_regression(self.test_id, is_gce)
-        except Exception as ex:
-            self.log.exception('Failed to check regression: %s', ex)
+        self._db_stats.check_regression()
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
