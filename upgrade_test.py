@@ -55,10 +55,13 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('rpm -qa scylla\*')
         elif repo_file:
-            scylla_repo = get_data_path(repo_file)
-            node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
-            node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-            node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+            if repo_file.startswith('http'):
+                node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo')
+            else:
+                scylla_repo = get_data_path(repo_file)
+                node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
+                node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
+                node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
             node.remoter.run('sudo nodetool snapshot')
