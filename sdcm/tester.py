@@ -1020,6 +1020,8 @@ class ClusterTester(Test):
                 for node in self.loaders.nodes:
                     node.instance.stop()
                 self.db_cluster = None
+
+        snapshot_uploaded = False
         if self.monitors is not None:
             self.monitors.get_backtraces()
             self.monitors.get_monitor_snapshot()
@@ -1040,7 +1042,6 @@ class ClusterTester(Test):
                     self.log.info(response.text)
 
             grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
-            snapshot_uploaded = False
             if grafana_snapshots:
                 result_path = '%s.png' % file_path
                 with open(grafana_snapshots[0]) as fh:
