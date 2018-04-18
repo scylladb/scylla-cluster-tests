@@ -194,7 +194,6 @@ class TestStats(object):
             data = self._stats
         if self._test_id:
             try:
-                logger.info('Update info for test %s: %s', self._test_id, data)
                 db.update(self._test_index, self._test_type, self._test_id, data)
             except Exception as ex:
                 logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
@@ -252,7 +251,7 @@ class TestStats(object):
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, snapshot_uploaded=False):
+    def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False):
         self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if self._tester.monitors:
             url_s3 = self._tester.get_s3_url(os.path.normpath(self._tester.job.logdir))
@@ -262,10 +261,10 @@ class TestStats(object):
                 self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
         self._stats['status'] = self._tester.status
         update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
-        if self._stats['errors']:
-            update_data.update({'errors': self._stats['errors']})
-        if self._stats['coredumps']:
-            update_data.update({'coredumps': self._stats['coredumps']})
+        if errors:
+            update_data.update({'errors': errors})
+        if coredumps:
+            update_data.update({'coredumps': coredumps})
         self.update(update_data)
 
     def check_regression(self):

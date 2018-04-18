@@ -977,12 +977,8 @@ class ClusterTester(Test):
                     cr.destroy()
                 self.credentials = []
 
-        if getattr(self, 'stats', None) and self.create_stats:
-            if db_cluster_errors:
-                self.stats['errors'] = db_cluster_errors
-            if db_cluster_coredumps:
-                self.stats['coredumps'] = db_cluster_coredumps
-            self.update_test_details(snapshot_uploaded)
+        if self.create_stats:
+            self.update_test_details(db_cluster_errors, db_cluster_coredumps, snapshot_uploaded)
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
@@ -1003,8 +999,8 @@ class ClusterTester(Test):
     def create_test_stats(self, sub_type=None):
         self._db_stats.create(sub_type)
 
-    def update_test_details(self, snapshot_uploaded=False):
-        self._db_stats.update_test_details(snapshot_uploaded)
+    def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False):
+        self._db_stats.update_test_details(errors, coredumps, snapshot_uploaded)
 
     def check_regression(self):
         self._db_stats.check_regression()

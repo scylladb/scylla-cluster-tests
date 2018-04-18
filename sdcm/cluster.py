@@ -1308,11 +1308,11 @@ class BaseCluster(object):
         return [node.public_ip_address for node in self.nodes]
 
     def get_node_database_errors(self):
-        errors = []
+        errors = {}
         for node in self.nodes:
             node_errors = node.search_database_log_errors()
             if node_errors:
-                errors.append({node.name: node_errors})
+                errors.update({node.name: node_errors})
         return errors
 
     def set_tc(self, node, dst_nodes, local_nodes):
