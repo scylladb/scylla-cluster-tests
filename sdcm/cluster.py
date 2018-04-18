@@ -800,23 +800,21 @@ WantedBy=multi-user.target
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
 
-    def db_up(self):
+    def is_port_used(self, port, service_name):
         try:
-            result = self.remoter.run('netstat -l | grep :9042',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
+            # check that port is taken
+            result_netstat = self.remoter.run('netstat -l | grep :%s' % port,
+                                              verbose=False, ignore_status=True)
+            return result_netstat.exit_status == 0
         except Exception as details:
-            self.log.error('Error checking for DB status: %s', details)
+            self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
+    def db_up(self):
+        return self.is_port_used(port=9042, service_name="scylla-server")
+
     def jmx_up(self):
-        try:
-            result = self.remoter.run('netstat -l | grep :7199',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Error checking for JMX status: %s', details)
-            return False
+        return self.is_port_used(port=7199, service_name="scylla-jmx")
 
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
