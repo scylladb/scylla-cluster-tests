@@ -908,7 +908,7 @@ WantedBy=multi-user.target
             self.remoter.run('sudo -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
-    def wait_db_up(self, verbose=True, timeout=600):
+    def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
@@ -930,7 +930,7 @@ WantedBy=multi-user.target
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
-    def wait_db_down(self, verbose=True, timeout=600):
+    def wait_db_down(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
