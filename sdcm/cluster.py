@@ -1765,7 +1765,7 @@ class BaseScyllaCluster(object):
 
             node_config_setup()
             try:
-                disks = node.detect_disks()
+                disks = node.detect_disks(nvme=True)
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks)
