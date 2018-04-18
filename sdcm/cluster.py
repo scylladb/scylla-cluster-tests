@@ -1102,6 +1102,7 @@ client_encryption_options:
         self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
         self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
 
+    @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
         """
         Detect local disks
@@ -1112,8 +1113,10 @@ client_encryption_options:
         result = self.remoter.run('ls /dev/{}'.format(patt[0]))
         disks = re.findall('/dev/{}'.format(patt[1]), result.stdout)
         assert disks, 'Failed to find disks!'
+        self.log.debug("Found disks: %s", disks)
         return disks
 
+    @log_run_info
     def scylla_setup(self, disks):
         """
         Setup scylla
