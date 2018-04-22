@@ -803,7 +803,8 @@ WantedBy=multi-user.target
     def is_port_used(self, port, service_name):
         try:
             # check that port is taken
-            result_netstat = self.remoter.run('netstat -l | grep :%s' % port,
+            result_netstat = self.remoter.run('netstat -ln | grep :%s' % port,
+                                              # -n don't translate port numbers to names
                                               verbose=False, ignore_status=True)
             return result_netstat.exit_status == 0
         except Exception as details:
