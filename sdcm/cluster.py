@@ -1064,10 +1064,12 @@ client_encryption_options:
         self.remoter.run('sudo sync')
         self.log.info('io.conf right after setup')
         self.remoter.run('sudo cat /etc/scylla.d/io.conf')
-        self.remoter.run('sudo systemctl enable scylla-server.service')
-        self.remoter.run('sudo systemctl enable scylla-jmx.service')
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl enable scylla-server.service')
+            self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
+        # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         mgmt_user = 'scylla-manager'
@@ -1113,14 +1115,20 @@ client_encryption_options:
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-server start', timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=timeout)
 
     def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
-        self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-jmx start', timeout=timeout)
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
@@ -1131,14 +1139,20 @@ client_encryption_options:
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-server stop', timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
     def stop_scylla_jmx(self, verify_up=False, verify_down=True, timeout=300):
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
-        self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-jmx stop', timeout=timeout)
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
