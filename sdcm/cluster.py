@@ -800,23 +800,22 @@ WantedBy=multi-user.target
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
 
-    def db_up(self):
+    def is_port_used(self, port, service_name):
         try:
-            result = self.remoter.run('netstat -l | grep :9042',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
+            # check that port is taken
+            result_netstat = self.remoter.run('netstat -ln | grep :%s' % port,
+                                              # -n don't translate port numbers to names
+                                              verbose=False, ignore_status=True)
+            return result_netstat.exit_status == 0
         except Exception as details:
-            self.log.error('Error checking for DB status: %s', details)
+            self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
+    def db_up(self):
+        return self.is_port_used(port=9042, service_name="scylla-server")
+
     def jmx_up(self):
-        try:
-            result = self.remoter.run('netstat -l | grep :7199',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Error checking for JMX status: %s', details)
-            return False
+        return self.is_port_used(port=7199, service_name="scylla-jmx")
 
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
@@ -910,7 +909,7 @@ WantedBy=multi-user.target
             self.remoter.run('sudo -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
-    def wait_db_up(self, verbose=True, timeout=600):
+    def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
@@ -932,7 +931,7 @@ WantedBy=multi-user.target
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
-    def wait_db_down(self, verbose=True, timeout=600):
+    def wait_db_down(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
@@ -1104,6 +1103,7 @@ client_encryption_options:
         self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
         self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
 
+    @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
         """
         Detect local disks
@@ -1114,8 +1114,10 @@ client_encryption_options:
         result = self.remoter.run('ls /dev/{}'.format(patt[0]))
         disks = re.findall('/dev/{}'.format(patt[1]), result.stdout)
         assert disks, 'Failed to find disks!'
+        self.log.debug("Found disks: %s", disks)
         return disks
 
+    @log_run_info
     def scylla_setup(self, disks):
         """
         Setup scylla
@@ -1764,7 +1766,7 @@ class BaseScyllaCluster(object):
 
             node_config_setup()
             try:
-                disks = node.detect_disks()
+                disks = node.detect_disks(nvme=True)
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks)

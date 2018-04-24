@@ -779,10 +779,9 @@ class ClusterTester(Test):
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
 
-
-    @clean_resources_on_exception
     def kill_stress_thread(self):
-        self.loaders.kill_stress_thread()
+        if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
+            self.loaders.kill_stress_thread()
 
     @clean_resources_on_exception
     def verify_stress_thread(self, queue):
@@ -1007,7 +1006,7 @@ class ClusterTester(Test):
                     node.instance.stop()
                 self.db_cluster = None
             elif self._failure_post_behavior == 'keep':
-                # Stopping nemesis, using timeout of 30 minutes, since replace/decomission node can take time
+                # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
                 self.db_cluster.stop_nemesis(timeout=1800)
                 for node in self.db_cluster.nodes:
                     node.stop_task_threads(timeout=600)
@@ -1021,6 +1020,8 @@ class ClusterTester(Test):
                 for node in self.loaders.nodes:
                     node.instance.stop()
                 self.db_cluster = None
+
+        snapshot_uploaded = False
         if self.monitors is not None:
             self.monitors.get_backtraces()
             self.monitors.get_monitor_snapshot()
@@ -1041,7 +1042,6 @@ class ClusterTester(Test):
                     self.log.info(response.text)
 
             grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
-            snapshot_uploaded = False
             if grafana_snapshots:
                 result_path = '%s.png' % file_path
                 with open(grafana_snapshots[0]) as fh:

@@ -137,10 +137,10 @@ def log_run_info(arg):
                 class_name = " <%s>" % args[0].__class__.__name__
             action = "%s%s" % (msg, class_name)
             start_time = datetime.datetime.now()
-            logger.info("BEGIN: %s", action)
+            logger.debug("BEGIN: %s", action)
             res = func(*args, **kwargs)
             end_time = datetime.datetime.now()
-            logger.info("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
+            logger.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
             return res
         return inner
 
