@@ -1024,15 +1024,21 @@ client_encryption_options:
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
         """
-        result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-        if result.exit_status == 0:
-            self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+        if self.is_rhel_like():
+            result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+            self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+            self.download_scylla_repo(scylla_repo)
+            self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+            self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
         else:
-            self.remoter.run('sudo yum update -y --skip-broken', retry=3)
-        self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
-        self.download_scylla_repo(scylla_repo)
-        self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
-        self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
+            self.remoter.run('sudo apt-get upgrade')
+            self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+            self.download_scylla_repo(scylla_repo)
+            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}'.format(self.scylla_pkg()))
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
