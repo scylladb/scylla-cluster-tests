@@ -37,6 +37,8 @@ from .remote import disable_master_ssh
 from . import data_path
 from . import wait
 from .utils import log_run_info, retrying
+from .utils import Distro
+
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -288,6 +290,32 @@ class BaseNode(object):
         self.scylla_version = ''
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
+        self.distro = None
+
+    def _get_distro(self):
+        # Distro attribute won't be changed, only need to detect once.
+        if self.distro:
+            return self.distro
+
+        result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
+        if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
+            self.distro = Distro.CENTOS7
+        if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
+            self.distro = Distro.RHEL7
+
+        result = self.remoter.run('cat /etc/issue', ignore_status=True)
+        if 'Ubuntu 14.04' in result.stdout:
+            self.distro = Distro.UBUNTU14
+        elif 'Ubuntu 16.04' in result.stdout:
+            self.distro = Distro.UBUNTU16
+        elif 'Debian GNU/Linux 8' in result.stdout:
+            self.distro = Distro.DEBIAN8
+        elif 'Debian GNU/Linux 9' in result.stdout:
+            self.distro = Distro.DEBIAN9
+        else:
+            self.log.debug("Failed to detect the distro name, %s" % result.stdout)
+
+        return self.distro
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
