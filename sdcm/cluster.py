@@ -985,13 +985,24 @@ client_encryption_options:
         if debug_install and self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
 
-    def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
-        if scylla_repo:
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-        else:
+    def download_scylla_repo(self, scylla_repo):
+        if not scylla_repo:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
+            return
+        if self.is_rhel_like():
+            repo_path = '/etc/yum.repos.d/scylla.repo'
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.run('sudo yum clean all')
+        else:
+            repo_path = '/etc/apt/sources.list.d/scylla.list'
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.run('sudo apt-get update')
 
-    def download_scylla_manager_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla-manager.repo'):
+    def download_scylla_manager_repo(self, scylla_repo):
+        if self.is_rhel_like():
+            repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+        else:
+            repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
 
     def clean_scylla(self):
