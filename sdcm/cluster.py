@@ -864,7 +864,8 @@ class BaseNode(object):
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
-                     server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None):
+                     server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
+                     debug_install=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -973,6 +974,10 @@ client_encryption_options:
 
         if append_scylla_args:
             self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+
+        if debug_install:
+            self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()),
+                             verbose=True, ignore_status=True)
 
     def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
         if scylla_repo:

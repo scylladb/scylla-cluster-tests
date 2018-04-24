@@ -434,8 +434,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                 node.datacenter_setup(self.datacenter)
             self.node_config_setup(node, seed_address, endpoint_snitch)
 
-            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                             verbose=verbose, ignore_status=True)
             node.stop_scylla_server(verify_down=False)
             node.start_scylla_server(verify_up=False)
 
