@@ -39,9 +39,6 @@ LOG = process.log
 STDOUT_LOG = process.stdout_log
 STDERR_LOG = process.stderr_log
 
-# list of running SSHSubProcess
-splist = []
-
 
 class SSHTimeout(Exception):
 
@@ -209,26 +206,6 @@ class SSHSubProcess(process.SubProcess):
             self._file_handler.close()
 
 
-def ssh_run(cmd, timeout=None, verbose=True, ignore_status=False,
-            allow_output_check='all', shell=False, env=None,
-            extra_text=None, log_file=None, watch_stdout_pattern=None):
-    global splist
-    sp = SSHSubProcess(cmd=cmd, verbose=verbose,
-                       allow_output_check=allow_output_check, shell=shell,
-                       env=env, extra_text=extra_text, log_file=log_file,
-                       watch_stdout_pattern=watch_stdout_pattern)
-
-    splist.append(sp)
-    cmd_result = sp.run(timeout=timeout)
-    sp.close_file_handler()
-    splist.remove(sp)
-
-    fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
-    if fail_condition and not ignore_status:
-        raise process.CmdError(cmd, sp.result)
-    return cmd_result
-
-
 def _scp_remote_escape(filename):
     """
     Escape special chars for SCP use.
@@ -296,6 +273,7 @@ class BaseRemote(object):
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         time.sleep(wait_key_installed)
         self._check_install_key_required()
+        self.splist = []  # when multiple subprocesses opened
 
     def _check_install_key_required(self):
         def _safe_ssh_ping():
@@ -564,7 +542,7 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
-        :param ssh_timeout: Timeout is used for ssh_run()
+        :param ssh_timeout: Timeout is used for self.ssh_run()
 
         :raises: process.CmdError if the remote copy command failed.
         """
@@ -584,7 +562,7 @@ class BaseRemote(object):
                 local_dest = astring.shell_escape(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
-                ssh_run(rsync, shell=True, extra_text=self.hostname,
+                self.ssh_run(rsync, shell=True, extra_text=self.hostname,
                         verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, e:
@@ -605,7 +583,7 @@ class BaseRemote(object):
                                                           escape=False)
                 local_dest = astring.shell_escape(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                ssh_run(scp, shell=True, extra_text=self.hostname,
+                self.ssh_run(scp, shell=True, extra_text=self.hostname,
                         verbose=verbose, timeout=ssh_timeout)
 
         if not preserve_perm:
@@ -639,14 +617,14 @@ class BaseRemote(object):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
-        :param ssh_timeout: Timeout is used for ssh_run()
+        :param ssh_timeout: Timeout is used for self.ssh_run()
 
         :raises: process.CmdError if the remote copy command failed
         """
         self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         self.start_master_ssh()
-
+        source_is_dir = False
         if isinstance(src, basestring):
             source_is_dir = os.path.isdir(src)
             src = [src]
@@ -659,7 +637,7 @@ class BaseRemote(object):
                 local_sources = [astring.shell_escape(path) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
-                ssh_run(rsync, shell=True, extra_text=self.hostname,
+                self.ssh_run(rsync, shell=True, extra_text=self.hostname,
                         verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, details:
@@ -704,7 +682,7 @@ class BaseRemote(object):
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                ssh_run(scp, shell=True, extra_text=self.hostname,
+                self.ssh_run(scp, shell=True, extra_text=self.hostname,
                         verbose=verbose, timeout=ssh_timeout)
 
     def _ssh_ping(self, timeout=30):
@@ -735,8 +713,7 @@ class BaseRemote(object):
             return True
 
     def close(self):
-        global splist
-        for sp in splist:
+        for sp in self.splist:
             try:
                 sp.kill()
             except OSError as e:
@@ -810,6 +787,23 @@ class BaseRemote(object):
                                                    executable=shell,
                                                    stdin=None)
 
+    def ssh_run(self, cmd, timeout=None, verbose=True, ignore_status=False,
+                allow_output_check='all', shell=False, env=None,
+                extra_text=None, log_file=None, watch_stdout_pattern=None):
+        sp = SSHSubProcess(cmd=cmd, verbose=verbose,
+                           allow_output_check=allow_output_check, shell=shell,
+                           env=env, extra_text=extra_text, log_file=log_file,
+                           watch_stdout_pattern=watch_stdout_pattern)
+
+        self.splist.append(sp)
+        cmd_result = sp.run(timeout=timeout)
+        sp.close_file_handler()
+        self.splist.remove(sp)
+
+        fail_condition = cmd_result.exit_status != 0 or cmd_result.interrupted
+        if fail_condition and not ignore_status:
+            raise process.CmdError(cmd, sp.result)
+        return cmd_result
 
 class Remote(BaseRemote):
 
@@ -846,7 +840,7 @@ class Remote(BaseRemote):
             full_cmd = '%s "%s %s"' % (ssh_cmd, env, astring.shell_escape(cmd))
         else:
             full_cmd = '%s "%s"' % (ssh_cmd, astring.shell_escape(cmd))
-        result = ssh_run(full_cmd, verbose=verbose,
+        result = self.ssh_run(full_cmd, verbose=verbose,
                          ignore_status=ignore_status, timeout=timeout,
                          extra_text=self.hostname, shell=True,
                          log_file=log_file,
