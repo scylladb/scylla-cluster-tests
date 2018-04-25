@@ -987,3 +987,13 @@ class NodeTerminateAndReplace(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
+
+class ChaosBareMetalMonkey(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(
+            disrupt_methods=['disrupt_stop_wait_start_scylla_server', 'disrupt_stop_start_scylla_server',
+                             'disrupt_destroy_data_then_repair', 'disrupt_destroy_data_then_rebuild',
+                             'disrupt_nodetool_drain', 'disrupt_no_corrupt_repair', 'disrupt_major_compaction',
+                             'disrupt_nodetool_refresh', 'disrupt_nodetool_enospc', 'disrupt_nodetool_cleanup',
+                             'disrupt_modify_table'])
