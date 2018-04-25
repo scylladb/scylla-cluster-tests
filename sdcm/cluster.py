@@ -787,7 +787,7 @@ WantedBy=multi-user.target
             self._backtrace_thread.join(timeout)
         if self._journal_thread:
             self._journal_thread.join(timeout)
-        self.remoter.close()
+        del(self.remoter)
 
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
