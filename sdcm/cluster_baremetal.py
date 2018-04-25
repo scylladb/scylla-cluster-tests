@@ -118,9 +118,17 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
         super(LoaderSetPhysical, self).__init__(node_prefix=self._node_prefix, **kwargs)
         self._install_cs = True
 
+    @classmethod
+    def _get_node_ips_param(cls, ip_type='public'):
+        return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
+
 
 class MonitorSetPhysical(PhysicalMachineCluster, cluster.BaseMonitorSet):
 
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), MONITOR_NAME)
         super(MonitorSetPhysical, self).__init__(node_prefix=self._node_prefix, **kwargs)
+
+    @classmethod
+    def _get_node_ips_param(cls, ip_type='public'):
+        return cluster.BaseMonitorSet.get_node_ips_param(ip_type)
