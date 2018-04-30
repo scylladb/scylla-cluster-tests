@@ -271,6 +271,7 @@ class Nemesis(object):
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
+        self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_private_ip = self.target_node.private_ip_address
         self._terminate_cluster_node(self.target_node)
         new_node = self._add_and_init_new_cluster_node(old_node_private_ip)
