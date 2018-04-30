@@ -17,9 +17,6 @@ import os
 import shutil
 import time
 import types
-import re
-import subprocess
-import platform
 from functools import wraps
 
 import boto3.session
@@ -137,7 +134,7 @@ def clean_resources_on_exception(method):
     return wrapper
 
 
-class ClusterTester(Test):
+class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def __init__(self, methodName='test', name=None, params=None,
                  base_logdir=None, tag=None, job=None, runner_queue=None):
@@ -160,12 +157,7 @@ class ClusterTester(Test):
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
 
         # for saving test details in DB
-        self._db_stats = db_stats.TestStats(self)
         self.create_stats = True
-
-    @property
-    def db_stats(self):
-        return self._db_stats
 
     @clean_resources_on_exception
     def setUp(self):
@@ -216,6 +208,15 @@ class ClusterTester(Test):
         """
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
+
+    def get_stats_obj(self):
+        """
+        Allow access db stats object to external objects like Nemesis - for updates
+        :return: db_stats.Stats object
+        """
+        return db_stats.Stats(test_index=self._test_index,
+                              test_type=self._test_type,
+                              test_id=self._test_id)
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
@@ -670,7 +671,7 @@ class ClusterTester(Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self._db_stats.update_stress_cmd_details(stress_cmd, prefix)
+        self.update_stress_cmd_details(stress_cmd, prefix)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -685,7 +686,7 @@ class ClusterTester(Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self._db_stats.update_bench_stress_cmd_details(stress_cmd)
+        self.update_bench_stress_cmd_details(stress_cmd)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -703,7 +704,7 @@ class ClusterTester(Test):
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
         if results:
-            self._db_stats.update_stress_results(results)
+            self.update_stress_results(results)
         else:
             self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
@@ -715,13 +716,13 @@ class ClusterTester(Test):
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
         if store_results:
-            self._db_stats.update_stress_results(results)
+            self.update_stress_results(results)
         return results
 
     @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
-        self._db_stats.update_stress_results(results)
+        self.update_stress_results(results)
         return results
 
     def get_auth_provider(self, user, password):
@@ -995,15 +996,6 @@ class ClusterTester(Test):
 
     def tearDown(self):
         self.clean_resources()
-
-    def create_test_stats(self, sub_type=None):
-        self._db_stats.create(sub_type)
-
-    def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False):
-        self._db_stats.update_test_details(errors, coredumps, snapshot_uploaded)
-
-    def check_regression(self):
-        self._db_stats.check_regression()
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "

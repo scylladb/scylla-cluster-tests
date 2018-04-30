@@ -98,19 +98,43 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
-class TestStats(object):
+class Stats(object):
     """
-    This class is responsible for saving test details and statistics in database(Elasticsearch)
+    This class is responsible for creating and updating database entry(document in Elasticsearch DB)
+    There are two usage options:
+    1. without arguments - as a based class of TestStatsMixin - for saving test statistics
+    2. with arguments - as a separate object to update an existing document
     """
+    def __init__(self, *args, **kwargs):
+        self._test_index = kwargs.get('test_index', None)
+        self._test_type = kwargs.get('test_type', None)
+        self._test_id = kwargs.get('test_id', None)
+        self._stats = {}
+        if not self._test_id:
+            super(Stats, self).__init__(*args, **kwargs)
 
+    def _create(self):
+        es.ES().create(self._test_index, self._test_type, self._test_id, self._stats)
+
+    def update(self, data):
+        """
+        Update document
+        :param data: data dictionary
+        """
+        try:
+            es.ES().update(self._test_index, self._test_type, self._test_id, data)
+        except Exception as ex:
+            logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
+
+
+class TestStatsMixin(Stats):
+    """
+    This mixin is responsible for saving test details and statistics in database.
+    """
     KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
 
-    def __init__(self, tester):
-        self._tester = tester
-        self._test_index = self._tester.__class__.__name__.lower()
-        self._test_type = self._tester.params.id.name
-        self._test_id = None
-        self._stats = self._init_stats()
+    def __init__(self, *args, **kwargs):
+        super(TestStatsMixin, self).__init__(*args, **kwargs)
 
     @staticmethod
     def _create_test_id():
@@ -122,7 +146,7 @@ class TestStats(object):
     def get_scylla_versions(self):
         versions = {}
         try:
-            versions_output = self._tester.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
+            versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
             for line in versions_output:
                 for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
                                 'scylla-enterprise-server', 'scylla-enterprise-tools']:
@@ -140,10 +164,10 @@ class TestStats(object):
         exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
         setup_details = {}
         is_gce = False
-        for p in self._tester.params.iteritems():
+        for p in self.params.iteritems():
             if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
                 is_gce = True
-        for p in self._tester.params.iteritems():
+        for p in self.params.iteritems():
             if p[1] in exclude_details or p[1].startswith('stress_cmd'):
                 continue
             else:
@@ -158,7 +182,7 @@ class TestStats(object):
                 else:
                     setup_details[p[1]] = p[2]
 
-        new_scylla_packages = self._tester.params.get('update_db_packages')
+        new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
 
         return setup_details
@@ -173,11 +197,13 @@ class TestStats(object):
             test_details['job_url'] = os.environ.get('BUILD_URL', '')
 
         test_details['start_host'] = platform.node()
-        test_details['test_duration'] = self._tester.params.get(key='test_duration', default=60)
+        test_details['test_duration'] = self.params.get(key='test_duration', default=60)
 
         return test_details
 
-    def create(self, sub_type=None):
+    def create_test_stats(self, sub_type=None):
+        self._test_index = self.__class__.__name__.lower()
+        self._test_type = self.params.id.name
         if sub_type:
             self._test_type = '{}_{}'.format(self._test_type, sub_type)
         self._test_id = self._create_test_id()
@@ -185,36 +211,25 @@ class TestStats(object):
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
-        db = es.ES()
-        db.create(self._test_index, self._test_type, self._test_id, self._stats)
-
-    def update(self, data=None):
-        db = es.ES()
-        if not data:
-            data = self._stats
-        if self._test_id:
-            try:
-                db.update(self._test_index, self._test_type, self._test_id, data)
-            except Exception as ex:
-                logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
+        self._create()
 
     def update_stress_cmd_details(self, cmd, prefix=''):
         section = '{0}cassandra-stress'.format(prefix)
         if section not in self._stats['test_details']:
-            self._stats['test_details'][section] = [] if self._tester.create_stats else {}
+            self._stats['test_details'][section] = [] if self.create_stats else {}
         cmd_params = get_stress_cmd_params(cmd)
         if cmd_params:
-            self._stats['test_details'][section].append(cmd_params) if self._tester.create_stats else\
+            self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
 
     def update_bench_stress_cmd_details(self, cmd, prefix=''):
         section = '{0}scylla-bench'.format(prefix)
         if section not in self._stats['test_details']:
-            self._stats['test_details'][section] = [] if self._tester.create_stats else {}
+            self._stats['test_details'][section] = [] if self.create_stats else {}
         cmd_params = get_stress_bench_cmd_params(cmd)
         if cmd_params:
-            self._stats['test_details'][section].append(cmd_params) if self._tester.create_stats else\
+            self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
 
@@ -253,13 +268,13 @@ class TestStats(object):
 
     def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False):
         self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self._tester.monitors:
-            url_s3 = self._tester.get_s3_url(os.path.normpath(self._tester.job.logdir))
+        if self.monitors:
+            url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
             self._stats['test_details']['prometheus_report'] = url_s3 + ".zip"
             # setup grafana_snapshot value only when snapshot is successfully uploaded
             if snapshot_uploaded:
                 self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
-        self._stats['status'] = self._tester.status
+        self._stats['status'] = self.status
         update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
         if errors:
             update_data.update({'errors': errors})
@@ -269,10 +284,19 @@ class TestStats(object):
 
     def check_regression(self):
         ra = ResultsAnalyzer(index=self._test_index,
-                             send_email=self._tester.params.get('send_email', default=True),
-                             email_recipients=self._tester.params.get('email_recipients', default=None))
-        is_gce = True if self._tester.params.get('cluster_backend') == 'gce' else False
+                             send_email=self.params.get('send_email', default=True),
+                             email_recipients=self.params.get('email_recipients', default=None))
+        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
             ra.check_regression(self._test_id, is_gce)
         except Exception as ex:
             logger.exception('Failed to check regression: %s', ex)
+
+
+if __name__ == '__main__':
+    import pdb
+    pdb.set_trace()
+    obj = Stats(test_index='longevitytest',
+                test_type='longevity_test.py:LongevityTest.test_custom_time',
+                test_id='2018-04-29 11:41:59')
+    obj.update({'nemesis': {}})
