@@ -3,7 +3,6 @@ import logging
 import math
 import yaml
 import elasticsearch
-from sortedcontainers import SortedDict
 import jinja2
 import pprint
 from send_email import Email
@@ -74,7 +73,78 @@ class QueryFilter(object):
         return None
 
 
-class ResultsAnalyzer(object):
+class BaseResultsAnalyzer(object):
+    def __init__(self, es_index, send_mail=False, email_recipients=(), email_template_fp="results.html", query_limit=1000):
+        self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
+        self._url = self._conf.get('es_url')
+        self._index = es_index
+        self._es = elasticsearch.Elasticsearch([self._url])
+        self._limit = query_limit
+        self._send_email = send_mail
+        self._email_recipients = email_recipients
+        self._email_template_fp = email_template_fp
+
+    @staticmethod
+    def _get_conf(conf_file):
+        with open(conf_file) as cf:
+            return yaml.safe_load(cf)
+
+    def get_all(self):
+        """
+        Get all the test results in json format
+        """
+        return self._es.search(index=self._index, size=self._limit)
+
+    def get_test_by_id(self, test_id):
+        """
+        Get test results by test id
+        :param test_id: test id created by performance test
+        :return: test results in json format
+        """
+        if not self._es.exists(index=self._index, doc_type='_all', id=test_id):
+            logger.error('Test results not found: {}'.format(test_id))
+            return None
+        return self._es.get(index=self._index, doc_type='_all', id=test_id)
+
+    def _test_version(self, test_doc):
+        if test_doc['_source'].get('versions'):
+            for v in ('scylla-server', 'scylla-enterprise-server'):
+                k = test_doc['_source']['versions'].get(v)
+                if k:
+                    return k
+
+        logger.error('Scylla version is not found for test %s', test_doc['_id'])
+        return None
+
+    def render_to_html(self, results, save_to_file=None):
+        """
+        Render analysis results to html template
+        :param results: results dictionary
+        :param save_to_file: File path to save html output
+        :return: html string
+        """
+        loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
+        env = jinja2.Environment(loader=loader, autoescape=True)
+        template = env.get_template(self._email_template_fp)
+        html = template.render(results)
+        if save_to_file:
+            with open(save_to_file, "w") as f:
+                f.write(html)
+        return html
+
+    def send_email(self, subject, content, html=True):
+        if self._send_email and self._email_recipients:
+            logger.debug('Send email to {}'.format(self._email_recipients))
+            em = Email(self._conf['email']['server'],
+                       self._conf['email']['sender'],
+                       self._email_recipients)
+            em.send(subject, content, html)
+
+    def check_regression(self, test_id):
+        return NotImplementedError("check_regression should be implemented!")
+
+
+class ResultsAnalyzer(BaseResultsAnalyzer):
     """
     Get performance test results from elasticsearch DB and analyze it to find a regression
     """
@@ -82,17 +152,11 @@ class ResultsAnalyzer(object):
     PARAMS = ['op rate', 'latency mean', 'latency 99th percentile']
 
     def __init__(self, *args, **kwargs):
-        self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
-        self._url = self._conf.get('es_url')
-        self._index = kwargs.get('index', self._conf.get('es_index'))
-        self._es = elasticsearch.Elasticsearch([self._url])
-        self._limit = 1000
-        self._send_email = kwargs.get('send_email', True)
-        self._email_recipients = kwargs.get('email_recipients', None)
-
-    def _get_conf(self, conf_file):
-        with open(conf_file) as cf:
-            return yaml.safe_load(cf)
+        super(ResultsAnalyzer, self).__init__(
+            es_index=kwargs.get('index', self._conf.get('es_index')),
+            send_mail=kwargs.get('send_email', True),
+            email_recipients=kwargs.get('email_recipients', None)
+        )
 
     def _remove_non_stat_keys(self, stats):
         for non_stat_key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
@@ -115,37 +179,10 @@ class ResultsAnalyzer(object):
         stats_average['op rate'] = stats_total['op rate']
         return stats_average
 
-    def _test_version(self, test_doc):
-        if test_doc['_source'].get('versions'):
-            for v in ('scylla-server', 'scylla-enterprise-server'):
-                k = test_doc['_source']['versions'].get(v)
-                if k:
-                    return k
-
-        logger.error('Scylla version is not found for test %s', test_doc['_id'])
-        return None
-
     def _get_best_value(self, key, val1, val2):
         if key == self.PARAMS[0]:  # op rate
             return val1 if val1 > val2 else val2
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
-
-    def get_all(self):
-        """
-        Get all the test results in json format
-        """
-        return self._es.search(index=self._index, size=self._limit)
-
-    def get_test_by_id(self, test_id):
-        """
-        Get test results by test id
-        :param test_id: test id created by performance test
-        :return: test results in json format
-        """
-        if not self._es.exists(index=self._index, doc_type='_all', id=test_id):
-            logger.error('Test results not found: {}'.format(test_id))
-            return None
-        return self._es.get(index=self._index, doc_type='_all', id=test_id)
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -186,6 +223,7 @@ class ResultsAnalyzer(object):
         :return: True/False
         """
         # get test res
+        from sortedcontainers import SortedDict
         doc = self.get_test_by_id(test_id)
         if not doc:
             logger.error('Cannot find test by id: {}!'.format(test_id))
@@ -273,28 +311,7 @@ class ResultsAnalyzer(object):
             results.update({dash: dash_url})
 
         subject = 'Performance Regression Compare Results - {} - {}'.format(test_type.split('.')[-1], test_version)
-        self.send_email(subject, results)
+        html = self.render_to_html(results)
+        self.send_email(subject, html)
 
         return True
-
-    @staticmethod
-    def render_to_html(res):
-        """
-        Render analysis results to html template
-        :param res: results dictionary
-        :return: html string
-        """
-        loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
-        env = jinja2.Environment(loader=loader, autoescape=True)
-        template = env.get_template('results.html')
-        html = template.render(dict(results=res))
-        return html
-
-    def send_email(self, subject, content, html=True):
-        if self._send_email and self._email_recipients:
-            logger.debug('Send email to {}'.format(self._email_recipients))
-            content = self.render_to_html(content)
-            em = Email(self._conf['email']['server'],
-                       self._conf['email']['sender'],
-                       self._email_recipients)
-            em.send(subject, content, html)

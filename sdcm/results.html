@@ -13,20 +13,20 @@
 </head>
 
 <body>
-    <h3>Test: {{ results.test_type }}</h3>
+    <h3>Test: {{ test_type }}</h3>
     <h3>
         <span>Test start time: </span>
-        <span class="blue">{{ results.test_id }}</span>
+        <span class="blue">{{ test_id }}</span>
     </h3>
     <h3>
         <span>Version: </span>
-        <span class="blue">{{ results.test_version.version }} </span>
+        <span class="blue">{{ test_version.version }} </span>
     </h3>
     <div>
         <span> Build Date: </span>
-        <span class="blue"> {{ results.test_version.date }} </span>
+        <span class="blue"> {{ test_version.date }} </span>
         <span> , Commit Id: </span>
-        <span class="blue"> {{ results.test_version.commit_id }}</span>
+        <span class="blue"> {{ test_version.commit_id }}</span>
     </div>
     <div>&nbsp;&nbsp;</div>
 
@@ -37,7 +37,7 @@
             <th>Latency mean</th>
             <th>Latency 99th percentile</th>
         </tr>
-        {% for cmp_res in results.res_list %}
+        {% for cmp_res in res_list %}
         <tr>
             <td>
                 <span class="blue fbold">{{ cmp_res.version_dst }}</span>
@@ -92,8 +92,8 @@
     </table>
 
     <h3>Dashboard:</h3>
-    <li><a href={{ results.dashboard_master }}>Perf-Regression Master</a></li>
-    <li><a href={{ results.dashboard_releases }}>Perf-Regression By-Release</a></li>
+    <li><a href={{ dashboard_master }}>Perf-Regression Master</a></li>
+    <li><a href={{ dashboard_releases }}>Perf-Regression By-Release</a></li>
 
 </body>
 </html>

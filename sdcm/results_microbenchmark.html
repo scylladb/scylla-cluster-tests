@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ subject }}</title>
+    <style>
+        .blue   { color: blue; }
+        .fbold  { font-weight: bold; }
+        .red    { color: red; }
+        .green  { color: green; }
+        .orange  { color: orange; }
+        .notice { font-size:120%; }
+        .small { font-size:80%; }
+        #results_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 50%;
+        }
+
+        #results_table td, #results_table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #results_table tr:nth-child(even){background-color: #f2f2f2;}
+
+        #results_table tr:hover {background-color: #ddd;}
+
+        #results_table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #85C1E9;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>Test: {{ subject }}</h3>
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_version.run_date_time }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ test_version.version }} </span>
+    </h3>
+    <div>
+        <span> Build Date: </span>
+        <span class="blue"> {{ test_version.date }} </span>
+        <span> , Commit Id: </span>
+        <span class="blue"> {{ test_version.commit_id }}</span>
+    </div>
+    <div>&nbsp;&nbsp;</div>
+    {% for test_type, params in results.iteritems() %}
+        <h2> {{ test_type }} </h2>
+        <table id="results_table">
+            <tr>
+                <th>Stat</th>
+                {% for stat in stats_names %}
+                <th>{{ stat }}</th>
+                {% endfor %}
+            </tr>
+            {% for param, stats in params.iteritems() %}
+                <tr>
+                    <td>{{ param }}</td>
+                    {% for stat in stats_names %}
+                        {% set cur_stat = stats.get(stat) %}
+                        <td>
+                            {% if ((stat == "Current") and stats.get("Diff best [%]") < 0) or (stat.startswith("Diff") and cur_stat < 0) %}
+                                <span class="notice green fbold">
+                            {% elif stat.startswith("Diff") and cur_stat > 10 %}
+                                <span class="notice red fbold">
+                            {% elif stat.startswith("Diff") and cur_stat > 5 %}
+                                <span class="orange fbold">
+                            {% else %}
+                                <span>
+                            {% endif %}
+                            {% if stat == "Best" or stat == "Last" %}
+                                {{ '%g (%s)' % (cur_stat) }}
+                            {% elif stat.startswith("Diff") %}
+                                {{ '%.2f' % cur_stat }}
+                            {% else %}
+                                {{ '%g' % cur_stat }}
+                            {% endif %}
+                                </span>
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+    {% endfor %}
+
+    <h3>Dashboard:</h3>
+    <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
+
+</body>
+</html>
