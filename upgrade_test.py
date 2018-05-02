@@ -31,17 +31,21 @@ class UpgradeTest(FillDatabaseData):
 
     :avocado: enable
     """
+    orig_ver = None
+    new_ver = None
 
     def upgrade_node(self, node):
         repo_file = self.db_cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
         new_version = self.db_cluster.params.get('new_version', None,  '')
         upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
+        upgrade_mode = self.db_cluster.params.get('upgrade_mode', default='smooth')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
-        result = node.remoter.run('rpm -qa scylla\*server')
-        orig_ver = result.stdout
+        result = node.remoter.run('scylla --version')
+        self.orig_ver = result.stdout
+
         if upgrade_node_packages:
             # update_scylla_packages
             node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
@@ -76,17 +80,23 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo yum clean all')
             ver_suffix = '-{}'.format(new_version) if new_version else ''
-            node.remoter.run('sudo yum update scylla{0}\* -y'.format(ver_suffix))
+            if upgrade_mode == 'direct':
+                node.remoter.run('sudo yum remove scylla\* -y'.format(ver_suffix))
+                node.remoter.run('sudo yum install scylla{0} -y'.format(ver_suffix))
+            else:
+                node.remoter.run('sudo yum update scylla{0}\* -y'.format(ver_suffix))
         node.remoter.run('sudo systemctl start scylla-server.service')
         node.wait_db_up(verbose=True)
         result = node.remoter.run('rpm -qa scylla\*server')
         new_ver = result.stdout
-        assert orig_ver != new_ver, "scylla-server version isn't changed"
+        assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
+        self.new_ver = new_ver
 
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
-        smooth_upgrade_mode = self.db_cluster.params.get('smooth_upgrade_mode', default=True)
-        result = node.remoter.run('rpm -qa scylla-server')
+        upgrade_mode = self.db_cluster.params.get('upgrade_mode', default='smooth')
+        new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default='scylla\*-tools-core')
+        result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
         # flush all memtables to SSTables
@@ -97,14 +107,18 @@ class UpgradeTest(FillDatabaseData):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        if smooth_upgrade_mode:
-            # workaround Part 1
-            node.remoter.run('sudo yum remove scylla\*tools-core -y')
-            node.remoter.run('sudo yum downgrade scylla\* -y')
-        else:
+        if upgrade_mode == 'direct':
             node.remoter.run('sudo yum remove scylla\* -y')
-        # workaround Part 2
-        node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
+            node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
+        elif upgrade_mode == 'maintenance':
+            node.remoter.run('sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
+        else:
+            if new_introduced_pkgs:
+                node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
+            node.remoter.run('sudo yum downgrade scylla\* -y')
+            if new_introduced_pkgs:
+                node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
+
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall("system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
@@ -112,7 +126,7 @@ class UpgradeTest(FillDatabaseData):
         node.remoter.run(cmd, verbose=True)
         node.remoter.run('sudo systemctl start scylla-server.service')
         node.wait_db_up(verbose=True)
-        result = node.remoter.run('rpm -qa scylla\*server')
+        result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
         assert orig_ver != new_ver, "scylla-server version isn't changed"
