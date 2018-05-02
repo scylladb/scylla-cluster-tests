@@ -7,6 +7,7 @@ gce_datacenter: 'us-east1-b'
 
 stress_cmd: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=2)' -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore -pop seq=1..10000000 -log interval=5
 stress_cmd_1: cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(factor=2)' -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore -pop seq=1..10000000 -log interval=5
+stress_cmd_read: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=2)' -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore -pop seq=1..10000000 -log interval=5
 
 n_monitor_nodes: 1
 user_prefix: 'gce-upgrade-VERSION'

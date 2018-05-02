@@ -211,6 +211,75 @@ class UpgradeTest(FillDatabaseData):
 
         self.verify_stress_thread(stress_queue)
 
+    def test_upgrade_rollback_with_multi_workload(self):
+        """
+        This scenario uses multiple workloads during each upgrade/rollback step,
+        it's used to make sure the workload works well during the fixed step.
+        """
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(nodes_num)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        ### write workload
+        self.log.info('Starting c-s write workload for 5m')
+        stress_cmd = self.params.get('stress_cmd')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade first node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        self.verify_stress_thread(stress_queue)
+
+        ### read workload
+        self.log.info('Starting c-s read workload for 10m')
+        stress_cmd_read = self.params.get('stress_cmd_read')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade second node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        self.verify_stress_thread(stress_queue)
+
+        ### read workload
+        self.log.info('Starting c-s read workload for 10m')
+        stress_cmd_read = self.params.get('stress_cmd_read')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade third node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[2]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # rollback third node
+        self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[2]].name)
+        self.rollback_node(self.db_cluster.nodes[indexes[2]])
+        self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[2]].name)
+
+        self.verify_stress_thread(stress_queue)
+
     def test_20_minutes(self):
         """
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
