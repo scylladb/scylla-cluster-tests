@@ -116,12 +116,14 @@ class ResultsAnalyzer(object):
         return stats_average
 
     def _test_version(self, test_doc):
-        if 'versions' not in test_doc['_source'] or 'scylla-server' not in test_doc['_source']['versions']:
-            logger.error('Scylla version is not found for test %s', test_doc['_id'])
-            return None, None
+        if test_doc['_source'].get('versions'):
+            for v in ('scylla-server', 'scylla-enterprise-server'):
+                k = test_doc['_source']['versions'].get(v)
+                if k:
+                    return k
 
-        return (test_doc['_source']['versions']['scylla-server']['version'],
-                test_doc['_source']['versions']['scylla-server']['date'])
+        logger.error('Scylla version is not found for test %s', test_doc['_id'])
+        return None
 
     def _get_best_value(self, key, val1, val2):
         if key == self.PARAMS[0]:  # op rate
@@ -188,7 +190,7 @@ class ResultsAnalyzer(object):
         if not doc:
             logger.error('Cannot find test by id: {}!'.format(test_id))
             return False
-        logger.info(pp.pformat(doc))
+        logger.debug(pp.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
@@ -203,7 +205,7 @@ class ResultsAnalyzer(object):
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results.stats_average',
                        'hits.hits._source.results.stats_total',
-                       'hits.hits._source.versions.scylla-server']
+                       'hits.hits._source.versions']
         tests_filtered = self._es.search(index=self._index, doc_type=test_type, q=query, filter_path=filter_path,
                                          size=self._limit)
         if not tests_filtered:
@@ -218,7 +220,8 @@ class ResultsAnalyzer(object):
             if '_source' not in tr:  # non-valid record?
                 logger.error('Skip non-valid test: %s', tr['_id'])
                 continue
-            (version, version_date) = self._test_version(tr)
+            version_info = self._test_version(tr)
+            version = version_info['version']
             if not version:
                 continue
             curr_test_stats = self._test_stats(tr)
@@ -228,7 +231,7 @@ class ResultsAnalyzer(object):
                 group_by_version[version] = dict(tests=SortedDict(), stats_best=dict(), best_test_id=dict())
                 group_by_version[version]['stats_best'] = {k: 0 for k in self.PARAMS}
                 group_by_version[version]['best_test_id'] = {k: tr['_id'] for k in self.PARAMS}
-            group_by_version[version]['tests'][version_date] = curr_test_stats
+            group_by_version[version]['tests'][version_info['date']] = curr_test_stats
             old_best = group_by_version[version]['stats_best']
             group_by_version[version]['stats_best'] =\
                 {k: self._get_best_value(k, curr_test_stats[k], old_best[k])
@@ -241,7 +244,8 @@ class ResultsAnalyzer(object):
 
         res_list = list()
         # compare with the best in the test version and all the previous versions
-        test_version = doc['_source']['versions']['scylla-server']['version']
+        test_version_info = self._test_version(doc)
+        test_version = test_version_info['version']
         for version in group_by_version.keys():
             if version == test_version and not len(group_by_version[test_version]['tests']):
                 logger.info('No previous tests in the current version {} to compare'.format(test_version))
@@ -258,10 +262,10 @@ class ResultsAnalyzer(object):
         # send results by email
         results = dict(test_type=test_type,
                        test_id=test_id,
-                       test_version=doc['_source']['versions']['scylla-server'],
+                       test_version=test_version_info,
                        res_list=res_list)
-        logger.info('Regression analysis:')
-        logger.info(pp.pformat(results))
+        logger.debug('Regression analysis:')
+        logger.debug(pp.pformat(results))
 
         dashboard_url = self._conf.get('kibana_url')
         for dash in ('dashboard_master', 'dashboard_releases'):
