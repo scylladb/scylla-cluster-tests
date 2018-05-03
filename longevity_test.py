@@ -79,9 +79,7 @@ class LongevityTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     loaders=self.loaders,
                                     monitoring_set=self.monitors,
-                                    test_index=self.test_index,
-                                    test_type=self.test_type,
-                                    test_id=self.test_id)
+                                    db_stats=self.get_stats_obj())
         stress_queue = list()
         write_queue = list()
 
