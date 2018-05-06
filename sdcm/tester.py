@@ -1047,9 +1047,9 @@ class ClusterTester(Test):
                                 'scylla-enterprise-server', 'scylla-enterprise-tools']:
                     match = re.search('(%s-(\S+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
                     if match:
-                        versions[package] = {'version': match.group(2),
-                                             'date': match.group(4),
-                                             'commit_id': match.group(5)}
+                        versions[package.replace('-enterprise', '')] = {'version': match.group(2),
+                                                                        'date': match.group(4),
+                                                                        'commit_id': match.group(5)}
         except Exception as ex:
             self.log.error('Failed getting scylla versions: %s', ex)
 
