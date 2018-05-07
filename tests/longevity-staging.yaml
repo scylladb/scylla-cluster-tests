@@ -16,7 +16,6 @@ failure_post_behavior: keep
 space_node_threshold: 64424500
 ip_ssh_connections: 'private'
 experimental: 'true'
-append_conf: 'enable_sstable_data_integrity_check: true'
 round_robin: 'true'
 pre_create_schema: True
 
