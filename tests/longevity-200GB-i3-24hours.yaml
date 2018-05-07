@@ -1,35 +1,27 @@
-test_duration: 5760
-prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..100000000"
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
-             "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000",
-             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"]
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
-                  "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000"]
-n_db_nodes: 6
-n_loaders: 3
+test_duration: 1440
+#prepare_write_cmd: "cassandra-stress write cl=QUORUM n=209715200 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..209715200"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=1440m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..209715200 -log interval=15 "]
+#stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=10080m -mode cql3 native -rate threads=10 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300 -port jmx=6868 -log interval=5"]
+n_db_nodes: 4
+n_loaders: 2
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
-nemesis_interval: 5
-user_prefix: 'longevity-tls-50gb-4d-not-jenkins'
+nemesis_interval: 30
+user_prefix: 'longevity-200gb-24h'
 failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
-server_encrypt: 'true'
-# Setting client encryption to false for now, till we will find the way to make c-s work with that
-client_encrypt: 'false'
-# append_conf: 'enable_sstable_data_integrity_check: true'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'on_demand'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
-use_mgmt: true
+use_mgmt: false
 mgmt_port: 10090
 scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/f4a2920f80c4bf178217c2553ad65ad7/centos/scylladb-2017.1.repo'
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-1.0/latest/scylla-manager.repo'
-
 
 backends: !mux
     gce: !mux
@@ -44,7 +36,7 @@ backends: !mux
         gce_instance_type_db: 'n1-highmem-16'
         gce_root_disk_type_db: 'pd-ssd'
         gce_root_disk_size_db: 50
-        gce_n_local_ssd_disk_db: 2
+        gce_n_local_ssd_disk_db: 8
         gce_instance_type_loader: 'n1-standard-4'
         gce_root_disk_type_loader: 'pd-standard'
         gce_n_local_ssd_disk_loader: 0
@@ -52,30 +44,28 @@ backends: !mux
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
-        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/17/scylla.repo'
+        scylla_repo: 'SCYLLA_REPO_FILE_URL'
         us_east_1:
           gce_datacenter: 'us-east1-b'
     aws: !mux
         cluster_backend: 'aws'
+        instance_type_db: 'i3.4xlarge'
         instance_type_loader: 'c4.4xlarge'
         instance_type_monitor: 'c4.2xlarge'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-d934e980'
-            ami_id_db_scylla: 'ami-29035f52'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_monitor: 'AMI_ID'
+            ami_id_loader: 'AMI_ID'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-29035f52'
             ami_loader_user: 'centos'
-            ami_id_db_cassandra: 'ami-3eff0028'
-            ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-29035f52'
             ami_monitor_user: 'centos'
 
 databases: !mux
     cassandra:
         db_type: cassandra
-        instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        instance_type_db: 'i2.4xlarge'
+
