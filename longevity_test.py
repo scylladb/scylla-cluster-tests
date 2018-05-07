@@ -42,6 +42,7 @@ class LongevityTest(ClusterTester):
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
+            time.sleep(10)
 
             # Remove "user profile" param for the next command
             if 'profile' in params:
@@ -139,6 +140,13 @@ class LongevityTest(ClusterTester):
         if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
             self.db_cluster.wait_total_space_used_per_node()
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+
+        # The below sleep is a temporary HACK to wait some time before we start reading until more data will be written.
+        # It wasn't necessary in the past because we had the wait_total_space_used, however now we have more keyspaces
+        # and tables while wait_total_space_used is checking only keyspace1.
+        # Todo: refactor wait_total_space_used to consider all keyspaces/tables in our stress list.
+
+        time.sleep(600)
 
         stress_read_cmd = self.params.get('stress_read_cmd', default=None)
         if stress_read_cmd:
