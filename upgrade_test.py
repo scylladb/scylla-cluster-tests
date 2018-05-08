@@ -280,6 +280,48 @@ class UpgradeTest(FillDatabaseData):
 
         self.verify_stress_thread(stress_queue)
 
+    def test_read_workload_during_upgrade(self):
+        """
+        Upgrade half of nodes in the cluster, and start special read workload
+        during the stage. Checksum method is changed to xxhash from Scylla 2.2,
+        we want to use this case to verify the read (cl=ALL) workload works
+        well.
+        """
+
+        self.log.info('Starting c-s write workload for 5m')
+        stress_cmd = self.params.get('stress_cmd')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd)
+
+        self.log.info('Sleeping for 360s to let cassandra-stress populate some data before the mixed workload')
+        time.sleep(360)
+
+        self.log.info('Starting c-s mixed workload for 60m')
+        stress_cmd_1 = self.params.get('stress_cmd_1')
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
+
+        self.log.info('Sleeping for 120s to let cassandra-stress start before the upgrade...')
+        time.sleep(120)
+
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(nodes_num / 2)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        # upgrade all the nodes in random order
+        for i in indexes[:-1]:
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+
+        stress_cmd_read_clall = self.params.get('stress_cmd_read_clall')
+        stress_queue_new = self.run_stress_thread(stress_cmd=stress_cmd_read_clall)
+
+        self.verify_stress_thread(stress_queue)
+        self.verify_stress_thread(stress_queue_new)
+
     def test_20_minutes(self):
         """
         Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
