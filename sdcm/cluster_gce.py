@@ -264,6 +264,7 @@ class GCECluster(cluster.BaseCluster):
             instances = self._create_instances(count, dc_idx)
 
         self.log.debug('instances: %s', instances)
+        self.log.debug('GCE instance extra info: %s', instances[0].extra)
         for ind, instance in enumerate(instances):
             node_index = ind + self._node_index + 1
             node = self._create_node(instance, node_index, dc_idx)
