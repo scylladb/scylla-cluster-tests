@@ -19,6 +19,7 @@ import os
 from avocado import main
 from sdcm.tester import ClusterTester
 import time
+import yaml
 
 
 class PerformanceRegressionTest(ClusterTester):
@@ -277,6 +278,79 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_read_bench')
         self.check_regression()
 
+    def test_mv_write(self):
+        """
+        Test steps:
+
+        1. Run WRITE workload on base table without materialized view
+        2. Run WRITE workload with materialized view when view is on partition key is the same host as partition key
+        3. Drop MV
+        4. Run WRITE workload with materialized view when view is on clustering key is the same host as partition key
+        5. Drop MV
+        """
+        def run_workload(stress_cmd, user_profile):
+            self.log.debug('Run stress test with user profile {}'.format(user_profile))
+            assert os.path.exists(user_profile), 'File not found: {}'.format(user_profile)
+            self.log.debug('Stress cmd: {}'.format(stress_cmd))
+            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, profile=user_profile)
+            results = self.get_stress_results(queue=stress_queue)
+            self.update_test_details()
+            self.display_results(results, test_name=test_name)
+            self.check_regression()
+            self.log.debug('Finish stress test with user profile {}'.format(user_profile))
+
+        def get_mv_name(user_profile):
+            # Get materialized view name from user profile
+            up = yaml.load(open(user_profile))
+            mv_name = ''
+
+            for k in up:
+                if isinstance(k, tuple) and k[0] == 'extra_definitions':
+                    mv_name = k[1][0].split(' AS')[0].split(' ')[-1]
+                    break
+
+            if not mv_name:
+                assert False, 'Failed to recognoze materialized view name from {0}: {1}'.format(user_profile, up)
+
+            return mv_name
+
+        def drop_mv(mv_name):
+            # drop MV
+            self.log.debug('Start dropping materialized view {}'.format(mv_name))
+            query = 'drop materialized view {}'.format(mv_name)
+
+            try:
+                session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
+                self.log.debug('Run query: {}'.format(query))
+                session.execute(query)
+            except Exception as e:
+                self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, e.message))
+                raise Exception
+
+            self.log.debug('Finish dropping materialized view {}'.format(mv_name))
+
+        test_name = 'test_mv_write'
+        duration = self.params.get('test_duration', default='60m')
+        self.log.debug('Start materialized views performance test. Test duration {} minutes'.format(duration))
+        self.create_test_stats()
+        cmd_no_mv = self.params.get('stress_cmd_no_mv')
+        cmd_no_mv_profile = self.params.get('stress_cmd_no_mv_profile')
+
+        # Run WRITE workload without materialized view
+        run_workload(cmd_no_mv, cmd_no_mv_profile)
+
+        # Run WRITE workload with materialized view
+        mv_commands = self.params.get("stress_cmd_mv")
+        # mv_commands structure (created by avocado in correctly parses yaml):
+        #   [
+        #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)],
+        #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)]
+        #   ]
+        for c in mv_commands:
+            cmd_mv, cmd_mv_profile = c[0][1], c[1][1]
+            run_workload(cmd_mv, cmd_mv_profile)
+            drop_mv(get_mv_name(cmd_mv_profile))
+            time.sleep(60)
 
 if __name__ == '__main__':
     main()

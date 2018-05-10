@@ -1,0 +1,49 @@
+keyspace: mview
+
+keyspace_definition: |
+
+  CREATE KEYSPACE IF NOT EXISTS  mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+table: users
+
+table_definition: |
+
+  CREATE TABLE IF NOT EXISTS  users (
+    id int,
+    username text,
+    first_name text,
+    last_name text,
+    password text,
+    email text,
+    last_access timeuuid,
+    PRIMARY KEY(id)
+  );
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW IF NOT EXISTS  mview.users_by_first_name AS SELECT * FROM mview.users WHERE id is not null and first_name IS NOT NULL PRIMARY KEY (id, first_name);
+
+columnspec:
+  - name: id
+    size: uniform(1..10)
+  - name: username
+    size: uniform(10..30)
+  - name: first_name
+    size: fixed(16)
+  - name: last_name
+    size: uniform(1..32)
+  - name: password
+    size: fixed(80) # sha-512
+  - name: email
+    size: uniform(16..50)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from mview.users where id = ? LIMIT 10
+    fields: samerow
+  read2:
+    cql: select * from mview.users_by_first_name where id = ? and first_name = ? LIMIT 1000
+    fields: samerow
