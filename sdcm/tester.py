@@ -1165,7 +1165,9 @@ class ClusterTester(Test):
             update_data.update({'coredumps': self.stats['coredumps']})
         self.update_test_stats(update_data)
 
-    def create_test_stats(self):
+    def create_test_stats(self, sub_type=None):
+        if sub_type:
+            self.test_type = '{}_{}'.format(self.test_type, sub_type)
         self.test_id = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.stats = {k: {} for k in ['test_details', 'setup_details', 'versions', 'results', 'nemesis',
                                       'errors', 'coredumps']}
