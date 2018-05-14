@@ -125,6 +125,15 @@ class ResultsAnalyzer(object):
         logger.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
+    def _get_grafana_snapshot(self, test_doc):
+        return test_doc['_source']['test_details'].get('grafana_snapshot')
+
+    def _get_setup_details(self, test_doc, is_gce):
+        setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
+        for sp in QueryFilter(test_doc, is_gce).setup_instance_params():
+            setup_details.update([(sp.replace('gce_', ''), test_doc['_source']['setup_details'].get(sp))])
+        return setup_details
+
     def _get_best_value(self, key, val1, val2):
         if key == self.PARAMS[0]:  # op rate
             return val1 if val1 > val2 else val2
@@ -263,7 +272,9 @@ class ResultsAnalyzer(object):
         results = dict(test_type=test_type,
                        test_id=test_id,
                        test_version=test_version_info,
-                       res_list=res_list)
+                       res_list=res_list,
+                       setup_details=self._get_setup_details(doc, is_gce),
+                       grafana_snapshot=self._get_grafana_snapshot(doc))
         logger.debug('Regression analysis:')
         logger.debug(pp.pformat(results))
 
