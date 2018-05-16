@@ -76,6 +76,40 @@ class UpgradeTest(FillDatabaseData):
         if orig_ver == new_ver:
             self.log.error('scylla-server version isn\'t changed')
 
+    def rollback_node(self, node):
+        self.log.info('Rollbacking a Node')
+        smooth_upgrade_mode = self.db_cluster.params.get('smooth_upgrade_mode', default=True)
+        result = node.remoter.run('rpm -qa scylla-server')
+        orig_ver = result.stdout
+        node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
+        # flush all memtables to SSTables
+        node.remoter.run('nodetool drain')
+        # backup the data
+        node.remoter.run('nodetool snapshot')
+        node.remoter.run('sudo systemctl stop scylla-server.service')
+        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo yum clean all')
+        if smooth_upgrade_mode:
+            # workaround Part 1
+            node.remoter.run('sudo yum remove scylla\*tools-core -y')
+            node.remoter.run('sudo yum downgrade scylla\* -y')
+        else:
+            node.remoter.run('sudo yum remove scylla\* -y')
+        # workaround Part 2
+        node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+        result = node.remoter.run('sudo find /var/lib/scylla/data/system')
+        snapshot_name = re.findall("system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
+        cmd = "DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
+        node.remoter.run(cmd, verbose=True)
+        node.remoter.run('sudo systemctl start scylla-server.service')
+        node.wait_db_up(verbose=True)
+        result = node.remoter.run('rpm -qa scylla\*server')
+        new_ver = result.stdout
+        self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
+        assert orig_ver != new_ver, "scylla-server version isn't changed"
+
     default_params = {'timeout': 650000}
 
     def test_upgrade_cql_queries(self):
