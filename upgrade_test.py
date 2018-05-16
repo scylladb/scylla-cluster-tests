@@ -38,7 +38,7 @@ class UpgradeTest(FillDatabaseData):
         repo_file = self.db_cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
         new_version = self.db_cluster.params.get('new_version', None,  '')
         upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
-        upgrade_mode = self.db_cluster.params.get('upgrade_mode', default='smooth')
+        upgrade_rollback_mode = self.db_cluster.params.get('upgrade_rollback_mode', default='major_release')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
@@ -64,7 +64,7 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('rpm -qa scylla\*')
         elif repo_file:
             if repo_file.startswith('http'):
-                node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo')
+                node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo'.format(repo_file))
             else:
                 scylla_repo = get_data_path(repo_file)
                 node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
@@ -80,8 +80,8 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo yum clean all')
             ver_suffix = '-{}'.format(new_version) if new_version else ''
-            if upgrade_mode == 'direct':
-                node.remoter.run('sudo yum remove scylla\* -y'.format(ver_suffix))
+            if upgrade_rollback_mode == 'reinstall':
+                node.remoter.run('sudo yum remove scylla\* -y')
                 node.remoter.run('sudo yum install scylla{0} -y'.format(ver_suffix))
             else:
                 node.remoter.run('sudo yum update scylla{0}\* -y'.format(ver_suffix))
@@ -94,8 +94,8 @@ class UpgradeTest(FillDatabaseData):
 
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
-        upgrade_mode = self.db_cluster.params.get('upgrade_mode', default='smooth')
-        new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default='scylla\*-tools-core')
+        upgrade_rollback_mode = self.db_cluster.params.get('upgrade_rollback_mode', default='major_release')
+        new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default=None)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
@@ -107,10 +107,10 @@ class UpgradeTest(FillDatabaseData):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        if upgrade_mode == 'direct':
+        if upgrade_rollback_mode == 'reinstall':
             node.remoter.run('sudo yum remove scylla\* -y')
             node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
-        elif upgrade_mode == 'maintenance':
+        elif upgrade_rollback_mode == 'minor_release':
             node.remoter.run('sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
         else:
             if new_introduced_pkgs:
@@ -178,6 +178,86 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
+
+    def test_rolling_upgrade(self):
+        """
+        Upgrade half of nodes in the cluster, and start special read workload
+        during the stage. Checksum method is changed to xxhash from Scylla 2.2,
+        we want to use this case to verify the read (cl=ALL) workload works
+        well, upgrade all nodes to new version in the end.
+        """
+
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(nodes_num)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
+
+        ### prepare write workload
+        self.log.info('Starting c-s prepare write workload (n=10000000)')
+        prepare_write_stress = self.params.get('prepare_write_stress')
+        prepare_write_stress_queue = self.run_stress_thread(stress_cmd=prepare_write_stress)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade first node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wait for the prepare write workload to finish
+        self.verify_stress_thread(prepare_write_stress_queue)
+
+        ### read workload
+        self.log.info('Starting c-s read workload for 10m')
+        stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
+        read_10m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade second node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wiat for the 10m read workload to finish
+        self.verify_stress_thread(read_10m_stress_queue)
+
+        ### read workload (cl=ALL)
+        self.log.info('Starting c-s read workload (cl=ALL n=10000000)')
+        stress_cmd_read_clall = self.params.get('stress_cmd_read_clall')
+        read_clall_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_clall)
+        # wiat for the cl=ALL read workload to finish
+        self.verify_stress_thread(read_clall_stress_queue)
+
+        ### read workload (20m)
+        self.log.info('Starting c-s read workload for 20m')
+        stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
+        read_20m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+
+        # rollback second node
+        self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
+        self.rollback_node(self.db_cluster.nodes[indexes[1]])
+        self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
+        self.db_cluster.nodes[indexes[1]].remoter.run("nodetool status")
+
+        for idx in indexs[1:]:
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
+            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+            self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wait for the 20m read workload to finish
+        self.verify_stress_thread(read_20m_stress_queue)
 
 
 if __name__ == '__main__':
