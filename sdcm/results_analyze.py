@@ -33,7 +33,8 @@ class QueryFilter(object):
 
     def test_details_params(self):
         return self.CS_CMD + self.CS_PRELOAD_CMD if \
-            self.test_type.endswith('read') or self.test_type.endswith('mixed') else self.CS_CMD
+            self.test_type.endswith('read') or self.test_type.endswith('mixed') and \
+            self.test_doc['_source']['test_details'].get(self.CS_PRELOAD_CMD[0]) else self.CS_CMD
 
     def cs_params(self):
         return self.CS_PROFILE_PARAMS if self.test_type.endswith('profiles') else self.CS_PARAMS
@@ -179,6 +180,25 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         stats_average['op rate'] = stats_total['op rate']
         return stats_average
 
+    def _test_version(self, test_doc):
+        if test_doc['_source'].get('versions'):
+            for v in ('scylla-server', 'scylla-enterprise-server'):
+                k = test_doc['_source']['versions'].get(v)
+                if k:
+                    return k
+
+        logger.error('Scylla version is not found for test %s', test_doc['_id'])
+        return None
+
+    def _get_grafana_snapshot(self, test_doc):
+        return test_doc['_source']['test_details'].get('grafana_snapshot')
+
+    def _get_setup_details(self, test_doc, is_gce):
+        setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
+        for sp in QueryFilter(test_doc, is_gce).setup_instance_params():
+            setup_details.update([(sp.replace('gce_', ''), test_doc['_source']['setup_details'].get(sp))])
+        return setup_details
+
     def _get_best_value(self, key, val1, val2):
         if key == self.PARAMS[0]:  # op rate
             return val1 if val1 > val2 else val2
@@ -301,7 +321,9 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         results = dict(test_type=test_type,
                        test_id=test_id,
                        test_version=test_version_info,
-                       res_list=res_list)
+                       res_list=res_list,
+                       setup_details=self._get_setup_details(doc, is_gce),
+                       grafana_snapshot=self._get_grafana_snapshot(doc))
         logger.debug('Regression analysis:')
         logger.debug(pp.pformat(results))
 
