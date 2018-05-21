@@ -23,10 +23,24 @@
         <span class="blue">{{ results.test_version.version }} </span>
     </h3>
     <div>
-        <span> Build Date: </span>
-        <span class="blue"> {{ results.test_version.date }} </span>
-        <span> , Commit Id: </span>
-        <span class="blue"> {{ results.test_version.commit_id }}</span>
+        <span> Version Details: </span>
+        <li>
+            <span> build date: </span>
+            <span class="blue"> {{ results.test_version.date }} </span>
+        </li>
+        <li>
+            <span> commit id: </span>
+            <span class="blue"> {{ results.test_version.commit_id }} </span>
+        </li>
+    </div>
+    <div>
+        <span> Setup Details: </span>
+        {% for key, val in results.setup_details.iteritems()|sort %}
+        <li>
+            <span> {{ key }}: </span>
+            <span class="blue"> {{ val }} </span>
+        </li>
+        {% endfor %}
     </div>
     <div>&nbsp;&nbsp;</div>
 
@@ -42,51 +56,29 @@
             <td>
                 <span class="blue fbold">{{ cmp_res.version_dst }}</span>
             </td>
-            <td>
-                <div>
-                    <span> {{ cmp_res.res.op_rate.val }} - </span>
-                    {% if cmp_res.res.op_rate.status == 'Regression' %}
-                        <span class="red fbold">
-                    {% else %}
-                        <span class="green fbold">
-                    {% endif %}
-                            {{ cmp_res.res.op_rate.percent }} {{ cmp_res.res.op_rate.status }}
-                        </span></span>
-                    <span class="small blue"> vs </span>
-                    <span>{{ cmp_res.res.op_rate.best_val }}</span>
-                    <span class="blue"> [{{ cmp_res.res.op_rate.best_id }}] </span>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <span> {{ cmp_res.res.latency_mean.val }} - </span>
-                    {% if cmp_res.res.latency_mean.status == 'Regression' %}
-                        <span class="red fbold">
-                    {% else %}
-                        <span class="green fbold">
-                    {% endif %}
-                            {{ cmp_res.res.latency_mean.percent }} {{ cmp_res.res.latency_mean.status }}
-                        </span></span>
-                    <span class="small blue"> vs </span>
-                    <span>{{ cmp_res.res.latency_mean.best_val }}</span>
-                    <span class="blue"> [{{ cmp_res.res.latency_mean.best_id }}] </span>
-                </div>
-            </td>
-            <td>
-                <div>
-                    <span> {{ cmp_res.res.latency_99th_percentile.val }} - </span>
-                    {% if cmp_res.res.latency_99th_percentile.status == 'Regression' %}
-                        <span class="red fbold">
-                    {% else %}
-                        <span class="green fbold">
-                    {% endif %}
-                            {{ cmp_res.res.latency_99th_percentile.percent }} {{ cmp_res.res.latency_99th_percentile.status }}
-                        </span></span>
-                    <span class="small blue"> vs </span>
-                    <span>{{ cmp_res.res.latency_99th_percentile.best_val }}</span>
-                    <span class="blue"> [{{ cmp_res.res.latency_99th_percentile.best_id }}] </span>
-                </div>
-            </td>
+
+            {% for stat in [cmp_res.res.op_rate, cmp_res.res.latency_mean, cmp_res.res.latency_99th_percentile] %}
+                <td>
+                    <div>
+                        <span> {{ stat.val }} - </span>
+                        {% with status = stat.status, percent = stat.percent,
+                           percent_abs = stat.percent|replace('%', '')|int %}
+                            {% if status == 'Regression' and percent_abs > 4 %}
+                                <span class="red fbold">
+                            {% elif status == 'Progress' and percent_abs > 4 %}
+                                <span class="green fbold">
+                            {% else %}
+                                <span>
+                            {% endif %}
+                                    {{ percent }} {{ status }}
+                        {% endwith %}
+                            </span></span></span>
+                        <span class="small blue"> vs </span>
+                        <span>{{ stat.best_val }}</span>
+                        <span class="blue"> [{{ stat.best_id }}] </span>
+                    </div>
+                </td>
+            {% endfor %}
         </tr>
         {% endfor %}
     </table>
@@ -94,6 +86,11 @@
     <h3>Dashboard:</h3>
     <li><a href={{ results.dashboard_master }}>Perf-Regression Master</a></li>
     <li><a href={{ results.dashboard_releases }}>Perf-Regression By-Release</a></li>
-
+    {% if results.grafana_snapshot %}
+        <h3>Grafana Snapshot:</h3>
+        <li><a href={{ results.grafana_snapshot }}>Download Grafana Snapshot</a></li>
+        <p>&nbsp;</p>
+        <img src={{ results.grafana_snapshot }}  height="50%" width="50%">
+    {% endif %}
 </body>
 </html>
