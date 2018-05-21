@@ -627,7 +627,7 @@
               "step": 4
             },
             {
-              "expr": "collectd_cassandra_stress_counter_user_gauge{type=\"lat_perc_95\"}",
+              "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
               "intervalFactor": 2,
               "refId": "F",
               "step": 4
@@ -743,7 +743,7 @@
               "step": 4
             },
             {
-              "expr": "collectd_cassandra_stress_counter_user_gauge{type=\"lat_perc_99\"}",
+              "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
               "intervalFactor": 2,
               "refId": "F",
               "step": 4
