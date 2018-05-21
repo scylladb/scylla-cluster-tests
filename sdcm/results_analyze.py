@@ -34,7 +34,8 @@ class QueryFilter(object):
 
     def test_details_params(self):
         return self.CS_CMD + self.CS_PRELOAD_CMD if \
-            self.test_type.endswith('read') or self.test_type.endswith('mixed') else self.CS_CMD
+            self.test_type.endswith('read') or self.test_type.endswith('mixed') and \
+            self.test_doc['_source']['test_details'].get(self.CS_PRELOAD_CMD[0]) else self.CS_CMD
 
     def cs_params(self):
         return self.CS_PROFILE_PARAMS if self.test_type.endswith('profiles') else self.CS_PARAMS
