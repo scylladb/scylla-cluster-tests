@@ -17,6 +17,7 @@ ami_id_db_scylla_desc: 'VERSION_DESC'
 #ip_ssh_connections: 'private'
 round_robin: 'true'
 instance_provision: 'on_demand'
+experimental: 'true'
 
 # email definitions to send regression report
 send_email: true

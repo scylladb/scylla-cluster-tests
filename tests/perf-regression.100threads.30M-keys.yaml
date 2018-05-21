@@ -10,8 +10,9 @@ user_prefix: 'perf-regression-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
-#ip_ssh_connections: 'private'
+ip_ssh_connections: 'private'
 instance_provision: 'spot_low_price'
+experimental: 'true'
 
 # email definitions to send regression report
 send_email: true
@@ -37,6 +38,7 @@ backends: !mux
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
+#        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-2.2/28/scylla.repo'
         scylla_repo: 'REPO_FILE_PATH'
         us_east_1:
           gce_datacenter: 'us-east1-b'

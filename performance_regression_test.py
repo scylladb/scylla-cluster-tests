@@ -123,6 +123,65 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
+    def prepare_mv(self, on_populated=False):
+        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
+
+        ks_name = 'keyspace1'
+        base_table_name = 'standard1'
+        if not on_populated:
+            # Truncate base table before materialized view creation
+            self.log.debug('Truncate base table: {0}.{1}'.format(ks_name, base_table_name))
+            self.truncate_cf(ks_name, base_table_name, session)
+
+        # Create materialized view
+        view_name = base_table_name + '_mv'
+        self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
+        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session, mv_columns=['"C0"', 'key'])
+
+        if on_populated:
+            # If materialized view has been created on populated base table, wait for the view is built
+            self._wait_for_view_build_start(session, ks_name, view_name)
+            self._wait_for_view(self.db_cluster, session, ks_name, view_name)
+
+    def _workload(self, stress_cmd, stress_num, keyspace_num=1, prefix='', debug_message=''):
+        if debug_message:
+            self.log.debug(debug_message)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num, prefix=prefix)
+        return self.get_stress_results(queue=stress_queue, store_results=True)
+
+    # do not run this test on 2.2 while this feature is not available
+    def test_write_with_mv_populated(self):
+        self._write_with_mv(on_populated=True)
+
+    def test_write_with_mv_not_populated(self):
+        self._write_with_mv(on_populated=False)
+
+    def _write_with_mv(self, on_populated):
+        """
+        Test steps:
+
+        1. Run a write workload
+        2. Create materialized view
+        3. Run a write workload
+        """
+        # run a write workload
+        base_cmd_w = self.params.get('stress_cmd_w')
+
+        self.create_test_stats()
+        # run a workload
+        self._workload(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
+                       debug_message='First start of cassandra-stress command: {}'.format(base_cmd_w))
+
+        self.prepare_mv(on_populated=on_populated)
+
+        # Start cassandra-stress writes again now with MV
+        results = self._workload(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
+                       debug_message='Second start of cassandra-stress command: {}'.format(base_cmd_w))
+
+        self.update_test_details()
+        self.display_results(results, test_name='test_write_with_mv_{}populated'.format('' if on_populated else 'not_'))
+        self.check_regression()
+
     def test_write(self):
         """
         Test steps:
@@ -138,6 +197,48 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.update_test_details()
         self.display_results(results, test_name='test_write')
+        self.check_regression()
+
+    def test_read_with_mv_populated(self):
+        self._read_with_mv(on_populated=True)
+
+    def test_read_with_mv_not_populated(self):
+        self._read_with_mv(on_populated=False)
+
+    def _read_with_mv(self, on_populated):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a read workload
+        3. Create MV
+        4. Run a read workload again
+        """
+        base_cmd_p = self.params.get('prepare_write_cmd')
+        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_r = self.params.get('stress_cmd_r')
+
+        self.create_test_stats()
+        # prepare schema and data before read
+        self._workload(stress_cmd=base_cmd_p, stress_num=2, keyspace_num=1, prefix='preload-',
+                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_w))
+
+        # run a read workload
+        self._workload(stress_cmd=base_cmd_r, stress_num=2,
+                       debug_message='First start of cassandra-stress command: {}'.format(base_cmd_w))
+
+        self.prepare_mv(on_populated=on_populated)
+
+        # If the MV was created on the empty base table, populate it before reads
+        if not on_populated:
+            self._workload(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
+
+        # run a read workload
+        results = self._workload(stress_cmd=base_cmd_r, stress_num=2,
+                       debug_message='Second start of cassandra-stress command: {}'.format(base_cmd_r))
+
+        self.update_test_details()
+        self.display_results(results, test_name='test_read_with_mv_{}populated'.format('' if on_populated else 'not_'))
         self.check_regression()
 
     def test_read(self):
@@ -161,6 +262,45 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.update_test_details()
         self.display_results(results, test_name='test_read')
+        self.check_regression()
+
+    def test_mixed_with_mv_populated(self):
+        self._mixed_with_mv(on_populated=True)
+
+    def test_mixed_with_mv_not_populated(self):
+        self._mixed_with_mv(on_populated=False)
+
+    def _mixed_with_mv(self, on_populated):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a mixed workload
+        """
+
+        base_cmd_p = self.params.get('prepare_write_cmd')
+        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_m = self.params.get('stress_cmd_m')
+
+        self.create_test_stats()
+        # run a write workload as a preparation
+        self._workload(stress_cmd=base_cmd_p, stress_num=2, keyspace_num=1, prefix='preload-',
+                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_w))
+
+        # run a mixed workload
+        self._workload(stress_cmd=base_cmd_m, stress_num=2,
+                                 debug_message='First start of cassandra-stress command: {}'.format(base_cmd_w))
+
+        self._workload(stress_cmd=base_cmd_m, stress_num=2)
+
+        self.prepare_mv(on_populated=on_populated)
+
+        # run a mixed workload
+        results = self._workload(stress_cmd=base_cmd_m, stress_num=2,
+                                 debug_message='Second start of cassandra-stress command: {}'.format(base_cmd_w))
+
+        self.update_test_details()
+        self.display_results(results, test_name='test_mixed_with_mv_{}populated'.format('' if on_populated else 'not_'))
         self.check_regression()
 
     def test_mixed(self):
