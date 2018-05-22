@@ -314,7 +314,7 @@ class Nemesis(object):
             refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
             self._run_nodetool(refresh_cmd, node)
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+            self._run_in_cqlsh(cmd)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
@@ -842,6 +842,11 @@ class MdcChaosMonkey(Nemesis):
 
 
 class UpgradeNemesis(Nemesis):
+
+    # upgrade a single node
+    def upgrade_node(self, node):
+        self.log.error("UpgradeNmemesis:upgrade_node() isn't implemented")
+        pass
 
     # # upgrade a single node
     # def upgrade_node(self, node):
