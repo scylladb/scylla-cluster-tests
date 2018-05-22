@@ -7,4 +7,4 @@ email:
   send: True
   server: localhost
   sender: 'scylla@scylladb.com'
-  recipients:
+  recipients: ["bentsi@scylladb.com"]

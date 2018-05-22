@@ -13,14 +13,14 @@
 </head>
 
 <body>
-    <h3>Test: {{ results.test_type }}</h3>
+    <h3>Test: {{ test_type }}</h3>
     <h3>
         <span>Test start time: </span>
-        <span class="blue">{{ results.test_id }}</span>
+        <span class="blue">{{ test_id }}</span>
     </h3>
     <h3>
         <span>Version: </span>
-        <span class="blue">{{ results.test_version.version }} </span>
+        <span class="blue">{{ test_version.version }} </span>
     </h3>
     <div>
         <span> Version Details: </span>
@@ -51,7 +51,7 @@
             <th>Latency mean</th>
             <th>Latency 99th percentile</th>
         </tr>
-        {% for cmp_res in results.res_list %}
+        {% for cmp_res in res_list %}
         <tr>
             <td>
                 <span class="blue fbold">{{ cmp_res.version_dst }}</span>
@@ -84,13 +84,13 @@
     </table>
 
     <h3>Dashboard:</h3>
-    <li><a href={{ results.dashboard_master }}>Perf-Regression Master</a></li>
-    <li><a href={{ results.dashboard_releases }}>Perf-Regression By-Release</a></li>
-    {% if results.grafana_snapshot %}
+    <li><a href={{ dashboard_master }}>Perf-Regression Master</a></li>
+    <li><a href={{ dashboard_releases }}>Perf-Regression By-Release</a></li>
+    {% if grafana_snapshot %}
         <h3>Grafana Snapshot:</h3>
-        <li><a href={{ results.grafana_snapshot }}>Download Grafana Snapshot</a></li>
+        <li><a href={{ grafana_snapshot }}>Download Grafana Snapshot</a></li>
         <p>&nbsp;</p>
-        <img src={{ results.grafana_snapshot }}  height="50%" width="50%">
+        <img src={{ grafana_snapshot }}  height="50%" width="50%">
     {% endif %}
 </body>
 </html>
