@@ -35,14 +35,14 @@ class UpgradeTest(FillDatabaseData):
     new_ver = None
 
     def upgrade_node(self, node):
-        repo_file = self.db_cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
+        new_scylla_repo = self.db_cluster.params.get('new_scylla_repo', None,  None)
         new_version = self.db_cluster.params.get('new_version', None,  '')
         upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
         upgrade_rollback_mode = self.db_cluster.params.get('upgrade_rollback_mode', default='major_release')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
-        # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
+        # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
         result = node.remoter.run('scylla --version')
         self.orig_ver = result.stdout
 
@@ -62,14 +62,9 @@ class UpgradeTest(FillDatabaseData):
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('rpm -qa scylla\*')
-        elif repo_file:
-            if repo_file.startswith('http'):
-                node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo'.format(repo_file))
-            else:
-                scylla_repo = get_data_path(repo_file)
-                node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
-                node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-                node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+        elif new_scylla_repo:
+            assert new_scylla_repo.startswith('http')
+            node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo'.format(new_scylla_repo))
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
             # flush all memtables to SSTables
