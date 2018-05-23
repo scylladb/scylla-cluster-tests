@@ -34,11 +34,15 @@ class UpgradeTest(FillDatabaseData):
     orig_ver = None
     new_ver = None
 
+    # `major_release` (eg: 2.1 <-> 2.2, 2017.1 <-> 2018.1)
+    # `reinstall` (opensource <-> enterprise, enterprise <-> opensource)
+    # `minor_release` (eg: 2.2.1 <-> 2.2.5, 2018.1.0 <-> 2018.1.1)
+    upgrade_rollback_mode = None
+
     def upgrade_node(self, node):
         new_scylla_repo = self.db_cluster.params.get('new_scylla_repo', None,  None)
         new_version = self.db_cluster.params.get('new_version', None,  '')
         upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
-        upgrade_rollback_mode = self.db_cluster.params.get('upgrade_rollback_mode', default='major_release')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
@@ -74,22 +78,29 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo yum clean all')
-            ver_suffix = '-{}'.format(new_version) if new_version else ''
-            if upgrade_rollback_mode == 'reinstall':
+
+            orig_is_enterprise = node.is_enterprise
+            result = node.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+            new_is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                         'No matches found' not in result.stdout) else False
+            if orig_is_enterprise != new_is_enterprise:
+                self.upgrade_rollback_mode = 'reinstall'
+            ver_suffix = '\*{}'.format(new_version) if new_version else ''
+            if self.upgrade_rollback_mode == 'reinstall':
                 node.remoter.run('sudo yum remove scylla\* -y')
                 node.remoter.run('sudo yum install scylla{0} -y'.format(ver_suffix))
             else:
                 node.remoter.run('sudo yum update scylla{0}\* -y'.format(ver_suffix))
         node.remoter.run('sudo systemctl start scylla-server.service')
         node.wait_db_up(verbose=True)
-        result = node.remoter.run('rpm -qa scylla\*server')
+        result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
 
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
-        upgrade_rollback_mode = self.db_cluster.params.get('upgrade_rollback_mode', default='major_release')
+        #fixme: auto identify new_introduced_pkgs, remote this parameter
         new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default=None)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
@@ -102,10 +113,14 @@ class UpgradeTest(FillDatabaseData):
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
-        if upgrade_rollback_mode == 'reinstall':
+
+        if re.findall('\d+.\d+', self.orig_ver)[0] == re.findall('\d+.\d+', self.new_ver)[0]:
+            self.upgrade_rollback_mode = 'minor_release'
+
+        if self.upgrade_rollback_mode == 'reinstall':
             node.remoter.run('sudo yum remove scylla\* -y')
             node.remoter.run('sudo yum install {} -y' % node.scylla_pkg())
-        elif upgrade_rollback_mode == 'minor_release':
+        elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run('sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
         else:
             if new_introduced_pkgs:
