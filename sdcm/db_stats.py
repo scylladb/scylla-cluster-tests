@@ -178,7 +178,7 @@ class TestStatsMixin(Stats):
                     # exclude these params from gce run
                     continue
                 elif p[1] == 'n_db_nodes' and isinstance(p[2], str) and re.search('\s', p[2]):  # multidc
-                    setup_details['n_db_nodes'] = re.sub('\s', '_', p[2])
+                    setup_details['n_db_nodes'] = sum([int(i) for i in p[2].split()])
                 else:
                     setup_details[p[1]] = p[2]
 
