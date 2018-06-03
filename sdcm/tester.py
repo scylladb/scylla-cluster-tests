@@ -891,6 +891,88 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         session.execute(query)
         time.sleep(0.2)
 
+    def truncate_cf(self, ks_name, table_name, session):
+        try:
+            session.execute('TRUNCATE TABLE {0}.{1}'.format(ks_name, table_name))
+        except Exception as e:
+            self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, e.message))
+
+    def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,
+                                 mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
+                                 gc_grace=None, columns=None, compact_storage=False):
+        mv_columns_str = mv_columns
+        if isinstance(mv_columns, list):
+            mv_columns_str = ', '.join(c for c in mv_columns)
+
+        where_clause = []
+        mv_partition_key = mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key)
+        mv_clustering_key = mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key)
+
+        for kc in mv_partition_key + mv_clustering_key:
+            where_clause.append('{} is not null'.format(kc))
+
+        pk_clause = ', '.join(pk for pk in mv_partition_key)
+        cl_clause = ', '.join(cl for cl in mv_clustering_key)
+
+        query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
+                    'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
+                                                    table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
+                                                    pk=pk_clause, cl=cl_clause)
+        if compression is not None:
+            query = ('%s AND compression = { \'sstable_compression\': '
+                     '\'%sCompressor\' }' % (query, compression))
+
+        if read_repair is not None:
+            query = '%s AND read_repair_chance=%f' % (query, read_repair)
+        if gc_grace is not None:
+            query = '%s AND gc_grace_seconds=%d' % (query, gc_grace)
+        if speculative_retry is not None:
+            query = ('%s AND speculative_retry=\'%s\'' %
+                     (query, speculative_retry))
+
+        if compact_storage:
+            query += ' AND COMPACT STORAGE'
+
+        self.log.debug('MV create statement: {}'.format(query))
+        session.execute(query)
+
+    def _wait_for_view(self, cluster, session, ks, view):
+        self.log.debug("Waiting for view {}.{} to finish building...".format(ks, view))
+
+        def _view_build_finished(live_nodes_amount):
+            result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE keyspace_name='{0}' "
+                                                       "AND view_name='{1}'".format(ks, view)))
+            self.log.debug('_wait_for_view result: {}'.format(result))
+            return len([status for status in result  if status[0] == 'SUCCESS']) >= live_nodes_amount
+
+        attempts = 20
+        live_nodes_amount = len([node for node in cluster.nodelist() if node.status == 'UP'])
+        while attempts > 0:
+            if _view_build_finished(live_nodes_amount):
+                return
+            time.sleep(3)
+            attempts -= 1
+
+        raise Exception("View {}.{} not built".format(ks, view))
+
+    def _wait_for_view_build_start(self, session, ks, view, seconds_to_wait = 20):
+
+        def _check_build_started():
+            result = self.rows_to_list(session.execute("SELECT last_token FROM system.views_builds_in_progress "
+                                                  "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
+            self.log.debug('_wait_for_view_build_start: {}'.format(result))
+            return result != [[None]]
+
+        self.log.debug("Ensure view building started.")
+        start = time.time()
+        while not _check_build_started():
+            if time.time() - start > seconds_to_wait:
+                raise Exception("View building didn't start in {} seconds".format(seconds_to_wait))
+
+    def rows_to_list(rows):
+        new_list = [list(row) for row in rows]
+        return new_list
+
     @staticmethod
     def get_s3_url(file_name):
         return 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
