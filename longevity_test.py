@@ -83,6 +83,7 @@ class LongevityTest(ClusterTester):
                                     db_stats=self.get_stats_obj())
         stress_queue = list()
         write_queue = list()
+        verify_queue = list()
 
         # prepare write workload
         prepare_write_cmd = self.params.get('prepare_write_cmd')
@@ -119,6 +120,17 @@ class LongevityTest(ClusterTester):
             # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
             for stress in write_queue:
                 self.verify_stress_thread(queue=stress)
+
+            # Run nodetool flush on all nodes to make sure nothing left in memory
+            self._flush_all_nodes()
+
+            # In case we would like to verify all keys were written successfully before we start other stress / nemesis
+            prepare_verify_cmd = self.params.get('prepare_verify_cmd', default=None)
+            if prepare_verify_cmd:
+                verify_queue.append(self.run_stress_thread(stress_cmd=prepare_verify_cmd, keyspace_num=keyspace_num))
+
+                for stress in verify_queue:
+                    self.verify_stress_thread(queue=stress)
 
         # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
         if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
@@ -212,6 +224,13 @@ class LongevityTest(ClusterTester):
             self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
                            columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'})
 
+    def _flush_all_nodes(self):
+        """
+        This function will connect all db nodes in the cluster and run "nodetool flush" command.
+        :return:
+        """
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo nodetool flush')
 
 if __name__ == '__main__':
     main()
