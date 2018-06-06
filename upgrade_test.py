@@ -322,6 +322,7 @@ class UpgradeTest(FillDatabaseData):
 
         # wait for the 20m read workload to finish
         self.verify_stress_thread(read_20m_stress_queue)
+        self.log.info('all nodes were upgraded, and last workaround is verified.')
 
 
 if __name__ == '__main__':
