@@ -1003,7 +1003,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
                 self.db_cluster.stop_nemesis(timeout=1800)
                 for node in self.db_cluster.nodes:
-                    node.stop_task_threads(timeout=600)
+                    node.stop_task_threads()
 
         if self.loaders is not None:
             self.loaders.get_backtraces()
