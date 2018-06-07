@@ -270,6 +270,8 @@ class TestStatsMixin(Stats):
             self._stats['results']['stats_total'] = total_stats
 
     def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False, scylla_conf=False):
+        if not self._stats:
+            return
         self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if self.monitors:
             url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
