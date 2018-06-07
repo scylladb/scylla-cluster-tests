@@ -684,7 +684,7 @@ class BaseNode(object):
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
-    def wait_ssh_up(self, verbose=True, timeout=300):
+    def wait_ssh_up(self, verbose=True, timeout=500):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
@@ -1009,12 +1009,13 @@ client_encryption_options:
         """
         Uninstall scylla
         """
-        self.stop_scylla_server(verify_down=False)
+        self.stop_scylla_server(verify_down=False, ignore_status=True)
         if self.is_rhel_like():
             self.remoter.run('sudo yum remove -y scylla\*')
             self.remoter.run('sudo yum clean all')
         else:
-            self.remoter.run('sudo apt-get remove -y scylla\*')
+            self.remoter.run('sudo rm /etc/apt/sources.list.d/scylla.list')
+            self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
             self.remoter.run('sudo apt-get clean all')
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
@@ -1036,8 +1037,9 @@ client_encryption_options:
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:
             self.remoter.run('sudo apt-get upgrade')
-            self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+            self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
+            self.remoter.run('sudo apt-get update')
             self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}'.format(self.scylla_pkg()))
 
     @log_run_info("Detecting disks")
@@ -1136,13 +1138,13 @@ client_encryption_options:
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
-    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300):
+    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
         if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout)
+            self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout, ignore_status=ignore_status)
         else:
-            self.remoter.run('sudo service scylla-server stop', timeout=timeout)
+            self.remoter.run('sudo service scylla-server stop', timeout=timeout, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -1817,10 +1819,17 @@ class BaseLoaderSet(object):
             return
 
         node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        else:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
 
         node.wait_cs_installed(verbose=verbose)
-        node.remoter.run('sudo yum install -y screen')
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y screen')
+        else:
+            node.remoter.run('sudo apt-get install -y screen')
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
                              db_node_address)
