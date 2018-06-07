@@ -26,16 +26,16 @@
         <span> Version Details: </span>
         <li>
             <span> build date: </span>
-            <span class="blue"> {{ results.test_version.date }} </span>
+            <span class="blue"> {{ test_version.date }} </span>
         </li>
         <li>
             <span> commit id: </span>
-            <span class="blue"> {{ results.test_version.commit_id }} </span>
+            <span class="blue"> {{ test_version.commit_id }} </span>
         </li>
     </div>
     <div>
         <span> Setup Details: </span>
-        {% for key, val in results.setup_details.iteritems()|sort %}
+        {% for key, val in setup_details.iteritems()|sort %}
         <li>
             <span> {{ key }}: </span>
             <span class="blue"> {{ val }} </span>

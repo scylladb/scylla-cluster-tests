@@ -91,7 +91,7 @@ def get_stress_bench_cmd_params(cmd):
     cmd_params = {}
     for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
                 'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
-                'timeout', 'client-compression']:
+                'timeout', 'client-compression', 'duration']:
         match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
         if match:
             cmd_params[key] = match.group(2).strip()

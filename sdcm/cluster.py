@@ -1840,7 +1840,7 @@ class BaseLoaderSet(object):
         cs_exporter_setup = CassandraStressExporterSetup()
         cs_exporter_setup.install(node)
 
-        if self.params.get('bench_run', default='').lower() == 'true':
+        if self.params.get('bench_run', default=False):
             # go1.7 still not in repo
             node.remoter.run('sudo yum install git -y')
             node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.7.linux-amd64.tar.gz')
@@ -1848,7 +1848,7 @@ class BaseLoaderSet(object):
             node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
             node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
             node.remoter.run("source $HOME/.bashrc")
-            node.remoter.run("go get github.com/pdziepak/scylla-bench")
+            node.remoter.run("go get github.com/scylladb/scylla-bench")
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -2045,7 +2045,7 @@ class BaseLoaderSet(object):
             if line.startswith('Results'):
                 enable_parse = True
                 continue
-            if line.startswith('Latency:'):
+            if line.startswith('Latency:') or ':' not in line:
                 continue
             if not enable_parse:
                 continue
@@ -2053,6 +2053,14 @@ class BaseLoaderSet(object):
             split_idx = line.index(':')
             key = line[:split_idx].strip()
             value = line[split_idx + 1:].split()[0]
+            # the value may be in milliseconds(ms) or microseconds(string containing non-ascii character)
+            try:
+                value = float(unicode(value).rstrip('ms'))
+            except UnicodeDecodeError:
+                value = float(unicode(value, errors='ignore').rstrip('s')) / 1000  # convert to milliseconds
+            except ValueError:
+                pass  # save as is
+
             # we try to use the same stats as we have in cassandra
             if key == 'max':
                 key = 'latency max'
@@ -2064,6 +2072,8 @@ class BaseLoaderSet(object):
                 key = 'latency 95th percentile'
             elif key == 'median':
                 key = 'latency median'
+            elif key == 'mean':
+                key = 'latency mean'
             elif key == 'Operations/s':
                 key = 'op rate'
             elif key == 'Rows/s':
@@ -2238,10 +2248,10 @@ class BaseLoaderSet(object):
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
             ips = ",".join([n.private_ip_address for n in node_list])
-            result = node.remoter.run(cmd="/home/centos/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
+            result = node.remoter.run(cmd="/$HOME/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
                                       timeout=timeout,
                                       ignore_status=True,
-                                      # watch_stdout_pattern='total,',
+                                      watch_stdout_pattern='Latency:',
                                       log_file=log_file_name)
             node.cs_start_time = result.stdout_pattern_found_at
             queue[RES_QUEUE].put((node, result))
@@ -2258,25 +2268,12 @@ class BaseLoaderSet(object):
         return queue
 
     def kill_stress_thread_bench(self):
-        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
-        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
-                                             content=kill_script_contents)
-        kill_script.save()
-        kill_script_dir = os.path.dirname(kill_script.path)
         for loader in self.nodes:
-            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
-            loader.remoter.send_files(kill_script.path, kill_script_dir)
-            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
-                                           ignore_status=True)
-            if cs_active.exit_status == 0:
-                kill_result = loader.remoter.run(kill_script.path,
-                                                 ignore_status=True)
+            sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', ignore_status=True)
+            if sb_active.exit_status == 0:
+                kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
-                    self.log.error('Terminate c-s on node %s:\n%s',
-                                   loader, kill_result)
-            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
-        kill_script.remove()
+                    self.log.error('Terminate scylla-bench on node %s:\n%s', loader, kill_result)
 
 
 class BaseMonitorSet(object):

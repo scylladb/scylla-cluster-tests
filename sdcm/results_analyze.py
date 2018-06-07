@@ -17,10 +17,6 @@ class QueryFilter(object):
     """
     SETUP_PARAMS = ['n_db_nodes', 'n_loaders', 'n_monitor_nodes']
     SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor']
-    CS_CMD = ('cassandra-stress', )
-    CS_PRELOAD_CMD = ('preload-cassandra-stress', )
-    CS_PARAMS = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop', 'duration')
-    CS_PROFILE_PARAMS = ('command', 'profile', 'ops', 'rate threads', 'duration')
 
     def __init__(self, test_doc, is_gce=False):
         self.test_doc = test_doc
@@ -31,14 +27,6 @@ class QueryFilter(object):
     def setup_instance_params(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
 
-    def test_details_params(self):
-        return self.CS_CMD + self.CS_PRELOAD_CMD if \
-            self.test_type.endswith('read') or self.test_type.endswith('mixed') and \
-            self.test_doc['_source']['test_details'].get(self.CS_PRELOAD_CMD[0]) else self.CS_CMD
-
-    def cs_params(self):
-        return self.CS_PROFILE_PARAMS if self.test_type.endswith('profiles') else self.CS_PARAMS
-
     def filter_setup_details(self):
         setup_details = ''
         for param in self.SETUP_PARAMS + self.setup_instance_params():
@@ -48,8 +36,41 @@ class QueryFilter(object):
         return setup_details
 
     def filter_test_details(self):
-        test_details = 'test_details.job_name:{}'.format(
+        test_details = 'test_details.job_name:{} '.format(
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
+        test_details += self.test_cmd_details()
+        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
+        return test_details
+
+    def test_cmd_details(self):
+        raise NotImplementedError('Derived classes must implement this method.')
+
+    def __call__(self, *args, **kwargs):
+        try:
+            return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
+        except KeyError:
+            logger.exception('Expected parameters for filtering are not found , test {} {}'.format(
+                self.test_type, self.test_doc['_id']))
+        return None
+
+
+class QueryFilterCS(QueryFilter):
+
+    _CMD = ('cassandra-stress', )
+    _PRELOAD_CMD = ('preload-cassandra-stress', )
+    _PARAMS = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop', 'duration')
+    _PROFILE_PARAMS = ('command', 'profile', 'ops', 'rate threads', 'duration')
+
+    def test_details_params(self):
+        return self._CMD + self._PRELOAD_CMD if \
+            self.test_type.endswith('read') or self.test_type.endswith('mixed') and \
+            self.test_doc['_source']['test_details'].get(self.CS_PRELOAD_CMD[0]) else self._CMD
+
+    def cs_params(self):
+        return self._PROFILE_PARAMS if self.test_type.endswith('profiles') else self._PARAMS
+
+    def test_cmd_details(self):
+        test_details = ""
         for cs in self.test_details_params():
             for param in self.cs_params():
                 if param == 'rate threads':
@@ -62,16 +83,21 @@ class QueryFilter(object):
                     if param in ['profile', 'ops']:
                         param_val = "\"{}\"".format(param_val)
                     test_details += ' AND test_details.{}.{}: {}'.format(cs, param, param_val)
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
         return test_details
 
-    def __call__(self, *args, **kwargs):
-        try:
-            return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
-        except KeyError:
-            logger.exception('Expected parameters for filtering are not found , test {} {}'.format(
-                self.test_type, self.test_doc['_id']))
-        return None
+
+class QueryFilterScyllaBench(QueryFilter):
+
+    _CMD = ('scylla-bench', )
+    _PARAMS = ('mode', 'workload', 'partition-count', 'clustering-row-count', 'concurrency', 'connection-count',
+               'replication-factor', 'duration')
+
+    def test_cmd_details(self):
+        test_details = ['AND test_details.{}.{}: {}'.format(
+            cmd, param, self.test_doc['_source']['test_details'][cmd][param])
+            for param in self._PARAMS for cmd in self._CMD]
+
+        return ' '.join(test_details)
 
 
 class BaseResultsAnalyzer(object):
@@ -154,7 +180,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
 
     def __init__(self, *args, **kwargs):
         super(ResultsAnalyzer, self).__init__(
-            es_index=kwargs.get('index', self._conf.get('es_index')),
+            es_index=kwargs.get('index'),
             send_mail=kwargs.get('send_email', True),
             email_recipients=kwargs.get('email_recipients', None)
         )
@@ -203,6 +229,10 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         if key == self.PARAMS[0]:  # op rate
             return val1 if val1 > val2 else val2
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
+
+    def _query_filter(self, test_doc, is_gce):
+        return QueryFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
+            else QueryFilterCS(test_doc, is_gce)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -258,7 +288,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
 
         # filter tests
         test_type = doc['_type']
-        query = QueryFilter(doc, is_gce)()
+        query = self._query_filter(doc, is_gce)
         if not query:
             return False
 
