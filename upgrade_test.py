@@ -16,6 +16,7 @@
 
 import random
 import time
+import re
 
 from avocado import main
 
@@ -31,16 +32,25 @@ class UpgradeTest(FillDatabaseData):
 
     :avocado: enable
     """
+    orig_ver = None
+    new_ver = None
+
+    # `major_release` (eg: 2.1 <-> 2.2, 2017.1 <-> 2018.1)
+    # `reinstall` (opensource <-> enterprise, enterprise <-> opensource)
+    # `minor_release` (eg: 2.2.1 <-> 2.2.5, 2018.1.0 <-> 2018.1.1)
+    upgrade_rollback_mode = None
 
     def upgrade_node(self, node):
-        repo_file = self.db_cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
+        new_scylla_repo = self.db_cluster.params.get('new_scylla_repo', None,  None)
         new_version = self.db_cluster.params.get('new_version', None,  '')
         upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
-        # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
-        orig_ver = node.remoter.run('rpm -qa scylla-server')
+        # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
+        result = node.remoter.run('scylla --version')
+        self.orig_ver = result.stdout
+
         if upgrade_node_packages:
             # update_scylla_packages
             node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
@@ -48,33 +58,99 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
             node.remoter.run('rpm -qa scylla\*')
+            # flush all memtables to SSTables
+            node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
+            node.remoter.run('sudo systemctl stop scylla-server.service')
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('rpm -qa scylla\*')
-        elif repo_file:
-            scylla_repo = get_data_path(repo_file)
-            node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
-            node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-            node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
+        elif new_scylla_repo:
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
+            node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
+            node.remoter.run('sudo cp /etc/scylla.d/io.conf /etc/scylla.d/io.conf-backup')
+            node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf $conf.autobackup; done')
+            assert new_scylla_repo.startswith('http')
+            node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo'.format(new_scylla_repo))
+            # flush all memtables to SSTables
+            node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
-            node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.remoter.run('sudo chown root:root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo yum clean all')
-            ver_suffix = '-{}'.format(new_version) if new_version else ''
-            node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
-                             ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
-        # flush all memtables to SSTables
-        node.remoter.run('sudo nodetool drain')
-        node.remoter.run('sudo systemctl restart scylla-server.service')
+
+            orig_is_enterprise = node.is_enterprise
+            result = node.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+            new_is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                         'No matches found' not in result.stdout) else False
+            scylla_pkg = 'scylla-enterprise' if new_is_enterprise else 'scylla'
+            if orig_is_enterprise != new_is_enterprise:
+                self.upgrade_rollback_mode = 'reinstall'
+            ver_suffix = '\*{}'.format(new_version) if new_version else ''
+            if self.upgrade_rollback_mode == 'reinstall':
+                node.remoter.run('sudo yum remove scylla\* -y')
+                node.remoter.run('sudo yum install {}{} -y'.format(scylla_pkg, ver_suffix))
+                node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
+            else:
+                node.remoter.run('sudo yum update {}{}\* -y'.format(scylla_pkg, ver_suffix))
+        node.remoter.run('sudo systemctl start scylla-server.service')
         node.wait_db_up(verbose=True)
-        new_ver = node.remoter.run('rpm -qa scylla-server')
-        if orig_ver == new_ver:
-            self.log.error('scylla-server version isn\'t changed')
+        result = node.remoter.run('scylla --version')
+        new_ver = result.stdout
+        assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
+        self.new_ver = new_ver
+
+    def rollback_node(self, node):
+        self.log.info('Rollbacking a Node')
+        #fixme: auto identify new_introduced_pkgs, remove this parameter
+        new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default=None)
+        result = node.remoter.run('scylla --version')
+        orig_ver = result.stdout
+        node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
+        # flush all memtables to SSTables
+        node.remoter.run('nodetool drain')
+        # backup the data
+        node.remoter.run('nodetool snapshot')
+        node.remoter.run('sudo systemctl stop scylla-server.service')
+        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
+        node.remoter.run('sudo yum clean all')
+
+        if re.findall('\d+.\d+', self.orig_ver)[0] == re.findall('\d+.\d+', self.new_ver)[0]:
+            self.upgrade_rollback_mode = 'minor_release'
+
+        if self.upgrade_rollback_mode == 'reinstall':
+            node.remoter.run('sudo yum remove scylla\* -y')
+            node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
+            node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
+        elif self.upgrade_rollback_mode == 'minor_release':
+            node.remoter.run('sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
+        else:
+            if new_introduced_pkgs:
+                node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
+            node.remoter.run('sudo yum downgrade scylla\* -y')
+            if new_introduced_pkgs:
+                node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
+            node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
+
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
+
+        result = node.remoter.run('sudo find /var/lib/scylla/data/system')
+        snapshot_name = re.findall("system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
+        cmd = "DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
+        # recover the system tables
+        if self.db_cluster.params.get('recover_system_tables', default=None):
+            node.remoter.run(cmd, verbose=True)
+        node.remoter.run('sudo systemctl start scylla-server.service')
+        node.wait_db_up(verbose=True)
+        result = node.remoter.run('scylla --version')
+        new_ver = result.stdout
+        self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
+        assert orig_ver != new_ver, "scylla-server version isn't changed"
 
     default_params = {'timeout': 650000}
 
@@ -115,47 +191,98 @@ class UpgradeTest(FillDatabaseData):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            self.log.info('Upgrade Node begin')
+            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             time.sleep(300)
-            self.log.info('Upgrade Node ended')
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
-    def test_20_minutes(self):
+    def test_rolling_upgrade(self):
         """
-        Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
-        If upgrade_node_packages defined we specify duration 10 * len(nodes) minutes.
+        Upgrade half of nodes in the cluster, and start special read workload
+        during the stage. Checksum method is changed to xxhash from Scylla 2.2,
+        we want to use this case to verify the read (cl=ALL) workload works
+        well, upgrade all nodes to new version in the end.
         """
-        self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
-        self.db_cluster.start_nemesis(interval=10)
-        duration = 20
-        if self.params.get('upgrade_node_packages'):
-            duration = 30 * len(self.db_cluster.nodes)
-        self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=duration)
 
-    def test_20_minutes_rollback(self):
-        """
-        Run cassandra-stress on a cluster for 20 minutes, together with node upgrades.
-        """
-        self.db_cluster.add_nemesis(nemesis=UpgradeNemesis,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
-        self.db_cluster.start_nemesis(interval=10)
-        self.db_cluster.stop_nemesis(timeout=None)
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = [x for x in range(nodes_num)]
+        # shuffle it so we will upgrade the nodes in a
+        # random order
+        random.shuffle(indexes)
 
-        self.db_cluster.clean_nemesis()
+        ### prepare write workload
+        self.log.info('Starting c-s prepare write workload (n=10000000)')
+        prepare_write_stress = self.params.get('prepare_write_stress')
+        prepare_write_stress_queue = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
 
-        self.db_cluster.add_nemesis(nemesis=RollbackNemesis,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
-        self.db_cluster.start_nemesis(interval=10)
-        self.run_stress(stress_cmd=self.params.get('stress_cmd'),
-                        duration=self.params.get('cassandra_stress_duration', 20))
+        node = self.db_cluster.nodes[0]
+        cmd = 'ALTER TABLE keyspace1.standard1 with dclocal_read_repair_chance = 0.0 and read_repair_chance =0.0'
+        if self.params.get('disable_read_repair_chance', default=None):
+            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+
+        # upgrade first node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wait for the prepare write workload to finish
+        self.verify_stress_thread(prepare_write_stress_queue)
+
+        ### read workload
+        self.log.info('Starting c-s read workload for 10m')
+        stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
+        read_10m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        time.sleep(60)
+
+        # upgrade second node
+        self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
+        self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+        self.upgrade_node(self.db_cluster.node_to_upgrade)
+        self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wait for the 10m read workload to finish
+        self.verify_stress_thread(read_10m_stress_queue)
+
+        ### read workload (cl=ALL)
+        self.log.info('Starting c-s read workload (cl=ALL n=10000000)')
+        stress_cmd_read_clall = self.params.get('stress_cmd_read_clall')
+        read_clall_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_clall)
+        # wait for the cl=ALL read workload to finish
+        self.verify_stress_thread(read_clall_stress_queue)
+
+        ### read workload (20m)
+        self.log.info('Starting c-s read workload for 20m')
+        stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
+        read_20m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+
+        # rollback second node
+        self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
+        self.rollback_node(self.db_cluster.nodes[indexes[1]])
+        self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
+        self.db_cluster.nodes[indexes[1]].remoter.run("nodetool status")
+
+        for i in indexes[1:]:
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+            self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+
+        # wait for the 20m read workload to finish
+        self.verify_stress_thread(read_20m_stress_queue)
 
 
 if __name__ == '__main__':
