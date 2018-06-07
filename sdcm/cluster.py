@@ -1014,7 +1014,7 @@ client_encryption_options:
             self.remoter.run('sudo yum remove -y scylla\*')
             self.remoter.run('sudo yum clean all')
         else:
-            self.remoter.run('sudo rm /etc/apt/sources.list.d/scylla.list')
+            self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
             self.remoter.run('sudo apt-get clean all')
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
@@ -1036,7 +1036,7 @@ client_encryption_options:
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:
-            self.remoter.run('sudo apt-get upgrade')
+            self.remoter.run('sudo apt-get upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
@@ -2254,7 +2254,10 @@ class BaseMonitorSet(object):
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        node.remoter.run('sudo yum install screen -y')
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install screen -y')
+        else:
+            node.remoter.run('sudo apt-get install screen -y')
         self.install_scylla_manager(node)
 
     def install_scylla_manager(self, node):
@@ -2367,11 +2370,18 @@ class BaseMonitorSet(object):
             self.start_scylla_monitoring(node)
 
     def start_scylla_monitoring(self, node):
-        run_script = dedent("""
-            cd {0.monitor_install_path}
-            sudo systemctl start docker
-            ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version} 
-        """.format(self))
+        if node.is_rhel_like() or node.is_ubuntu16():
+            run_script = dedent("""
+                cd {0.monitor_install_path}
+                sudo systemctl start docker
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
+            """.format(self))
+        else:
+            run_script = dedent("""
+                cd {0.monitor_install_path}
+                sudo service docker start
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
+            """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script)
         self.add_sct_dashboards_to_grafana(node)
 
