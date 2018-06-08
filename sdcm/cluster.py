@@ -623,6 +623,8 @@ class BaseNode(object):
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
+        if not self.distro:
+            self.distro = self._get_distro()
 
     def is_port_used(self, port, service_name):
         try:
