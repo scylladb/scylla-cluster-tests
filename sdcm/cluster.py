@@ -317,6 +317,33 @@ class BaseNode(object):
 
         return self.distro
 
+    def is_centos7(self):
+        return self.distro == Distro.CENTOS7
+
+    def is_rhel7(self):
+        return self.distro == Distro.RHEL7
+
+    def is_rhel_like(self):
+        return self.distro == Distro.CENTOS7 or self.distro == Distro.RHEL7
+
+    def is_ubuntu14(self):
+        return self.distro == Distro.UBUNTU14
+
+    def is_ubuntu16(self):
+        return self.distro == Distro.UBUNTU16
+
+    def is_ubuntu(self):
+        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14
+
+    def is_debian8(self):
+        return self.distro == Distro.DEBIAN8
+
+    def is_debian9(self):
+        return self.distro == Distro.DEBIAN9
+
+    def is_debian(self):
+        return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
+
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
 
