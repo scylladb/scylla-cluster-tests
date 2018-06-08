@@ -344,6 +344,40 @@ class BaseNode(object):
     def is_debian(self):
         return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
 
+    def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
+                    debian8_pkgs=None, debian9_pkgs=None):
+        """
+        Support to install packages to multiple distros
+
+        :param pkgs: default package name string
+        :param apt_pkgs: special package name string for apt-get
+        """
+        # install packages for special debian like system
+        if self.is_ubuntu14() and ubuntu14_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
+            return
+        if self.is_ubuntu16() and ubuntu16_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
+            return
+        if self.is_ubuntu14() and ubuntu14_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
+            return
+        if self.is_debian8() and debian8_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % debian8_pkgs)
+            return
+        if self.is_debian9() and debian9_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % debian9_pkgs)
+            return
+
+        # install general packages for debian like system
+        if apt_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % apt_pkgs)
+            return
+
+        if not self.is_rhel_like():
+            self.log.error('Install packages for unknown distro by yum')
+        self.remoter.run('sudo yum install -y %s' % pkgs)
+
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
 
