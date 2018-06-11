@@ -409,13 +409,15 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                                   broadcast=node.public_ip_address,
                                   authenticator=authenticator,
                                   server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'))
+                                  client_encrypt=self._param_enabled('client_encrypt'),
+                                  append_scylla_args=self.params.get('append_scylla_args'))
             else:
                 node.config_setup(enable_exp=self._param_enabled('experimental'),
                                   endpoint_snitch=endpoint_snitch,
                                   authenticator=authenticator,
                                   server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'))
+                                  client_encrypt=self._param_enabled('client_encrypt'),
+                                  append_scylla_args=self.params.get('append_scylla_args'))
 
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
