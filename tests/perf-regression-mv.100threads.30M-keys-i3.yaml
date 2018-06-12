@@ -10,12 +10,13 @@ user_prefix: 'perf-regression-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
-#ip_ssh_connections: 'private'
+ip_ssh_connections: 'private'
 instance_provision: 'spot_low_price'
+experimental: 'true'
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com']
+email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com', 'julia.yakovlev@scylladb.com']
 
 backends: !mux
     gce: !mux
@@ -37,6 +38,7 @@ backends: !mux
         gce_root_disk_type_monitor: 'pd-standard'
         gce_root_disk_size_monitor: 50
         gce_n_local_ssd_disk_monitor: 0
+#        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-2.2/28/scylla.repo'
         scylla_repo: 'REPO_FILE_PATH'
         us_east_1:
           gce_datacenter: 'us-east1-b'
@@ -45,12 +47,12 @@ backends: !mux
         cluster_backend: 'aws'
         instance_type_loader: 'c4.large'
         instance_type_monitor: t2.small
-        instance_type_db: 'i2.2xlarge'
+        instance_type_db: 'i3.4xlarge'
         us_east_1:
             user_credentials_path: ''
             region_name: 'us-east-1'
-            security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-ec4a72c4'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-c327759a'
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
