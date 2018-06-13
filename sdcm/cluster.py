@@ -1682,8 +1682,12 @@ class BaseScyllaCluster(object):
             else:
                 match = re.findall("scylla-(.*).el7.centos", result.stdout)
                 if match:
+                    scylla_version = match[0]
+                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
                     for node in self.nodes:
-                        node.scylla_version = match[0]
+                        node.scylla_version = scylla_version
+                else:
+                    self.log.error("Unknown ScyllaDB version")
 
     def cfstat_reached_threshold(self, key, threshold):
         """
