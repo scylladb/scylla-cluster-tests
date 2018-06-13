@@ -2028,7 +2028,7 @@ class BaseLoaderSet(object):
                 results['%s write' % key] = m[0][1]
 
         if not enable_parse:
-            logger.warning('Cannot find summary in c-stress results: %s', lines)
+            logger.warning('Cannot find summary in c-stress results: %s', lines[-10:])
             return {}
         return results
 
