@@ -352,6 +352,12 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
+    def ip_address(self, datacenter):
+        if (self.is_docker() or self.is_gce()) and len(datacenter) > 1:
+            return self.public_ip_address
+        else:
+            return self.private_ip_address
+
     @property
     def init_system(self):
         if self._init_system is None:
