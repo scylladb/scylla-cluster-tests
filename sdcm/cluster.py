@@ -24,14 +24,7 @@ import threading
 import time
 import uuid
 import yaml
-import matplotlib
-import platform
 import shutil
-import glob
-
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 from avocado.utils import path
 from avocado.utils import process
@@ -306,7 +299,6 @@ class BaseNode(object):
         self._metrics_target = None
         self.prometheus_data_dir = None
 
-        self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
@@ -1947,9 +1939,7 @@ class BaseLoaderSet(object):
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
                                       ignore_status=True,
-                                      watch_stdout_pattern='total,',
                                       log_file=log_file_name)
-            node.cs_start_time = result.stdout_pattern_found_at
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -2107,17 +2097,6 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
-    def _plot_nemesis_events(nemesis, node):
-        nemesis_event_start_times = [
-            operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
-        for start_time in nemesis_event_start_times:
-            plt.axvline(start_time, color='blue', linestyle='dashdot')
-        nemesis_event_end_times = [
-            operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
-        for end_time in nemesis_event_end_times:
-            plt.axvline(end_time, color='red', linestyle='dashdot')
-
-    @staticmethod
     def _parse_cs_results(lines):
         results = dict()
         results['time'] = []
@@ -2147,59 +2126,6 @@ class BaseLoaderSet(object):
                 results['latmax'].append(latmax)
         return results
 
-    def _plot_metric_data(self, cs_results, x_title, y_title, color, title,
-                          db_cluster, plotfile, node):
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node)
-        plt.plot(cs_results[x_title], cs_results[y_title], label=y_title,
-                 color=color)
-        plt.title(title)
-        plt.xlabel(x_title)
-        plt.ylabel(y_title)
-        plt.legend()
-        plt.savefig(plotfile + '-%s.svg' % y_title)
-        plt.savefig(plotfile + '-%s.png' % y_title)
-        plt.close()
-
-    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None,
-                               db_cluster=None):
-        cs_results = self._parse_cs_results(lines)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='ops', color='green',
-                               title='Operations vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat95', color='blue',
-                               title='Latency 95% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat99', color='green',
-                               title='Latency 99% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat999', color='black',
-                               title='Latency 99.9% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='latmax', color='red',
-                               title='Maximum Latency vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
     def verify_stress_thread(self, queue, db_cluster):
         results = []
         cs_summary = []
@@ -2218,8 +2144,6 @@ class BaseLoaderSet(object):
             for line in lines:
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
-            plotfile = os.path.join(self.logdir, str(node))
-            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return cs_summary, errors
 
@@ -2271,9 +2195,7 @@ class BaseLoaderSet(object):
             result = node.remoter.run(cmd="/$HOME/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
                                       timeout=timeout,
                                       ignore_status=True,
-                                      watch_stdout_pattern='Latency:',
                                       log_file=log_file_name)
-            node.cs_start_time = result.stdout_pattern_found_at
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
