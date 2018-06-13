@@ -781,13 +781,17 @@ WantedBy=multi-user.target
         raise NotImplementedError('Derived classes must implement restart')
 
     @log_run_info
+    @log_run_info
     def stop_task_threads(self, timeout=10):
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
         if self._journal_thread:
+            # current implementation of journal thread uses blocking journalctl cmd with pipe to sct_log_formatter
+            # hence to stop the thread we need to kill the process first
+            self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
             self._journal_thread.join(timeout)
-        del(self.remoter)
+        del self.remoter
 
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
