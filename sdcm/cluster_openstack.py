@@ -336,24 +336,28 @@ class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):
         self.scylla_repo = scylla_repo
 
 
-class MonitorSetOpenStack(OpenStackCluster, cluster.BaseMonitorSet):
+class MonitorSetOpenStack(cluster.BaseMonitorSet, OpenStackCluster):
 
     def __init__(self, openstack_image, openstack_network, service, credentials,
                  openstack_instance_type='m1.small',
                  openstack_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10, params=None):
+                 user_prefix=None, n_nodes=10, targets={}, params=None):
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
-        super(MonitorSetOpenStack, self).__init__(openstack_image=openstack_image,
-                                                  openstack_network=openstack_network,
-                                                  openstack_instance_type=openstack_instance_type,
-                                                  openstack_image_username=openstack_image_username,
-                                                  service=service,
-                                                  credentials=credentials,
-                                                  cluster_prefix=cluster_prefix,
-                                                  node_prefix=node_prefix,
-                                                  n_nodes=n_nodes,
-                                                  params=params)
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        OpenStackCluster.__init__(self,
+                                  openstack_image=openstack_image,
+                                  openstack_network=openstack_network,
+                                  openstack_instance_type=openstack_instance_type,
+                                  openstack_image_username=openstack_image_username,
+                                  service=service,
+                                  credentials=credentials,
+                                  cluster_prefix=cluster_prefix,
+                                  node_prefix=node_prefix,
+                                  n_nodes=n_nodes,
+                                  params=params)
         self.scylla_repo = scylla_repo
 
     def destroy(self):

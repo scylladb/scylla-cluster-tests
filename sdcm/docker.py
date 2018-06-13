@@ -223,11 +223,14 @@ class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):
         return self.check_nodes_up_and_normal(node_list)
 
 
-class LoaderSetDocker(DockerCluster, cluster.BaseLoaderSet):
+class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
-        super(LoaderSetDocker, self).__init__(node_prefix=self._node_prefix, **kwargs)
+        cluster.BaseLoaderSet.__init__(self,
+                                       params=kwargs.get("params"),
+                                       install_cs=True)
+        DockerCluster.__init__(self, node_prefix=self._node_prefix, **kwargs)
 
 
 class MonitorSetDocker(DockerCluster, cluster.BaseMonitorSet):

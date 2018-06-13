@@ -324,21 +324,24 @@ class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):
         self._install_cs = True
 
 
-class MonitorSetLibvirt(LibvirtCluster, cluster.BaseMonitorSet):
+class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):
 
     def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=1,
-                 params=None):
+                 params=None, targets=None):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
-
-        super(MonitorSetLibvirt, self).__init__(domain_info=domain_info,
-                                                hypervisor=hypervisor,
-                                                cluster_uuid=cluster_uuid,
-                                                cluster_prefix=cluster_prefix,
-                                                node_prefix=node_prefix,
-                                                n_nodes=n_nodes,
-                                                params=params)
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        LibvirtCluster.__init__(self,
+                                domain_info=domain_info,
+                                hypervisor=hypervisor,
+                                cluster_uuid=cluster_uuid,
+                                cluster_prefix=cluster_prefix,
+                                node_prefix=node_prefix,
+                                n_nodes=n_nodes,
+                                params=params)
 
     def destroy(self):
         self.log.info('Destroy nodes')

@@ -213,29 +213,18 @@ class Nemesis(object):
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
-    def reconfigure_monitoring(self):
-        self.log.info("Reconfiguring monitoring")
-        if self.cluster.params.get('cluster_backend') != 'gce' and len(self.cluster.datacenter) > 1:
-            ip_addr_attr = 'public_ip_address'
-        else:
-            ip_addr_attr = 'private_ip_address'
-        targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-        loader_targets = [getattr(n, ip_addr_attr) for n in self.loaders.nodes]
-        for monitoring_node in self.monitoring_set.nodes:
-            self.log.info('Monitoring node: %s', str(monitoring_node))
-            monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
 
     def _add_and_init_new_cluster_node(self, old_node_private_ip):
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)[0]
         new_node.replacement_node_ip = old_node_private_ip
         self.cluster.wait_for_init(node_list=[new_node], timeout=30)
-        self.reconfigure_monitoring()
+        self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
-        self.reconfigure_monitoring()
+        self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True):
         def get_node_info_list(verification_node):
