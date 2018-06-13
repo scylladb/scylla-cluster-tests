@@ -324,6 +324,9 @@ class BaseNode(object):
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
 
+    def is_gce(self):
+        return self.__class__.__name__ == "GCENode"
+
     def scylla_pkg(self):
         if self.is_enterprise is None:
             result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
