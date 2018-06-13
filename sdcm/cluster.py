@@ -311,9 +311,7 @@ class BaseNode(object):
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
         self.termination_event = threading.Event()
-        if node_prefix is not None and 'db-node' in node_prefix:
-            self.start_journal_thread()
-        self.start_backtrace_thread()
+        self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap. So addition means not the first set of node.
@@ -781,6 +779,11 @@ WantedBy=multi-user.target
         raise NotImplementedError('Derived classes must implement restart')
 
     @log_run_info
+    def start_task_threads(self):
+        if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
+            self.start_journal_thread()
+        self.start_backtrace_thread()
+
     @log_run_info
     def stop_task_threads(self, timeout=10):
         self.termination_event.set()
