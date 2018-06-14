@@ -1440,17 +1440,22 @@ class BaseScyllaCluster(object):
                 node.is_seed = False
         return seed_nodes
 
-    def get_seed_nodes_by_flag(self):
+    def get_seed_nodes_by_flag(self, private_ip=True):
         """
         We set is_seed at two point, before and after node_setup.
         However, we can only call this function when the flag is set.
         """
-        node_private_ips = [node.private_ip_address for node
-                            in self.nodes if node.is_seed]
-        seeds = ",".join(node_private_ips)
+        if private_ip:
+            node_private_ips = [node.private_ip_address for node
+                                in self.nodes if node.is_seed]
+            seeds = ",".join(node_private_ips)
+        else:
+            node_public_ips = [node.public_ip_address for node
+                                in self.nodes if node.is_seed]
+            seeds = ",".join(node_public_ips)
         if not seeds:
             # use first node as seed by default
-            seeds = self.nodes[0].private_ip_address
+            seeds = self.nodes[0].private_ip_address if private_ip else self.nodes[0].public_ip_address
             self.nodes[0].is_seed = True
         return seeds
 
