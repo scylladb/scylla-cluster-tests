@@ -404,7 +404,7 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                 if not endpoint_snitch:
                     endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
-                node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
+                node.config_setup(seed_address=self.get_seed_nodes_by_flag(private_ip=False),
                                   enable_exp=self._param_enabled('experimental'),
                                   endpoint_snitch=endpoint_snitch,
                                   broadcast=node.public_ip_address,
