@@ -1747,9 +1747,10 @@ class BaseScyllaCluster(object):
             node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
-            endpoint_snitch = ''
+            endpoint_snitch = self.params.get('endpoint_snitch')
             if len(self.datacenter) > 1:
-                endpoint_snitch = 'GossipingPropertyFileSnitch'
+                if not endpoint_snitch:
+                    endpoint_snitch = 'GossipingPropertyFileSnitch'
                 node.datacenter_setup(self.datacenter)
             authenticator = self.params.get('authenticator')
             seed_address = self.get_seed_nodes_by_flag()

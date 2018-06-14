@@ -399,9 +399,10 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
         if not cluster.Setup.REUSE_CLUSTER:
             node.wait_ssh_up(verbose=verbose)
             authenticator = self.params.get('authenticator')
-            endpoint_snitch = ''
+            endpoint_snitch = self.params.get('endpoint_snitch')
             if len(self.datacenter) > 1:
-                endpoint_snitch = "Ec2MultiRegionSnitch"
+                if not endpoint_snitch:
+                    endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
                 node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                                   enable_exp=self._param_enabled('experimental'),
