@@ -823,6 +823,26 @@ class ChaosMonkey(Nemesis):
         self.call_random_disrupt_method()
 
 
+class LimitedChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        # Limit the nemesis scope:
+        #  - NodeToolCleanupMonkey
+        #  - DecommissionMonkey
+        #  - DrainerMonkey
+        #  - RefreshMonkey
+        #  - StopStartMonkey
+        #  - MajorCompactionMonkey
+        #  - ModifyTableMonkey
+        #  - EnospcMonkey
+        #  - StopWaitStartMonkey
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
+                                                         'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
+                                                         'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
+                                                         'disrupt_modify_table', 'disrupt_nodetool_enospc',
+                                                         'disrupt_stop_wait_start_scylla_server'])
+
 class AllMonkey(Nemesis):
 
     @log_time_elapsed_and_status
