@@ -11,7 +11,7 @@ from collections import defaultdict
 from es import ES
 from results_analyze import BaseResultsAnalyzer
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("microbenchmarking")
 logger.setLevel(logging.INFO)
 
 ch = logging.StreamHandler(sys.stdout)
@@ -20,7 +20,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-ES_INDEX = 'test11_microbenchmarking'
+ES_INDEX = 'test13_microbenchmarking'
 HOSTNAME = socket.gethostname()
 
 
@@ -97,6 +97,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         for test_type, current_result in current_results.iteritems():
             list_of_results_from_db = sorted_by_type[test_type]
+            if not list_of_results_from_db:
+                logger.warning("No results for '%s' in DB. Skipping", test_type)
+                continue
             set_results_by_param("aio")
             set_results_by_param("frag/s")
             set_results_by_param("cpu")
@@ -117,7 +120,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
 def get_results(results_path, update_db):
     test_id = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    bad_chars = '(){}<>[] '
+    bad_chars = " "
     os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
     db = ES()
     results = {}
