@@ -334,7 +334,7 @@ class AWSNode(cluster.BaseNode):
         self.log.info('Destroyed')
 
 
-class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
+class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
@@ -523,8 +523,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseLoaderSet.__init__(self,
-                                       params=params,
-                                       install_cs=True)
+                                       params=params)
         AWSCluster.__init__(self,
                             ec2_ami_id=ec2_ami_id,
                             ec2_subnet_id=ec2_subnet_id,

@@ -332,7 +332,6 @@ class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):
                                                  node_prefix=node_prefix,
                                                  n_nodes=n_nodes,
                                                  params=params)
-        self._install_cs = True
         self.scylla_repo = scylla_repo
 
 

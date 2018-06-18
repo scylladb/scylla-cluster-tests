@@ -321,7 +321,6 @@ class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
-        self._install_cs = True
 
 
 class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):

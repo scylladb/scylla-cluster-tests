@@ -228,8 +228,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
         cluster.BaseLoaderSet.__init__(self,
-                                       params=kwargs.get("params"),
-                                       install_cs=True)
+                                       params=kwargs.get("params"))
         DockerCluster.__init__(self, node_prefix=self._node_prefix, **kwargs)
 
 

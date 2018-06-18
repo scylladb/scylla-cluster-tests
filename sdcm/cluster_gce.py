@@ -316,8 +316,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
         node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self,
-                                       params=params,
-                                       install_cs=True)
+                                       params=params)
         GCECluster.__init__(self,
                             gce_image=gce_image,
                             gce_network=gce_network,

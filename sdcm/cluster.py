@@ -885,7 +885,10 @@ client_encryption_options:
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
     def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
-        self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        if scylla_repo:
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        else:
+            self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
 
     def clean_scylla(self):
         """
@@ -1643,9 +1646,8 @@ class BaseScyllaCluster(object):
 
 class BaseLoaderSet(object):
 
-    def __init__(self, params, install_cs):
+    def __init__(self, params):
         self._loader_queue = []
-        self._install_cs = install_cs
         self.params = params
 
     def node_setup(self, node, verbose=False, db_node_address=None):
@@ -1656,9 +1658,8 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
-        if self._install_cs:
-            node.download_scylla_repo(self.params.get('scylla_repo'))
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        node.download_scylla_repo(self.params.get('scylla_repo'))
+        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
 
         node.wait_cs_installed(verbose=verbose)
         node.remoter.run('sudo yum install -y screen')
