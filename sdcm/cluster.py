@@ -2174,6 +2174,15 @@ class BaseMonitorSet(object):
             summary = "Instance {{ $labels.instance }} root disk low space",
             description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
           }        
+        # Alert for 99% cassandra stress write spikes
+        ALERT CassandraStressWriteTooSlow
+          IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
+          FOR 1s
+          LABELS { severity = "1" }
+          ANNOTATIONS {
+            summary = "Cassandra Stress write latency more than 1000ms",
+            description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
+          }
         """)
         import tempfile
         with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
