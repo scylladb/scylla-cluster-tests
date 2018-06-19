@@ -242,7 +242,7 @@ class UserRemoteCredentials(object):
     def __init__(self, key_file):
         self.type = 'user'
         self.key_file = key_file
-        self.name = os.path.basename(self.key_file)[:-4]
+        self.name = os.path.basename(self.key_file)
         self.key_pair_name = self.name
 
     def __str__(self):
