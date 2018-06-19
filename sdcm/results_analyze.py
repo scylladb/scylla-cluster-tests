@@ -1,6 +1,7 @@
 import os
 import logging
 import math
+import tempfile
 import yaml
 import elasticsearch
 import jinja2
@@ -143,11 +144,11 @@ class BaseResultsAnalyzer(object):
         logger.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    def render_to_html(self, results, save_to_file=None):
+    def render_to_html(self, results, save_to_file=False):
         """
         Render analysis results to html template
         :param results: results dictionary
-        :param save_to_file: File path to save html output
+        :param save_to_file: Boolean, whether to save html file on disk
         :return: html string
         """
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
@@ -155,8 +156,10 @@ class BaseResultsAnalyzer(object):
         template = env.get_template(self._email_template_fp)
         html = template.render(results)
         if save_to_file:
-            with open(save_to_file, "w") as f:
+            html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+            with open(html_file_path, "w") as f:
                 f.write(html)
+            logger.info("HTML report saved to '%s'.", html_file_path)
         return html
 
     def send_email(self, subject, content, html=True):

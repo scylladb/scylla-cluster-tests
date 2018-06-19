@@ -33,7 +33,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             query_limit=10000
         )
 
-    def check_regression(self, current_results):
+    def check_regression(self, current_results, save_html_report):
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47'
             "hits.hits._type",  # large-partition-skips_64-32.1
@@ -114,7 +114,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "kibana_url": self._conf.get('kibana_url'),
         }
         for_render.update(dict(test_version=version_info))
-        html = self.render_to_html(for_render, save_to_file="/tmp/perf.html")
+        html = self.render_to_html(for_render, save_to_file=save_html_report)
         self.send_email(subject, html)
 
 
@@ -140,10 +140,10 @@ def get_results(results_path, update_db):
     return results
 
 
-def main(update_db, results_path="."):
+def main(update_db, results_path, save_report):
     results = get_results(results_path=results_path, update_db=update_db)
     mbra = MicroBenchmarkingResultsAnalyzer()
-    mbra.check_regression(results)
+    mbra.check_regression(results, save_html_report=save_report)
 
 
 def parse_args():
@@ -152,9 +152,11 @@ def parse_args():
                         help="Upload current microbenchmarking stats to ElasticSearch")
     parser.add_argument("--results-path", action="store", default=".",
                         help="Path where to search for test results")
+    parser.add_argument("--save-report", action="store_true", default=False,
+                        help="Save HTML generated results report to the file before sending by email")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
-    main(update_db=args.update_db, results_path=args.results_path)
+    main(update_db=args.update_db, results_path=args.results_path, save_report=args.save_report)
