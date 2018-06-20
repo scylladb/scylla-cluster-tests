@@ -273,7 +273,7 @@ class GCECluster(cluster.BaseCluster):
             self.log.info("Added node: %s", node.name)
             local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
             if len(local_nodes) > len(nodes):
-                node.is_addition = True
+                node.enable_auto_bootstrap = True
 
         self._node_index += count
         self.log.info('added nodes: %s', nodes)
