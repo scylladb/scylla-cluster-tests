@@ -1,8 +1,5 @@
-import logging
 import smtplib
 import email.message as email_message
-
-logger = logging.getLogger(__name__)
 
 
 class Email(object):
@@ -27,17 +24,14 @@ class Email(object):
         :param html: True/False
         :return:
         """
-        try:
-            msg = email_message.Message()
-            msg['subject'] = subject
-            msg['from'] = self.sender
-            msg['to'] = ','.join(self.recipients)
-            if html:
-                msg.add_header('Content-Type', 'text/html')
-            msg.set_payload(content)
+        msg = email_message.Message()
+        msg['subject'] = subject
+        msg['from'] = self.sender
+        msg['to'] = ','.join(self.recipients)
+        if html:
+            msg.add_header('Content-Type', 'text/html')
+        msg.set_payload(content)
 
-            ms = smtplib.SMTP(self.server)
-            ms.sendmail(self.sender, self.recipients, msg.as_string())
-            ms.quit()
-        except Exception:
-            logger.exception('Failed sending email')
+        ms = smtplib.SMTP(self.server)
+        ms.sendmail(self.sender, self.recipients, msg.as_string())
+        ms.quit()
