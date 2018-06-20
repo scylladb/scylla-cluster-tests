@@ -41,3 +41,7 @@ class SnitchTest(ClusterTester):
         result = self.db_cluster.nodes[0].remoter.run('nodetool status', verbose=True)
         assert 'Datacenter: us-east1scylla_node_east' in result.stdout
         assert 'Datacenter: us-west1scylla_node_west' in result.stdout
+
+        stress_cmd = self.params.get('stress_cmd')
+        stress = self.run_stress_thread(stress_cmd=stress_cmd)
+        self.verify_stress_thread(queue=stress)
