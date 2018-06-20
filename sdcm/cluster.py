@@ -255,24 +255,6 @@ class UserRemoteCredentials(object):
         pass
 
 
-class GCECredentials(object):
-
-    def __init__(self, key_file):
-        self.type = 'user'
-        self.key_file = key_file
-        self.name = os.path.basename(self.key_file)
-        self.key_pair_name = self.name
-
-    def __str__(self):
-        return "Key Pair %s -> %s" % (self.name, self.key_file)
-
-    def write_key_file(self):
-        pass
-
-    def destroy(self):
-        pass
-
-
 class BaseNode(object):
 
     def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
