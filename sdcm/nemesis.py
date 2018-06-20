@@ -225,7 +225,8 @@ class Nemesis(object):
             self.log.info('Monitoring node: %s', str(monitoring_node))
             monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
 
-    def _add_and_init_new_cluster_node(self, old_node_private_ip):
+    def _add_and_init_new_cluster_node(self, old_node_private_ip=None):
+        """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)[0]
         new_node.replacement_node_ip = old_node_private_ip
@@ -267,7 +268,7 @@ class Nemesis(object):
                 self._terminate_cluster_node(self.target_node)
                 # Replace the node that was terminated.
                 if add_node:
-                    self._add_and_init_new_cluster_node(target_node_ip)
+                    self._add_and_init_new_cluster_node()
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
