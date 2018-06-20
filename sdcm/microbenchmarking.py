@@ -30,7 +30,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             es_index=ES_INDEX,
             send_mail=True,
             email_template_fp="results_microbenchmark.html",
-            query_limit=10000
+            query_limit=10000,
+            logger=logger
         )
 
     def check_regression(self, current_results, save_html_report):
@@ -98,7 +99,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         for test_type, current_result in current_results.iteritems():
             list_of_results_from_db = sorted_by_type[test_type]
             if not list_of_results_from_db:
-                logger.warning("No results for '%s' in DB. Skipping", test_type)
+                self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
             set_results_by_param("aio")
             set_results_by_param("frag/s")
