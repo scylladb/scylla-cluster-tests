@@ -172,6 +172,9 @@ class BaseResultsAnalyzer(object):
                        self._conf['email']['sender'],
                        self._email_recipients)
             em.send(subject, content, html)
+        else:
+            self.log.warning("Won't send email (send_email: %s, recipients: %s)",
+                             self._send_email, self._email_recipients)
 
     def check_regression(self):
         return NotImplementedError("check_regression should be implemented!")
