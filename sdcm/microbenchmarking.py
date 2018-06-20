@@ -25,10 +25,11 @@ HOSTNAME = socket.gethostname()
 
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
-    def __init__(self):
+    def __init__(self, email_recipients):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index=ES_INDEX,
             send_mail=True,
+            email_recipients=email_recipients,
             email_template_fp="results_microbenchmark.html",
             query_limit=10000,
             logger=logger
@@ -141,10 +142,10 @@ def get_results(results_path, update_db):
     return results
 
 
-def main(update_db, results_path, save_report):
-    results = get_results(results_path=results_path, update_db=update_db)
-    mbra = MicroBenchmarkingResultsAnalyzer()
-    mbra.check_regression(results, save_html_report=save_report)
+def main(args):
+    results = get_results(results_path=args.results_path, update_db=args.update_db)
+    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients)
+    mbra.check_regression(results, save_html_report=args.save_report)
 
 
 def parse_args():
@@ -153,6 +154,8 @@ def parse_args():
                         help="Upload current microbenchmarking stats to ElasticSearch")
     parser.add_argument("--results-path", action="store", default=".",
                         help="Path where to search for test results")
+    parser.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
+                        help="Comma separated email addresses list that will get the report")
     parser.add_argument("--save-report", action="store_true", default=False,
                         help="Save HTML generated results report to the file before sending by email")
     return parser.parse_args()
@@ -160,4 +163,4 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    main(update_db=args.update_db, results_path=args.results_path, save_report=args.save_report)
+    main(args)
