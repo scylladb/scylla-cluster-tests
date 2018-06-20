@@ -966,8 +966,15 @@ WantedBy=multi-user.target
         return errors
 
     def datacenter_setup(self, datacenters):
-        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\n\" >> /etc/scylla/cassandra-rackdc.properties'"
-        cmd = cmd.format(datacenters[self.dc_idx])
+        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
+        region_name = datacenters[self.dc_idx]
+        ret = re.findall('-([a-z]+).*-', region_name)
+        if ret:
+            dc_suffix = 'scylla_node_{}'.format(ret[0])
+        else:
+            dc_suffix = region_name.replace('-', '_')
+
+        cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
         self.remoter.run(cmd)
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
