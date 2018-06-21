@@ -6,7 +6,7 @@ import datetime
 import json
 import argparse
 import socket
-
+import tempfile
 from collections import defaultdict
 from es import ES
 from results_analyze import BaseResultsAnalyzer
@@ -117,8 +117,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "kibana_url": self._conf.get('kibana_url'),
         }
         for_render.update(dict(test_version=version_info))
-        html = self.render_to_html(for_render, save_to_file=save_html_report)
-        self.send_email(subject, html)
+        html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        html = self.render_to_html(for_render, html_file_path=html_file_path)
+        self.send_email(subject, html, files=(html_file_path,))
 
 
 def get_results(results_path, update_db):

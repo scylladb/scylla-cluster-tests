@@ -1,7 +1,6 @@
 import os
 import logging
 import math
-import tempfile
 import yaml
 import elasticsearch
 import jinja2
@@ -146,11 +145,11 @@ class BaseResultsAnalyzer(object):
         self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    def render_to_html(self, results, save_to_file=False):
+    def render_to_html(self, results, html_file_path=""):
         """
         Render analysis results to html template
         :param results: results dictionary
-        :param save_to_file: Boolean, whether to save html file on disk
+        :param html_file_path: Boolean, whether to save html file on disk
         :return: html string
         """
         self.log.info("Rendering results to html using '%s' template...", self._email_template_fp)
@@ -158,20 +157,19 @@ class BaseResultsAnalyzer(object):
         env = jinja2.Environment(loader=loader, autoescape=True)
         template = env.get_template(self._email_template_fp)
         html = template.render(results)
-        if save_to_file:
-            html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        if html_file_path:
             with open(html_file_path, "w") as f:
                 f.write(html)
             self.log.info("HTML report saved to '%s'.", html_file_path)
         return html
 
-    def send_email(self, subject, content, html=True):
+    def send_email(self, subject, content, html=True, files=()):
         if self._send_email and self._email_recipients:
             self.log.debug('Send email to {}'.format(self._email_recipients))
             em = Email(self._conf['email']['server'],
                        self._conf['email']['sender'],
                        self._email_recipients)
-            em.send(subject, content, html)
+            em.send(subject, content, html, files=files)
         else:
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self._send_email, self._email_recipients)
