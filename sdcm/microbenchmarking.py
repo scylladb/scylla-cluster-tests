@@ -22,6 +22,7 @@ logger.addHandler(ch)
 
 ES_INDEX = 'test13_microbenchmarking'
 HOSTNAME = socket.gethostname()
+TEST_ID = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
@@ -108,7 +109,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             set_results_by_param("time (s)")
 
         version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
-        subject = "Microbenchmarks - Performance Regression"
+        subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
         for_render = {
             "subject": subject,
             "results": report_results,
@@ -121,7 +122,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
 
 def get_results(results_path, update_db):
-    test_id = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     bad_chars = " "
     os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
     db = ES()
@@ -137,14 +137,14 @@ def get_results(results_path, update_db):
                 datastore = json.load(f)
             datastore.update({'hostname': HOSTNAME})
             if update_db:
-                db.create(index=ES_INDEX, doc_type=test_type, doc_id=test_id, body=datastore)
+                db.create(index=ES_INDEX, doc_type=test_type, doc_id=TEST_ID, body=datastore)
             results[test_type] = datastore
     return results
 
 
 def main(args):
     results = get_results(results_path=args.results_path, update_db=args.update_db)
-    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients)
+    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
     mbra.check_regression(results, save_html_report=args.save_report)
 
 
