@@ -1095,7 +1095,7 @@ class BaseCluster(object):
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
