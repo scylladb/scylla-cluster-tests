@@ -36,7 +36,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             logger=logger
         )
 
-    def check_regression(self, current_results, save_html_report):
+    def check_regression(self, current_results, html_report_path):
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47'
             "hits.hits._type",  # large-partition-skips_64-32.1
@@ -117,9 +117,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "kibana_url": self._conf.get('kibana_url'),
         }
         for_render.update(dict(test_version=version_info))
-        html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        html = self.render_to_html(for_render, html_file_path=html_file_path)
-        self.send_email(subject, html, files=(html_file_path,))
+        if html_report_path:
+            html_file_path = html_report_path
+        else:
+            html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        self.render_to_html(for_render, html_file_path=html_file_path)
+        for_render["full_report"] = False
+        summary_html = self.render_to_html(for_render)
+        self.send_email(subject, summary_html, files=(html_file_path,))
 
 
 def get_results(results_path, update_db):
@@ -146,7 +151,7 @@ def get_results(results_path, update_db):
 def main(args):
     results = get_results(results_path=args.results_path, update_db=args.update_db)
     mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
-    mbra.check_regression(results, save_html_report=args.save_report)
+    mbra.check_regression(results, html_report_path=args.report_path)
 
 
 def parse_args():
@@ -157,8 +162,8 @@ def parse_args():
                         help="Path where to search for test results")
     parser.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
                         help="Comma separated email addresses list that will get the report")
-    parser.add_argument("--save-report", action="store_true", default=False,
-                        help="Save HTML generated results report to the file before sending by email")
+    parser.add_argument("--report-path", action="store", default="",
+                        help="Save HTML generated results report to the file path before sending by email")
     return parser.parse_args()
 
 
