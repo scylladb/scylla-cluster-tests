@@ -63,14 +63,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # report_results = {
         #     "large-partition-skips_1-0.1": {
         #           "aio":{
-        #               "min"
-        #               "max":
-        #               "cur":
-        #               "last":
-        #               "diff":
+        #               "Current":
+        #               "Last":
+        #               "Diff last [%]":
+        #               "Best":
+        #               "Diff best [%]":
         #           }
         # }
         allowed_stats = ("Current", "Last", "Diff last [%]", "Best", "Diff best [%]")
+        metrics = ("aio", "frag/s", "cpu", "time (s)")
 
         def set_results_by_param(param):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_id"], "%Y-%m-%d_%H:%M:%S"))
@@ -95,7 +96,11 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 "Best": (min_result_val, min_result_commit),
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
+                "has_regression": False,
             }
+            if diff_last > 5 or diff_best > 5:
+                report_results[test_type]["has_diff"] = True
+                stats["has_regression"] = True
             report_results[test_type][param] = stats
 
         for test_type, current_result in current_results.iteritems():
@@ -103,10 +108,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             if not list_of_results_from_db:
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
-            set_results_by_param("aio")
-            set_results_by_param("frag/s")
-            set_results_by_param("cpu")
-            set_results_by_param("time (s)")
+            for metrica in metrics:
+                set_results_by_param(metrica)
 
         version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
         subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
@@ -114,7 +117,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "subject": subject,
             "results": report_results,
             "stats_names": allowed_stats,
+            "metrics": metrics,
             "kibana_url": self._conf.get('kibana_url'),
+            "full_report": True,
         }
         for_render.update(dict(test_version=version_info))
         if html_report_path:
