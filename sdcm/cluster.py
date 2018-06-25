@@ -810,17 +810,23 @@ class BaseNode(object):
 
         if self.enable_auto_bootstrap:
             if 'auto_bootstrap' in scylla_yaml_contents:
+                if re.findall("auto_bootstrap: False", scylla_yaml_contents):
+                    self.log.debug('auto_bootstrap is not set as expected, update it to `True`.')
                 p = re.compile('auto_bootstrap:.*')
                 scylla_yaml_contents = p.sub('auto_bootstrap: True',
                                              scylla_yaml_contents)
             else:
+                self.log.debug('auto_bootstrap is missing, set it `True`.')
                 scylla_yaml_contents += "\nauto_bootstrap: True\n"
         else:
             if 'auto_bootstrap' in scylla_yaml_contents:
+                if re.findall("auto_bootstrap: True", scylla_yaml_contents):
+                    self.log.debug('auto_bootstrap is not set as expected, update it to `False`.')
                 p = re.compile('auto_bootstrap:.*')
                 scylla_yaml_contents = p.sub('auto_bootstrap: False',
                                              scylla_yaml_contents)
             else:
+                self.log.debug('auto_bootstrap is missing, set it `False`.')
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
