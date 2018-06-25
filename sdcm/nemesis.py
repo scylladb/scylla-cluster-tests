@@ -217,7 +217,7 @@ class Nemesis(object):
     def _add_and_init_new_cluster_node(self, old_node_private_ip=None):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
-        new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)[0]
+        new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         new_node.replacement_node_ip = old_node_private_ip
         self.cluster.wait_for_init(node_list=[new_node], timeout=30)
         self.monitoring_set.reconfigure_scylla_monitoring()
