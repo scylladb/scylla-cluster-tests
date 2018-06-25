@@ -85,7 +85,7 @@
                         {% else %}
                             <span>
                         {% endif %}
-                        {% if stat == "Best" or stat == "Last" %}
+                        {% if stat == "Best (commit id)" or stat == "Last (commit id)" %}
                             {{ '%g (%s)' % (cur_stat) }}
                         {% elif stat.startswith("Diff") %}
                             {{ '%.2f' % cur_stat }}
