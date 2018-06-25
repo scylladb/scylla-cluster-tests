@@ -34,7 +34,6 @@ from libcloud.compute.types import Provider
 
 from . import cluster
 from . import nemesis
-from .cluster import GCECredentials
 from .cluster_libvirt import LoaderSetLibvirt
 from .cluster_openstack import LoaderSetOpenStack
 from .cluster_libvirt import MonitorSetLibvirt
@@ -347,7 +346,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if len(services) > 1:
             assert len(services) == len(db_info['n_nodes'])
         user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(GCECredentials(key_file=user_credentials))
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         gce_image_db = self.params.get('gce_image_db')
         if not gce_image_db:
@@ -566,7 +565,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_docker(self):
         user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(GCECredentials(key_file=user_credentials))
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             docker_image=self.params.get('docker_image', None),
             n_nodes=[self.params.get('n_db_nodes')],
@@ -587,7 +586,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_baremetal(self):
         user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(GCECredentials(key_file=user_credentials))
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             n_nodes=[self.params.get('n_db_nodes')],
             public_ips=self.params.get('db_nodes_public_ip', None),
