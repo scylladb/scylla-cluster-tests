@@ -72,6 +72,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # }
         allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
         metrics = ("aio", "frag/s", "cpu", "time (s)")
+        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_id"], "%Y-%m-%d_%H:%M:%S"))
@@ -82,8 +83,12 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
 
-            last_val = get_metrica_val(list_of_results_from_db[-1])
-            last_commit = get_commit_id(list_of_results_from_db[-1])
+            if get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
+                last_idx = -2
+            else:  # when current results are on disk but db is not updated
+                last_idx = -1
+            last_val = get_metrica_val(list_of_results_from_db[last_idx])
+            last_commit = get_commit_id(list_of_results_from_db[last_idx])
             cur_val = float(current_result["results"]["stats"][metrica])
             min_result = min(list_of_results_from_db, key=get_metrica_val)
             min_result_val = get_metrica_val(min_result)
@@ -111,7 +116,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             for metrica in metrics:
                 set_results_for(metrica)
 
-        version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
         subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
         for_render = {
             "subject": subject,
@@ -121,7 +125,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "kibana_url": self._conf.get('kibana_url'),
             "full_report": True,
         }
-        for_render.update(dict(test_version=version_info))
+        for_render.update(dict(test_version=cur_version_info))
         if html_report_path:
             html_file_path = html_report_path
         else:
