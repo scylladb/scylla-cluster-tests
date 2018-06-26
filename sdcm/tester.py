@@ -174,23 +174,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.cs_db_cluster.wait_for_init()
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
-        if self.params.get('cluster_backend') not in ['gce', 'docker'] and len(self.db_cluster.datacenter) > 1:
-            ip_addr_attr = 'public_ip_address'
-        else:
-            ip_addr_attr = 'private_ip_address'
-
-        mgmt_params = {}
-        if self.params.get('use_mgmt', default=None):
-            mgmt_params = {'mgmt_port': self.params.get('mgmt_port', default=10090),
-                           'scylla_repo': self.params.get('scylla_repo_m'),
-                           'scylla_mgmt_repo': self.params.get('scylla_mgmt_repo'),
-                           'mgmt_db_local': self.params.get('mgmt_db_local', default=True)
-                           }
-            self.log.debug('mgmt_params: %s', mgmt_params)
-        self.monitors.wait_for_init(targets={'db_nodes': [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes],
-                                             'loaders': [getattr(n, ip_addr_attr) for n in self.loaders.nodes]},
-                                    scylla_version=self.db_cluster.nodes[0].scylla_version,
-                                    **mgmt_params)
+        self.monitors.wait_for_init()
 
         # cancel reuse cluster - for new nodes added during the test
         cluster.Setup.reuse_cluster(False)
@@ -287,7 +271,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                                 scylla_repo=scylla_repo,
                                                 user_prefix=user_prefix,
                                                 n_nodes=monitor_info['n_nodes'],
-                                                params=self.params)
+                                                params=self.params,
+                                                targets=dict(db_cluster=self.db_cluster,
+                                                             loaders=self.loaders)
+                                                )
         else:
             self.monitors = NoMonitorSet()
 
@@ -391,6 +378,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                           service=services[:1],
                                           n_nodes=monitor_info['n_nodes'],
                                           add_disks=monitor_additional_disks,
+                                          targets=dict(db_cluster=self.db_cluster,
+                                                       loaders=self.loaders),
                                           **common_params)
         else:
             self.monitors = NoMonitorSet()
@@ -485,6 +474,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 ec2_instance_type=monitor_info['type'],
                 ec2_block_device_mappings=monitor_info['device_mappings'],
                 n_nodes=monitor_info['n_nodes'],
+                targets=dict(db_cluster=self.db_cluster,
+                             loaders=self.loaders),
                 **common_params)
         else:
             self.monitors = NoMonitorSet()
@@ -559,7 +550,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                               hypervisor=hypervisor,
                                               user_prefix=user_prefix,
                                               n_nodes=monitor_info['n_nodes'],
-                                              params=self.params)
+                                              params=self.params,
+                                              targets=dict(db_cluster=self.db_cluster,
+                                                           loaders=self.loaders)
+                                              )
         else:
             self.monitors = NoMonitorSet()
 
@@ -579,10 +573,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.loaders = docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
-        if params['n_nodes']:
-            self.monitors = docker.MonitorSetDocker(**params)
-        else:
-            self.monitors = NoMonitorSet()
+        self.log.warning("Scylla monitoring is currently not supported on Docker")
+        self.monitors = NoMonitorSet()
 
     def get_cluster_baremetal(self):
         user_credentials = self.params.get('user_credentials_path', None)
@@ -593,7 +585,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             private_ips=self.params.get('db_nodes_private_ip', None),
             user_prefix=self.params.get('user_prefix', None),
             credentials=self.credentials,
-            params=self.params
+            params=self.params,
+            targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
@@ -694,7 +687,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
             self.loaders.kill_stress_thread()
 
-    @clean_resources_on_exception
     def verify_stress_thread(self, queue):
         results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
         # Sometimes, we might have an epic error messages list
@@ -989,6 +981,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
                 current_nemesis.report()
+            # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
+            self.db_cluster.stop_nemesis(timeout=1800)
+            # TODO: this should be run in parallel
+            for node in self.db_cluster.nodes:
+                node.stop_task_threads(timeout=60)
+
             if self._failure_post_behavior == 'destroy':
                 self.db_cluster.destroy()
                 self.db_cluster = None
@@ -998,11 +996,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 for node in self.db_cluster.nodes:
                     node.instance.stop()
                 self.db_cluster = None
-            elif self._failure_post_behavior == 'keep':
-                # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
-                self.db_cluster.stop_nemesis(timeout=1800)
-                for node in self.db_cluster.nodes:
-                    node.stop_task_threads()
 
         if self.loaders is not None:
             self.loaders.get_backtraces()
@@ -1021,11 +1014,14 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.monitors.download_monitor_data()
 
             # upload prometheus data
-            prometheus_folder = glob.glob(os.path.join(self.logdir, '*monitor*/*monitor*/prometheus/'))
-            if prometheus_folder:
-                prometheus_folder = prometheus_folder[0]
-                file_path = os.path.normpath(self.job.logdir)
-                shutil.make_archive(file_path, 'zip', prometheus_folder)
+            monitoring_data_path_pattern = os.path.join(self.logdir, '*monitor*/*monitor*/monitoring_data/')
+            monitoring_data_dir = glob.glob(monitoring_data_path_pattern)
+            file_path = os.path.normpath(self.job.logdir)
+            if not monitoring_data_dir:
+                self.log.warning("No monitoring data found for path pattern %s" % monitoring_data_path_pattern)
+            else:
+                monitoring_data_dir = monitoring_data_dir[0]  # glob returns list
+                shutil.make_archive(file_path, 'zip', monitoring_data_dir)
                 result_path = '%s.zip' % file_path
                 with open(result_path) as fh:
                     mydata = fh.read()

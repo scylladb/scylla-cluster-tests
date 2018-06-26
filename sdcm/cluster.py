@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import ConfigParser
 import Queue
 import atexit
 import getpass
@@ -24,15 +23,10 @@ import threading
 import time
 import uuid
 import yaml
-import matplotlib
-import platform
 import shutil
-import glob
 
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
+from sdcm.prometheus import start_metrics_server
+from textwrap import dedent
 from avocado.utils import path
 from avocado.utils import process
 from avocado.utils import script
@@ -42,10 +36,9 @@ from .remote import Remote
 from .remote import disable_master_ssh
 from . import data_path
 from . import wait
-from .utils import get_monitor_version, log_run_info
+from .utils import log_run_info
 
 from .loader import CassandraStressExporterSetup
-from .prometheus import start_metrics_server
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -281,21 +274,14 @@ class BaseNode(object):
         self._journal_thread = None
         self.n_coredumps = 0
         self._backtrace_thread = None
-        self._prometheus_thread = None
-        self._collectd_exporter_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
-        self._metrics_target = None
-        self.prometheus_data_dir = None
 
-        self.cs_start_time = None
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
         self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
         self.termination_event = threading.Event()
-        if node_prefix is not None and 'db-node' in node_prefix:
-            self.start_journal_thread()
-        self.start_backtrace_thread()
+        self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap. So addition means not the first set of node.
@@ -303,10 +289,12 @@ class BaseNode(object):
         self.scylla_version = ''
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
-        self._set_prometheus_paths()
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
+
+    def is_gce(self):
+        return self.__class__.__name__ == "GCENode"
 
     def scylla_pkg(self):
         if self.is_enterprise is None:
@@ -332,6 +320,12 @@ class BaseNode(object):
     @property
     def private_ip_address(self):
         return self._private_ip_address
+
+    def ip_address(self, datacenter):
+        if (self.is_docker() or self.is_gce()) and len(datacenter) > 1:
+            return self.public_ip_address
+        else:
+            return self.private_ip_address
 
     @property
     def init_system(self):
@@ -415,200 +409,6 @@ class BaseNode(object):
                                    preserve_perm=preserve_perm,
                                    preserve_symlinks=preserve_symlinks,
                                    verbose=verbose)
-
-    def install_grafana(self):
-        self.remoter.run('sudo yum install rsync -y')
-        self.remoter.run(
-            'sudo yum install https://grafanarel.s3.amazonaws.com/builds/grafana-3.1.1-1470047149.x86_64.rpm -y',
-            ignore_status=True)
-        self.remoter.run('sudo grafana-cli plugins install grafana-piechart-panel')
-
-    def setup_grafana(self, scylla_version=''):
-        self.remoter.run('sudo cp /etc/grafana/grafana.ini /tmp/grafana-noedit.ini')
-        self.remoter.run('sudo chown %s /tmp/grafana-noedit.ini' % self.remoter.user)
-        grafana_ini_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
-                                            'grafana.ini')
-        self.remoter.receive_files(src='/tmp/grafana-noedit.ini',
-                                   dst=grafana_ini_dst_path)
-
-        grafana_cfg = ConfigParser.SafeConfigParser()
-        grafana_cfg.read(grafana_ini_dst_path)
-        grafana_cfg.set(section='auth.basic', option='enabled', value='false')
-        grafana_cfg.set(section='auth.anonymous', option='enabled', value='true')
-        grafana_cfg.set(section='auth.anonymous', option='org_role', value='Admin')
-        with open(grafana_ini_dst_path, 'wb') as grafana_ini_dst:
-            grafana_cfg.write(grafana_ini_dst)
-        self.remoter.send_files(src=grafana_ini_dst_path,
-                                dst='/tmp/grafana.ini')
-        self.remoter.run('sudo mv /tmp/grafana.ini /etc/grafana/grafana.ini')
-        self.remoter.run('sudo chmod 666 /etc/grafana/grafana.ini')
-
-        if self.is_docker():
-            self.remoter.run('sudo service grafana-server start')
-        else:
-            self.remoter.run('sudo systemctl daemon-reload')
-            self.remoter.run('sudo systemctl start grafana-server')
-        self.remoter.run('sudo systemctl enable grafana-server.service')
-
-        def _register_grafana_json(json_filename, url):
-            json_path = data_path.get_data_path(json_filename)
-            result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
-                                 (url, json_path), ignore_status=True)
-            return result.exit_status == 0
-
-        json_mapping = {'scylla-data-source.json': 'datasources',
-                        'scylla-dash-timeout-metrics.json': 'dashboards/db'}
-
-        if platform.linux_distribution()[0].lower() == 'ubuntu':
-            process.run('sudo apt-get --assume-yes install git')
-        else:
-            process.run('sudo yum install git -y')
-
-        scylla_version = get_monitor_version(scylla_version, clone=True)
-        for i in glob.glob('data_dir/grafana/*.%s.json' % scylla_version):
-            json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
-
-        for i in glob.glob('data_dir/scylla-dash-per-server-nemesis.%s.json' % scylla_version):
-            json_mapping[i.replace('data_dir/', '')] = 'dashboards/db'
-
-        for grafana_json in json_mapping:
-            url = 'http://%s:3000/api/%s' % (self.public_ip_address, json_mapping[grafana_json])
-            wait.wait_for(_register_grafana_json, step=10,
-                          text="Waiting to register 'data_dir/%s' on '%s'..." % (grafana_json, url),
-                          json_filename=grafana_json, url=url)
-
-        self.log.info('Prometheus Web UI: http://%s:3000', self.public_ip_address)
-        self.log.info('Grafana Web UI: http://%s:3000', self.public_ip_address)
-
-    def _set_prometheus_paths(self):
-        self.prometheus_system_base_dir = '/var/tmp'
-        self.prometheus_base_dir = 'prometheus-1.0.2.linux-amd64'
-        self.prometheus_tarball = '%s.tar.gz' % self.prometheus_base_dir
-        self.prometheus_base_url = 'https://github.com/prometheus/prometheus/releases/download/v1.0.2'
-        self.prometheus_system_dir = os.path.join(self.prometheus_system_base_dir,
-                                                  self.prometheus_base_dir)
-        self.prometheus_path = os.path.join(self.prometheus_system_dir, 'prometheus')
-        self.prometheus_custom_cfg_basename = 'prometheus-scylla.yml'
-        self.prometheus_custom_cfg_path = os.path.join(self.prometheus_system_dir,
-                                                       self.prometheus_custom_cfg_basename)
-        self.prometheus_data_dir = os.path.join(self.prometheus_system_dir, 'data')
-        self.prometheus_service_path_tmp = '/tmp/prometheus.service'
-        self.prometheus_service_path = '/etc/systemd/system/prometheus.service'
-
-    def install_prometheus(self):
-        self.remoter.run('curl %s/%s -o %s/%s -L' %
-                         (self.prometheus_base_url, self.prometheus_tarball,
-                          self.prometheus_system_base_dir, self.prometheus_tarball))
-        self.remoter.run('tar -xzvf %s/%s -C %s' %
-                         (self.prometheus_system_base_dir,
-                          self.prometheus_tarball,
-                          self.prometheus_system_base_dir), verbose=False)
-
-    def download_prometheus_data_dir(self):
-        self.remoter.run('sudo chown -R %s:%s %s' %
-                         (self.remoter.user, self.remoter.user, self.prometheus_data_dir))
-        dst = os.path.join(self.logdir, 'prometheus')
-        self.remoter.receive_files(src=self.prometheus_data_dir, dst=dst)
-
-    def _write_prometheus_cfg(self, targets):
-        """
-        9180 -> prometheus API server
-        9100 -> node exporter
-        9103 -> collectd exporter
-        """
-        scylla_targets_list = ['%s:9180' % str(ip) for ip in targets['db_nodes']]
-        node_exporter_targets_list = ['%s:9100' % str(ip) for ip in targets['db_nodes']]
-        loader_targets_list = ['%s:9103' % str(ip) for ip in targets['loaders']]
-        prometheus_cfg = """
-global:
-  scrape_interval: 15s
-
-  external_labels:
-    monitor: 'scylla-monitor'
-
-scrape_configs:
-- job_name: scylla
-  honor_labels: true
-  static_configs:
-  - targets: %s
-
-- job_name: node_exporter
-  honor_labels: true
-  static_configs:
-  - targets: %s
-
-- job_name: stress_metrics
-  honor_labels: true
-  static_configs:
-  - targets: %s
-
-""" % (scylla_targets_list, node_exporter_targets_list, loader_targets_list)
-
-        if self._metrics_target:
-            prometheus_cfg += """
-
-- job_name: sct_metrics
-  honor_labels: true
-  static_configs:
-  - targets: %s
-
-""" % [self._metrics_target]
-
-        tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus')
-        tmp_path_prom = os.path.join(tmp_dir_prom,
-                                     self.prometheus_custom_cfg_basename)
-        with open(tmp_path_prom, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(prometheus_cfg)
-        try:
-            self.remoter.send_files(src=tmp_path_prom,
-                                    dst=self.prometheus_custom_cfg_path,
-                                    verbose=True,
-                                    ssh_timeout=60)
-        finally:
-            shutil.rmtree(tmp_dir_prom)
-
-    def reconfigure_prometheus(self, targets):
-        self._write_prometheus_cfg(targets)
-        self.remoter.run('sudo systemctl restart prometheus.service')
-
-    def setup_prometheus(self, targets, metrics_cfg=True, sct_public_ip=None):
-        if metrics_cfg:
-            default_addr = start_metrics_server()
-            if sct_public_ip:
-                self._metrics_target = sct_public_ip + ':' + default_addr.split(':')[1]
-            else:
-                self._metrics_target = default_addr
-        self._write_prometheus_cfg(targets)
-
-        systemd_unit = """[Unit]
-Description=Prometheus
-
-[Service]
-Type=simple
-User=root
-Group=root
-ExecStart=%s -config.file %s -storage.local.path %s
-
-[Install]
-WantedBy=multi-user.target
-""" % (self.prometheus_path, self.prometheus_custom_cfg_path, self.prometheus_data_dir)
-        tmp_dir_prom = tempfile.mkdtemp(prefix='scm-prometheus-systemd')
-        tmp_path_prom = os.path.join(tmp_dir_prom, 'prometheus.service')
-        with open(tmp_path_prom, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(systemd_unit)
-        try:
-            self.remoter.send_files(src=tmp_path_prom,
-                                    dst=self.prometheus_service_path_tmp)
-            self.remoter.run('sudo mv %s %s' %
-                             (self.prometheus_service_path_tmp,
-                              self.prometheus_service_path))
-            if self.is_docker():
-                self.remoter.run('sudo %s -config.file %s -storage.local.path %s &' %
-                                 (self.prometheus_path, self.prometheus_custom_cfg_path, self.prometheus_data_dir))
-            else:
-                self.remoter.run('sudo systemctl start prometheus.service')
-        finally:
-            shutil.rmtree(tmp_dir_prom)
 
     def journal_thread(self):
         while True:
@@ -763,13 +563,22 @@ WantedBy=multi-user.target
         raise NotImplementedError('Derived classes must implement restart')
 
     @log_run_info
+    def start_task_threads(self):
+        if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
+            self.start_journal_thread()
+        self.start_backtrace_thread()
+
+    @log_run_info
     def stop_task_threads(self, timeout=10):
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
         if self._journal_thread:
+            # current implementation of journal thread uses blocking journalctl cmd with pipe to sct_log_formatter
+            # hence to stop the thread we need to kill the process first
+            self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
             self._journal_thread.join(timeout)
-        del(self.remoter)
+        del self.remoter
 
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
@@ -1058,7 +867,10 @@ client_encryption_options:
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
     def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
-        self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        if scylla_repo:
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        else:
+            self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
 
     def clean_scylla(self):
         """
@@ -1200,7 +1012,6 @@ class BaseCluster(object):
 
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
                  node_prefix='node', n_nodes=[10], params=None, region_names=None):
-        super(BaseCluster, self).__init__()
         if cluster_uuid is None:
             self.uuid = uuid.uuid4()
         else:
@@ -1226,8 +1037,9 @@ class BaseCluster(object):
         self.params = params
         self.datacenter = region_names or []
         if Setup.REUSE_CLUSTER:
-            self._node_public_ips = self.params.get(self._get_node_ips_param(), None) or []
-            self._node_private_ips = self.params.get(self._get_node_ips_param('private'), None) or []
+            # get_node_ips_param should be defined in child
+            self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True), None) or []
+            self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False), None) or []
             self.log.debug('Node public IPs: {}, private IPs: {}'.format(self._node_public_ips, self._node_private_ips))
 
         if isinstance(n_nodes, list):
@@ -1238,10 +1050,7 @@ class BaseCluster(object):
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
-
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return 'db_nodes_public_ip' if ip_type == 'public' else 'db_nodes_private_ip'
+        super(BaseCluster, self).__init__()
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
@@ -1274,6 +1083,15 @@ class BaseCluster(object):
             if node.n_coredumps > 0:
                 self.coredumps[node.name] = node.n_coredumps
 
+    def node_setup(self, node, verbose=False):
+        raise NotImplementedError("Derived class must implement 'node_setup' method!")
+
+    def get_node_ips_param(public_ip=True):
+        raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
+
+    def wait_for_init(self):
+        raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0):
         """
         :param count: number of nodes to add
@@ -1297,8 +1115,18 @@ class BaseCluster(object):
                 errors.update({node.name: node_errors})
         return errors
 
-    def set_tc(self, node, dst_nodes, local_nodes):
-        # FIXME: local_nodes isn't used
+    def _param_enabled(self, param):
+        param = self.params.get(param)
+        if isinstance(param, str):
+            return True if param and param.lower() == 'true' else False
+        elif isinstance(param, bool):
+            return param
+        elif param is None:
+            return False
+        else:
+            raise ValueError('Unsupported type: {}'.format(type(param)))
+
+    def set_tc(self, node, dst_nodes):
         node.remoter.run("sudo modprobe sch_netem")
         node.remoter.run("sudo tc qdisc del dev eth0 root", ignore_status=True)
         node.remoter.run("sudo tc qdisc add dev eth0 handle 1: root prio")
@@ -1307,6 +1135,13 @@ class BaseCluster(object):
         node.remoter.run("sudo tc qdisc add dev eth0 parent 1:1 handle 2:1 netem delay 100ms 20ms 25% reorder 5% 25% loss random 5% 25%")
         node.remoter.run("sudo tc qdisc show dev eth0", verbose=True)
         node.remoter.run("sudo tc filter show dev eth0", verbose=True)
+
+    def set_traffic_control(self):
+        if self._param_enabled('enable_tc'):
+            for node in self.nodes:
+                dst_nodes = [n for n in self.nodes if n.dc_idx != node.dc_idx]
+                local_nodes = [n for n in self.nodes if n.dc_idx == node.dc_idx and n != node]
+                self.set_tc(node, dst_nodes, local_nodes)
 
     def destroy(self):
         self.log.info('Destroy nodes')
@@ -1390,6 +1225,11 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
         self._seed_node_rebooted = False
         self.seed_nodes_private_ips = None
+        super(BaseScyllaCluster, self).__init__(*args, **kwargs)
+
+    @staticmethod
+    def get_node_ips_param(public_ip=True):
+        return 'db_nodes_public_ip' if public_ip else 'db_nodes_private_ip'
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -1648,8 +1488,12 @@ class BaseScyllaCluster(object):
             else:
                 match = re.findall("scylla-(.*).el7.centos", result.stdout)
                 if match:
+                    scylla_version = match[0]
+                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
                     for node in self.nodes:
-                        node.scylla_version = match[0]
+                        node.scylla_version = scylla_version
+                else:
+                    self.log.error("Unknown ScyllaDB version")
 
     def cfstat_reached_threshold(self, key, threshold):
         """
@@ -1706,18 +1550,7 @@ class BaseScyllaCluster(object):
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def _param_enabled(self, param):
-        param = self.params.get(param)
-        if isinstance(param, str):
-            return True if param and param.lower() == 'true' else False
-        elif isinstance(param, bool):
-            return param
-        elif param is None:
-            return False
-        else:
-            raise ValueError('Unsupported type: {}'.format(type(param)))
-
-    def _node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False):
         """
         Install, configure and run scylla on node
         :param node: scylla node object
@@ -1776,8 +1609,6 @@ class BaseScyllaCluster(object):
             node.replacement_node_ip = None
             node_config_setup()
 
-
-
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
         """
@@ -1792,14 +1623,14 @@ class BaseScyllaCluster(object):
         self.update_db_packages(node_list)
         self.get_seed_nodes()
         self.get_scylla_version()
+        self.set_traffic_control()
 
 
 class BaseLoaderSet(object):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, params):
         self._loader_queue = []
-        self._install_cs = False
-        self.params = kwargs.get('params', {})
+        self.params = params
 
     def node_setup(self, node, verbose=False, db_node_address=None):
         self.log.info('Setup in BaseLoaderSet')
@@ -1809,9 +1640,8 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
-        if self._install_cs:
-            node.download_scylla_repo(self.params.get('scylla_repo'))
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        node.download_scylla_repo(self.params.get('scylla_repo'))
+        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
 
         node.wait_cs_installed(verbose=verbose)
         node.remoter.run('sudo yum install -y screen')
@@ -1836,9 +1666,9 @@ class BaseLoaderSet(object):
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
 
-    @classmethod
-    def get_node_ips_param(cls, ip_type='public'):
-        return 'loaders_public_ip' if ip_type == 'public' else 'loaders_private_ip'
+    @staticmethod
+    def get_node_ips_param(public_ip=True):
+        return 'loaders_public_ip' if public_ip else 'loaders_private_ip'
 
     def get_loader(self):
         if not self._loader_queue:
@@ -1909,9 +1739,7 @@ class BaseLoaderSet(object):
             result = node.remoter.run(cmd=node_cmd,
                                       timeout=timeout,
                                       ignore_status=True,
-                                      watch_stdout_pattern='total,',
                                       log_file=log_file_name)
-            node.cs_start_time = result.stdout_pattern_found_at
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -1994,7 +1822,7 @@ class BaseLoaderSet(object):
                 results['%s write' % key] = m[0][1]
 
         if not enable_parse:
-            logger.warning('Cannot find summary in c-stress results: %s', lines)
+            logger.warning('Cannot find summary in c-stress results: %s', lines[-10:])
             return {}
         return results
 
@@ -2069,17 +1897,6 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
-    def _plot_nemesis_events(nemesis, node):
-        nemesis_event_start_times = [
-            operation['start'] - node.cs_start_time for operation in nemesis.operation_log]
-        for start_time in nemesis_event_start_times:
-            plt.axvline(start_time, color='blue', linestyle='dashdot')
-        nemesis_event_end_times = [
-            operation['end'] - node.cs_start_time for operation in nemesis.operation_log]
-        for end_time in nemesis_event_end_times:
-            plt.axvline(end_time, color='red', linestyle='dashdot')
-
-    @staticmethod
     def _parse_cs_results(lines):
         results = dict()
         results['time'] = []
@@ -2109,59 +1926,6 @@ class BaseLoaderSet(object):
                 results['latmax'].append(latmax)
         return results
 
-    def _plot_metric_data(self, cs_results, x_title, y_title, color, title,
-                          db_cluster, plotfile, node):
-        for nemesis in db_cluster.nemesis:
-            self._plot_nemesis_events(nemesis, node)
-        plt.plot(cs_results[x_title], cs_results[y_title], label=y_title,
-                 color=color)
-        plt.title(title)
-        plt.xlabel(x_title)
-        plt.ylabel(y_title)
-        plt.legend()
-        plt.savefig(plotfile + '-%s.svg' % y_title)
-        plt.savefig(plotfile + '-%s.png' % y_title)
-        plt.close()
-
-    def _cassandra_stress_plot(self, lines, plotfile='plot', node=None,
-                               db_cluster=None):
-        cs_results = self._parse_cs_results(lines)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='ops', color='green',
-                               title='Operations vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat95', color='blue',
-                               title='Latency 95% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat99', color='green',
-                               title='Latency 99% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='lat999', color='black',
-                               title='Latency 99.9% vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
-        self._plot_metric_data(cs_results=cs_results, x_title='time',
-                               y_title='latmax', color='red',
-                               title='Maximum Latency vs Time',
-                               db_cluster=db_cluster,
-                               plotfile=plotfile,
-                               node=node)
-
     def verify_stress_thread(self, queue, db_cluster):
         results = []
         cs_summary = []
@@ -2180,8 +1944,6 @@ class BaseLoaderSet(object):
             for line in lines:
                 if 'java.io.IOException' in line:
                     errors += ['%s: %s' % (node, line.strip())]
-            plotfile = os.path.join(self.logdir, str(node))
-            self._cassandra_stress_plot(lines, plotfile, node, db_cluster)
 
         return cs_summary, errors
 
@@ -2233,9 +1995,7 @@ class BaseLoaderSet(object):
             result = node.remoter.run(cmd="/$HOME/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
                                       timeout=timeout,
                                       ignore_status=True,
-                                      watch_stdout_pattern='Latency:',
                                       log_file=log_file_name)
-            node.cs_start_time = result.stdout_pattern_found_at
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -2259,51 +2019,207 @@ class BaseLoaderSet(object):
 
 
 class BaseMonitorSet(object):
+    # This is a Mixin for monitoring cluster and should not be inherited
+    def __init__(self, targets, params):
+        self.targets = targets
+        self.params = params
+        self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
+        self.sct_ip_port = self.set_local_sct_ip()
+        self.grafana_port = 3000
+        self.grafana_start_time = None
+        self.monitor_install_path_base = "/var/lib/scylla"
+        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-master")
+        self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
+        self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
 
-    grafana_start_time = None
-    scylla_version = ''
-    is_enterprise = None
+    @staticmethod
+    def get_node_ips_param(public_ip=True):
+        param_name = 'monitor_nodes_public_ip' if public_ip else 'monitor_nodes_private_ip'
+        return param_name
 
-    @classmethod
-    def get_node_ips_param(cls, ip_type='public'):
-        return 'monitor_nodes_public_ip' if ip_type == 'public' else 'monitor_nodes_private_ip'
+    @property
+    def scylla_version(self):
+        return self.targets["db_cluster"].nodes[0].scylla_version
 
-    def node_setup(self, node, targets=None, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
+    @property
+    def monitoring_version(self):
+        self.log.debug("Using %s ScyllaDB version to derive monitoring version" % self.scylla_version)
+        version = re.match(r"(\d+\.\d+)", self.scylla_version)
+        if not version:
+            return 'master'
+        else:
+            return version.group(1)
+
+    @property
+    def is_enterprise(self):
+        return self.targets["db_cluster"].nodes[0].is_enterprise
+
+    def node_setup(self, node, **kwargs):
         self.log.info('Setup in BaseMonitorSet')
-        node.wait_ssh_up(verbose=verbose)
+        node.wait_ssh_up()
 
         if Setup.REUSE_CLUSTER:
-            # We have to start http server to expose the metrics via prometheus client
-            node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
+            self.start_scylla_monitoring(node)  # during download_monitor_data scylla monitoring is stopped
             return
-
-        # The init scripts should install/update c-s, so
-        # let's try to guarantee it will be there before
-        # proceeding
-        node.install_prometheus()
-        node.setup_prometheus(targets=targets, sct_public_ip=self.params.get('sct_public_ip'))
-        node.install_grafana()
-        self.scylla_version = scylla_version
-        self.is_enterprise = is_enterprise
-        node.setup_grafana(scylla_version)
+        self.install_scylla_monitoring(node)
+        self.configure_scylla_monitoring(node)
+        self.start_scylla_monitoring(node)
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
         node.remoter.run('sudo yum install screen -y')
-        if 'scylla_repo' in kwargs and 'scylla_mgmt_repo' in kwargs:
-            if kwargs.get('mgmt_db_local') is True:
+        self.install_scylla_manager(node)
+
+    def install_scylla_manager(self, node):
+        if self.params.get('use_mgmt', default=None):
+            if self.params.get('mgmt_db_local', default=True):
                 mgmt_db_hosts = ['127.0.0.1']
             else:
-                mgmt_db_hosts = [str(trg) for trg in targets['db_nodes']]
-            node.install_mgmt(scylla_repo=kwargs.get('scylla_repo'),
-                              scylla_mgmt_repo=kwargs.get('scylla_mgmt_repo'),
-                              mgmt_port=kwargs.get('mgmt_port'),
+                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
+                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'),
+                              mgmt_port=self.params.get('mgmt_port', default=10090),
                               db_hosts=mgmt_db_hosts)
 
+    def set_local_sct_ip(self):
+        sct_public_ip = self.params.get('sct_public_ip')
+        if sct_public_ip:
+            return sct_public_ip + ':' + self.local_metrics_addr.split(':')[1]
+        else:
+            return self.local_metrics_addr
+
     @wait_for_init_wrap
-    def wait_for_init(self, targets=None, verbose=False, scylla_version='', is_enterprise=None, **kwargs):
+    def wait_for_init(self):
         pass
+
+    def install_scylla_monitoring_prereqs(self, node):
+        prereqs_script = dedent("""
+            yum install -y python-pip unzip wget docker
+            pip install --upgrade pip
+            pip install pyyaml
+        """.format(**locals()))
+        node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
+
+    def download_scylla_monitoring(self, node):
+        install_script = dedent("""
+            mkdir -p {0.monitor_install_path_base}
+            cd {0.monitor_install_path_base}
+            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/master.zip
+            unzip master.zip
+        """.format(self))
+        node.remoter.run("sudo bash -ce '%s'" % install_script)
+
+    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
+        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
+        if sct_metrics:
+            template_fn = "prometheus.yml.template"
+            prometheus_yaml_template = os.path.join(self.monitor_install_path, "prometheus", template_fn)
+            local_template_tmp = os.path.join("/tmp", template_fn + ".orig")
+            local_template = os.path.join("/tmp", template_fn)
+            node.remoter.receive_files(src=prometheus_yaml_template,
+                                       dst=local_template_tmp)
+            with open(local_template_tmp) as f:
+                templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
+                self.log.debug("Configs %s" % templ_yaml)
+            loader_targets_list = ["%s:9103" % n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["loaders"].nodes]
+            scrape_configs = templ_yaml["scrape_configs"]
+            scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
+                                       static_configs=[dict(targets=loader_targets_list)]))
+            if self.sct_ip_port:
+                scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
+                                           static_configs=[dict(targets=[self.sct_ip_port])]))
+            with open(local_template, "w") as fo:
+                yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
+            node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
+            node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
+            process.run("rm -f {local_template_tmp} {local_template}".format(**locals()))
+        self._monitoring_targets = " ".join(db_targets_list)
+        configure_script = dedent("""
+            cd {0.monitor_install_path}
+            mkdir -p {0.monitoring_conf_dir}
+            ./genconfig.py -ns -d {0.monitoring_conf_dir} {0._monitoring_targets}
+        """.format(self))
+        node.remoter.run("sudo bash -ce '%s'" % configure_script)
+        if alert_manager:
+            self.configure_alert_manager(node)
+
+    def configure_alert_manager(self, node):
+        alertmanager_conf_file = os.path.join(self.monitor_install_path, "prometheus", "prometheus.rules")
+        conf = dedent("""
+        # Alert for any instance that it's root disk free disk space bellow 25%.
+        ALERT RootDiskFull
+          IF node_filesystem_avail{mountpoint="/"}/node_filesystem_size{mountpoint="/"}*100 < 25
+          FOR 30s
+          LABELS { severity = "1" }
+          ANNOTATIONS {
+            summary = "Instance {{ $labels.instance }} root disk low space",
+            description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
+          }        
+        # Alert for 99% cassandra stress write spikes
+        ALERT CassandraStressWriteTooSlow
+          IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
+          FOR 1s
+          LABELS { severity = "1" }
+          ANNOTATIONS {
+            summary = "Cassandra Stress write latency more than 1000ms",
+            description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
+          }
+        """)
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
+            f.write(conf)
+            node.send_files(src=f.name, dst=f.name)
+            node.remoter.run("chmod 777 %s" % f.name)
+            node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
+
+    def reconfigure_scylla_monitoring(self):
+        for node in self.nodes:
+            self.stop_scylla_monitoring(node)
+            # We use sct_metrics=False, alert_manager=False since they should be configured once
+            self.configure_scylla_monitoring(node, sct_metrics=False, alert_manager=False)
+            self.start_scylla_monitoring(node)
+
+    def start_scylla_monitoring(self, node):
+        run_script = dedent("""
+            cd {0.monitor_install_path}
+            sudo systemctl start docker
+            ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version} 
+        """.format(self))
+        node.remoter.run("sudo bash -ce '%s'" % run_script)
+        self.add_sct_dashboards_to_grafana(node)
+
+    def add_sct_dashboards_to_grafana(self, node):
+        sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
+
+        def _register_grafana_json(json_filename):
+            url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
+            json_path = data_path.get_data_path(json_filename)
+            result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+                                 (url, json_path), ignore_status=True)
+            return result.exit_status == 0
+
+        wait.wait_for(_register_grafana_json, step=10,
+                      text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
+                      json_filename=sct_dashboard_json)
+
+    def download_monitoring_data_dir(self, node):
+        local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
+        node.remoter.run('sudo chown -R %s:%s %s' %
+                         (node.remoter.user, node.remoter.user, self.monitoring_data_dir))
+        node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
+
+    @log_run_info
+    def install_scylla_monitoring(self, node):
+        self.install_scylla_monitoring_prereqs(node)
+        self.download_scylla_monitoring(node)
+
+    def stop_scylla_monitoring(self, node):
+        kill_script = dedent("""
+            cd {0.monitor_install_path}
+            ./kill-all.sh 
+        """.format(self))
+        node.remoter.run("sudo bash -ce '%s'" % kill_script)
 
     def get_monitor_snapshot(self):
         """
@@ -2318,35 +2234,32 @@ class BaseMonitorSet(object):
 
         try:
             process.run('curl "{}" -o {} -L'.format(phantomjs_url, phantomjs_tar))
-            process.run('tar xvfj {}'.format(phantomjs_tar),
-                        verbose=False)
+            process.run('yum install -y bzip2 && tar xvfj {}'.format(phantomjs_tar))
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
-            scylla_version = get_monitor_version(self.scylla_version)
-            version = scylla_version.replace('.', '-')
 
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
+                version = self.monitoring_version.replace('.', '-')
                 grafana_url = "http://%s:3000/dashboard/db/%s-per-server-metrics-%s?from=%s&to=now" % (
-                              node.public_ip_address, scylla_pkg, version, start_time)
-                snapshot_path = os.path.join(self.logdir,
+                    node.public_ip_address, scylla_pkg, version, start_time)
+                snapshot_path = os.path.join(node.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("sudo yum install fontconfig bitmap-fonts -y")
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                             "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
-                             grafana_url, snapshot_path), shell=True)
+                                grafana_url, snapshot_path), shell=True)
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
 
+    @log_run_info
     def download_monitor_data(self):
-        self.log.debug('Download monitor data')
         for node in self.nodes:
             try:
-                node.remoter.run('sudo systemctl stop prometheus.service', ignore_status=True)
-                if node.prometheus_data_dir:
-                    node.download_prometheus_data_dir()
+                self.stop_scylla_monitoring(node)
+                self.download_monitoring_data_dir(node)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
@@ -2362,15 +2275,16 @@ class NoMonitorSet(object):
     def __str__(self):
         return 'NoMonitorSet'
 
-    def wait_for_init(self, targets, verbose=False, scylla_version='', is_enterprise=None):
-        del targets
-        del verbose
+    def wait_for_init(self):
         self.log.info('Monitor nodes disabled for this run')
 
     def get_backtraces(self):
         pass
 
     def get_monitor_snapshot(self):
+        pass
+
+    def reconfigure_scylla_monitoring(self):
         pass
 
     def download_monitor_data(self):

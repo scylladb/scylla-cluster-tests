@@ -12,14 +12,10 @@
 # Copyright (c) 2017 ScyllaDB
 
 import logging
-import re
-import os
-import glob
 import time
 import datetime
 from functools import wraps
 
-from avocado.utils import process
 
 logger = logging.getLogger('avocado.test')
 
@@ -46,40 +42,6 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1):
         _remote_get_file(remoter, src, dst)
         retries -= 1
     #assert _remote_get_hash(remoter, dst) == hash_expected
-
-
-def get_monitor_version(full_version, clone=False):
-    """
-    Detect matched dashboard version from scylla version.
-
-    :param full_version: version info returned by `scylla --version`
-    :param clone: force to clone scylla-grafana-monitoring project
-    :return: dashboard version (eg: 1.7, 2.0, master)
-    """
-    if not os.path.exists('scylla-grafana-monitoring/') or clone:
-        # clean old files
-        process.run('rm -rf scylla-grafana-monitoring/')
-        process.run('rm -rf data_dir/grafana')
-        process.run('git clone https://github.com/scylladb/scylla-grafana-monitoring/')
-        # convert template to final dashboard
-        for i in glob.glob('scylla-grafana-monitoring/grafana/*.*.template.json'):
-            process.run('cd scylla-grafana-monitoring/ && mkdir -p grafana/build && pwd && ./make_dashboards.py -t grafana/types.json -d %s'
-                        % i.replace('scylla-grafana-monitoring', '.'), shell=True, verbose=True)
-        # copy dashboard to data_dir
-        process.run('cp -r scylla-grafana-monitoring/grafana data_dir/', shell=True)
-        process.run('cp scylla-grafana-monitoring/grafana/build/* data_dir/grafana/', shell=True)
-
-    if not full_version or '666.development' in full_version:
-        ret = 'master'
-    else:
-        ret = re.findall("-(\d+\.\d+)", full_version)[0]
-
-    # We only add dashboard for release version, let's use master for pre-release version
-    jsons = glob.glob('data_dir/grafana/*.%s.json' % ret)
-    if not jsons:
-        ret = 'master'
-
-    return ret
 
 
 class retrying(object):

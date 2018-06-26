@@ -59,7 +59,7 @@ class AWSCluster(cluster.BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], params=None):
+                 node_prefix='node', n_nodes=10, params=None):
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
@@ -334,7 +334,7 @@ class AWSNode(cluster.BaseNode):
         self.log.info('Destroyed')
 
 
-class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
+class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
@@ -511,7 +511,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.get_seed_nodes()
 
 
-class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
+class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
@@ -522,55 +522,50 @@ class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
-        super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
-                                           ec2_subnet_id=ec2_subnet_id,
-                                           ec2_security_group_ids=ec2_security_group_ids,
-                                           ec2_instance_type=ec2_instance_type,
-                                           ec2_ami_username=ec2_ami_username,
-                                           ec2_user_data=user_data,
-                                           services=services,
-                                           ec2_block_device_mappings=ec2_block_device_mappings,
-                                           credentials=credentials,
-                                           cluster_prefix=cluster_prefix,
-                                           node_prefix=node_prefix,
-                                           n_nodes=n_nodes,
-                                           params=params)
+        cluster.BaseLoaderSet.__init__(self,
+                                       params=params)
+        AWSCluster.__init__(self,
+                            ec2_ami_id=ec2_ami_id,
+                            ec2_subnet_id=ec2_subnet_id,
+                            ec2_security_group_ids=ec2_security_group_ids,
+                            ec2_instance_type=ec2_instance_type,
+                            ec2_ami_username=ec2_ami_username,
+                            ec2_user_data=user_data,
+                            services=services,
+                            ec2_block_device_mappings=ec2_block_device_mappings,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            params=params)
 
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
 
-class MonitorSetAWS(AWSCluster, cluster.BaseMonitorSet):
+class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
-                 user_prefix=None, n_nodes=10, params=None):
+                 user_prefix=None, n_nodes=10, targets=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
-        super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
-                                            ec2_subnet_id=ec2_subnet_id,
-                                            ec2_security_group_ids=ec2_security_group_ids,
-                                            ec2_instance_type=ec2_instance_type,
-                                            ec2_ami_username=ec2_ami_username,
-                                            ec2_user_data=user_data,
-                                            services=services,
-                                            ec2_block_device_mappings=ec2_block_device_mappings,
-                                            credentials=credentials,
-                                            cluster_prefix=cluster_prefix,
-                                            node_prefix=node_prefix,
-                                            n_nodes=n_nodes,
-                                            params=params)
-
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseMonitorSet.get_node_ips_param(ip_type)
-
-    def destroy(self):
-        self.log.info('Destroy nodes')
-        for node in self.nodes:
-            node.destroy()
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        AWSCluster.__init__(self,
+                            ec2_ami_id=ec2_ami_id,
+                            ec2_subnet_id=ec2_subnet_id,
+                            ec2_security_group_ids=ec2_security_group_ids,
+                            ec2_instance_type=ec2_instance_type,
+                            ec2_ami_username=ec2_ami_username,
+                            ec2_user_data=user_data,
+                            services=services,
+                            ec2_block_device_mappings=ec2_block_device_mappings,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            params=params)
