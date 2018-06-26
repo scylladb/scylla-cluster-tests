@@ -86,16 +86,19 @@ class retrying(object):
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
-    def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,)):
+    def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message=""):
         self.n = n  # number of times to retry
         self.sleep_time = sleep_time  # number seconds to sleep between retries
         self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
+        self.message = message  # string that will be printed between retries
 
     def __call__(self, func):
         @wraps(func)
         def inner(*args, **kwargs):
             for i in xrange(self.n):
                 try:
+                    if self.message:
+                        logger.info("%s [try #%s]" % (self.message, i))
                     return func(*args, **kwargs)
                 except self.allowed_exceptions as e:
                     logger.debug("retrying: %r" % e)
