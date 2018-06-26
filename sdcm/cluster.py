@@ -42,7 +42,7 @@ from .remote import Remote
 from .remote import disable_master_ssh
 from . import data_path
 from . import wait
-from .utils import get_monitor_version, log_run_info
+from .utils import get_monitor_version, log_run_info, retrying
 
 from .loader import CassandraStressExporterSetup
 from .prometheus import start_metrics_server
@@ -408,6 +408,10 @@ class BaseNode(object):
                                 options=options, verbose=verbose,
                                 args=args, log_file=log_file,
                                 watch_stdout_pattern=watch_stdout_pattern)
+
+    def run_nodetool(self, subcmd="status"):
+        result = self.remoter.run(cmd="nodetool %s" % subcmd, timeout=60, verbose=True)
+        return result.stdout
 
     def send_files(self, src, dst, delete_dst=False,
                    preserve_symlinks=False, verbose=False):
@@ -1656,6 +1660,11 @@ class BaseScyllaCluster(object):
                     up_statuses.append(False)
         if not all(up_statuses):
             raise ClusterNodesNotReady("Not all nodes joined the cluster")
+
+    @retrying(n=30, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady,),
+              message="Waiting for nodes to join the cluster")
+    def wait_for_nodes_up_and_normal(self, nodes):
+        self.check_nodes_up_and_normal(nodes=nodes)
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
