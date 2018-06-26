@@ -19,6 +19,7 @@ server_encrypt: 'true'
 # Setting client encryption to false for now, till we will find the way to make c-s work with that
 client_encrypt: 'false'
 # append_conf: 'enable_sstable_data_integrity_check: true'
+append_scylla_args: '--blocked-reactor-notify-ms 1000'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'on_demand'
