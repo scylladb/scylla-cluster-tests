@@ -1,8 +1,8 @@
-import logging
 import smtplib
-import email.message as email_message
-
-logger = logging.getLogger(__name__)
+import os.path
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
 class Email(object):
@@ -20,24 +20,31 @@ class Email(object):
         self.sender = sender
         self.recipients = recipients
 
-    def send(self, subject, content, html=True):
+    def send(self, subject, content, html=True, files=()):
         """
         :param subject: text
         :param content: text/html
         :param html: True/False
+        :param files: paths of the files that will be attached to the email
         :return:
         """
-        try:
-            msg = email_message.Message()
-            msg['subject'] = subject
-            msg['from'] = self.sender
-            msg['to'] = ','.join(self.recipients)
-            if html:
-                msg.add_header('Content-Type', 'text/html')
-            msg.set_payload(content)
-
-            ms = smtplib.SMTP(self.server)
-            ms.sendmail(self.sender, self.recipients, msg.as_string())
-            ms.quit()
-        except Exception:
-            logger.exception('Failed sending email')
+        msg = MIMEMultipart()
+        msg['subject'] = subject
+        msg['from'] = self.sender
+        msg['to'] = ','.join(self.recipients)
+        if html:
+            text_part = MIMEText(content, "html")
+        else:
+            text_part = MIMEText(content, "plain")
+        msg.attach(text_part)
+        for path in files:
+            with open(path, "rb") as fil:
+                part = MIMEApplication(
+                    fil.read(),
+                    Name=os.path.basename(path)
+                )
+            part['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(path)
+            msg.attach(part)
+        ms = smtplib.SMTP(self.server)
+        ms.sendmail(self.sender, self.recipients, msg.as_string())
+        ms.quit()

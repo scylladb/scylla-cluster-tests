@@ -6,34 +6,37 @@ import datetime
 import json
 import argparse
 import socket
-
+import tempfile
 from collections import defaultdict
 from es import ES
 from results_analyze import BaseResultsAnalyzer
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = logging.getLogger("microbenchmarking")
+logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.INFO)
+ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-ES_INDEX = 'test11_microbenchmarking'
+ES_INDEX = 'test13_microbenchmarking'
 HOSTNAME = socket.gethostname()
+TEST_ID = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
-    def __init__(self):
+    def __init__(self, email_recipients):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index=ES_INDEX,
             send_mail=True,
+            email_recipients=email_recipients,
             email_template_fp="results_microbenchmark.html",
-            query_limit=10000
+            query_limit=10000,
+            logger=logger
         )
 
-    def check_regression(self, current_results):
+    def check_regression(self, current_results, html_report_path):
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47'
             "hits.hits._type",  # large-partition-skips_64-32.1
@@ -60,64 +63,81 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # report_results = {
         #     "large-partition-skips_1-0.1": {
         #           "aio":{
-        #               "min"
-        #               "max":
-        #               "cur":
-        #               "last":
-        #               "diff":
+        #               "Current":
+        #               "Last":
+        #               "Diff last [%]":
+        #               "Best":
+        #               "Diff best [%]":
         #           }
         # }
-        allowed_stats = ("Current", "Last", "Diff last [%]", "Best", "Diff best [%]")
+        allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
+        metrics = ("aio", "frag/s", "cpu", "time (s)")
+        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
 
-        def set_results_by_param(param):
+        def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_id"], "%Y-%m-%d_%H:%M:%S"))
 
-            def get_param_val(x):
-                return float(x["_source"]["results"]["stats"][param])
+            def get_metrica_val(x):
+                return float(x["_source"]["results"]["stats"][metrica])
 
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
 
-            last_val = get_param_val(list_of_results_from_db[-1])
-            last_commit = get_commit_id(list_of_results_from_db[-1])
-            cur_val = float(current_result["results"]["stats"][param])
-            min_result = min(list_of_results_from_db, key=get_param_val)
-            min_result_val = get_param_val(min_result)
+            if get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
+                last_idx = -2
+            else:  # when current results are on disk but db is not updated
+                last_idx = -1
+            last_val = get_metrica_val(list_of_results_from_db[last_idx])
+            last_commit = get_commit_id(list_of_results_from_db[last_idx])
+            cur_val = float(current_result["results"]["stats"][metrica])
+            min_result = min(list_of_results_from_db, key=get_metrica_val)
+            min_result_val = get_metrica_val(min_result)
             min_result_commit = get_commit_id(min_result)
             diff_last = ((cur_val - last_val)/max(cur_val, last_val))*100 if max(cur_val, last_val) else 0
             diff_best = ((cur_val - min_result_val)/max(cur_val, min_result_val))*100 if max(cur_val, min_result_val) else 0
             stats = {
                 "Current": cur_val,
-                "Last": (last_val, last_commit),
-                "Best": (min_result_val, min_result_commit),
+                "Last (commit id)": (last_val, last_commit),
+                "Best (commit id)": (min_result_val, min_result_commit),
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
+                "has_regression": False,
             }
-            report_results[test_type][param] = stats
+            if diff_last > 5 or diff_best > 5:
+                report_results[test_type]["has_diff"] = True
+                stats["has_regression"] = True
+            report_results[test_type][metrica] = stats
 
         for test_type, current_result in current_results.iteritems():
             list_of_results_from_db = sorted_by_type[test_type]
-            set_results_by_param("aio")
-            set_results_by_param("frag/s")
-            set_results_by_param("cpu")
-            set_results_by_param("time (s)")
+            if not list_of_results_from_db:
+                self.log.warning("No results for '%s' in DB. Skipping", test_type)
+                continue
+            for metrica in metrics:
+                set_results_for(metrica)
 
-        version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
-        subject = "Microbenchmarks - Performance Regression"
+        subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
         for_render = {
             "subject": subject,
             "results": report_results,
             "stats_names": allowed_stats,
+            "metrics": metrics,
             "kibana_url": self._conf.get('kibana_url'),
+            "full_report": True,
         }
-        for_render.update(dict(test_version=version_info))
-        html = self.render_to_html(for_render, save_to_file="/tmp/perf.html")
-        self.send_email(subject, html)
+        for_render.update(dict(test_version=cur_version_info))
+        if html_report_path:
+            html_file_path = html_report_path
+        else:
+            html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        self.render_to_html(for_render, html_file_path=html_file_path)
+        for_render["full_report"] = False
+        summary_html = self.render_to_html(for_render)
+        self.send_email(subject, summary_html, files=(html_file_path,))
 
 
 def get_results(results_path, update_db):
-    test_id = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    bad_chars = '(){}<>[] '
+    bad_chars = " "
     os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
     db = ES()
     results = {}
@@ -132,15 +152,15 @@ def get_results(results_path, update_db):
                 datastore = json.load(f)
             datastore.update({'hostname': HOSTNAME})
             if update_db:
-                db.create(index=ES_INDEX, doc_type=test_type, doc_id=test_id, body=datastore)
+                db.create(index=ES_INDEX, doc_type=test_type, doc_id=TEST_ID, body=datastore)
             results[test_type] = datastore
     return results
 
 
-def main(update_db, results_path="."):
-    results = get_results(results_path=results_path, update_db=update_db)
-    mbra = MicroBenchmarkingResultsAnalyzer()
-    mbra.check_regression(results)
+def main(args):
+    results = get_results(results_path=args.results_path, update_db=args.update_db)
+    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
+    mbra.check_regression(results, html_report_path=args.report_path)
 
 
 def parse_args():
@@ -149,9 +169,13 @@ def parse_args():
                         help="Upload current microbenchmarking stats to ElasticSearch")
     parser.add_argument("--results-path", action="store", default=".",
                         help="Path where to search for test results")
+    parser.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
+                        help="Comma separated email addresses list that will get the report")
+    parser.add_argument("--report-path", action="store", default="",
+                        help="Save HTML generated results report to the file path before sending by email")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
-    main(update_db=args.update_db, results_path=args.results_path)
+    main(args)

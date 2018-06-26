@@ -7,7 +7,7 @@ import jinja2
 import pprint
 from send_email import Email
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=2)
 
 
@@ -49,7 +49,7 @@ class QueryFilter(object):
         try:
             return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
         except KeyError:
-            logger.exception('Expected parameters for filtering are not found , test {} {}'.format(
+            log.exception('Expected parameters for filtering are not found , test {} {}'.format(
                 self.test_type, self.test_doc['_id']))
         return None
 
@@ -101,7 +101,8 @@ class QueryFilterScyllaBench(QueryFilter):
 
 
 class BaseResultsAnalyzer(object):
-    def __init__(self, es_index, send_mail=False, email_recipients=(), email_template_fp="results.html", query_limit=1000):
+    def __init__(self, es_index, send_mail=False, email_recipients=(),
+                 email_template_fp="results.html", query_limit=1000, logger=None):
         self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
         self._url = self._conf.get('es_url')
         self._index = es_index
@@ -110,6 +111,7 @@ class BaseResultsAnalyzer(object):
         self._send_email = send_mail
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
+        self.log = logger if logger else log
 
     @staticmethod
     def _get_conf(conf_file):
@@ -129,7 +131,7 @@ class BaseResultsAnalyzer(object):
         :return: test results in json format
         """
         if not self._es.exists(index=self._index, doc_type='_all', id=test_id):
-            logger.error('Test results not found: {}'.format(test_id))
+            self.log.error('Test results not found: {}'.format(test_id))
             return None
         return self._es.get(index=self._index, doc_type='_all', id=test_id)
 
@@ -140,34 +142,39 @@ class BaseResultsAnalyzer(object):
                 if k:
                     return k
 
-        logger.error('Scylla version is not found for test %s', test_doc['_id'])
+        self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    def render_to_html(self, results, save_to_file=None):
+    def render_to_html(self, results, html_file_path=""):
         """
         Render analysis results to html template
         :param results: results dictionary
-        :param save_to_file: File path to save html output
+        :param html_file_path: Boolean, whether to save html file on disk
         :return: html string
         """
+        self.log.info("Rendering results to html using '%s' template...", self._email_template_fp)
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
         env = jinja2.Environment(loader=loader, autoescape=True)
         template = env.get_template(self._email_template_fp)
         html = template.render(results)
-        if save_to_file:
-            with open(save_to_file, "w") as f:
+        if html_file_path:
+            with open(html_file_path, "w") as f:
                 f.write(html)
+            self.log.info("HTML report saved to '%s'.", html_file_path)
         return html
 
-    def send_email(self, subject, content, html=True):
+    def send_email(self, subject, content, html=True, files=()):
         if self._send_email and self._email_recipients:
-            logger.debug('Send email to {}'.format(self._email_recipients))
+            self.log.debug('Send email to {}'.format(self._email_recipients))
             em = Email(self._conf['email']['server'],
                        self._conf['email']['sender'],
                        self._email_recipients)
-            em.send(subject, content, html)
+            em.send(subject, content, html, files=files)
+        else:
+            self.log.warning("Won't send email (send_email: %s, recipients: %s)",
+                             self._send_email, self._email_recipients)
 
-    def check_regression(self, test_id):
+    def check_regression(self):
         return NotImplementedError("check_regression should be implemented!")
 
 
@@ -195,12 +202,12 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         # check if stats exists
         if 'results' not in test_doc['_source'] or 'stats_average' not in test_doc['_source']['results'] or \
                 'stats_total' not in test_doc['_source']['results']:
-            logger.error('Cannot find results for test: {}!'.format(test_doc['_id']))
+            self.log.error('Cannot find results for test: {}!'.format(test_doc['_id']))
             return None
         stats_average = self._remove_non_stat_keys(test_doc['_source']['results']['stats_average'])
         stats_total = test_doc['_source']['results']['stats_total']
         if not stats_average or not stats_total:
-            logger.error('Cannot find average/total results for test: {}!'.format(test_doc['_id']))
+            self.log.error('Cannot find average/total results for test: {}!'.format(test_doc['_id']))
             return None
         # replace average by total value for op rate
         stats_average['op rate'] = stats_total['op rate']
@@ -213,7 +220,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                 if k:
                     return k
 
-        logger.error('Scylla version is not found for test %s', test_doc['_id'])
+        self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
     def _get_grafana_snapshot(self, test_doc):
@@ -261,7 +268,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                                                       best_id=best_id,
                                                       status=status)
             except TypeError:
-                logger.exception('Failed to compare {} results: {} vs {}, version {}'.format(
+                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
                     param, src[param], dst[param], version_dst))
         return cmp_res
 
@@ -278,9 +285,9 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         from sortedcontainers import SortedDict
         doc = self.get_test_by_id(test_id)
         if not doc:
-            logger.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error('Cannot find test by id: {}!'.format(test_id))
             return False
-        logger.debug(pp.pformat(doc))
+        self.log.debug(pp.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
@@ -299,7 +306,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         tests_filtered = self._es.search(index=self._index, doc_type=test_type, q=query, filter_path=filter_path,
                                          size=self._limit)
         if not tests_filtered:
-            logger.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
 
         # get the best res for all versions of this job
@@ -308,7 +315,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
             if tr['_id'] == test_id:  # filter the current test
                 continue
             if '_source' not in tr:  # non-valid record?
-                logger.error('Skip non-valid test: %s', tr['_id'])
+                self.log.error('Skip non-valid test: %s', tr['_id'])
                 continue
             version_info = self._test_version(tr)
             version = version_info['version']
@@ -338,7 +345,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         test_version = test_version_info['version']
         for version in group_by_version.keys():
             if version == test_version and not len(group_by_version[test_version]['tests']):
-                logger.info('No previous tests in the current version {} to compare'.format(test_version))
+                self.log.info('No previous tests in the current version {} to compare'.format(test_version))
                 continue
             cmp_res = self.cmp(test_stats,
                                group_by_version[version]['stats_best'],
@@ -346,7 +353,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                                group_by_version[version]['best_test_id'])
             res_list.append(cmp_res)
         if not res_list:
-            logger.info('No test results to compare with')
+            self.log.info('No test results to compare with')
             return False
 
         # send results by email
@@ -356,8 +363,8 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),
                        grafana_snapshot=self._get_grafana_snapshot(doc))
-        logger.debug('Regression analysis:')
-        logger.debug(pp.pformat(results))
+        self.log.debug('Regression analysis:')
+        self.log.debug(pp.pformat(results))
 
         dashboard_url = self._conf.get('kibana_url')
         for dash in ('dashboard_master', 'dashboard_releases'):
