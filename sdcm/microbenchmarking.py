@@ -83,7 +83,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
 
-            if get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
+            if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
@@ -114,6 +114,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
             for metrica in metrics:
+                self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
                 set_results_for(metrica)
 
         subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
@@ -146,9 +147,9 @@ def get_results(results_path, update_db):
         for filename in os.listdir(dirname):
             new_filename = "".join(c for c in filename if c not in bad_chars)
             test_type = dirname + "_" + os.path.splitext(new_filename)[0]
-            logger.info(filename)
-            logger.info(test_type)
-            with open(os.path.join(dirname, filename), 'r') as f:
+            json_path = os.path.join(dirname, filename)
+            with open(json_path, 'r') as f:
+                logger.info("Reading: %s", json_path)
                 datastore = json.load(f)
             datastore.update({'hostname': HOSTNAME})
             if update_db:
