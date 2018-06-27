@@ -20,7 +20,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-ES_INDEX = 'test13_microbenchmarking'
+ES_INDEX = 'microbenchmarking'
 HOSTNAME = socket.gethostname()
 TEST_ID = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 

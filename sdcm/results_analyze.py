@@ -103,9 +103,9 @@ class BaseResultsAnalyzer(object):
     def __init__(self, es_index, send_mail=False, email_recipients=(),
                  email_template_fp="results.html", query_limit=1000, logger=None):
         self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
-        self._url = self._conf.get('es_url')
+        self._es = elasticsearch.Elasticsearch([self._conf["es_url"]], verify_certs=False,
+                                               http_auth=(self._conf["es_user"], self._conf["es_password"]))
         self._index = es_index
-        self._es = elasticsearch.Elasticsearch([self._url])
         self._limit = query_limit
         self._send_email = send_mail
         self._email_recipients = email_recipients

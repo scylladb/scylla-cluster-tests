@@ -1,5 +1,7 @@
-es_url: 'http://ec2-54-174-18-71.compute-1.amazonaws.com:9200/'
+es_url: 'http://ec2-54-174-18-71.compute-1.amazonaws.com:9200'
 es_index: 'performanceregression'
+es_user: ''
+es_password: ''
 kibana_url: 'http://ec2-54-174-18-71.compute-1.amazonaws.com:5601/'
 dashboard_master: 'goto/74b95b1aaf21325391ca35336e4147f0'
 dashboard_releases: 'goto/194f2175bc7438bd8b0e2ad0996fb340'
