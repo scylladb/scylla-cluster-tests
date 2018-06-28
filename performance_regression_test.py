@@ -165,6 +165,7 @@ class PerformanceRegressionTest(ClusterTester):
         return self._stats['results']['stats_total']['op rate']
 
     def assert_mv_performance(self, ops_without_mv, ops_with_mv, failure_message):
+        self.log.debug('Assert performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
         self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     # do not run this test on 2.2 while this feature is not available

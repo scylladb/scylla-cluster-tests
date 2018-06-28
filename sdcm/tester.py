@@ -960,9 +960,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             if time.time() - start > seconds_to_wait:
                 raise Exception("View building didn't start in {} seconds".format(seconds_to_wait))
 
+    @staticmethod
     def rows_to_list(rows):
-        new_list = [list(row) for row in rows]
-        return new_list
+        return [list(row) for row in rows]
 
     @staticmethod
     def get_s3_url(file_name):
