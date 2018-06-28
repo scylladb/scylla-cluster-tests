@@ -59,7 +59,7 @@ class AWSCluster(cluster.BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], params=None):
+                 node_prefix='node', n_nodes=10, params=None):
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
@@ -202,7 +202,7 @@ class AWSCluster(cluster.BaseCluster):
             self._reuse_credentials = cluster.UserRemoteCredentials(key_file=instance_key_file)
         return self._reuse_credentials
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances()
         else:
@@ -221,6 +221,8 @@ class AWSCluster(cluster.BaseCluster):
                                          self.logdir, dc_idx=dc_idx)
                        for node_index, instance in
                        enumerate(instances, start=self._node_index + 1)]
+        for node in added_nodes:
+            node.enable_auto_bootstrap = enable_auto_bootstrap
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
@@ -334,7 +336,7 @@ class AWSNode(cluster.BaseNode):
         self.log.info('Destroyed')
 
 
-class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
+class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
@@ -351,7 +353,7 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s' % (name, sum(n_nodes)))
-        if params.get('stop_service') == 'true':
+        if params.get('stop_service', default='true') == 'true':
             user_data += ' --stop-services'
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
@@ -370,11 +372,14 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
-            ec2_user_data = ('--clustername %s --bootstrap true '
-                             '--totalnodes %s ' % (self.name,
-                                                   count))
+            if self._ec2_user_data:
+                ec2_user_data = self._ec2_user_data
+            else:
+                ec2_user_data = ('--clustername %s --bootstrap true '
+                                 '--totalnodes %s ' % (self.name,
+                                                       count))
         if self.nodes:
             if dc_idx > 0:
                 node_public_ips = [node.public_ip_address for node
@@ -388,34 +393,38 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
                 seeds = ",".join(node_private_ips)
                 if not seeds:
                     seeds = self.nodes[0].private_ip_address
-            ec2_user_data += ' --seeds %s' % seeds
+            ec2_user_data += ' --seeds %s --bootstrap true' % seeds
 
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx)
+                                                              dc_idx=dc_idx,
+                                                              enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
     def node_setup(self, node, verbose=False):
         if not cluster.Setup.REUSE_CLUSTER:
             node.wait_ssh_up(verbose=verbose)
             authenticator = self.params.get('authenticator')
-            endpoint_snitch = ''
+            endpoint_snitch = self.params.get('endpoint_snitch')
             if len(self.datacenter) > 1:
-                endpoint_snitch = "Ec2MultiRegionSnitch"
+                if not endpoint_snitch:
+                    endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
-                node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
+                node.config_setup(seed_address=self.get_seed_nodes_by_flag(private_ip=False),
                                   enable_exp=self._param_enabled('experimental'),
                                   endpoint_snitch=endpoint_snitch,
                                   broadcast=node.public_ip_address,
                                   authenticator=authenticator,
                                   server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'))
+                                  client_encrypt=self._param_enabled('client_encrypt'),
+                                  append_scylla_args=self.params.get('append_scylla_args'))
             else:
                 node.config_setup(enable_exp=self._param_enabled('experimental'),
                                   endpoint_snitch=endpoint_snitch,
                                   authenticator=authenticator,
                                   server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'))
+                                  client_encrypt=self._param_enabled('client_encrypt'),
+                                  append_scylla_args=self.params.get('append_scylla_args'))
 
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -479,7 +488,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError('Unexpected cassandra.yaml '
                                  'contents:\n%s' % yaml_stream.read())
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
@@ -511,7 +520,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         self.get_seed_nodes()
 
 
-class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
+class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
@@ -522,55 +531,50 @@ class LoaderSetAWS(AWSCluster, cluster.BaseLoaderSet):
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
-        super(LoaderSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
-                                           ec2_subnet_id=ec2_subnet_id,
-                                           ec2_security_group_ids=ec2_security_group_ids,
-                                           ec2_instance_type=ec2_instance_type,
-                                           ec2_ami_username=ec2_ami_username,
-                                           ec2_user_data=user_data,
-                                           services=services,
-                                           ec2_block_device_mappings=ec2_block_device_mappings,
-                                           credentials=credentials,
-                                           cluster_prefix=cluster_prefix,
-                                           node_prefix=node_prefix,
-                                           n_nodes=n_nodes,
-                                           params=params)
+        cluster.BaseLoaderSet.__init__(self,
+                                       params=params)
+        AWSCluster.__init__(self,
+                            ec2_ami_id=ec2_ami_id,
+                            ec2_subnet_id=ec2_subnet_id,
+                            ec2_security_group_ids=ec2_security_group_ids,
+                            ec2_instance_type=ec2_instance_type,
+                            ec2_ami_username=ec2_ami_username,
+                            ec2_user_data=user_data,
+                            services=services,
+                            ec2_block_device_mappings=ec2_block_device_mappings,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            params=params)
 
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
 
-class MonitorSetAWS(AWSCluster, cluster.BaseMonitorSet):
+class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
-                 user_prefix=None, n_nodes=10, params=None):
+                 user_prefix=None, n_nodes=10, targets=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
-        super(MonitorSetAWS, self).__init__(ec2_ami_id=ec2_ami_id,
-                                            ec2_subnet_id=ec2_subnet_id,
-                                            ec2_security_group_ids=ec2_security_group_ids,
-                                            ec2_instance_type=ec2_instance_type,
-                                            ec2_ami_username=ec2_ami_username,
-                                            ec2_user_data=user_data,
-                                            services=services,
-                                            ec2_block_device_mappings=ec2_block_device_mappings,
-                                            credentials=credentials,
-                                            cluster_prefix=cluster_prefix,
-                                            node_prefix=node_prefix,
-                                            n_nodes=n_nodes,
-                                            params=params)
-
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseMonitorSet.get_node_ips_param(ip_type)
-
-    def destroy(self):
-        self.log.info('Destroy nodes')
-        for node in self.nodes:
-            node.destroy()
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        AWSCluster.__init__(self,
+                            ec2_ami_id=ec2_ami_id,
+                            ec2_subnet_id=ec2_subnet_id,
+                            ec2_security_group_ids=ec2_security_group_ids,
+                            ec2_instance_type=ec2_instance_type,
+                            ec2_ami_username=ec2_ami_username,
+                            ec2_user_data=user_data,
+                            services=services,
+                            ec2_block_device_mappings=ec2_block_device_mappings,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            params=params)

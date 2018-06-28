@@ -160,7 +160,7 @@ class DockerCluster(cluster.BaseCluster):
                 return node_name, node_index
             node_index += 1
 
-    def _create_nodes(self, count, dc_idx=0):
+    def _create_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):
         """
         Create nodes from docker containers
         :param count: count of nodes to create
@@ -174,6 +174,7 @@ class DockerCluster(cluster.BaseCluster):
             seed_ip = self.nodes[0].public_ip_address if not is_seed else None
             self._create_container(node_name, is_seed, seed_ip)
             new_node = self._create_node(node_name)
+            new_node.enable_auto_bootstrap = enable_auto_bootstrap
             self.nodes.append(new_node)
             new_nodes.append(new_node)
         return new_nodes
@@ -195,11 +196,11 @@ class DockerCluster(cluster.BaseCluster):
             self.nodes.append(new_node)
         return self.nodes
 
-    def add_nodes(self, count, dc_idx=0):
+    def add_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
             return self._get_nodes()
         else:
-            return self._create_nodes(count, dc_idx)
+            return self._create_nodes(count, dc_idx, enable_auto_bootstrap)
 
     def destroy(self):
         logger.info('Destroy nodes')
@@ -223,11 +224,13 @@ class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):
         return self.check_nodes_up_and_normal(node_list)
 
 
-class LoaderSetDocker(DockerCluster, cluster.BaseLoaderSet):
+class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
-        super(LoaderSetDocker, self).__init__(node_prefix=self._node_prefix, **kwargs)
+        cluster.BaseLoaderSet.__init__(self,
+                                       params=kwargs.get("params"))
+        DockerCluster.__init__(self, node_prefix=self._node_prefix, **kwargs)
 
 
 class MonitorSetDocker(DockerCluster, cluster.BaseMonitorSet):

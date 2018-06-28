@@ -76,7 +76,7 @@ class GrowClusterTest(ClusterTester):
 
     def add_nodes(self, add_node_cnt):
         self.metrics_srv.event_start('add_node')
-        new_nodes = self.db_cluster.add_nodes(count=add_node_cnt)
+        new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
         self.db_cluster.wait_for_init(node_list=new_nodes)
         self.metrics_srv.event_stop('add_node')
         self.reconfigure_monitor()

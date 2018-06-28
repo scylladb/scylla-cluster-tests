@@ -7,7 +7,7 @@
         .fbold  { font-weight: bold; }
         .red    { color: red; }
         .green  { color: green; }
-        .orange  { color: orange; }
+        .orange { color: orange; }
         .notice { font-size:120%; }
         .small { font-size:80%; }
         #results_table {
@@ -51,44 +51,55 @@
         <span> , Commit Id: </span>
         <span class="blue"> {{ test_version.commit_id }}</span>
     </div>
-    <div>&nbsp;&nbsp;</div>
+    {% if not full_report %}
+    <br>
+    <div>
+        <h3>Showing only  results that have regression.</h3>
+        <span>To see full results download and open attached HTML file.</span>
+    </div>
+    {% endif %}
     {% for test_type, params in results.iteritems() %}
-        <h2> {{ test_type }} </h2>
-        <table id="results_table">
+    {% if full_report or params.get("has_diff") %}
+    <h2> {{ test_type }} </h2>
+    <table id="results_table">
+        <tr>
+            <th>Stat</th>
+            {% for stat in stats_names %}
+            <th>{{ stat }}</th>
+            {% endfor %}
+        </tr>
+        {% for metrica in metrics %}
+            {% set stats = params.get(metrica) %}
+            {%  if full_report or stats.has_regression %}
             <tr>
-                <th>Stat</th>
+                <td>{{ metrica }}</td>
                 {% for stat in stats_names %}
-                <th>{{ stat }}</th>
+                    {% set cur_stat = stats.get(stat) %}
+                    <td>
+                        {% if ((stat == "Current") and stats.get("Diff best [%]") < 0) or (stat.startswith("Diff") and cur_stat < 0) %}
+                            <span class="notice green fbold">
+                        {% elif stat.startswith("Diff") and cur_stat > 10 %}
+                            <span class="notice red fbold">
+                        {% elif stat.startswith("Diff") and cur_stat > 5 %}
+                            <span class="orange fbold">
+                        {% else %}
+                            <span>
+                        {% endif %}
+                        {% if stat == "Best (commit id)" or stat == "Last (commit id)" %}
+                            {{ '%g (%s)' % (cur_stat) }}
+                        {% elif stat.startswith("Diff") %}
+                            {{ '%.2f' % cur_stat }}
+                        {% else %}
+                            {{ '%g' % cur_stat }}
+                        {% endif %}
+                            </span>
+                    </td>
                 {% endfor %}
             </tr>
-            {% for param, stats in params.iteritems() %}
-                <tr>
-                    <td>{{ param }}</td>
-                    {% for stat in stats_names %}
-                        {% set cur_stat = stats.get(stat) %}
-                        <td>
-                            {% if ((stat == "Current") and stats.get("Diff best [%]") < 0) or (stat.startswith("Diff") and cur_stat < 0) %}
-                                <span class="notice green fbold">
-                            {% elif stat.startswith("Diff") and cur_stat > 10 %}
-                                <span class="notice red fbold">
-                            {% elif stat.startswith("Diff") and cur_stat > 5 %}
-                                <span class="orange fbold">
-                            {% else %}
-                                <span>
-                            {% endif %}
-                            {% if stat == "Best" or stat == "Last" %}
-                                {{ '%g (%s)' % (cur_stat) }}
-                            {% elif stat.startswith("Diff") %}
-                                {{ '%.2f' % cur_stat }}
-                            {% else %}
-                                {{ '%g' % cur_stat }}
-                            {% endif %}
-                                </span>
-                        </td>
-                    {% endfor %}
-                </tr>
-            {% endfor %}
-        </table>
+            {% endif %}
+        {% endfor %}
+    </table>
+    {% endif %}
     {% endfor %}
 
     <h3>Dashboard:</h3>

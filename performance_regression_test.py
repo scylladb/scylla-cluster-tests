@@ -154,7 +154,7 @@ class PerformanceRegressionTest(ClusterTester):
                                               prefix=prefix)
         results = self.get_stress_results(queue=stress_queue, store_results=True)
         if save_stats:
-            self.update_test_details()
+            self.update_test_details(scylla_conf=True)
             self.display_results(results, test_name=test_name)
             self.check_regression()
             total_ops = self._get_total_ops()
@@ -165,6 +165,7 @@ class PerformanceRegressionTest(ClusterTester):
         return self._stats['results']['stats_total']['op rate']
 
     def assert_mv_performance(self, ops_without_mv, ops_with_mv, failure_message):
+        self.log.debug('Assert performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
         self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     # do not run this test on 2.2 while this feature is not available
@@ -214,7 +215,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.update_test_details()
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')
         self.check_regression()
 
@@ -283,7 +284,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.update_test_details()
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read')
         self.check_regression()
 
@@ -347,7 +348,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.update_test_details()
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
 
@@ -420,7 +421,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.create_test_stats(sub_type='mixed')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details()
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
@@ -438,7 +439,7 @@ class PerformanceRegressionTest(ClusterTester):
         stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
         results = self.get_stress_results_bench(queue=stress_queue)
 
-        self.update_test_details()
+        self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read_bench')
         self.check_regression()
 
@@ -458,7 +459,7 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Stress cmd: {}'.format(stress_cmd))
             stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, profile=user_profile)
             results = self.get_stress_results(queue=stress_queue)
-            self.update_test_details()
+            self.update_test_details(scylla_conf=True)
             self.display_results(results, test_name=test_name)
             self.check_regression()
             self.log.debug('Finish stress test with user profile {}'.format(user_profile))

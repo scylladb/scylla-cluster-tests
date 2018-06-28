@@ -1,8 +1,6 @@
 import os
 import time
-
 import cluster
-from .loader import CassandraStressExporterSetup
 
 
 def _prepend_user_prefix(user_prefix, base_name):
@@ -148,6 +146,7 @@ class GCECluster(cluster.BaseCluster):
                                          params=params,
                                          # services=services,
                                          region_names=gce_region_names)
+        self.log.debug("GCECluster constructor")
 
     def __str__(self):
         identifier = 'GCE Cluster %s | ' % self.name
@@ -256,7 +255,8 @@ class GCECluster(cluster.BaseCluster):
         except Exception as ex:
             raise CreateGCENodeError('Failed to create node: %s', ex)
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
+        self.log.info("Adding nodes to cluster")
         nodes = []
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances()
@@ -268,20 +268,17 @@ class GCECluster(cluster.BaseCluster):
         for ind, instance in enumerate(instances):
             node_index = ind + self._node_index + 1
             node = self._create_node(instance, node_index, dc_idx)
-
             nodes.append(node)
             self.nodes.append(node)
-
-            local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
-            if len(local_nodes) > len(nodes):
-                node.is_addition = True
+            self.log.info("Added node: %s", node.name)
+            node.enable_auto_bootstrap = enable_auto_bootstrap
 
         self._node_index += count
         self.log.info('added nodes: %s', nodes)
         return nodes
 
 
-class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
+class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
@@ -307,35 +304,8 @@ class ScyllaGCECluster(GCECluster, cluster.BaseScyllaCluster):
                                                gce_region_names=gce_datacenter)
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
-        added_nodes = super(ScyllaGCECluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx)
-        return added_nodes
 
-    def node_setup(self, node, verbose=False):
-        """
-        Configure scylla.yaml on cluster nodes.
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-        """
-        self._node_setup(node, verbose)
-
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
-        super(ScyllaGCECluster, self).wait_for_init(node_list=node_list, verbose=verbose, timeout=timeout)
-
-        if self._param_enabled('enable_tc'):
-            for node in self.nodes:
-                dst_nodes = [n for n in self.nodes if n.dc_idx != node.dc_idx]
-                local_nodes = [n for n in self.nodes if n.dc_idx == node.dc_idx and n != node]
-                self.set_tc(node, dst_nodes, local_nodes)
-
-    def destroy(self):
-        self.stop_nemesis()
-        super(ScyllaGCECluster, self).destroy()
-
-
-class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
+class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
@@ -343,55 +313,48 @@ class LoaderSetGCE(GCECluster, cluster.BaseLoaderSet):
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
-        super(LoaderSetGCE, self).__init__(gce_image=gce_image,
-                                           gce_network=gce_network,
-                                           gce_image_type=gce_image_type,
-                                           gce_image_size=gce_image_size,
-                                           gce_n_local_ssd=gce_n_local_ssd,
-                                           gce_instance_type=gce_instance_type,
-                                           gce_image_username=gce_image_username,
-                                           services=service,
-                                           credentials=credentials,
-                                           cluster_prefix=cluster_prefix,
-                                           node_prefix=node_prefix,
-                                           n_nodes=n_nodes,
-                                           add_disks=add_disks,
-                                           params=params)
-        self._install_cs = True
-
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
+        cluster.BaseLoaderSet.__init__(self,
+                                       params=params)
+        GCECluster.__init__(self,
+                            gce_image=gce_image,
+                            gce_network=gce_network,
+                            gce_image_type=gce_image_type,
+                            gce_image_size=gce_image_size,
+                            gce_n_local_ssd=gce_n_local_ssd,
+                            gce_instance_type=gce_instance_type,
+                            gce_image_username=gce_image_username,
+                            services=service,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            add_disks=add_disks,
+                            params=params)
 
 
-class MonitorSetGCE(GCECluster, cluster.BaseMonitorSet):
+class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
-                 gce_image_username='centos',
-                 user_prefix=None, n_nodes=10, add_disks=None, params=None):
+                 gce_image_username='centos', user_prefix=None, n_nodes=[1],
+                 targets={}, add_disks=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
-        super(MonitorSetGCE, self).__init__(gce_image=gce_image,
-                                            gce_image_type=gce_image_type,
-                                            gce_image_size=gce_image_size,
-                                            gce_n_local_ssd=gce_n_local_ssd,
-                                            gce_network=gce_network,
-                                            gce_instance_type=gce_instance_type,
-                                            gce_image_username=gce_image_username,
-                                            services=service,
-                                            credentials=credentials,
-                                            cluster_prefix=cluster_prefix,
-                                            node_prefix=node_prefix,
-                                            n_nodes=n_nodes,
-                                            add_disks=add_disks,
-                                            params=params)
-
-    @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
-        return cluster.BaseMonitorSet.get_node_ips_param(ip_type)
-
-    def destroy(self):
-        self.log.info('Destroy nodes')
-        for node in self.nodes:
-            node.destroy()
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        GCECluster.__init__(self,
+                            gce_image=gce_image,
+                            gce_image_type=gce_image_type,
+                            gce_image_size=gce_image_size,
+                            gce_n_local_ssd=gce_n_local_ssd,
+                            gce_network=gce_network,
+                            gce_instance_type=gce_instance_type,
+                            gce_image_username=gce_image_username,
+                            services=service,
+                            credentials=credentials,
+                            cluster_prefix=cluster_prefix,
+                            node_prefix=node_prefix,
+                            n_nodes=n_nodes,
+                            add_disks=add_disks,
+                            params=params)
