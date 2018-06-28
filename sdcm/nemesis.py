@@ -220,6 +220,7 @@ class Nemesis(object):
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         new_node.replacement_node_ip = old_node_private_ip
         self.cluster.wait_for_init(node_list=[new_node], timeout=30)
+        self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
