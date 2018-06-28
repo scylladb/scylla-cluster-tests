@@ -259,6 +259,11 @@ class Nemesis(object):
                 # Replace the node that was terminated.
                 if add_node:
                     self._add_and_init_new_cluster_node()
+                # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
+                # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+                for node in self.cluster.nodes:
+                        # TODO: wherever we have keyspace1 hardcoded, to replace it with a list of keyspaces.
+                        node.remoter.run('nodetool --host localhost cleanup keyspace1', verbose=True)
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
