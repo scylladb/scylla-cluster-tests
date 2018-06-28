@@ -353,7 +353,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
                      '--totalnodes %s' % (name, sum(n_nodes)))
-        if params.get('stop_service') == 'true':
+        if params.get('stop_service', default='true') == 'true':
             user_data += ' --stop-services'
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
