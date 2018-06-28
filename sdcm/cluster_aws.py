@@ -202,7 +202,7 @@ class AWSCluster(cluster.BaseCluster):
             self._reuse_credentials = cluster.UserRemoteCredentials(key_file=instance_key_file)
         return self._reuse_credentials
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances()
         else:
@@ -221,6 +221,8 @@ class AWSCluster(cluster.BaseCluster):
                                          self.logdir, dc_idx=dc_idx)
                        for node_index, instance in
                        enumerate(instances, start=self._node_index + 1)]
+        for node in added_nodes:
+            node.enable_auto_bootstrap = enable_auto_bootstrap
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
@@ -370,11 +372,14 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
-            ec2_user_data = ('--clustername %s --bootstrap true '
-                             '--totalnodes %s ' % (self.name,
-                                                   count))
+            if self._ec2_user_data:
+                ec2_user_data = self._ec2_user_data
+            else:
+                ec2_user_data = ('--clustername %s --bootstrap true '
+                                 '--totalnodes %s ' % (self.name,
+                                                       count))
         if self.nodes:
             if dc_idx > 0:
                 node_public_ips = [node.public_ip_address for node
@@ -388,11 +393,12 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                 seeds = ",".join(node_private_ips)
                 if not seeds:
                     seeds = self.nodes[0].private_ip_address
-            ec2_user_data += ' --seeds %s' % seeds
+            ec2_user_data += ' --seeds %s --bootstrap true' % seeds
 
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx)
+                                                              dc_idx=dc_idx,
+                                                              enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
     def node_setup(self, node, verbose=False):
@@ -482,7 +488,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError('Unexpected cassandra.yaml '
                                  'contents:\n%s' % yaml_stream.read())
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())

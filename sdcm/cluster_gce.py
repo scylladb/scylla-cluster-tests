@@ -255,7 +255,7 @@ class GCECluster(cluster.BaseCluster):
         except Exception as ex:
             raise CreateGCENodeError('Failed to create node: %s', ex)
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         self.log.info("Adding nodes to cluster")
         nodes = []
         if cluster.Setup.REUSE_CLUSTER:
@@ -271,9 +271,7 @@ class GCECluster(cluster.BaseCluster):
             nodes.append(node)
             self.nodes.append(node)
             self.log.info("Added node: %s", node.name)
-            local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
-            if len(local_nodes) > len(nodes):
-                node.is_addition = True
+            node.enable_auto_bootstrap = enable_auto_bootstrap
 
         self._node_index += count
         self.log.info('added nodes: %s', nodes)
