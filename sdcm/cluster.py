@@ -1686,8 +1686,8 @@ class BaseLoaderSet(object):
         if self.params.get('bench_run', default=False):
             # go1.7 still not in repo
             node.remoter.run('sudo yum install git -y')
-            node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.7.linux-amd64.tar.gz')
-            node.remoter.run('sudo tar -C /usr/local -xvzf go1.7.linux-amd64.tar.gz')
+            node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz')
+            node.remoter.run('sudo tar -C /usr/local -xvzf go1.9.linux-amd64.tar.gz')
             node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
             node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
             node.remoter.run("source $HOME/.bashrc")
@@ -2023,7 +2023,9 @@ class BaseLoaderSet(object):
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
             ips = ",".join([n.private_ip_address for n in node_list])
-            result = node.remoter.run(cmd="/$HOME/go/bin/{0} -nodes {1}".format(stress_cmd.strip(), ips),
+            bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
+            result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(
+                                      stress_cmd.strip(), ips, bench_log),
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
