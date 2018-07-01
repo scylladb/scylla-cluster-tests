@@ -8,8 +8,10 @@ import argparse
 import socket
 import tempfile
 from collections import defaultdict
-from es import ES
 from results_analyze import BaseResultsAnalyzer
+# disable InsecureRequestWarning
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger("microbenchmarking")
 logger.setLevel(logging.DEBUG)
@@ -20,29 +22,29 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-ES_INDEX = 'microbenchmarking'
-HOSTNAME = socket.gethostname()
-TEST_ID = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
     def __init__(self, email_recipients):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
-            es_index=ES_INDEX,
+            es_index="microbenchmarking",
             send_mail=True,
             email_recipients=email_recipients,
             email_template_fp="results_microbenchmark.html",
             query_limit=10000,
             logger=logger
         )
+        self.hostname = socket.gethostname()
+        self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
+        self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)
 
     def check_regression(self, current_results, html_report_path):
         filter_path = (
-            "hits.hits._id",  # '2018-04-02_18:36:47'
-            "hits.hits._type",  # large-partition-skips_64-32.1
+            "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
+            "hits.hits._source.test_args",  # [64-32.1)
+            "hits.hits.test_group_properties.name",  # large-partition-skips
             "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
+            "hits.hits._source.test_run_date",
             "hits.hits._source.test_group_properties.name",  # large-partition-skips
-            "hits.hits._source.results.parameters",  # 'read,skip,test_run_count': u'64,32,1',
             "hits.hits._source.results.stats.aio",
             "hits.hits._source.results.stats.cpu",
             "hits.hits._source.results.stats.time (s)",
@@ -55,9 +57,11 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         results = tests_filtered["hits"]["hits"]
         sorted_by_type = defaultdict(list)
         for res in results:
-            if res["_source"]["hostname"] != HOSTNAME:
+            if res["_source"]["hostname"] != self.hostname:
                 continue
-            sorted_by_type[res["_type"]].append(res)
+            test_type = "%s_%s" % (res["_source"]["test_group_properties"]["name"],
+                                   res["_source"]["test_args"])
+            sorted_by_type[test_type].append(res)
 
         report_results = defaultdict(dict)
         # report_results = {
@@ -75,7 +79,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
 
         def set_results_for(metrica):
-            list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_id"], "%Y-%m-%d_%H:%M:%S"))
+            list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
+                                                                                  self._run_date_pattern))
 
             def get_metrica_val(x):
                 return float(x["_source"]["results"]["stats"][metrica])
@@ -117,7 +122,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
                 set_results_for(metrica)
 
-        subject = "Microbenchmarks - Performance Regression - %s" % TEST_ID
+        subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
         for_render = {
             "subject": subject,
             "results": report_results,
@@ -136,31 +141,33 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         summary_html = self.render_to_html(for_render)
         self.send_email(subject, summary_html, files=(html_file_path,))
 
-
-def get_results(results_path, update_db):
-    bad_chars = " "
-    os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
-    db = ES()
-    results = {}
-    for dirname in os.listdir(os.getcwd()):
-        logger.info(dirname)
-        for filename in os.listdir(dirname):
-            new_filename = "".join(c for c in filename if c not in bad_chars)
-            test_type = dirname + "_" + os.path.splitext(new_filename)[0]
-            json_path = os.path.join(dirname, filename)
-            with open(json_path, 'r') as f:
-                logger.info("Reading: %s", json_path)
-                datastore = json.load(f)
-            datastore.update({'hostname': HOSTNAME})
-            if update_db:
-                db.create(index=ES_INDEX, doc_type=test_type, doc_id=TEST_ID, body=datastore)
-            results[test_type] = datastore
-    return results
+    def get_results(self, results_path, update_db):
+        bad_chars = " "
+        os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
+        results = {}
+        for dirname in os.listdir(os.getcwd()):
+            logger.info(dirname)
+            for filename in os.listdir(dirname):
+                new_filename = "".join(c for c in filename if c not in bad_chars)
+                test_args = os.path.splitext(new_filename)[0]
+                test_type = dirname + "_" + test_args
+                json_path = os.path.join(dirname, filename)
+                with open(json_path, 'r') as f:
+                    logger.info("Reading: %s", json_path)
+                    datastore = json.load(f)
+                datastore.update({'hostname': self.hostname,
+                                  'test_args': test_args,
+                                  'test_run_date': self.test_run_date})
+                if update_db:
+                    self._es.create(index=self._index, doc_type="microbenchmark", id="%s_%s" % (self.test_run_date, test_type),
+                                    body=datastore)
+                results[test_type] = datastore
+        return results
 
 
 def main(args):
-    results = get_results(results_path=args.results_path, update_db=args.update_db)
     mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
+    results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
     mbra.check_regression(results, html_report_path=args.report_path)
 
 
