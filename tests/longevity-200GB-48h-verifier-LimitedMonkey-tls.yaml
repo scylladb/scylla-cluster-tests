@@ -57,8 +57,8 @@ backends: !mux
         instance_type_monitor: 'c4.2xlarge'
         us_east_1:
             region_name: 'us-east-1'
-            security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-d934e980'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-c327759a'
             ami_id_db_scylla: 'AMI_ID'
             ami_id_monitor: 'AMI_ID'
             ami_id_loader: 'AMI_ID'
