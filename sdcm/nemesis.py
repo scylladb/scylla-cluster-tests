@@ -259,6 +259,11 @@ class Nemesis(object):
                 # Replace the node that was terminated.
                 if add_node:
                     self._add_and_init_new_cluster_node()
+                # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
+                # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+                for node in self.cluster.nodes:
+                        # TODO: wherever we have keyspace1 hardcoded, to replace it with a list of keyspaces.
+                        node.remoter.run('nodetool --host localhost cleanup keyspace1', verbose=True)
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
@@ -817,6 +822,26 @@ class ChaosMonkey(Nemesis):
     def disrupt(self):
         self.call_random_disrupt_method()
 
+
+class LimitedChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        # Limit the nemesis scope:
+        #  - NodeToolCleanupMonkey
+        #  - DecommissionMonkey
+        #  - DrainerMonkey
+        #  - RefreshMonkey
+        #  - StopStartMonkey
+        #  - MajorCompactionMonkey
+        #  - ModifyTableMonkey
+        #  - EnospcMonkey
+        #  - StopWaitStartMonkey
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
+                                                         'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
+                                                         'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
+                                                         'disrupt_modify_table', 'disrupt_nodetool_enospc',
+                                                         'disrupt_stop_wait_start_scylla_server'])
 
 class AllMonkey(Nemesis):
 
