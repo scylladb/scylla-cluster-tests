@@ -36,7 +36,7 @@ from .remote import Remote
 from .remote import disable_master_ssh
 from . import data_path
 from . import wait
-from .utils import get_monitor_version, log_run_info, retrying
+from .utils import log_run_info, retrying
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
