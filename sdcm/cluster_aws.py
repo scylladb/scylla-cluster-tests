@@ -126,7 +126,7 @@ class AWSCluster(cluster.BaseCluster):
                                                                 InstanceType=self._ec2_instance_type)
         return instances
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
@@ -196,6 +196,8 @@ class AWSCluster(cluster.BaseCluster):
                                          self.logdir, dc_idx=dc_idx)
                        for node_index, instance in
                        enumerate(instances, start=self._node_index + 1)]
+        for node in added_nodes:
+            node.enable_auto_bootstrap = enable_auto_bootstrap
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
@@ -342,7 +344,7 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             ec2_user_data = ('--clustername %s --bootstrap true '
                              '--totalnodes %s ' % (self.name,
@@ -364,7 +366,8 @@ class ScyllaAWSCluster(AWSCluster, cluster.BaseScyllaCluster):
 
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx)
+                                                              dc_idx=dc_idx,
+                                                              enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
     def node_setup(self, node, verbose=False):
@@ -448,7 +451,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError('Unexpected cassandra.yaml '
                                  'contents:\n%s' % yaml_stream.read())
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())

@@ -1183,7 +1183,7 @@ class BaseCluster(object):
             if node.n_coredumps > 0:
                 self.coredumps[node.name] = node.n_coredumps
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         pass
 
     def get_node_private_ips(self):

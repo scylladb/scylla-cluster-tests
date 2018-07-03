@@ -128,12 +128,14 @@ class DockerCluster(cluster.BaseCluster):
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix)
 
-    def add_nodes(self, count, dc_idx=0):
+    def add_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):
         for node_index in xrange(count):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             is_seed = (node_index == 0)
             seed_ip = self.nodes[0].public_ip_address if not is_seed else None
-            self.nodes.append(self._create_node(node_name, is_seed, seed_ip))
+            node = self._create_node(node_name, is_seed, seed_ip)
+            node.enable_auto_bootstrap = enable_auto_bootstrap
+            self.nodes.append(node)
 
     def destroy(self):
         logger.info('Destroy nodes')
