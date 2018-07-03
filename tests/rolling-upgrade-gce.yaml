@@ -6,10 +6,10 @@ n_monitor_nodes: 1
 gce_datacenter: 'us-east1-b'
 
 # workloads
-prepare_write_stress: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
-stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
-stress_cmd_read_clall: cassandra-stress read no-warmup cl=ALL n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
-stress_cmd_read_20m: cassandra-stress read no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
+prepare_write_stress: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3) compression=SnappyCompressor' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_clall: cassandra-stress read no-warmup cl=ALL n=10000000 -schema 'replication(factor=3) compression=DeflateCompressor' -port jmx=6868 -mode cql3 native compression=none -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_20m: cassandra-stress read no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
 
 user_prefix: 'rolling-upgrade-VERSION'
 failure_post_behavior: keep
