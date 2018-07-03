@@ -269,7 +269,7 @@ class Nemesis(object):
                 if add_node:
                     # retry in case of failure
                     for i in range(2):
-                        new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx)
+                        new_nodes = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)
                         try:
                             self.cluster.wait_for_init(node_list=new_nodes, timeout=30)
                         except Exception as ex:
