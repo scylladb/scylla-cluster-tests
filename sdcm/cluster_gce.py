@@ -245,7 +245,7 @@ class GCECluster(cluster.BaseCluster):
 
                 local_nodes = [n for n in self.nodes if n.dc_idx == dc_idx]
                 if len(local_nodes) > len(nodes):
-                    n.is_addition = True
+                    n.enable_auto_bootstrap = True
 
         assert len(nodes) == count, 'Fail to create {} instances'.format(count)
         self.log.info('added nodes: %s', nodes)

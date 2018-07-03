@@ -308,8 +308,8 @@ class BaseNode(object):
         self.start_backtrace_thread()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
-        # enable bootstrap. So addition means not the first set of node.
-        self.is_addition = False
+        # enable bootstrap.
+        self.enable_auto_bootstrap = False
         self.scylla_version = ''
         self.is_enterprise = None
 
@@ -1011,7 +1011,7 @@ WantedBy=multi-user.target
             scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
                                          scylla_yaml_contents)
 
-        if self.is_addition:
+        if self.enable_auto_bootstrap:
             if 'auto_bootstrap' in scylla_yaml_contents:
                 p = re.compile('auto_bootstrap:.*')
                 scylla_yaml_contents = p.sub('auto_bootstrap: True',
