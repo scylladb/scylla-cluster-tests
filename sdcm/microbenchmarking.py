@@ -130,6 +130,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "metrics": metrics,
             "kibana_url": self._conf.get('kibana_url'),
             "full_report": True,
+            "hostname": self.hostname,
         }
         for_render.update(dict(test_version=cur_version_info))
         if html_report_path:
