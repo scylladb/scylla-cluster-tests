@@ -647,11 +647,10 @@ class BaseNode(object):
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
-    def get_cfstats(self, tcpdump=False):
-        def keyspace1_available():
+    def get_cfstats(self, keyspace, tcpdump=False):
+        def keyspace_available():
             self.remoter.run('nodetool flush', ignore_status=True)
-            res = self.remoter.run('nodetool cfstats keyspace1',
-                                   ignore_status=True)
+            res = self.remoter.run('nodetool cfstats {}'.format(keyspace), ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
         if tcpdump:
@@ -659,10 +658,9 @@ class BaseNode(object):
             tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
                                               kwargs={'tcpdump_id': tcpdump_id})
             tcpdump_thread.start()
-        wait.wait_for(keyspace1_available, step=60,
-                      text='Waiting until keyspace1 is available')
+        wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
-            result = self.remoter.run('nodetool cfstats keyspace1')
+            result = self.remoter.run('nodetool cfstats {}'.format(keyspace))
         except process.CmdError:
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
@@ -1524,16 +1522,17 @@ class BaseScyllaCluster(object):
                 else:
                     self.log.error("Unknown ScyllaDB version")
 
-    def cfstat_reached_threshold(self, key, threshold):
+    def cfstat_reached_threshold(self, key, threshold, keyspace):
         """
         Find whether a certain cfstat key in all nodes reached a certain value.
 
         :param key: cfstat key, example, 'Space used (total)'.
         :param threshold: threshold value for cfstats key. Example, 2432043080.
+        :param keyspace: keyspace name or table full name(example: 'keyspace1.standard1')
         :return: Whether all nodes reached that threshold or not.
         """
         tcpdump = self.params.get('tcpdump')
-        cfstats = [node.get_cfstats(tcpdump)[key] for node in self.nodes]
+        cfstats = [node.get_cfstats(keyspace, tcpdump)[key] for node in self.nodes]
         self.log.debug("Current cfstats: %s" % cfstats)
         reached_threshold = True
         if max(cfstats) < threshold:
@@ -1542,16 +1541,16 @@ class BaseScyllaCluster(object):
             self.log.debug("Done waiting on cfstats: %s" % cfstats)
         return reached_threshold
 
-    def wait_cfstat_reached_threshold(self, key, threshold):
+    def wait_cfstat_reached_threshold(self, key, threshold, keyspace):
         text = "Waiting until cfstat '%s' reaches value '%s'" % (
             key, threshold)
         wait.wait_for(func=self.cfstat_reached_threshold, step=10,
-                      text=text, key=key, threshold=threshold)
+                      text=text, key=key, threshold=threshold, keyspace=keyspace)
 
-    def wait_total_space_used_per_node(self, size=None):
+    def wait_total_space_used_per_node(self, size=None, keyspace='keyspace1'):
         if size is None:
             size = int(self.params.get('space_node_threshold'))
-        self.wait_cfstat_reached_threshold('Space used (total)', size)
+        self.wait_cfstat_reached_threshold('Space used (total)', size, keyspace)
 
     def add_nemesis(self, nemesis, loaders, monitoring_set, **kwargs):
         self.nemesis.append(nemesis(cluster=self,
