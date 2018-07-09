@@ -52,13 +52,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.versions",
         )
 
-        tests_filtered = self._es.search(index=self._index, filter_path=filter_path, size=self._limit)
+        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
+        cur_version = cur_version_info["version"]
+        tests_filtered = self._es.search(index=self._index, filter_path=filter_path, size=self._limit,
+                                         q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
+                                                                                                      cur_version[:3]))
         assert tests_filtered, "No results from DB"
         results = tests_filtered["hits"]["hits"]
         sorted_by_type = defaultdict(list)
         for res in results:
-            if res["_source"]["hostname"] != self.hostname:
-                continue
             test_type = "%s_%s" % (res["_source"]["test_group_properties"]["name"],
                                    res["_source"]["test_args"])
             sorted_by_type[test_type].append(res)
@@ -76,7 +78,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # }
         allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
         metrics = ("aio", "frag/s", "cpu", "time (s)")
-        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
