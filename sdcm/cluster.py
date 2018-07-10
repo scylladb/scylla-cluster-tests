@@ -2291,6 +2291,7 @@ class BaseMonitorSet(object):
             try:
                 self.stop_scylla_monitoring(node)
                 self.download_monitoring_data_dir(node)
+                self.start_scylla_monitoring(node)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
