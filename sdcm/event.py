@@ -163,15 +163,20 @@ class ReactorStalledErrorEvent(DatabaseErrorEvent):
     PATTERN = 'Reactor stalled'
 
 
+class DataReturnedErrorEvent(DatabaseErrorEvent):
+    _Name = 'DATA_RETURNED_NOT_VALIDATED'
+    PATTERN = 'Data returned was not validated'
+
+
 class EventHandler(Process):
     """
     Check error counters on prometheus,
     stop test if number of errors exceeded a threshold.
     This task is running as a detached process during the test.
     """
-    CRITICAL_EVENTS = []
-    ERROR_EVENTS = [(SCTMetrics.COREDUMP_COUNTER, 'node'),
-                    (SCTMetrics.DISRUPT_ERROR_COUNTER, 'method'),
+    CRITICAL_EVENTS = [(SCTMetrics.COREDUMP_COUNTER, 'node'),
+                       (SCTMetrics.DATA_RETURNED_NOT_VALIDATED, 'node')]
+    ERROR_EVENTS = [(SCTMetrics.DISRUPT_ERROR_COUNTER, 'method'),
                     (SCTMetrics.DATABASE_ERROR_COUNTER, 'error')]
     EXCLUDED_EVENTS = []
     alive = True

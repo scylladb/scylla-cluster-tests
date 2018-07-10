@@ -304,7 +304,8 @@ class BaseNode(object):
         self._database_log_errors_index = []
         self._database_error_events = [event.BadAllocErrorEvent, event.RuntimeErrorEvent, event.StacktraceErrorEvent,
                                        event.BacktraceErrorEvent, event.SegmentationErrorEvent,
-                                       event.IntegrityCheckErrorEvent, event.ReactorStalledErrorEvent]
+                                       event.IntegrityCheckErrorEvent, event.ReactorStalledErrorEvent,
+                                       event.DataReturnedErrorEvent]
         self._database_log_offset = 0
         self._database_log_line_cnt = 0
         self.termination_event = threading.Event()
