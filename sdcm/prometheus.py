@@ -55,6 +55,7 @@ class SCTMetrics(object):
     DISRUPT_ERROR_COUNTER = 'nemesis_disruption_error_counter'
     COREDUMP_COUNTER = 'coredump_counter'
     DATABASE_ERROR_COUNTER = 'database_error_counter'
+    CRITICAL_ERROR_COUNTER = 'critical_error_counter'
 
     def __init__(self):
         super(SCTMetrics, self).__init__()
@@ -72,6 +73,9 @@ class SCTMetrics(object):
                                                       ['node', 'event'])
         self._database_error_counter = self._create_counter(self.DATABASE_ERROR_COUNTER,
                                                             'Counter for database errors',
+                                                            ['error', 'event'])
+        self._critical_error_counter = self._create_counter(self.CRITICAL_ERROR_COUNTER,
+                                                            'Counter for critical errors',
                                                             ['error', 'event'])
 
     @staticmethod
@@ -111,3 +115,7 @@ class SCTMetrics(object):
     @log_error
     def database_error_event(self, error):
         self._database_error_counter.labels(error, ERROR).inc()
+
+    @log_error
+    def critical_error_event(self, error):
+        self._critical_error_counter.labels(error, ERROR).inc()

@@ -128,6 +128,12 @@ class DatabaseErrorEvent(SCTError):
     PATTERN = 'Exception'
 
 
+class CriticalErrorEvent(SCTError):
+    _NAME = 'CRITICAL_ERROR'
+    _METRIC = 'critical_error_event'
+    PATTERN = 'Exception'
+
+
 class BadAllocErrorEvent(DatabaseErrorEvent):
     _NAME = 'BAD_ALLOC'
     PATTERN = 'std::bad_alloc'
@@ -163,7 +169,7 @@ class ReactorStalledErrorEvent(DatabaseErrorEvent):
     PATTERN = 'Reactor stalled'
 
 
-class DataReturnedErrorEvent(DatabaseErrorEvent):
+class DataReturnedErrorEvent(CriticalErrorEvent):
     _Name = 'DATA_RETURNED_NOT_VALIDATED'
     PATTERN = 'Data returned was not validated'
 
@@ -175,7 +181,7 @@ class EventHandler(Process):
     This task is running as a detached process during the test.
     """
     CRITICAL_EVENTS = [(SCTMetrics.COREDUMP_COUNTER, 'node'),
-                       (SCTMetrics.DATA_RETURNED_NOT_VALIDATED, 'node')]
+                       (SCTMetrics.CRITICAL_ERROR_COUNTER, 'error')]
     ERROR_EVENTS = [(SCTMetrics.DISRUPT_ERROR_COUNTER, 'method'),
                     (SCTMetrics.DATABASE_ERROR_COUNTER, 'error')]
     EXCLUDED_EVENTS = []
