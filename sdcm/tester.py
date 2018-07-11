@@ -685,7 +685,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
-            self.loaders.kill_stress_thread()
+            if self.params.get('bench_run', default=False):
+                self.loaders.kill_stress_thread_bench()
+            else:
+                self.loaders.kill_stress_thread()
 
     def verify_stress_thread(self, queue):
         results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
