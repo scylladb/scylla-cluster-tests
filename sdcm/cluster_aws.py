@@ -401,7 +401,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                               enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
-    def node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False, timeout=3600):
         if not cluster.Setup.REUSE_CLUSTER:
             node.wait_ssh_up(verbose=verbose)
             authenticator = self.params.get('authenticator')
@@ -430,7 +430,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                              verbose=verbose, ignore_status=True)
             node.remoter.run('sudo systemctl restart scylla-server.service')
 
-        node.wait_db_up(verbose=verbose)
+        node.wait_db_up(verbose=verbose, timeout=timeout)
         node.remoter.run('nodetool status', verbose=True, retry=5)
 
     def destroy(self):

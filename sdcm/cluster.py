@@ -1182,7 +1182,7 @@ def wait_for_init_wrap(method):
         logger.debug('Method kwargs: %s', kwargs)
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
-        setup_kwargs = {k: kwargs[k] for k in kwargs if k not in ('node_list', 'timeout')}
+        setup_kwargs = {k: kwargs[k] for k in kwargs if k != 'node_list'}
 
         queue = Queue.Queue()
 
@@ -1578,7 +1578,7 @@ class BaseScyllaCluster(object):
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False, timeout=30):
         """
         Install, configure and run scylla on node
         :param node: scylla node object
@@ -1631,7 +1631,7 @@ class BaseScyllaCluster(object):
             self.log.info('io.conf right after reboot')
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
-        node.wait_db_up()
+        node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
         if node.replacement_node_ip:
             # If this is a replacement node, we need to set back configuration in case
@@ -1662,7 +1662,7 @@ class BaseLoaderSet(object):
         self._loader_queue = []
         self.params = params
 
-    def node_setup(self, node, verbose=False, db_node_address=None):
+    def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
 
