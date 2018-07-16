@@ -2059,7 +2059,7 @@ class BaseMonitorSet(object):
         self.grafana_port = 3000
         self.grafana_start_time = None
         self.monitor_install_path_base = "/var/lib/scylla"
-        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-master")
+        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-branch-1.0")
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
         self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
 
