@@ -507,12 +507,13 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = ('--clustername %s --bootstrap true '
+                ec2_user_data = ('--clustername %s '
                                  '--totalnodes %s --seeds %s '
                                  '--version community '
                                  '--release 2.1.15' % (self.name,
                                                        count,
                                                        seeds))
+        ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
         added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
                                                               ec2_user_data=ec2_user_data,
                                                               dc_idx=dc_idx)
