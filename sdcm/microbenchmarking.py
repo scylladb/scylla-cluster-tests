@@ -99,8 +99,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             min_result = min(list_of_results_from_db, key=get_metrica_val)
             min_result_val = get_metrica_val(min_result)
             min_result_commit = get_commit_id(min_result)
-            diff_last = ((cur_val - last_val)/max(cur_val, last_val))*100 if max(cur_val, last_val) else 0
-            diff_best = ((cur_val - min_result_val)/max(cur_val, min_result_val))*100 if max(cur_val, min_result_val) else 0
+            diff_last = ((cur_val - last_val)/last_val)*100 if last_val > 0 else last_val * 100
+            diff_best = ((cur_val - min_result_val)/min_result_val)*100 if min_result_val > 0 else min_result_val * 100
             stats = {
                 "Current": cur_val,
                 "Last (commit id)": (last_val, last_commit),

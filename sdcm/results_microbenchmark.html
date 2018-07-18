@@ -90,7 +90,7 @@
                         {% if stat == "Best (commit id)" or stat == "Last (commit id)" %}
                             {{ '%g (%s)' % (cur_stat) }}
                         {% elif stat.startswith("Diff") %}
-                            {{ '%.2f' % cur_stat }}
+                            {{ '%.1f' % cur_stat }}
                         {% else %}
                             {{ '%g' % cur_stat }}
                         {% endif %}
