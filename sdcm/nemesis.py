@@ -214,12 +214,12 @@ class Nemesis(object):
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
 
-    def _add_and_init_new_cluster_node(self, old_node_private_ip=None):
+    def _add_and_init_new_cluster_node(self, old_node_private_ip=None, timeout=3600):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         new_node.replacement_node_ip = old_node_private_ip
-        self.cluster.wait_for_init(node_list=[new_node], timeout=30)
+        self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
@@ -258,7 +258,9 @@ class Nemesis(object):
                 self._terminate_cluster_node(self.target_node)
                 # Replace the node that was terminated.
                 if add_node:
-                    self._add_and_init_new_cluster_node()
+                    # When adding node after decommission the node is declared as up only after it completed bootstrapping,
+                    # increasing the timeout for now
+                    self._add_and_init_new_cluster_node(timeout=10800)
                 # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
                 # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
                 for node in self.cluster.nodes:
