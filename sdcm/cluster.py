@@ -1508,19 +1508,22 @@ class BaseScyllaCluster(object):
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
-            try:
-                result = self.nodes[0].remoter.run("rpm -q {}".format(self.nodes[0].scylla_pkg()))
-            except Exception as ex:
-                self.log.error('Failed getting scylla version: %s', ex)
-            else:
-                match = re.findall("scylla-(.*).el7.centos", result.stdout)
-                if match:
-                    scylla_version = match[0]
-                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
-                    for node in self.nodes:
-                        node.scylla_version = scylla_version
+            version_commands = ["scylla --version", "rpm -q {}".format(self.nodes[0].scylla_pkg())]
+            for version_cmd in version_commands:
+                try:
+                    result = self.nodes[0].remoter.run(version_cmd)
+                except Exception as ex:
+                    self.log.error('Failed getting scylla version: %s', ex)
                 else:
-                    self.log.error("Unknown ScyllaDB version")
+                    match = re.match("(\d+[.]\d+[.]\w+).*", result.stdout)
+                    if match:
+                        scylla_version = match.group(1)
+                        self.log.info("Found ScyllaDB version: %s" % scylla_version)
+                        for node in self.nodes:
+                            node.scylla_version = scylla_version
+                        break
+                    else:
+                        self.log.error("Unknown ScyllaDB version")
 
     def cfstat_reached_threshold(self, key, threshold, keyspace):
         """
