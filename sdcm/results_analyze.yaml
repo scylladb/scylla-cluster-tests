@@ -1,8 +1,7 @@
-es_url: 'https://746f0ad652a3447d83b1572f657c67cb.us-east-1.aws.found.io:9243'
-es_index: 'performanceregression'
+es_url: 'https://ES_URL_ID.us-east-1.aws.found.io:9243'
 es_user: ''
 es_password: ''
-kibana_url: 'https://70f106c98484448dbc4705050eb3f7e9.us-east-1.aws.found.io:9243'
+kibana_url: 'https://KIBANA_URL_ID.us-east-1.aws.found.io:9243'
 dashboard_master: 'goto/74b95b1aaf21325391ca35336e4147f0'
 dashboard_releases: 'goto/194f2175bc7438bd8b0e2ad0996fb340'
 email:

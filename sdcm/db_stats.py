@@ -7,9 +7,11 @@ import logging
 from textwrap import dedent
 
 import es
-from results_analyze import ResultsAnalyzer
+from results_analyze import PerformanceResultsAnalyzer
 
 logger = logging.getLogger(__name__)
+
+ES_DOC_TYPE = "test_stats"
 
 
 class CassandraStressCmdParseError(Exception):
@@ -107,14 +109,13 @@ class Stats(object):
     """
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
-        self._test_type = kwargs.get('test_type', None)
         self._test_id = kwargs.get('test_id', None)
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
     def _create(self):
-        es.ES().create(self._test_index, self._test_type, self._test_id, self._stats)
+        es.ES().create(self._test_index, ES_DOC_TYPE, self._test_id, self._stats)
 
     def update(self, data):
         """
@@ -122,7 +123,7 @@ class Stats(object):
         :param data: data dictionary
         """
         try:
-            es.ES().update(self._test_index, self._test_type, self._test_id, data)
+            es.ES().update(self._test_index, ES_DOC_TYPE, self._test_id, data)
         except Exception as ex:
             logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
 
@@ -138,7 +139,7 @@ class TestStatsMixin(Stats):
 
     @staticmethod
     def _create_test_id():
-        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
 
     def _init_stats(self):
         return {k: {} for k in self.KEYS}
@@ -192,7 +193,6 @@ class TestStatsMixin(Stats):
 
     def get_test_details(self):
         test_details = {}
-        test_details['test_name'] = self._test_type
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
 
         test_details['job_name'] = os.environ.get('JOB_NAME', 'local_run')
@@ -206,14 +206,15 @@ class TestStatsMixin(Stats):
 
     def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
-        self._test_type = self.params.id.name
-        if sub_type:
-            self._test_type = '{}_{}'.format(self._test_type, sub_type)
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
+        if sub_type:
+            self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
+        else:
+            self._stats['test_details']['test_name'] = self.params.id.name
         self._create()
 
     def update_stress_cmd_details(self, cmd, prefix=''):
@@ -298,7 +299,7 @@ class TestStatsMixin(Stats):
         self.update(update_data)
 
     def check_regression(self):
-        ra = ResultsAnalyzer(index=self._test_index,
+        ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=ES_DOC_TYPE,
                              send_email=self.params.get('send_email', default=True),
                              email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
@@ -312,6 +313,5 @@ if __name__ == '__main__':
     import pdb
     pdb.set_trace()
     obj = Stats(test_index='longevitytest',
-                test_type='longevity_test.py:LongevityTest.test_custom_time',
                 test_id='2018-04-29 11:41:59')
     obj.update({'nemesis': {}})

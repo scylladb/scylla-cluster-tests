@@ -198,7 +198,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         :return: db_stats.Stats object
         """
         return db_stats.Stats(test_index=self._test_index,
-                              test_type=self._test_type,
                               test_id=self._test_id)
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):

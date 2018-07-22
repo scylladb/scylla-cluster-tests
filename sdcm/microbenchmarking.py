@@ -27,7 +27,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
     def __init__(self, email_recipients):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index="microbenchmarking",
-            send_mail=True,
+            es_doc_type="microbenchmark",
+            send_email=True,
             email_recipients=email_recipients,
             email_template_fp="results_microbenchmark.html",
             query_limit=10000,
@@ -54,7 +55,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
         cur_version = cur_version_info["version"]
-        tests_filtered = self._es.search(index=self._index, filter_path=filter_path, size=self._limit,
+        tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                          q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
                                                                                                       cur_version[:3]))
         assert tests_filtered, "No results from DB"
@@ -161,8 +162,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                   'test_args': test_args,
                                   'test_run_date': self.test_run_date})
                 if update_db:
-                    self._es.create(index=self._index, doc_type="microbenchmark", id="%s_%s" % (self.test_run_date, test_type),
-                                    body=datastore)
+                    self._es.create(index=self._es_index, doc_type=self._es_doc_type,
+                                    id="%s_%s" % (self.test_run_date, test_type), body=datastore)
                 results[test_type] = datastore
         return results
 

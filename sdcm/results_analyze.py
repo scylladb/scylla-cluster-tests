@@ -20,7 +20,7 @@ class QueryFilter(object):
 
     def __init__(self, test_doc, is_gce=False):
         self.test_doc = test_doc
-        self.test_type = test_doc['_type']
+        self.test_name = test_doc["_source"]["test_details"]["test_name"]
         self.is_gce = is_gce
         self.date_re = '/2018-*/'
 
@@ -40,6 +40,7 @@ class QueryFilter(object):
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
         test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
+        test_details += ' AND test_details.test_name: {}'.format(self.test_name)
         return test_details
 
     def test_cmd_details(self):
@@ -49,8 +50,7 @@ class QueryFilter(object):
         try:
             return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
         except KeyError:
-            log.exception('Expected parameters for filtering are not found , test {} {}'.format(
-                self.test_type, self.test_doc['_id']))
+            log.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
         return None
 
 
@@ -66,7 +66,7 @@ class QueryFilterCS(QueryFilter):
             self.test_doc['_source']['test_details'].get(self._PRELOAD_CMD[0]) else self._CMD
 
     def cs_params(self):
-        return self._PROFILE_PARAMS if self.test_type.endswith('profiles') else self._PARAMS
+        return self._PROFILE_PARAMS if self.test_name.endswith('profiles') else self._PARAMS
 
     def test_cmd_details(self):
         test_details = ""
@@ -100,20 +100,22 @@ class QueryFilterScyllaBench(QueryFilter):
 
 
 class BaseResultsAnalyzer(object):
-    def __init__(self, es_index, send_mail=False, email_recipients=(),
-                 email_template_fp="results.html", query_limit=1000, logger=None):
-        self._conf = self._get_conf(os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c'))
+    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
+                 email_template_fp="", query_limit=1000, logger=None):
+        self._conf = self.get_conf()
         self._es = elasticsearch.Elasticsearch([self._conf["es_url"]], verify_certs=False,
                                                http_auth=(self._conf["es_user"], self._conf["es_password"]))
-        self._index = es_index
+        self._es_index = es_index
+        self._es_doc_type = es_doc_type
         self._limit = query_limit
-        self._send_email = send_mail
+        self._send_email = send_email
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
         self.log = logger if logger else log
 
     @staticmethod
-    def _get_conf(conf_file):
+    def get_conf():
+        conf_file = os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c')
         with open(conf_file) as cf:
             return yaml.safe_load(cf)
 
@@ -121,7 +123,7 @@ class BaseResultsAnalyzer(object):
         """
         Get all the test results in json format
         """
-        return self._es.search(index=self._index, size=self._limit)
+        return self._es.search(index=self._es_index, size=self._limit)
 
     def get_test_by_id(self, test_id):
         """
@@ -129,10 +131,10 @@ class BaseResultsAnalyzer(object):
         :param test_id: test id created by performance test
         :return: test results in json format
         """
-        if not self._es.exists(index=self._index, doc_type='_all', id=test_id):
+        if not self._es.exists(index=self._es_index, doc_type=self._es_doc_type, id=test_id):
             self.log.error('Test results not found: {}'.format(test_id))
             return None
-        return self._es.get(index=self._index, doc_type='_all', id=test_id)
+        return self._es.get(index=self._es_index, doc_type=self._es_doc_type, id=test_id)
 
     def _test_version(self, test_doc):
         if test_doc['_source'].get('versions'):
@@ -177,18 +179,20 @@ class BaseResultsAnalyzer(object):
         return NotImplementedError("check_regression should be implemented!")
 
 
-class ResultsAnalyzer(BaseResultsAnalyzer):
+class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     """
     Get performance test results from elasticsearch DB and analyze it to find a regression
     """
 
     PARAMS = ['op rate', 'latency mean', 'latency 99th percentile']
 
-    def __init__(self, *args, **kwargs):
-        super(ResultsAnalyzer, self).__init__(
-            es_index=kwargs.get('index'),
-            send_mail=kwargs.get('send_email', True),
-            email_recipients=kwargs.get('email_recipients', None)
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients):
+        super(PerformanceResultsAnalyzer, self).__init__(
+            es_index=es_index,
+            es_doc_type=es_doc_type,
+            send_email=send_email,
+            email_recipients=email_recipients,
+            email_template_fp="results_performance.html"
         )
 
     def _remove_non_stat_keys(self, stats):
@@ -293,7 +297,6 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        test_type = doc['_type']
         query = self._query_filter(doc, is_gce)
         if not query:
             return False
@@ -302,8 +305,7 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results.stats_average',
                        'hits.hits._source.results.stats_total',
                        'hits.hits._source.versions']
-        tests_filtered = self._es.search(index=self._index, doc_type=test_type, q=query, filter_path=filter_path,
-                                         size=self._limit)
+        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path, size=self._limit)
         if not tests_filtered:
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
@@ -356,7 +358,8 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # send results by email
-        results = dict(test_type=test_type,
+        full_test_name = doc["_source"]["test_details"]["test_name"]
+        results = dict(test_name=full_test_name,
                        test_id=test_id,
                        test_version=test_version_info,
                        res_list=res_list,
@@ -369,8 +372,8 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
         for dash in ('dashboard_master', 'dashboard_releases'):
             dash_url = '{}{}'.format(dashboard_url, self._conf.get(dash))
             results.update({dash: dash_url})
-
-        subject = 'Performance Regression Compare Results - {} - {}'.format(test_type.split('.')[-1], test_version)
+        test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
+        subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
         html = self.render_to_html(results)
         self.send_email(subject, html)
 
