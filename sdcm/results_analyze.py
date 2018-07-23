@@ -63,7 +63,6 @@ class QueryFilterCS(QueryFilter):
 
     def test_details_params(self):
         return self._CMD + self._PRELOAD_CMD if \
-            self.test_type.endswith('read') or self.test_type.endswith('mixed') and \
             self.test_doc['_source']['test_details'].get(self._PRELOAD_CMD[0]) else self._CMD
 
     def cs_params(self):
