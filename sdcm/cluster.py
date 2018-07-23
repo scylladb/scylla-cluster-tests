@@ -1100,7 +1100,7 @@ class BaseCluster(object):
             if node.n_coredumps > 0:
                 self.coredumps[node.name] = node.n_coredumps
 
-    def node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
     def get_node_ips_param(public_ip=True):
@@ -1581,7 +1581,7 @@ class BaseScyllaCluster(object):
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_setup(self, node, verbose=False, timeout=30):
+    def node_setup(self, node, verbose=False, timeout=3600):
         """
         Install, configure and run scylla on node
         :param node: scylla node object
