@@ -2094,7 +2094,6 @@ class BaseMonitorSet(object):
         node.wait_ssh_up()
 
         if Setup.REUSE_CLUSTER:
-            self.start_scylla_monitoring(node)  # during download_monitor_data scylla monitoring is stopped
             return
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
