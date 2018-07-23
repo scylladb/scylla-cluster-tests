@@ -257,9 +257,9 @@ class ResultsAnalyzer(BaseResultsAnalyzer):
                 delta = src[param] - dst[param]
                 change_perc = int(math.fabs(delta) * 100 / dst[param])
                 best_id = best_test_id[param]
-                if (param.startswith('latency') and change_perc > 0) or (param == 'op rate' and change_perc < 0):
+                if (param.startswith('latency') and delta > 0) or (param == 'op rate' and delta < 0):
                     status = 'Regression'
-                elif change_perc == 0:
+                if change_perc == 0:
                     status = "Difference"
                 cmp_res['res'][param_key_name] = dict(percent='{}%'.format(change_perc),
                                                       val=src[param],
