@@ -202,6 +202,22 @@ class AWSCluster(cluster.BaseCluster):
             self._reuse_credentials = cluster.UserRemoteCredentials(key_file=instance_key_file)
         return self._reuse_credentials
 
+    def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
+        """
+        Update --bootstrap argument inside ec2_user_data string.
+        """
+        if enable_auto_bootstrap:
+            if '--bootstrap ' in ec2_user_data:
+                ec2_user_data.replace('--bootstrap false', '--bootstrap true')
+            else:
+                ec2_user_data += ' --bootstrap true '
+        else:
+            if '--bootstrap ' in ec2_user_data:
+                ec2_user_data.replace('--bootstrap true', '--bootstrap false')
+            else:
+                ec2_user_data += ' --bootstrap false '
+        return ec2_user_data
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances()
