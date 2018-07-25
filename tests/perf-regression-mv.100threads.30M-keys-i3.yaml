@@ -45,7 +45,7 @@ backends: !mux
 
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.large'
+        instance_type_loader: 'c4.2xlarge'
         instance_type_monitor: t2.small
         instance_type_db: 'i3.4xlarge'
         us_east_1:
