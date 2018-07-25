@@ -75,4 +75,4 @@ databases: !mux
         instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        instance_type_db: 'i2.2xlarge'
+        instance_type_db: 'i3.2xlarge'
