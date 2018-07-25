@@ -2283,11 +2283,34 @@ class BaseMonitorSet(object):
         pass
 
     def install_scylla_monitoring_prereqs(self, node):
-        prereqs_script = dedent("""
-            yum install -y python-pip unzip wget docker
-            pip install --upgrade pip
-            pip install pyyaml
-        """.format(**locals()))
+        if node.is_rhel_like():
+            prereqs_script = dedent("""
+                yum install -y python-pip unzip wget docker
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
+        elif node.is_ubuntu():
+            prereqs_script = dedent("""
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+                sudo apt-get update
+                sudo apt-get install -y docker docker.io
+                apt-get install -y python-setuptools unzip wget
+                easy_install pip
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
+        else:
+            prereqs_script = dedent("""
+                curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+                sudo apt-get update
+                sudo apt-get install -y docker docker.io
+                apt-get install -y python-setuptools unzip wget
+                easy_install pip
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
