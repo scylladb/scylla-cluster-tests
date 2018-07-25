@@ -408,7 +408,7 @@ class PerformanceRegressionTest(ClusterTester):
         time.sleep(60)
 
         # Run READ workload
-        self.create_test_stats(sub_type='read')
+        self.create_test_stats(sub_type='read', calc_prometheus_stats=False)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -418,7 +418,7 @@ class PerformanceRegressionTest(ClusterTester):
         time.sleep(60)
 
         # run MIXED workload
-        self.create_test_stats(sub_type='mixed')
+        self.create_test_stats(sub_type='mixed', calc_prometheus_stats=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scylla_conf=True)

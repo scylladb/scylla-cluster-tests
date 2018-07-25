@@ -1,10 +1,19 @@
+import bisect
 import re
 import datetime
+import time
 import os
 import subprocess
 import platform
 import logging
+import requests
+import json
+import yaml
 from textwrap import dedent
+from math import sqrt, fabs
+from collections import defaultdict
+
+from copy import deepcopy
 
 import es
 from results_analyze import PerformanceResultsAnalyzer
@@ -26,6 +35,11 @@ class CassandraStressCmdParseError(Exception):
 
     def __repr__(self):
         return self.__str__()
+
+
+def stddev(lst):
+    mean = float(sum(lst)) / len(lst)
+    return sqrt(sum((x - mean)**2 for x in lst) / len(lst))
 
 
 def get_stress_cmd_params(cmd):
@@ -98,6 +112,161 @@ def get_stress_bench_cmd_params(cmd):
         if match:
             cmd_params[key] = match.group(2).strip()
     return cmd_params
+
+
+class TimeSeries(object):
+    """Time series data in format list of tuple(unix time, value)"""
+    def __init__(self, data, agg_time=30):
+        self.data = sorted(data, key=lambda x: x[0])
+        self.agg_time = agg_time  # [seconds] time frame which is considered close enough to aggregate to data points
+
+    def __str__(self):
+        return "%s: %s" % (self.__class__.__name__, str(self.data))
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __add__(self, ts_obj):
+        if len(ts_obj.data) == 0:
+            return self
+        if len(self.data) == 0:
+            return ts_obj
+        new_data = deepcopy(self.data)
+        for t, val in ts_obj.data:
+            time_stamps = [time_stamp for time_stamp, _ in new_data]
+            i = bisect.bisect_left(time_stamps, t)
+            if i == 0:  # first or before
+                delta = fabs(time_stamps[i] - t)
+                if delta < self.agg_time:
+                    new_data[i][1] += val
+                else:
+                    new_data.insert(i, (t, val))
+
+            elif i == len(time_stamps):  # after last
+                delta = fabs(t - time_stamps[i-1])
+                if delta < self.agg_time:
+                    new_data[i-1][1] += val
+                else:
+                    new_data.insert(i, (t, val))
+            elif time_stamps[i] == t:
+                new_data[i][1] += val
+            else:  # big gap in the middle
+                delta_right = fabs(t - time_stamps[i])
+                delta_left = fabs(t - time_stamps[i - 1])
+                if delta_left < self.agg_time and delta_right < self.agg_time:
+                    new_data.insert(i, [t, new_data[i-1][1] + fabs( new_data[i][1] - new_data[i-1][1])/2 + val])
+                elif delta_left < self.agg_time:
+                    new_data[i-1][1] += val
+                else:
+                    new_data[i][1] += val
+        return TimeSeries(new_data)
+
+    def __eq__(self, other):
+        return self.data == other.data
+
+
+def test_time_series():
+    empty_time_series = TimeSeries([])
+    assert TimeSeries([[1, 2], [2, 3]]) + empty_time_series == TimeSeries([[1, 2], [2, 3]])
+    assert empty_time_series + TimeSeries([[1, 2], [2, 3]]) == TimeSeries([[1, 2], [2, 3]])
+    t1 = TimeSeries([[1, 10], [2, 2]])
+    t2 = TimeSeries([[1, 10], [2, 2]])
+    assert t1 + t2 == TimeSeries([[1, 20], [2, 4]])
+    t1 = TimeSeries([[1, 10]])
+    t2 = TimeSeries([[3, 10]])
+    assert t1 + t2 == TimeSeries([[1, 20]])
+    assert t2 + t1 == TimeSeries([[3, 20]])
+    # overlapping
+    t1 = TimeSeries([[1, 10], [2, 10], [3, 10]])
+    t2 = TimeSeries([[2, 10], [3, 10], [4, 10]])
+    # right
+    assert t1 + t2 == TimeSeries([[1, 10], [2, 20], [3, 30]])
+    # from left
+    assert t2 + t1 == TimeSeries([[2, 30], [3, 20], [4, 10]])
+    # absorption
+    t1 = TimeSeries([[1, 10], [2, 10], [3, 10]])
+    t2 = TimeSeries([[2, 10]])
+    assert t2 + t1 == TimeSeries([[2, 40]])
+    assert t1 + t2 == TimeSeries([[1, 10], [2, 20], [3, 10]])
+    # adding with middle
+    t1 = TimeSeries([[1, 10], [3, 20], [4, 10]])
+    t2 = TimeSeries([[2, 10]])
+    assert t1 + t2 == TimeSeries([[1, 10], [2, 25], [3, 20], [4, 10]])
+    assert t2 + t1 == TimeSeries([[2, 50]])
+
+
+class PrometheusDBStats(object):
+    def __init__(self, host, port=9090):
+        self.host = host
+        self.port = port
+        self.range_query_url = "http://{0.host}:{0.port}/api/v1/query_range?query=".format(self)
+        self.config = self.get_configuration()
+
+    @property
+    def scylla_scrape_interval(self):
+        return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
+
+    def request(self, url):
+        response = requests.get(url)
+        result = json.loads(response.content)
+        logger.debug("Response from Prometheus server: %s", str(result)[:200])
+        if result["status"] == "success":
+            return result
+        else:
+            logger.error("Prometheus return error: %s", result)
+
+    def get_configuration(self):
+        result = self.request(url="http://{0.host}:{0.port}/api/v1/status/config".format(self))
+        configs = yaml.safe_load(result["data"]["yaml"])
+        logger.debug("Parsed Prometheus configs: %s", configs)
+        new_scrape_configs = {}
+        for conf in configs["scrape_configs"]:
+            new_scrape_configs[conf["job_name"]] = conf
+        configs["scrape_configs"] = new_scrape_configs
+        return configs
+
+    def query(self, metric_name, time_period, offset=0):
+        url = "http://{0.host}:{0.port}/api/v1/query?query=".format(self)
+        query = "{url}{metric_name}[{time_period}s] offset {offset}s".format(**locals())
+        result = self.request(url=query)
+        if result:
+            return result["data"]["result"]
+        else:
+            logger.error("Prometheus query unsuccessful!")
+            return []
+
+    def get_scylladb_throughput(self, period, offset, aggregate=False):
+        """
+        Calculates throughput (ops/second) based on counter values
+        Results returned from the PrometheusDB contain list of following structures:
+            metric: {
+            __name__: "scylla_transport_requests_served",
+            instance: "bentsi-tst-db-node-97cd3f5a-0-1",
+            job: "scylla",
+            shard: "0",
+            type: "derive"
+            },
+            values: []
+        :param period: in seconds
+        :return: list of tuples (unix time, op/s)
+        """
+        results = self.query(metric_name="scylla_transport_requests_served", time_period=period, offset=offset)
+        for metric_result in results:
+            values = metric_result["values"]
+            throughput = []
+            if len(values) == 0 or len(values) == 1:
+                continue
+            else:  # more than two results
+                for i in xrange(1, len(values)):
+                    opps = (float(values[i][1]) - float(values[i-1][1])) / self.scylla_scrape_interval
+                    throughput.append([values[i][0], opps])
+                metric_result["values"] = throughput
+        if aggregate:
+            aggregated = TimeSeries([])
+            for res in results:
+                aggregated += TimeSeries(res["values"])
+            return aggregated
+        return results
 
 
 class Stats(object):
@@ -204,7 +373,7 @@ class TestStatsMixin(Stats):
 
         return test_details
 
-    def create_test_stats(self, sub_type=None):
+    def create_test_stats(self, sub_type=None, calc_prometheus_stats=False):
         self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
@@ -215,6 +384,10 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
         else:
             self._stats['test_details']['test_name'] = self.params.id.name
+        self._stats['calc_prometheus_stats'] = calc_prometheus_stats
+        if calc_prometheus_stats:
+            self._stats["results"]["throughput"] = defaultdict(dict)
+            self._stats["results"]["throughput"]["start_time"] = time.time()
         self._create()
 
     def update_stress_cmd_details(self, cmd, prefix=''):
@@ -236,6 +409,25 @@ class TestStatsMixin(Stats):
             self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
+
+    def get_scylla_throughput(self):
+        if self.monitors and self._stats['calc_prometheus_stats']:
+            self.log.info("Calculating throughput stats from PrometheusDB...")
+            ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+            stats_period = int(time.time() - self._stats["test_details"]["start_time"])
+            ps_results = ps.get_scylladb_throughput(period=stats_period, offset=120, aggregate=True)  # op/s
+            throughput = self._stats["results"]["throughput"]
+            sum_aggregated_ops = [val for _, val in ps_results.data]
+            throughput["max"] = max(sum_aggregated_ops)
+            # filter all values that is less than 1% of max at he beginning and at the end
+            ops_filtered = filter(lambda x: x > throughput["max"] * 0.01, sum_aggregated_ops)
+            throughput["min"] = min(ops_filtered)
+            throughput["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
+            throughput["stdev"] = stddev(ops_filtered)
+            self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
+        else:
+            self.log.warning("Unable to get stats from Prometheus. "
+                             "Probably scylla monitoring nodes were not provisioned.")
 
     def update_stress_results(self, results):
         if 'stats' not in self._stats['results']:
@@ -280,6 +472,7 @@ class TestStatsMixin(Stats):
             # setup grafana_snapshot value only when snapshot is successfully uploaded
             if snapshot_uploaded:
                 self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+            self.get_scylla_throughput()
 
         if scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
             node = self.db_cluster.nodes[0]
@@ -291,7 +484,8 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
 
         self._stats['status'] = self.status
-        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
+        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details'],
+                       'results': {'throughput': self._stats["results"]["throughput"]}}
         if errors:
             update_data.update({'errors': errors})
         if coredumps:
@@ -310,8 +504,4 @@ class TestStatsMixin(Stats):
 
 
 if __name__ == '__main__':
-    import pdb
-    pdb.set_trace()
-    obj = Stats(test_index='longevitytest',
-                test_id='2018-04-29 11:41:59')
-    obj.update({'nemesis': {}})
+    test_time_series()
