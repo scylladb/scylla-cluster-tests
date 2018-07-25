@@ -28,7 +28,7 @@ backends: !mux
           gce_datacenter: 'us-east1-b'
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.2xlarge'
+        instance_type_loader: 'c4.large'
         instance_type_monitor: 't2.small'
         us_west_2:
             region_name: 'us-west-2'

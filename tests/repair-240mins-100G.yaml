@@ -60,7 +60,7 @@ backends: !mux
         cluster_backend: 'aws'
         instance_type_loader: 'c4.4xlarge'
         instance_type_monitor: 'c4.2xlarge'
-        instance_type_db: 'i2.8xlarge'
+        instance_type_db: 'i3.2xlarge'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
