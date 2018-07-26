@@ -10,7 +10,7 @@ stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema '
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
-user_prefix: 'perf-regression-VERSION'
+user_prefix: 'perf-regression-latency-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'

@@ -210,7 +210,7 @@ class PerformanceRegressionTest(ClusterTester):
         """
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
-        self.create_test_stats()
+        self.create_test_stats(calc_prometheus_stats=True)
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
         results = self.get_stress_results(queue=stress_queue)
@@ -339,7 +339,7 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        self.create_test_stats()
+        self.create_test_stats(calc_prometheus_stats=True)
         # run a write workload as a preparation
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
         self.get_stress_results(queue=stress_queue, store_results=False)
@@ -367,11 +367,10 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_r = self.params.get('stress_cmd_r')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        self.create_test_stats(sub_type='write')
-
         stress_queue = list()
         # if test require a pre-population of data
         if prepare_write_cmd:
+            self.create_test_stats(sub_type='write-prepare')
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
             if not isinstance(prepare_write_cmd, basestring) and len(prepare_write_cmd) > 1:
@@ -392,12 +391,15 @@ class PerformanceRegressionTest(ClusterTester):
                     stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
                                                                prefix='preload-'))
 
-        for stress in stress_queue:
-            self.get_stress_results(queue=stress, store_results=False)
+            for stress in stress_queue:
+                self.get_stress_results(queue=stress, store_results=False)
+
+            self.update_test_details()
 
         time.sleep(60)
 
         # Run WRITE workload
+        self.create_test_stats(sub_type='write', calc_prometheus_stats=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -408,7 +410,7 @@ class PerformanceRegressionTest(ClusterTester):
         time.sleep(60)
 
         # Run READ workload
-        self.create_test_stats(sub_type='read', calc_prometheus_stats=False)
+        self.create_test_stats(sub_type='read', calc_prometheus_stats=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -435,7 +437,7 @@ class PerformanceRegressionTest(ClusterTester):
                       "-partition-count 50000000 -clustering-row-count 1 -connection-count "
                       "32 -concurrency 512 -replication-factor 3")
 
-        self.create_test_stats()
+        self.create_test_stats(calc_prometheus_stats=True)
         stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
         results = self.get_stress_results_bench(queue=stress_queue)
 
