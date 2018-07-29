@@ -21,6 +21,8 @@ from sdcm.tester import ClusterTester
 import time
 import yaml
 
+KB = 1024
+
 
 class PerformanceRegressionTest(ClusterTester):
 
@@ -442,6 +444,61 @@ class PerformanceRegressionTest(ClusterTester):
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read_bench')
         self.check_regression()
+
+    def _scylla_bench_prepare_table(self):
+        node = self.db_cluster.nodes[0]
+        session = self.cql_connection_patient(node)
+        session.execute("""
+            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  AND durable_writes = true;
+        """)
+        session.execute("""
+            CREATE TABLE scylla_bench.test (
+                pk bigint,
+                ck bigint,
+                v blob,
+                PRIMARY KEY (pk, ck)
+            ) WITH CLUSTERING ORDER BY (ck ASC)
+                AND bloom_filter_fp_chance = 0.01
+                AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+                AND comment = ''
+                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60', 'compaction_window_unit': 'MINUTES'}
+                AND compression = {}
+                AND crc_check_chance = 1.0
+                AND dclocal_read_repair_chance = 0.1
+                AND default_time_to_live = 86400
+                AND gc_grace_seconds = 0
+                AND max_index_interval = 2048
+                AND memtable_flush_period_in_ms = 0
+                AND min_index_interval = 128
+                AND read_repair_chance = 0.0
+                AND speculative_retry = 'NONE';
+        """)
+
+    def test_timeseries_bench(self):
+        """
+        Timeseries write/read workload
+        """
+        cmd_w = ("scylla-bench -workload=timeseries -mode=write -replication-factor=3 "
+                 "-partition-count=5000 -clustering-row-count=1000000 -clustering-row-size=200 "
+                 "-concurrency=48 -max-rate=150000 -rows-per-request=5000")
+
+        self.create_test_stats(sub_type='write')
+        self._scylla_bench_prepare_table()
+        self.run_stress_thread_bench(stress_cmd=cmd_w)
+        start_timestamp = int(time.time())
+        self.db_cluster.wait_total_space_used_per_node(700 * KB * KB * KB, 'scylla_bench.test')  # 700GB
+
+        cmd_r = ("scylla-bench -workload=timeseries -mode=read -partition-count=5000 -concurrency=1 "
+                 "-replication-factor=3 -write-rate=30 -clustering-row-count=1000000 -clustering-row-size=200 "
+                 "-rows-per-request=1000000 -no-lower-bound -start-timestamp=%s -duration=60m" % start_timestamp)
+
+        self.create_test_stats(sub_type='read')
+        stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r)
+        results = self.get_stress_results_bench(queue=stress_queue)
+        self.update_test_details()
+        self.display_results(results, test_name='test_timeseries_read_bench')
+        self.check_regression()
+        self.kill_stress_thread()
 
     def test_mv_write(self):
         """
