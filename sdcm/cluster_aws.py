@@ -194,14 +194,6 @@ class AWSCluster(cluster.BaseCluster):
         ec2 = ec2_client.EC2Client(region_name=self.region_names[0])
         return [ec2.get_instance_by_private_ip(ip) for ip in self._node_private_ips]
 
-    def _retrieve_credentials(self, instance, dc_idx):
-        if not self._reuse_credentials:
-            key_file = self._credentials[dc_idx].key_file
-            instance_key_file = os.path.join(os.path.dirname(key_file),
-                                             '.'.join([instance.key_name, os.path.basename(key_file).split('.')[-1]]))
-            self._reuse_credentials = cluster.UserRemoteCredentials(key_file=instance_key_file)
-        return self._reuse_credentials
-
     def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
         """
         Update --bootstrap argument inside ec2_user_data string.
@@ -247,13 +239,8 @@ class AWSCluster(cluster.BaseCluster):
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,
                      base_logdir, dc_idx):
-        if cluster.Setup.REUSE_CLUSTER:
-            credentials = self._retrieve_credentials(instance, dc_idx)
-        else:
-            credentials = self._credentials[dc_idx]
-
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
-                       credentials=credentials, ami_username=ami_username,
+                       credentials=self._credentials[dc_idx], ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
                        base_logdir=base_logdir, dc_idx=dc_idx)
 
@@ -416,30 +403,36 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                               enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
+    def node_config_setup(self, node, seed_address, endpoint_snitch):
+        if len(self.datacenter) > 1:
+            node.config_setup(seed_address=seed_address,
+                              enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              broadcast=node.public_ip_address,
+                              authenticator=self.params.get('authenticator'),
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'),
+                              append_scylla_args=self.params.get('append_scylla_args'))
+        else:
+            node.config_setup(enable_exp=self._param_enabled('experimental'),
+                              endpoint_snitch=endpoint_snitch,
+                              authenticator=self.params.get('authenticator'),
+                              server_encrypt=self._param_enabled('server_encrypt'),
+                              client_encrypt=self._param_enabled('client_encrypt'),
+                              append_scylla_args=self.params.get('append_scylla_args'))
+
     def node_setup(self, node, verbose=False, timeout=3600):
+        endpoint_snitch = self.params.get('endpoint_snitch')
+        seed_address = self.get_seed_nodes_by_flag(private_ip=False)
+
         if not cluster.Setup.REUSE_CLUSTER:
+
             node.wait_ssh_up(verbose=verbose)
-            authenticator = self.params.get('authenticator')
-            endpoint_snitch = self.params.get('endpoint_snitch')
             if len(self.datacenter) > 1:
                 if not endpoint_snitch:
                     endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
-                node.config_setup(seed_address=self.get_seed_nodes_by_flag(private_ip=False),
-                                  enable_exp=self._param_enabled('experimental'),
-                                  endpoint_snitch=endpoint_snitch,
-                                  broadcast=node.public_ip_address,
-                                  authenticator=authenticator,
-                                  server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'),
-                                  append_scylla_args=self.params.get('append_scylla_args'))
-            else:
-                node.config_setup(enable_exp=self._param_enabled('experimental'),
-                                  endpoint_snitch=endpoint_snitch,
-                                  authenticator=authenticator,
-                                  server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'),
-                                  append_scylla_args=self.params.get('append_scylla_args'))
+            self.node_config_setup(node, seed_address, endpoint_snitch)
 
             node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
                              verbose=verbose, ignore_status=True)
@@ -447,6 +440,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.remoter.run('nodetool status', verbose=True, retry=5)
+
+        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
 
     def destroy(self):
         self.stop_nemesis()

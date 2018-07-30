@@ -1581,6 +1581,17 @@ class BaseScyllaCluster(object):
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
+    def node_config_setup(self, node, seed_address, endpoint_snitch):
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,
+                          enable_exp=self._param_enabled('experimental'),
+                          endpoint_snitch=endpoint_snitch,
+                          authenticator=self.params.get('authenticator'),
+                          server_encrypt=self._param_enabled('server_encrypt'),
+                          client_encrypt=self._param_enabled('client_encrypt'),
+                          append_conf=self.params.get('append_conf'),
+                          append_scylla_args=self.params.get('append_scylla_args'))
+
     def node_setup(self, node, verbose=False, timeout=3600):
         """
         Install, configure and run scylla on node
@@ -1588,31 +1599,19 @@ class BaseScyllaCluster(object):
         :param verbose:
         """
         node.wait_ssh_up(verbose=verbose)
+        endpoint_snitch = self.params.get('endpoint_snitch')
+        seed_address = self.get_seed_nodes_by_flag()
 
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
-            endpoint_snitch = self.params.get('endpoint_snitch')
             if len(self.datacenter) > 1:
                 if not endpoint_snitch:
                     endpoint_snitch = 'GossipingPropertyFileSnitch'
                 node.datacenter_setup(self.datacenter)
-            authenticator = self.params.get('authenticator')
-            seed_address = self.get_seed_nodes_by_flag()
 
-            def node_config_setup():
-                node.config_setup(seed_address=seed_address,
-                                  cluster_name=self.name,
-                                  enable_exp=self._param_enabled('experimental'),
-                                  endpoint_snitch=endpoint_snitch,
-                                  authenticator=authenticator,
-                                  server_encrypt=self._param_enabled('server_encrypt'),
-                                  client_encrypt=self._param_enabled('client_encrypt'),
-                                  append_conf=self.params.get('append_conf'),
-                                  append_scylla_args=self.params.get('append_scylla_args'))
-
-            node_config_setup()
+            self.node_config_setup(node, seed_address, endpoint_snitch)
             try:
                 disks = node.detect_disks(nvme=True)
             except AssertionError:
@@ -1636,11 +1635,14 @@ class BaseScyllaCluster(object):
 
         node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
+        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
+
+    def clean_replacement_node_ip(self, node, seed_address, endpoint_snitch):
         if node.replacement_node_ip:
             # If this is a replacement node, we need to set back configuration in case
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
-            node_config_setup()
+            self.node_config_setup(node, seed_address, endpoint_snitch)
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
