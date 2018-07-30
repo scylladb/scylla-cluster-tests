@@ -2,8 +2,6 @@ es_url: 'https://ES_URL_ID.us-east-1.aws.found.io:9243'
 es_user: ''
 es_password: ''
 kibana_url: 'https://KIBANA_URL_ID.us-east-1.aws.found.io:9243'
-dashboard_master: 'goto/74b95b1aaf21325391ca35336e4147f0'
-dashboard_releases: 'goto/194f2175bc7438bd8b0e2ad0996fb340'
 email:
   send: True
   server: localhost

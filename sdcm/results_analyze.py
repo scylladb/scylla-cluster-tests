@@ -313,6 +313,29 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         # get the best res for all versions of this job
         group_by_version = dict()
+        # Example:
+        # group_by_version = {
+        #     "2.3.rc1": {
+        #         "tests": {  # SortedDict(),
+        #             "20180726": {
+        #                 "latency 99th percentile": 10.3,
+        #                 "op rate": 15034.3
+        #                 #...
+        #             }
+        #         },
+        #
+        #         "stats_best": {
+        #             "op rate": 0,
+        #             "latency mean": 0,
+        #         },
+        #         "best_test_id": {
+        #             "op rate": "9b4a0a287",
+        #             "latency mean": "9b4a0a287",
+        #
+        #         }
+        #     }
+        # }
+        # Find best results for each version
         for tr in tests_filtered['hits']['hits']:
             if tr['_id'] == test_id:  # filter the current test
                 continue
@@ -329,7 +352,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             if version not in group_by_version:
                 group_by_version[version] = dict(tests=SortedDict(), stats_best=dict(), best_test_id=dict())
                 group_by_version[version]['stats_best'] = {k: 0 for k in self.PARAMS}
-                group_by_version[version]['best_test_id'] = {k: tr['_id'] for k in self.PARAMS}
+                group_by_version[version]['best_test_id'] = {k: version_info["commit_id"] for k in self.PARAMS}
             group_by_version[version]['tests'][version_info['date']] = curr_test_stats
             old_best = group_by_version[version]['stats_best']
             group_by_version[version]['stats_best'] =\
@@ -339,7 +362,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             for k in self.PARAMS:
                 if k in curr_test_stats and k in old_best and\
                         group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
-                            group_by_version[version]['best_test_id'][k] = tr['_id']
+                            group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
 
         res_list = list()
         # compare with the best in the test version and all the previous versions
@@ -370,10 +393,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))
 
-        dashboard_url = self._conf.get('kibana_url')
-        for dash in ('dashboard_master', 'dashboard_releases'):
-            dash_url = '{}{}'.format(dashboard_url, self._conf.get(dash))
-            results.update({dash: dash_url})
+        kibana_url = self._conf.get('kibana_url')
+        results.update({'dashboard_master': kibana_url})
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
         html = self.render_to_html(results)
