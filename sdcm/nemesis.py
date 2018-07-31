@@ -161,6 +161,14 @@ class Nemesis(object):
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    def disrupt_restart_node(self):
+        self._set_current_disruption('RestartNode %s' % self.target_node)
+        self.target_node.restart()
+        self.log.info('Waiting scylla services to start after node restart')
+        self.target_node.wait_db_up()
+        self.log.info('Waiting JMX services to start after node restart')
+        self.target_node.wait_jmx_up()
+
     def _destroy_data(self):
         # Send the script used to corrupt the DB
         break_scylla = get_data_path('break_scylla.sh')
@@ -739,6 +747,11 @@ class StopStartMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_stop_start_scylla_server()
 
+class RestartNodeMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_restart_node()
 
 class DrainerMonkey(Nemesis):
 
@@ -838,11 +851,13 @@ class LimitedChaosMonkey(Nemesis):
         #  - ModifyTableMonkey
         #  - EnospcMonkey
         #  - StopWaitStartMonkey
+        #  - RestartNodeMonkey
         self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
                                                          'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
-                                                         'disrupt_stop_wait_start_scylla_server'])
+                                                         'disrupt_stop_wait_start_scylla_server',
+                                                         'disrupt_restart_node'])
 
 class AllMonkey(Nemesis):
 
