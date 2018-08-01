@@ -217,7 +217,7 @@ class LongevityTest(ClusterTester):
         keyspace_num = self.params.get('keyspace_num', default=1)
         self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
 
-        for i in xrange(1, keyspace_num):
+        for i in xrange(1, keyspace_num+1):
             keyspace_name = 'keyspace{}'.format(i)
             self.create_ks(session, keyspace_name, rf=3)
             self.log.debug('{} Created'.format(keyspace_name))
