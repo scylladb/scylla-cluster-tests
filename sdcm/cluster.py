@@ -573,6 +573,8 @@ class BaseNode(object):
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
+        if self.termination_event.isSet():
+            return
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
@@ -1576,6 +1578,8 @@ class BaseScyllaCluster(object):
 
     @log_run_info("Stop nemesis threads on cluster")
     def stop_nemesis(self, timeout=10):
+        if self.termination_event.isSet():
+            return
         self.termination_event.set()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
