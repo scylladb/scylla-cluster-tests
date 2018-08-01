@@ -1036,6 +1036,20 @@ client_encryption_options:
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:
+            if self.is_ubuntu14():
+                self.remoter.run('sudo apt-get install software-properties-common -y')
+                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
+                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+                self.remoter.run('sudo apt-get update')
+                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
+                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_debian8():
+                self.remoter.run('sudo apt-get install software-properties-common -y')
+                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
+                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+                self.remoter.run('sudo apt-get update')
+                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
+                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
             self.remoter.run('sudo apt-get upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
