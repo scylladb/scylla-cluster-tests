@@ -40,7 +40,7 @@ class QueryFilter(object):
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
         test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-        test_details += ' AND test_details.test_name: {}'.format(self.test_name)
+        test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", "\:"))
         return test_details
 
     def test_cmd_details(self):
@@ -186,13 +186,14 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = ['op rate', 'latency mean', 'latency 99th percentile']
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients):
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
         super(PerformanceResultsAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
             email_recipients=email_recipients,
-            email_template_fp="results_performance.html"
+            email_template_fp="results_performance.html",
+            logger=logger
         )
 
     def _remove_non_stat_keys(self, stats):
@@ -300,7 +301,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         query = self._query_filter(doc, is_gce)
         if not query:
             return False
-
+        self.log.debug("Query to ES: %s", query)
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results.stats_average',
                        'hits.hits._source.results.stats_total',
@@ -310,7 +311,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if not tests_filtered:
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
-
         # get the best res for all versions of this job
         group_by_version = dict()
         # Example:

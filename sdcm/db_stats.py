@@ -75,10 +75,12 @@ def get_stress_cmd_params(cmd):
                     cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
 
             for temp in cmd.split(' -')[1:]:
-                k = temp.split()[0]
-                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
-                if match:
-                    cmd_params[k] = match.group(2).strip()
+                try:
+                    k, v = temp.split(" ", 1)
+                except ValueError as e:
+                    logger.warning("%s:%s" % (temp, e))
+                else:
+                    cmd_params[k] = v.strip().replace("'", "")
             if 'rate' in cmd_params:
                 # split rate section on separate items
                 if 'threads' in cmd_params['rate']:
