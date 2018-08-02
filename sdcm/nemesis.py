@@ -381,7 +381,7 @@ class Nemesis(object):
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
-    def call_random_disrupt_method(self, disrupt_methods=None):
+    def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
         if not disrupt_methods:
             disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
                                attr[0].startswith('disrupt_') and
@@ -390,51 +390,45 @@ class Nemesis(object):
             disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
                                attr[0] in disrupt_methods and
                                callable(attr[1])]
-        disrupt_method = random.choice(disrupt_methods)
+        if not predefined_sequence:
+            disrupt_method = random.choice(disrupt_methods)
+        else:
+            if not self._random_sequence:
+                # Generate random sequence, every method has same chance to be called.
+                # Here we use multiple original methods list, it will increase the chance
+                # to call same method continuously.
+                #
+                # Adjust the rate according to the test duration. Try to call more unique
+                # methods and don't wait to long time to meet the balance if the test
+                # duration is short.
+                test_duration = self.cluster.params.get('test_duration', default=180)
+                if test_duration < 600:  # less than 10 hours
+                    rate = 1
+                elif test_duration < 4320:  # less than 3 days
+                    rate = 2
+                else:
+                    rate = 3
+                multiple_disrupt_methods = disrupt_methods * rate
+                random.shuffle(multiple_disrupt_methods)
+                self._random_sequence = multiple_disrupt_methods
+            # consume the random sequence
+            disrupt_method = self._random_sequence.pop()
+
         disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
         self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method_name)
         self.metrics_srv.event_start(disrupt_method_name)
-        disrupt_method()
-        self.metrics_srv.event_stop(disrupt_method_name)
-        self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
-
-    def random_order_call_disrupt_methods(self, disrupt_methods=None):
-        if not disrupt_methods:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0].startswith('disrupt_') and
-                               callable(attr[1])]
+        exc = None
+        try:
+            disrupt_method()
+        except Exception as exc:
+            self.log.error("Exception in random_disrupt_method %s: %s", disrupt_method_name, exc)
         else:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0] in disrupt_methods and
-                               callable(attr[1])]
-
-        if not self._random_sequence:
-            # Generate random sequence, every method has same chance to be called.
-            # Here we use multiple original methods list, it will increase the chance
-            # to call same method continuously.
-            #
-            # Adjust the rate according to the test duration. Try to call more unique
-            # methods and don't wait to long time to meet the balance if the test
-            # duration is short.
-            test_duration = self.cluster.params.get('test_duration', default=180)
-            if test_duration < 600:     # less than 10 hours
-                rate = 1
-            elif test_duration < 4320:  # less than 3 days
-                rate = 2
-            else:
-                rate = 3
-            multiple_disrupt_methods = disrupt_methods * rate
-            random.shuffle(multiple_disrupt_methods)
-            self._random_sequence = multiple_disrupt_methods
-        # consume the random sequence
-        disrupt_method = self._random_sequence.pop()
-
-        disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
-        self.log.info(">>>>>>>>>>>>>Started disrupt_method %s" % disrupt_method_name)
-        self.metrics_srv.event_start(disrupt_method_name)
-        disrupt_method()
-        self.metrics_srv.event_stop(disrupt_method_name)
-        self.log.info("<<<<<<<<<<<<<Finished disrupt_method %s" % disrupt_method_name)
+            self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
+        finally:
+            self.metrics_srv.event_stop(disrupt_method_name)
+            if exc:
+                # propagate exception to the wrapper - to have the same handling as via-class call
+                raise
 
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
@@ -859,11 +853,12 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_stop_wait_start_scylla_server',
                                                          'disrupt_restart_node'])
 
+
 class AllMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.random_order_call_disrupt_methods()
+        self.call_random_disrupt_method(predefined_sequence=True)
 
 
 class MdcChaosMonkey(Nemesis):
