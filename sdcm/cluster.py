@@ -2466,8 +2466,12 @@ class BaseMonitorSet(object):
         start_time = str(self.grafana_start_time).split('.')[0] + '000'
 
         try:
-            process.run('curl "{}" -o {} -L'.format(phantomjs_url, phantomjs_tar))
-            process.run('yum install -y bzip2 && tar xvfj {}'.format(phantomjs_tar))
+            install_phantom_js_script = dedent("""
+                sudo yum install -y bzip2
+                curl "{phantomjs_url}" -o {phantomjs_tar} -L
+                tar xvfj {phantomjs_tar}
+            """.format(**locals()))
+            process.run(install_phantom_js_script)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
