@@ -15,6 +15,8 @@ import os
 import tempfile
 import shutil
 
+from textwrap import dedent
+
 
 class CollectdSetup(object):
 
@@ -441,14 +443,14 @@ WantedBy=multi-user.target
             shutil.rmtree(tmp_dir_exporter)
 
     def collectd_exporter_service_setup(self):
-        service_file = """# Run node_exporter
+        service_file = dedent("""# Run node_exporter
 
-start on startup
+            start on startup
 
-script
-   %s -collectd.listen-address=:65534
-end script
-""" % self.collectd_exporter_path
+            script
+               {0.collectd_exporter_path} -collectd.listen-address=:65534
+            end script
+        """.format(self))
 
         tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd-upstart-service')
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd_exporter.conf')
