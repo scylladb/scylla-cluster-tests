@@ -384,7 +384,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         results = dict(test_name=full_test_name,
-                       test_id=test_id,
+                       test_start_time=doc["_source"]["test_details"]["start_time"],
                        test_version=test_version_info,
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),

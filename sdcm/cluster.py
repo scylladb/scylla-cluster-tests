@@ -22,6 +22,8 @@ import tempfile
 import threading
 import time
 import uuid
+
+import requests
 import yaml
 import shutil
 
@@ -2227,11 +2229,11 @@ class BaseMonitorSet(object):
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.grafana_start_time = None
         self.monitor_install_path_base = "/var/lib/scylla"
         self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-branch-1.0")
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
         self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
+        self.phantomjs_installed = False
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
@@ -2437,10 +2439,15 @@ class BaseMonitorSet(object):
                       json_filename=sct_dashboard_json)
 
     def download_monitoring_data_dir(self, node):
-        local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
-        node.remoter.run('sudo chown -R %s:%s %s' %
-                         (node.remoter.user, node.remoter.user, self.monitoring_data_dir))
-        node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
+        try:
+            local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
+            node.remoter.run('sudo chown -R %s:%s %s' %
+                             (node.remoter.user, node.remoter.user, self.monitoring_data_dir))
+            node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
+            return local_monitoring_data_dir
+        except Exception as e:
+            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+            return ""
 
     @log_run_info
     def install_scylla_monitoring(self, node):
@@ -2454,28 +2461,55 @@ class BaseMonitorSet(object):
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % kill_script)
 
-    def get_monitor_snapshot(self):
-        """
-        Take snapshot for grafana monitor in the end of test
-        """
-        phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
-        phantomjs_tar = os.path.basename(phantomjs_url)
-        if not self.grafana_start_time:
-            self.log.error("grafana isn't setup, skip to get snapshot")
-            return
-        start_time = str(self.grafana_start_time).split('.')[0] + '000'
-
-        try:
+    def install_phantom_js(self):
+        if not self.phantomjs_installed:
+            phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
+            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
+            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
             install_phantom_js_script = dedent("""
-                sudo yum install -y bzip2
-                curl "{phantomjs_url}" -o {phantomjs_tar} -L
+                sudo rm -rf {phantomjs_base}*
+                sudo yum install -y bzip2 fontconfig bitmap-fonts
+                curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
-            process.run(install_phantom_js_script)
+            process.run("bash -ce '%s'" % install_phantom_js_script)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
+            self.phantomjs_installed = True
+        else:
+            self.log.debug("PhantomJS is already installed!")
 
+    @staticmethod
+    def generate_s3_url(file_path):
+        job_name = os.environ.get('JOB_NAME', "local_run")
+        file_name = os.path.basename(os.path.normpath(file_path))
+        return "https://cloudius-jenkins-test.s3.amazonaws.com/{job_name}/{file_name}".format(**locals())
+
+    def upload_file_to_s3(self, file_path):
+        try:
+            s3_url = self.generate_s3_url(file_path)
+            with open(file_path) as fh:
+                mydata = fh.read()
+                self.log.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
+                response = requests.put(s3_url, data=mydata)
+                self.log.debug(response)
+                return s3_url if response.ok else ""
+        except Exception as e:
+            self.log.debug("Unable to upload to S3: %s" % e)
+            return ""
+
+    def get_grafana_screenshot(self, test_start_time=None):
+        """
+            Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
+        """
+        if not test_start_time:
+            self.log.error("No start time for test")
+            return
+        start_time = str(test_start_time).split('.')[0] + '000'
+
+        try:
+            self.install_phantom_js()
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 version = self.monitoring_version.replace('.', '-')
@@ -2483,24 +2517,31 @@ class BaseMonitorSet(object):
                     node.public_ip_address, scylla_pkg, version, start_time)
                 snapshot_path = os.path.join(node.logdir,
                                              "grafana-snapshot-%s.png" % n)
-                process.run("sudo yum install fontconfig bitmap-fonts -y")
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                             "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                 grafana_url, snapshot_path), shell=True)
+                # since there is only one monitoring node returning here
+                return self.upload_file_to_s3(snapshot_path)
+
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
+        return ""
 
     @log_run_info
     def download_monitor_data(self):
         for node in self.nodes:
             try:
                 self.stop_scylla_monitoring(node)
-                self.download_monitoring_data_dir(node)
+                monitoring_data_dir_path = self.download_monitoring_data_dir(node)
                 self.start_scylla_monitoring(node)
+                shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
+                zipped_data_path = '%s.zip' % node.logdir
+                return self.upload_file_to_s3(zipped_data_path)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
+        return ""
 
 
 class NoMonitorSet(object):

@@ -3,7 +3,7 @@
     <h3>Test: {{ test_name }}</h3>
     <h3>
         <span>Test start time: </span>
-        <span class="blue">{{ test_id }}</span>
+        <span class="blue">{{ test_start_time }}</span>
     </h3>
     <h3>
         <span>Version: </span>
@@ -81,8 +81,8 @@
     <h3>Dashboard:</h3>
     <li><a href={{ dashboard_master }}>Perf-Regression Master</a></li>
     {% if grafana_snapshot %}
-        <h3>Grafana Snapshot:</h3>
-        <li><a href={{ grafana_snapshot }}>Download Grafana Snapshot</a></li>
+        <h3>Grafana Screenshot:</h3>
+        <li><a href={{ grafana_snapshot }}>Download Grafana Screenshot</a></li>
         <p>&nbsp;</p>
         <img src={{ grafana_snapshot }}  height="50%" width="50%">
     {% endif %}

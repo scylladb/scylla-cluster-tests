@@ -373,6 +373,7 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
+        test_details['grafana_snapshot'] = ""
         return test_details
 
     def create_test_stats(self, sub_type=None, calc_prometheus_stats=False):
@@ -465,16 +466,12 @@ class TestStatsMixin(Stats):
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False, scylla_conf=False):
-        if not self._stats:
-            return
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if self.monitors:
-            url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
-            self._stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            # setup grafana_snapshot value only when snapshot is successfully uploaded
-            if snapshot_uploaded:
-                self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+            test_start_time = self._stats['test_details']['start_time']
+            self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
+            self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
             self.get_scylla_throughput()
 
         if scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
