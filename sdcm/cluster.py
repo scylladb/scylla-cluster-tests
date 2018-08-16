@@ -2513,8 +2513,8 @@ class BaseMonitorSet(object):
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 version = self.monitoring_version.replace('.', '-')
-                grafana_url = "http://%s:3000/dashboard/db/%s-per-server-metrics-%s?from=%s&to=now" % (
-                    node.public_ip_address, scylla_pkg, version, start_time)
+                grafana_url = "http://%s:%s/dashboard/db/%s-per-server-metrics-nemesis-%s?from=%s&to=now" % (
+                    node.public_ip_address, self.grafana_port, scylla_pkg, version, start_time)
                 snapshot_path = os.path.join(node.logdir,
                                              "grafana-snapshot-%s.png" % n)
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
