@@ -304,6 +304,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results.stats_average',
                        'hits.hits._source.results.stats_total',
+                       'hits.hits._source.results.throughput',
                        'hits.hits._source.versions']
         tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path, size=self._limit)
         if not tests_filtered:
@@ -364,6 +365,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        test_version=test_version_info,
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),
+                       throughput_results=doc["_source"]["results"]["throughput"],
                        grafana_snapshot=self._get_grafana_snapshot(doc))
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))
