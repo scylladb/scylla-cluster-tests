@@ -4,7 +4,7 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 user_prefix: 'cases-dns-VERSION'
-failure_post_behavior: destory
+failure_post_behavior: destroy
 ip_ssh_connections: 'public'
 experimental: 'true'
 stop_services: 'true'

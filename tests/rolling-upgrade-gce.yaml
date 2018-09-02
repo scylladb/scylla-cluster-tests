@@ -12,7 +12,7 @@ stress_cmd_read_clall: cassandra-stress read no-warmup cl=ALL n=10000000 -schema
 stress_cmd_read_20m: cassandra-stress read no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
 
 user_prefix: 'rolling-upgrade-VERSION'
-failure_post_behavior: keep
+failure_post_behavior: destroy
 
 experimental: 'true'
 
