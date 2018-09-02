@@ -441,7 +441,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.remoter.run('nodetool status', verbose=True, retry=5)
 
-        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
 
     def destroy(self):
         self.stop_nemesis()
