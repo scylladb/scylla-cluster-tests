@@ -847,7 +847,7 @@ class BaseNode(object):
         if server_encrypt or client_encrypt:
             self.remoter.send_files(src='./data_dir/ssl_conf',
                                     dst='/tmp/')
-            self.remoter.run('sudo mv /tmp/ssl_conf/* /etc/scylla/')
+            self.remoter.run('sudo mv /tmp/ssl_conf/*.* /etc/scylla/')
 
         if server_encrypt:
             scylla_yaml_contents += """
