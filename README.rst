@@ -43,58 +43,55 @@ Setting up SCT environment
 Currently we support Red Hat like operating systems that use YUM package manager.
 SCT tests can run on two environments: on local RHEL like OS (tested on Fedora) or inside SCT docker container.
 Note: When running following commands, please clone this repo and `cd` into it.
+During SCT environment setup, you will be asked to configure your AWS CLI tool. This is needed to retrieve
+QA private keys from secure S3 Bucket during automated setup.
+The keys will be needed to connect to the Scylla clusters under test via SSH.
 
-Local run
----------
+Use following values when running ``aws configure``
+ * ``region`` -> `us-east-1`
+ * ``Default output format`` -> `None`
+ * ``aws_access_key_id``, ``aws_secret_access_key``
 
-To run SCT tests locally, first install OS pre-requisites::
-
-    sudo install-prereqs.sh
-
-Second install Python pre-requisites::
-
-    pip install -r requirements-python.txt
-
-SCT in Docker
--------------
+Option 1: Setup SCT in Docker
+-----------------------------
 As mentioned before, instead of installing all the prerequisites on your machine, you can also use SCT Docker
 container (aka Hydra) to run SCT avocado tests::
 
-    sudo install-hydra.sh
+    sudo ./install-hydra.sh
+    aws configure
 
 Notes for Hydra
 
-When running Hydra for the first time it will build the SCT Docker image. Please be patient and let the process complete
-till the end.
-Your home directory is exposed into the docker container to the root user, so all the SSH/AWS/GCE configurations
-are "automatically" visible to the SCT container.
-SCT is the current working directory in the container ( Run `hydra ls -l` to check)
+ * When running Hydra for the first time it will build the SCT Docker image. Please be patient and let the process complete till the end
+ * Your home directory is exposed into the docker container to the root user, so all the SSH/AWS/GCE configurations are "automatically" visible to the SCT container.
+ * SCT is the current working directory in the container ( Run `hydra ls -l` to check)
+ * QA private keys existence is checked each time when Hydra is run.
+ * Hydra will check for update on each run and when update will be available the Docker image will be rebuilt
 
-Example running avocado using Hydra::
+Option 2: Setup SCT locally
+---------------------------
 
-    hydra "avocado run --show-job-log performance_regression_test.py:PerformanceRegressionTest.test_write --multiplex tests/perf-regression.100threads.30M-keys.yaml --filter-only /run/backends/aws/us_east_1 /run/databases/scylla --filter-out /run/backends/gce /run/backends/docker"
+To run SCT tests locally run following::
+
+    sudo ./install-prereqs.sh
+    aws configure
+    ./get-qa-ssh-keys.sh
+
+
+
+Run a test
+----------
+
+Example running avocado using Hydra on AWS using `sample.yaml` configuration file::
+
+    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml"
 
 You can also enter the containerized SCT environment using::
 
     hydra bash
 
-
 Depending on which backend hardware/cloud provider/virtualization you will use, relevant configuration of those backend
 services should be done.
-
-
-Configuring AWS
----------------
-Before running SCT tests on AWS you will need to configure it by::
-
-    aws configure
-
-That will ask you for your ``region``, ``aws_access_key_id``,
-``aws_secret_access_key``. Please complete that setup.
-
-Note: `aws configure` will also ask for ``Default output format``, but you can
-just use the default value (None) as a valid answer.
-Note: Make sure you run this command under current user
 
 Configuring Google Cloud
 ------------------------
@@ -109,30 +106,10 @@ configurable test parameters, such as DB cluster instance types and AMI IDs.
 In this example, we're assuming that you have copied ``data_dir/scylla.yaml``
 to ``data_dir/your_config.yaml``.
 
+All the test run configurations are stored in ``tests`` directory.
+
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in ``data_dir/your_config.yaml``.
-
-Before running the suite, you should make avocado aware of the scdm libraries.
-In order to do that, you can issue a::
-
-    sudo python setup.py develop
-
-That will put sdcm in the python library path, while still allowing you to edit
-the code and make changes if you want. If you don't perform this step, you'll
-end up with the following error messages in the avocado test runner output,
-when trying to execute the tests::
-
-    Error receiving message from test: <type 'exceptions.ImportError'> -> No module named sdcm.cluster
-
-    Reproduced traceback from: /usr/lib/python2.7/site-packages/avocado/core/runner.py:75
-    Traceback (most recent call last):
-      File "/usr/lib64/python2.7/multiprocessing/queues.py", line 378, in get
-        return recv()
-    ImportError: No module named sdcm.cluster
-
-That happens because avocado does not know about the sdcm library, place where
-the resource cleanup functions are defined. Once avocado knows about that library,
-you won't get this error anymore.
 
 Setup Notes - Making your regular user able to access qemu:///session
 ---------------------------------------------------------------------

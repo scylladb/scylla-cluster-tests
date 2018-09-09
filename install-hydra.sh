@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 HYDRA_LINK_PATH=/usr/local/bin/hydra
-if ! docker --version > /dev/null; then
+if ! docker --version ; then
     echo "Docker not installed!!!"
     curl -fsSL get.docker.com -o get-docker.sh
     sh get-docker.sh
@@ -18,8 +18,16 @@ if [ ! -L "${HYDRA_LINK_PATH}" ]; then
     ln -s $(pwd)/docker/env/hydra.sh ${HYDRA_LINK_PATH}
 fi
 echo "Hydra installed."
-echo "==================================================================================================="
+if ! aws --version; then
+    echo "Installing AWS CLI..."
+    yum install -y python-devel python-pip
+    pip install --upgrade pip
+    grep -v '^#' requirements-python.txt| grep awscli |  xargs -t -L 1 pip install
+fi
+echo "AWS CLI installed."
+echo "==================================     NOTES      ================================================="
 echo "To check that Hydra is installed, run 'hydra ls' anywhere in bash."
 echo "It will run 'ls' command in the SCT Docker container."
-echo "NOTE: When running Hydra for the first time it will build the SCT Docker image. Please be patient!"
+echo "When running Hydra for the first time it will build the SCT Docker image. Please be patient!"
 echo "==================================================================================================="
+echo "Please run 'aws configure' to configure AWS CLI"

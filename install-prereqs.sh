@@ -24,3 +24,15 @@ curl -fsSL get.docker.com -o get-docker.sh
 sh get-docker.sh
 groupadd docker || true
 usermod -aG docker $USER || true
+
+# Make sdcm available in python path due to avocado runner bug
+if [ "$1" == "docker" ]; then
+    ln -s /sct/sdcm /usr/lib/python2.7/site-packages/sdcm
+else
+    grep -v '^#' requirements-python.txt | xargs -t -L 1 pip install
+    ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm
+    echo "========================================================="
+    echo "Please run 'aws configure' to configure AWS CLI and then"
+    echo "run 'get-qa-ssh-keys.sh' to retrieve AWS QA private keys"
+    echo "========================================================="
+fi
