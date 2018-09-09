@@ -134,33 +134,6 @@ That happens because avocado does not know about the sdcm library, place where
 the resource cleanup functions are defined. Once avocado knows about that library,
 you won't get this error anymore.
 
-Setup - Virtual Environment [currently not supported]
----------------------------------------------------
-
-For people seeking to run the tests using a self contained virtual environment,
-we provide a script to help you out with installing all the python dependencies.
-You will need to install a few development packages for the install process to
-work though::
-
-    sudo dnf install gcc python-devel libpng-devel libfreetype-devel libev libev-devel libyaml-devel libvirt-devel -y
-
-This is of course if you are running Fedora. Please adapt this instruction if
-you are running on another distro that won't have the same package names.
-
-Then you can run the `setup_venv` script::
-
-    ./setup_venv
-
-That will install everything you need then give you the command to start the
-virtual environment::
-
-    ...
-    Scylla Cluster Tests successfully configured
-    Now run 'source .sct_venv/bin/activate' to work from the created virtual environment
-
-As you can see, the dir of the virtual environment is `.sct_venv`, and that will
-be created inside the suite top level dir.
-
 Setup Notes - Making your regular user able to access qemu:///session
 ---------------------------------------------------------------------
 
