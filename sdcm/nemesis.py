@@ -208,6 +208,22 @@ class Nemesis(object):
         self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
 
+    def disrupt_restart_with_resharding(self):
+        self._set_current_disruption('RestartNode with resharding %s' % self.target_node)
+        murmur3_partitioner_ignore_msb_bits = 15
+        self.log.info('Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
+                      '{murmur3_partitioner_ignore_msb_bits}'.format(**locals()))
+        self.target_node.restart_node_with_resharding(murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+        self.log.info('Waiting scylla services to start after node restart')
+        self.target_node.wait_db_up()
+        self.log.info('Waiting JMX services to start after node restart')
+        self.target_node.wait_jmx_up()
+
+        # Wait 5 minutes our before return back the default value
+        time.sleep(360)
+        self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
+        self.target_node.restart_node_with_resharding()
+
     def _destroy_data(self):
         # Send the script used to corrupt the DB
         break_scylla = get_data_dir_path('break_scylla.sh')
@@ -1162,7 +1178,6 @@ class NodeTerminateAndReplace(Nemesis):
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
 
-
 class ValidateHintedHandoffShortDowntime(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1172,3 +1187,9 @@ class SnapshotOperations(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_snapshot_operations()
+
+class NodeRestartWithResharding(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_restart_with_resharding()
+
