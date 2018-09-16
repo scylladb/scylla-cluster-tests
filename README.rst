@@ -1,10 +1,13 @@
-Scylla Cluster Tests
-====================
+SCT - Scylla Cluster Tests
+==========================
 
-Here you can find some avocado [1] tests for scylla clusters.
-Those tests can automatically create a scylla cluster, some loader machines
-and then run operations defined by the test writers, such as database
-workloads.
+SCT tests are designed to test Scylla database on physical/virtual servers under high read/write load.
+Currently the tests are run using avocado[1] framework (version 36.4)
+These tests automatically create:
+
+* Scylla clusters - Run Scylla database
+* Loader machines - used to run load generators like cassandra-stress
+* Monitoring server - uses official Scylla Monitoring repo_ to monitor Scylla clusters and Loaders
 
 What's inside?
 --------------
@@ -15,7 +18,7 @@ What's inside?
    local processes running on the local machine instead of using actual
    machines running scylla services as cluster nodes. It contains:
 
-   * ``sdcm.cluster``: Cluster classes that use the ``boto3`` API [2]
+   * ``sdcm.cluster``: Base classes for Clusters
    * ``sdcm.remote``: SSH library
    * ``sdcm.nemesis``: Nemesis classes (a nemesis is a class that does disruption in the node)
    * ``sdcm.tester``: Contains the base test class, see below.
@@ -30,134 +33,83 @@ What's inside?
      * Security groups
      * Number of loader nodes
      * Number of cluster nodes
+   * SCT dashboards definition files for Grafana
 
 3. Python files with tests. The convention is that test files have the ``_test.py`` suffix.
 
-Regular Setup
--------------
+Setting up SCT environment
+--------------------------
 
-This guide was written with Red Hat based distributions (Fedora, RHEL and CentOS), and has been tested on recent Fedora and CentOS 7.
+Currently we support Red Hat like operating systems that use YUM package manager.
+SCT tests can run on two environments: on local RHEL like OS (tested on Fedora) or inside SCT docker container.
+Note: When running following commands, please clone this repo and `cd` into it.
+During SCT environment setup, you will be asked to configure your AWS CLI tool. This is needed to retrieve
+QA private keys from secure S3 Bucket during automated setup.
+The keys will be needed to connect to the Scylla clusters under test via SSH.
 
-Install freetype and C++ compilers and libraries::
+Use following values when running ``aws configure``
+ * ``region`` -> `us-east-1`
+ * ``Default output format`` -> `None`
+ * ``aws_access_key_id``, ``aws_secret_access_key``
 
-    sudo yum install freetype-devel gcc-c++
+Option 1: Setup SCT in Docker
+-----------------------------
+As mentioned before, instead of installing all the prerequisites on your machine, you can also use SCT Docker
+container (aka Hydra) to run SCT avocado tests::
 
-Install ``boto3`` and ``awscli`` (the last one is to help you configure aws), ``matplotlib``, ``aexpect`` and ``apache-libcloud``::
-
-    sudo -H pip install boto3
-    sudo -H pip install awscli
-    sudo -H pip install matplotlib==1.5.0
-    sudo -H pip install aexpect
-    sudo -H pip install apache-libcloud
-
-Install avocado. Make sure you install the LTS version (36.X), as newer versions have API incompatibilities with scylla-cluster-tests.
-
-You'll follow instructions in:
-
-http://avocado-framework.readthedocs.org/en/latest/GetStartedGuide.html#installing-avocado
-
-The detail here is to ensure you're installing the LTS version.
-
-Example: Following the instructions in the link, after you download the repo file for Fedora, (avocado-fedora.repo) edit it. Before modifying it, its contents are::
-
-    [avocado]
-    name=Avocado
-    baseurl=https://repos-avocadoproject.rhcloud.com/static/fedora-$releasever-noarch/
-    skip_if_unavailable=True
-    gpgkey=https://repos-avocadoproject.rhcloud.com/static/crosa_redhat_com.gpg
-    gpgcheck=1
-    enabled=1
-    enabled_metadata=1
-
-    [avocado-lts]
-    name=Avocado LTS (Long Term Stability)
-    baseurl=https://repos-avocadoproject.rhcloud.com/static/lts/fedora-$releasever-noarch/
-    skip_if_unavailable=True
-    gpgkey=https://repos-avocadoproject.rhcloud.com/static/crosa_redhat_com.gpg
-    gpgcheck=1
-    enabled=0
-
-Change enabled=1 in [avocado] to enabled=0, and enabled=0 in [avocado-lts] to enabled=1.
-Now you can install avocado LTS with the dnf/yum command mentioned in the docs.
-
-If you are using a very recent fedora version (example, 25) for which there is no avocado lts release (>24) then replace $releasever with 24 (or whatever $CURRENT_VERSION -1 is).
-
-Configure aws::
-
+    sudo ./install-hydra.sh
     aws configure
 
-That will ask you for your ``region``, ``aws_access_key_id``,
-``aws_secret_access_key``. Please complete that setup.
+Notes for Hydra
 
-Note: `aws configure` will also ask for ``Default output format``, but you can
-just use the default value (None) as a valid answer.
+ * When running Hydra for the first time it will build the SCT Docker image. Please be patient and let the process complete till the end
+ * Your home directory is exposed into the docker container to the root user, so all the SSH/AWS/GCE configurations are "automatically" visible to the SCT container.
+ * SCT is the current working directory in the container ( Run `hydra ls -l` to check)
+ * QA private keys existence is checked each time when Hydra is run.
+ * Hydra will check for update on each run and when update will be available the Docker image will be rebuilt
 
-You'll also need to install cassandra-driver (needed to support issuing CQL
-queries to nodes)::
+Option 2: Setup SCT locally
+---------------------------
 
-    sudo -H pip install cassandra-driver
+To run SCT tests locally run following::
 
-That install command requires gcc, python-devel and redhat-rpm-config, so if
-you still don't have either, please install them::
+    sudo ./install-prereqs.sh
+    aws configure
+    ./get-qa-ssh-keys.sh
 
-    sudo dnf install gcc python-devel redhat-rpm-config.noarch -y
+
+
+Run a test
+----------
+
+Example running avocado using Hydra on AWS using `sample.yaml` configuration file::
+
+    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml"
+
+You can also enter the containerized SCT environment using::
+
+    hydra bash
+
+Depending on which backend hardware/cloud provider/virtualization you will use, relevant configuration of those backend
+services should be done.
+
+Configuring Google Cloud
+------------------------
+
+TBD
+
+Configuring test run configuration YAML
+---------------------------------------
 
 Take a look at the ``data_dir/scylla.yaml`` file. It contains a number of
 configurable test parameters, such as DB cluster instance types and AMI IDs.
 In this example, we're assuming that you have copied ``data_dir/scylla.yaml``
 to ``data_dir/your_config.yaml``.
 
+All the test run configurations are stored in ``tests`` directory.
+
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in ``data_dir/your_config.yaml``.
-
-Before running the suite, you should make avocado aware of the scdm libraries.
-In order to do that, you can issue a::
-
-    sudo python setup.py develop
-
-That will put sdcm in the python library path, while still allowing you to edit
-the code and make changes if you want. If you don't perform this step, you'll
-end up with the following error messages in the avocado test runner output,
-when trying to execute the tests::
-
-    Error receiving message from test: <type 'exceptions.ImportError'> -> No module named sdcm.cluster
-
-    Reproduced traceback from: /usr/lib/python2.7/site-packages/avocado/core/runner.py:75
-    Traceback (most recent call last):
-      File "/usr/lib64/python2.7/multiprocessing/queues.py", line 378, in get
-        return recv()
-    ImportError: No module named sdcm.cluster
-
-That happens because avocado does not know about the sdcm library, place where
-the resource cleanup functions are defined. Once avocado knows about that library,
-you won't get this error anymore.
-
-Setup - Virtual Environment
----------------------------
-
-For people seeking to run the tests using a self contained virtual environment,
-we provide a script to help you out with installing all the python dependencies.
-You will need to install a few development packages for the install process to
-work though::
-
-    sudo dnf install gcc python-devel libpng-devel libfreetype-devel libev libev-devel libyaml-devel libvirt-devel -y
-
-This is of course if you are running Fedora. Please adapt this instruction if
-you are running on another distro that won't have the same package names.
-
-Then you can run the `setup_venv` script::
-
-    ./setup_venv
-
-That will install everything you need then give you the command to start the
-virtual environment::
-
-    ...
-    Scylla Cluster Tests successfully configured
-    Now run 'source .sct_venv/bin/activate' to work from the created virtual environment
-
-As you can see, the dir of the virtual environment is `.sct_venv`, and that will
-be created inside the suite top level dir.
 
 Setup Notes - Making your regular user able to access qemu:///session
 ---------------------------------------------------------------------
@@ -311,8 +263,8 @@ Setup
 2) Instantiate a set of loader nodes. They will be the ones to initiate
    cassandra stress, and possibly other database stress inducing activities.
 
-3) Instantiate a set of monitoring nodes. They will run prometheus [4], to
-   store metrics information about the database cluster, and also grafana [5],
+3) Instantiate a set of monitoring nodes. They will run prometheus [3], to
+   store metrics information about the database cluster, and also grafana [4],
    to let the user see real time dashboards of said metrics while the test is
    running. This is very useful in case you want to run the test suite and keep
    watching the behavior of each node.
@@ -446,7 +398,7 @@ Footnotes
 ---------
 
 * [1] http://avocado-framework.github.io/
-* [2] http://aws.amazon.com/sdk-for-python/
-* [3] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
-* [4] https://prometheus.io/
-* [5] http://grafana.org/
+* [2] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
+* [3] https://prometheus.io/
+* [4] http://grafana.org/
+.. _repo: https://github.com/scylladb/scylla-grafana-monitoring
