@@ -33,6 +33,7 @@ docker run --rm -it --privileged \
     -v ${SCT_DIR}:${WORK_DIR} \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
     -v /tmp:/tmp \
+    -v /var/tmp:/var/tmp \
     -v ~:/root \
     -w ${WORK_DIR} \
     scylladb/hydra:v${VERSION} \
