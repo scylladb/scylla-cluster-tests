@@ -960,15 +960,15 @@ class BaseNode(object):
             f.seek(0, os.SEEK_END)
             return f.tell()
 
-    def search_database_log(self, expression, start_search_from=0):
+    def search_database_log(self, expression, start_search_from_byte=0):
         matches = []
         pattern = re.compile(expression, re.IGNORECASE)
 
         if not os.path.exists(self.database_log):
             return matches
         with open(self.database_log, 'r') as f:
-            if start_search_from:
-                f.seek(start_search_from)
+            if start_search_from_byte:
+                f.seek(start_search_from_byte)
             for index, line in enumerate(f):
                 if index not in self._database_log_errors_index:
                     m = pattern.search(line)
@@ -1037,6 +1037,15 @@ class BaseNode(object):
         if hinted_handoff_disabled:  # disable hinted handoff (it is enabled by default in Scylla)
             p = re.compile('[# ]*hinted_handoff_enabled:.*')
             scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents)
+
+        if murmur3_partitioner_ignore_msb_bits:
+            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
+            p = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
+            if p.findall(scylla_yaml_contents):
+                scylla_yaml_contents = p.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(murmur3_partitioner_ignore_msb_bits)
 
         if murmur3_partitioner_ignore_msb_bits:
             self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
@@ -1489,44 +1498,29 @@ server_encryption_options:
         self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
         return ''
 
+    def _resharding_finished(self):
+        """
+        Check is there's Reshard listed in the log
+        """
+        patt = re.compile('RESHARD')
+        out = self.run_nodetool("compactionstats")
+        m = patt.search(out)
+        # If 'RESHARD' is not found in the compactionstats output, return True - means resharding was finished
+        # (or was not started)
+        return True if not m else False
+
     # Default value of murmur3_partitioner_ignore_msb_bits parameter is 12
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits=12):
-        def _wait_for_resharding(timeout=300, reshard_found=False, start_search_from=0):
-            """
-            wait until there's no Reshard listed in the log
-            sleep for more 5 seconds
-            break if there's no Reshard in the log
-            """
-            to = 0
-            sleep_time = 5
-            prev_out = []
-            while to <= timeout:
-                out = self.search_database_log('Reshard', start_search_from=start_search_from)
-                if out and prev_out == [o[0] for o in out]:
-                    break
-                prev_out = [o[0] for o in out]
-                if not out:
-                    if not timeout:
-                        return reshard_found
-                    time.sleep(sleep_time)
-                    return _wait_for_resharding(timeout=0, reshard_found=reshard_found)
-                reshard_found = True
-                time.sleep(sleep_time)
-                to += sleep_time
-                # Next statement recovers the case when "Reshard" text has not been found in the log and timeout was set to zero,
-                # but in the next iteration the "Reshard" was found again
-                timeout = timeout or 300
-            return reshard_found
-
         self.stop_scylla()
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         self.config_setup(murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
-        start_search_from = self.mark_log()
         self.start_scylla()
 
-        if not _wait_for_resharding(start_search_from=start_search_from):
-            logger.debug('Resharding has not been started! (murmur3_partitioner_ignore_msb_bits={})'.
-                         format(murmur3_partitioner_ignore_msb_bits))
+        resharding_finished = wait.wait_for(func=self._resharding_finished, step=5, timeout=3600,
+                      text="Wait for re-sharding to be finished")
+        if not resharding_finished:
+            logger.error('Resharding has not been started or was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
+                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
         else:
             logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
                          format(murmur3_partitioner_ignore_msb_bits))
