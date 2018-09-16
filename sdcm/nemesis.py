@@ -220,6 +220,7 @@ class Nemesis(object):
         self.target_node.wait_jmx_up()
 
         # Wait 5 minutes our before return back the default value
+        self.log.debug('Wait 5 minutes our before return murmur3_partitioner_ignore_msb_bits back the default value (12)')
         time.sleep(360)
         self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
         self.target_node.restart_node_with_resharding()
@@ -1192,4 +1193,3 @@ class NodeRestartWithResharding(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_with_resharding()
-
