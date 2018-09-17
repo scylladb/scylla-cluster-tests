@@ -20,6 +20,7 @@ fi
 echo "Hydra installed."
 if ! aws --version; then
     echo "Installing AWS CLI..."
+    yum install -y epel-release
     yum install -y python-devel python-pip
     pip install --upgrade pip
     grep -v '^#' requirements-python.txt| grep awscli |  xargs -t -L 1 pip install
