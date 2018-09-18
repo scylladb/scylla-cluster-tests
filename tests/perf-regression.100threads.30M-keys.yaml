@@ -15,7 +15,7 @@ instance_provision: 'spot_low_price'
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com']
+email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com', 'bentsi@scylladb.com']
 
 backends: !mux
     gce: !mux
