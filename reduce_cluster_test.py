@@ -30,7 +30,7 @@ class DecommissionNoAddMonkey(Nemesis):
     @log_time_elapsed
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=False)
-        self.reconfigure_monitoring()
+        self.monitoring_set.reconfigure_scylla_monitoring()
 
 
 class ReduceClusterTest(ClusterTester):
