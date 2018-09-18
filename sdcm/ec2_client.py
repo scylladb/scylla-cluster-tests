@@ -5,6 +5,8 @@ import boto3
 import base64
 from botocore.exceptions import ClientError, NoRegionError
 
+from .utils import retrying
+
 logger = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
@@ -216,6 +218,8 @@ class EC2Client(object):
         instance = self._resource.Instance(id=instance_id)
         return instance
 
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(ClientError,),
+              message="Waiting for instance is available")
     def add_tags(self, instance_id, tags=[]):
         """
         Add tags to instance
