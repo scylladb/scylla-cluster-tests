@@ -79,13 +79,7 @@ class GrowClusterTest(ClusterTester):
         new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
         self.db_cluster.wait_for_init(node_list=new_nodes)
         self.metrics_srv.event_stop('add_node')
-        self.reconfigure_monitor()
-
-    def reconfigure_monitor(self):
-        targets = [node.private_ip_address for node in self.db_cluster.nodes]
-        loader_targets = [node.private_ip_address for node in self.loaders.nodes]
-        for monitoring_node in self.monitors.nodes:
-            monitoring_node.reconfigure_prometheus(targets={'db_nodes': targets, 'loaders': loader_targets})
+        self.monitors.reconfigure_scylla_monitoring()
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
         # 60 minutes should be long enough for adding each node
