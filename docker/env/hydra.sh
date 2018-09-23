@@ -8,6 +8,14 @@ PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
 
+# if running on Build server
+if [[ ${USER} == "jenkins" ]]; then
+    echo "Running on Build Server..."
+else
+    TTY_STDIN="-it"
+    TERM_SET_SIZE="export COLUMNS=`tput cols`; export LINES=`tput lines`;"
+fi
+
 if ! docker --version; then
     echo "Docker not installed!!! Please run 'install-hydra.sh'!"
     exit 1
@@ -27,7 +35,8 @@ else
 fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
-docker run --rm -it --privileged \
+
+docker run --rm ${TTY_STDIN} --privileged \
     -h SCT-CONTAINER \
     -v /var/run:/run \
     -v ${SCT_DIR}:${WORK_DIR} \
@@ -37,4 +46,4 @@ docker run --rm -it --privileged \
     -v ~:/root \
     -w ${WORK_DIR} \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "export COLUMNS=`tput cols`; export LINES=`tput lines`; eval $CMD"
+    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
