@@ -36,11 +36,8 @@ from avocado.utils import script
 from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
-from . import data_path
 from . import wait
-from .utils import log_run_info, retrying
-from .utils import Distro
-
+from .utils import log_run_info, retrying, get_data_dir_path, Distro
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -459,7 +456,7 @@ class BaseNode(object):
     def install_sct_log_formatter(self):
         result = self.remoter.run('test -e /var/tmp/sct_log_formatter', verbose=False, ignore_status=True)
         if result.exit_status != 0:
-            sct_log_formatter = data_path.get_data_path('sct_log_formatter')
+            sct_log_formatter = get_data_dir_path('sct_log_formatter')
             self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
             self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
             self._sct_log_formatter_installed = True
@@ -2429,7 +2426,7 @@ class BaseMonitorSet(object):
 
         def _register_grafana_json(json_filename):
             url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
-            json_path = data_path.get_data_path(json_filename)
+            json_path = get_data_dir_path(json_filename)
             result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                  (url, json_path), ignore_status=True)
             return result.exit_status == 0

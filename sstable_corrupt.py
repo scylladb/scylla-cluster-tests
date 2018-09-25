@@ -17,7 +17,7 @@ import logging
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.data_path import get_data_path
+from sdcm.utils import get_data_dir_path
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class SstableCorruptTest(ClusterTester):
 
     def corrupt_sstables(self):
         logger.debug('Corrupt sstables')
-        src = get_data_path('corrupt_sstables.sh')
+        src = get_data_dir_path('corrupt_sstables.sh')
         dst = '/tmp/corrupt_sstables.sh'
         node = self.db_cluster.nodes[0]
         node.remoter.send_files(src, dst)
