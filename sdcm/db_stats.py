@@ -288,7 +288,7 @@ class TestStatsMixin(Stats):
         test_details['grafana_snapshot'] = ""
         return test_details
 
-    def create_test_stats(self, sub_type=None, calc_prometheus_stats=False):
+    def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
@@ -299,7 +299,6 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
         else:
             self._stats['test_details']['test_name'] = self.params.id.name
-        self._stats['test_details']['calc_prometheus_stats'] = calc_prometheus_stats
         self._stats['results']['throughput'] = defaultdict(dict)
         self._create()
 
@@ -324,7 +323,7 @@ class TestStatsMixin(Stats):
             self.update(dict(test_details=self._stats['test_details']))
 
     def get_scylla_throughput(self):
-        if self.monitors and self._stats['test_details']['calc_prometheus_stats']:
+        if self.monitors:
             self.log.info("Calculating throughput stats from PrometheusDB...")
             ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
             offset = 120  # 2 minutes offset
@@ -343,11 +342,8 @@ class TestStatsMixin(Stats):
             throughput["stdev"] = stddev(ops_filtered)
             self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
         else:
-            if not self._stats['test_details']['calc_prometheus_stats']:
-                self.log.info("Calculating stats from PrometheusDB was not selected!")
-            else:
-                self.log.warning("Unable to get stats from Prometheus. "
-                                 "Probably scylla monitoring nodes were not provisioned.")
+            self.log.warning("Unable to get stats from Prometheus. "
+                             "Probably scylla monitoring nodes were not provisioned.")
 
     def update_stress_results(self, results):
         if 'stats' not in self._stats['results']:
