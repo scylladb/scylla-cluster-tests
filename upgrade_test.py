@@ -22,7 +22,6 @@ from avocado import main
 
 from sdcm.nemesis import RollbackNemesis
 from sdcm.nemesis import UpgradeNemesis
-from sdcm.data_path import get_data_path
 from sdcm.fill_db_data import FillDatabaseData
 
 

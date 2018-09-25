@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .data_path import get_data_path
+from .utils import get_data_dir_path
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -249,7 +249,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                                  n_nodes=db_info['n_nodes'],
                                                  params=self.params)
 
-        scylla_repo = get_data_path('scylla.repo')
+        scylla_repo = get_data_dir_path('scylla.repo')
         self.loaders = LoaderSetOpenStack(openstack_image=self.params.get('openstack_image'),
                                           openstack_image_username=self.params.get('openstack_image_username'),
                                           openstack_network=self.params.get('openstack_network'),

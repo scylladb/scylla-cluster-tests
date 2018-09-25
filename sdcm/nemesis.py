@@ -26,7 +26,7 @@ import threading
 from avocado.utils import process
 
 from sdcm.cluster import SCYLLA_YAML_PATH
-from .data_path import get_data_path
+from .utils import get_data_dir_path
 from .log import SDCMAdapter
 from . import prometheus
 from . import mgmt
@@ -171,7 +171,7 @@ class Nemesis(object):
 
     def _destroy_data(self):
         # Send the script used to corrupt the DB
-        break_scylla = get_data_path('break_scylla.sh')
+        break_scylla = get_data_dir_path('break_scylla.sh')
         self.target_node.remoter.send_files(break_scylla,
                                             "/tmp/break_scylla.sh")
 
@@ -894,7 +894,7 @@ class UpgradeNemesis(Nemesis):
     #         node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
     #         node.remoter.run('rpm -qa scylla\*')
     #     elif repo_file:
-    #         scylla_repo = get_data_path(repo_file)
+    #         scylla_repo = get_data_dir_path(repo_file)
     #         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
     #         node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
     #         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
