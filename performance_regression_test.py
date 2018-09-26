@@ -141,10 +141,8 @@ class PerformanceRegressionTest(ClusterTester):
         self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
         self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session, mv_columns=['"C0"', 'key'])
 
-        if on_populated:
-            # If materialized view has been created on populated base table, wait for the view is built
-            self._wait_for_view_build_start(session, ks_name, view_name)
-            self._wait_for_view(self.db_cluster, session, ks_name, view_name)
+        # Wait for the materialized view is built
+        self._wait_for_view(self.db_cluster, session, ks_name, view_name)
 
     def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='', save_stats=True):
         if debug_message:
