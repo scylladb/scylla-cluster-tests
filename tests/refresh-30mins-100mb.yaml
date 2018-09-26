@@ -4,8 +4,8 @@ n_loaders: 1
 n_monitor_nodes: 1
 user_prefix: 'cases-refresh-100mb-not-jenkins'
 failure_post_behavior: destroy
-prepare_stress_cmd: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore -pop seq=1..10000000 -log interval=5
-stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore -pop seq=1..10000000 -log interval=5
+prepare_stress_cmd: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
 # 100M (300000 rows)
 sstable_url: 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
 sstable_file: '/var/tmp/keyspace1.standard1.100M.tar.gz'
