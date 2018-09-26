@@ -161,12 +161,29 @@ class Nemesis(object):
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
-    def disrupt_restart_node(self):
-        self._set_current_disruption('RestartNode %s' % self.target_node)
+    def disrupt_restart_then_repair_node(self):
+        self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
         self.log.info('Waiting scylla services to start after node restart')
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node restart')
+        self.target_node.wait_jmx_up()
+        self.repair_nodetool_repair()
+
+    def disrupt_hard_reboot_node(self):
+        self._set_current_disruption('HardRebootNode %s' % self.target_node)
+        self.target_node.reboot(hard=true)
+        self.log.info('Waiting scylla services to start after node reboot')
+        self.target_node.wait_db_up()
+        self.log.info('Waiting JMX services to start after node reboot')
+        self.target_node.wait_jmx_up()
+
+    def disrupt_soft_reboot_node(self):
+        self._set_current_disruption('SoftRebootNode %s' % self.target_node)
+        self.target_node.reboot(hard=false)
+        self.log.info('Waiting scylla services to start after node reboot')
+        self.target_node.wait_db_up()
+        self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
 
     def _destroy_data(self):
@@ -741,11 +758,23 @@ class StopStartMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_stop_start_scylla_server()
 
-class RestartNodeMonkey(Nemesis):
+class RestartThenRepairNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_restart_node()
+        self.disrupt_restart_then_repair_node()
+
+class HardRebootNodeMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_hard_reboot_node()
+
+class SoftRebootNodeMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_soft_reboot_node()
 
 class DrainerMonkey(Nemesis):
 

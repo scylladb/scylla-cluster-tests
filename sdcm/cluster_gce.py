@@ -107,7 +107,17 @@ class GCENode(cluster.BaseNode):
         return ip_tuple
 
     def restart(self):
+        # When using local_ssd disks in GCE, there is no option to Stop and Start an instance.
+        # So, for now we will keep restart the same as hard reboot.
         self._instance_wait_safe(self._instance.reboot)
+
+    def reboot(self, hard=True):
+        if hard:
+            self.log.debug('Hardly rebooting node')
+            self._instance_wait_safe(self._instance.reboot)
+        else:
+            self.log.debug('Softly rebooting node')
+            self.remoter.run('sudo reboot')
 
     def destroy(self):
         self.stop_task_threads()
