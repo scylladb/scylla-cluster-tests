@@ -37,6 +37,8 @@ from .remote import disable_master_ssh
 from . import data_path
 from . import wait
 from .utils import log_run_info, retrying
+from .utils import Distro
+
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -288,6 +290,93 @@ class BaseNode(object):
         self.scylla_version = ''
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
+        self.distro = None
+
+    def _get_distro(self):
+        # Distro attribute won't be changed, only need to detect once.
+        if self.distro:
+            return self.distro
+
+        result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
+        if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
+            self.distro = Distro.CENTOS7
+        if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
+            self.distro = Distro.RHEL7
+
+        result = self.remoter.run('cat /etc/issue', ignore_status=True)
+        if 'Ubuntu 14.04' in result.stdout:
+            self.distro = Distro.UBUNTU14
+        elif 'Ubuntu 16.04' in result.stdout:
+            self.distro = Distro.UBUNTU16
+        elif 'Debian GNU/Linux 8' in result.stdout:
+            self.distro = Distro.DEBIAN8
+        elif 'Debian GNU/Linux 9' in result.stdout:
+            self.distro = Distro.DEBIAN9
+        else:
+            self.log.debug("Failed to detect the distro name, %s" % result.stdout)
+
+        return self.distro
+
+    def is_centos7(self):
+        return self.distro == Distro.CENTOS7
+
+    def is_rhel7(self):
+        return self.distro == Distro.RHEL7
+
+    def is_rhel_like(self):
+        return self.distro == Distro.CENTOS7 or self.distro == Distro.RHEL7
+
+    def is_ubuntu14(self):
+        return self.distro == Distro.UBUNTU14
+
+    def is_ubuntu16(self):
+        return self.distro == Distro.UBUNTU16
+
+    def is_ubuntu(self):
+        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14
+
+    def is_debian8(self):
+        return self.distro == Distro.DEBIAN8
+
+    def is_debian9(self):
+        return self.distro == Distro.DEBIAN9
+
+    def is_debian(self):
+        return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
+
+    def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
+                    debian8_pkgs=None, debian9_pkgs=None):
+        """
+        Support to install packages to multiple distros
+
+        :param pkgs: default package name string
+        :param apt_pkgs: special package name string for apt-get
+        """
+        # install packages for special debian like system
+        if self.is_ubuntu14() and ubuntu14_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
+            return
+        if self.is_ubuntu16() and ubuntu16_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
+            return
+        if self.is_ubuntu14() and ubuntu14_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
+            return
+        if self.is_debian8() and debian8_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % debian8_pkgs)
+            return
+        if self.is_debian9() and debian9_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % debian9_pkgs)
+            return
+
+        # install general packages for debian like system
+        if apt_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % apt_pkgs)
+            return
+
+        if not self.is_rhel_like():
+            self.log.error('Install packages for unknown distro by yum')
+        self.remoter.run('sudo yum install -y %s' % pkgs)
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
@@ -297,9 +386,13 @@ class BaseNode(object):
 
     def scylla_pkg(self):
         if self.is_enterprise is None:
-            result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
-            self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
-                                          'No matches found' not in result.stdout) else False
+            if self.is_rhel_like():
+                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                              'No matches found' not in result.stdout) else False
+            else:
+                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
+                self.is_enterprise = True if 'scylla-enterprise' in result.stdout else False
 
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
@@ -534,6 +627,9 @@ class BaseNode(object):
         Verify the number of backtraces stored, report if new ones were found.
         """
         self.wait_ssh_up(verbose=False)
+        if self.is_ubuntu14():
+            # fixme: ubuntu14 doesn't has coredumpctl, skip it.
+            return
         new_n_coredumps = self._get_n_coredumps()
         if new_n_coredumps is not None:
             if (new_n_coredumps - self.n_coredumps) == 1:
@@ -588,13 +684,15 @@ class BaseNode(object):
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
-    def wait_ssh_up(self, verbose=True, timeout=300):
+    def wait_ssh_up(self, verbose=True, timeout=500):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
+        if not self.distro:
+            self.distro = self._get_distro()
 
     def is_port_used(self, port, service_name):
         try:
@@ -773,7 +871,8 @@ class BaseNode(object):
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
-                     server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None):
+                     server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
+                     debug_install=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -883,19 +982,41 @@ client_encryption_options:
         if append_scylla_args:
             self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
 
-    def download_scylla_repo(self, scylla_repo, repo_path='/etc/yum.repos.d/scylla.repo'):
-        if scylla_repo:
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-        else:
+        if debug_install and self.is_rhel_like():
+            self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
+
+    def download_scylla_repo(self, scylla_repo):
+        if not scylla_repo:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
+            return
+        if self.is_rhel_like():
+            repo_path = '/etc/yum.repos.d/scylla.repo'
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.run('sudo yum clean all')
+        else:
+            repo_path = '/etc/apt/sources.list.d/scylla.list'
+            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.run('sudo apt-get update')
+
+    def download_scylla_manager_repo(self, scylla_repo):
+        if self.is_rhel_like():
+            repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+        else:
+            repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+        self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
 
     def clean_scylla(self):
         """
         Uninstall scylla
         """
-        self.remoter.run('sudo systemctl stop scylla-server.service', ignore_status=True)
-        self.remoter.run('sudo yum remove -y "scylla*"')
-        self.remoter.run('sudo yum clean all')
+        self.stop_scylla_server(verify_down=False, ignore_status=True)
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum remove -y scylla\*')
+            self.remoter.run('sudo yum clean all')
+        else:
+            self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
+            self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
+            self.remoter.run('sudo apt-get clean all')
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
 
@@ -904,15 +1025,36 @@ client_encryption_options:
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
         """
-        result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-        if result.exit_status == 0:
-            self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+        if self.is_rhel_like():
+            result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+            self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+            self.download_scylla_repo(scylla_repo)
+            self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+            self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:
-            self.remoter.run('sudo yum update -y --skip-broken', retry=3)
-        self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
-        self.download_scylla_repo(scylla_repo)
-        self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
-        self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
+            if self.is_ubuntu14():
+                self.remoter.run('sudo apt-get install software-properties-common -y')
+                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
+                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+                self.remoter.run('sudo apt-get update')
+                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
+                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_debian8():
+                self.remoter.run('sudo apt-get install software-properties-common -y')
+                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
+                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+                self.remoter.run('sudo apt-get update')
+                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
+                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            self.remoter.run('sudo apt-get upgrade -y')
+            self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
+            self.download_scylla_repo(scylla_repo)
+            self.remoter.run('sudo apt-get update')
+            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}'.format(self.scylla_pkg()))
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -938,10 +1080,12 @@ client_encryption_options:
         self.remoter.run('sudo sync')
         self.log.info('io.conf right after setup')
         self.remoter.run('sudo cat /etc/scylla.d/io.conf')
-        self.remoter.run('sudo systemctl enable scylla-server.service')
-        self.remoter.run('sudo systemctl enable scylla-jmx.service')
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl enable scylla-server.service')
+            self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
+        # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         mgmt_user = 'scylla-manager'
@@ -950,7 +1094,7 @@ client_encryption_options:
 
         self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.download_scylla_repo(scylla_repo)
-        self.download_scylla_repo(scylla_mgmt_repo, repo_path='/etc/yum.repos.d/scylla-manager.repo')
+        self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
@@ -987,14 +1131,20 @@ client_encryption_options:
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-server start', timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=timeout)
 
     def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
-        self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-jmx start', timeout=timeout)
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
@@ -1002,17 +1152,23 @@ client_encryption_options:
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
-    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300):
+    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout, ignore_status=ignore_status)
+        else:
+            self.remoter.run('sudo service scylla-server stop', timeout=timeout, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
     def stop_scylla_jmx(self, verify_up=False, verify_down=True, timeout=300):
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
-        self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+        if not self.is_ubuntu14():
+            self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+        else:
+            self.remoter.run('sudo service scylla-jmx stop', timeout=timeout)
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
@@ -1677,10 +1833,17 @@ class BaseLoaderSet(object):
             return
 
         node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        else:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
 
         node.wait_cs_installed(verbose=verbose)
-        node.remoter.run('sudo yum install -y screen')
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y screen')
+        else:
+            node.remoter.run('sudo apt-get install -y screen')
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
                              db_node_address)
@@ -2105,7 +2268,10 @@ class BaseMonitorSet(object):
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        node.remoter.run('sudo yum install screen -y')
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install screen -y')
+        else:
+            node.remoter.run('sudo apt-get install screen -y')
         self.install_scylla_manager(node)
 
     def install_scylla_manager(self, node):
@@ -2131,11 +2297,34 @@ class BaseMonitorSet(object):
         pass
 
     def install_scylla_monitoring_prereqs(self, node):
-        prereqs_script = dedent("""
-            yum install -y python-pip unzip wget docker
-            pip install --upgrade pip
-            pip install pyyaml
-        """.format(**locals()))
+        if node.is_rhel_like():
+            prereqs_script = dedent("""
+                yum install -y python-pip unzip wget docker
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
+        elif node.is_ubuntu():
+            prereqs_script = dedent("""
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+                sudo apt-get update
+                sudo apt-get install -y docker docker.io
+                apt-get install -y python-setuptools unzip wget
+                easy_install pip
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
+        else:
+            prereqs_script = dedent("""
+                curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+                sudo apt-get update
+                sudo apt-get install -y docker docker.io
+                apt-get install -y python-setuptools unzip wget
+                easy_install pip
+                pip install --upgrade pip
+                pip install pyyaml
+            """)
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
@@ -2218,11 +2407,18 @@ class BaseMonitorSet(object):
             self.start_scylla_monitoring(node)
 
     def start_scylla_monitoring(self, node):
-        run_script = dedent("""
-            cd {0.monitor_install_path}
-            sudo systemctl start docker
-            ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version} 
-        """.format(self))
+        if node.is_rhel_like() or node.is_ubuntu16():
+            run_script = dedent("""
+                cd {0.monitor_install_path}
+                sudo systemctl start docker
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
+            """.format(self))
+        else:
+            run_script = dedent("""
+                cd {0.monitor_install_path}
+                sudo service docker start
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
+            """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script)
         self.add_sct_dashboards_to_grafana(node)
 

@@ -15,6 +15,8 @@ import os
 import tempfile
 import shutil
 
+from textwrap import dedent
+
 
 class CollectdSetup(object):
 
@@ -29,6 +31,8 @@ class CollectdSetup(object):
 
     def _setup_collectd(self):
         system_path_remote = self.collectd_config()
+        if not self.node.is_rhel_like():
+            system_path_remote = '/etc/collectd/collectd.conf'
         tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd')
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'scylla.conf')
         tmp_path_remote = "/tmp/scylla-collectd.conf"
@@ -392,11 +396,16 @@ LoadPlugin processes
     def start_collectd_service(self):
         # Disable SELinux to allow the unix socket plugin to work
         self.node.remoter.run('sudo setenforce 0', ignore_status=True)
-        self.node.remoter.run('sudo systemctl enable collectd.service')
+        if self.node.is_rhel_like() or self.node.is_ubuntu16():
+            self.node.remoter.run('sudo systemctl enable collectd.service')
         if self.node.is_docker():
             self.node.remoter.run('sudo /usr/sbin/collectd')
         else:
-            self.node.remoter.run('sudo systemctl restart collectd.service')
+            if self.node.is_rhel_like() or self.node.is_ubuntu16():
+                self.node.remoter.run('sudo systemctl restart collectd.service')
+            else:
+                self.node.remoter.run('sudo service collectd start')
+
 
     def collectd_exporter_setup(self):
         systemd_unit = """[Unit]
@@ -426,19 +435,49 @@ WantedBy=multi-user.target
             if self.node.is_docker():
                 self.node.remoter.run('sudo {} -collectd.listen-address=:65534 &'.format(self.collectd_exporter_path))
             else:
-                self.node.remoter.run('sudo systemctl start collectd-exporter.service')
+                if self.node.is_rhel_like() or self.node.is_ubuntu16():
+                    self.node.remoter.run('sudo systemctl start collectd-exporter.service')
+                else:
+                    self.node.remoter.run('sudo service collectd-exporter start')
+        finally:
+            shutil.rmtree(tmp_dir_exporter)
+
+    def collectd_exporter_service_setup(self):
+        service_file = dedent("""# Run node_exporter
+
+            start on startup
+
+            script
+               {0.collectd_exporter_path} -collectd.listen-address=:65534
+            end script
+        """.format(self))
+
+        tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd-upstart-service')
+        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd_exporter.conf')
+        tmp_path_remote = '/tmp/collectd_exporter.conf'
+        system_path_remote = '/etc/init/collectd_exporter.conf'
+        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
+            tmp_cfg_prom.write(service_file)
+        try:
+            self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
+            self.node.remoter.run('sudo mv %s %s' %
+                                  (tmp_path_remote, system_path_remote))
+            self.node.remoter.run('sudo service collectd_exporter restart')
         finally:
             shutil.rmtree(tmp_dir_exporter)
 
     def install(self, node):
         self.node = node
 
-        self.node.remoter.run('sudo yum install -y epel-release', retry=3)
-        self.node.remoter.run('sudo yum upgrade ca-certificates -y '
-                              '--disablerepo=epel',
-                              ignore_status=True,
-                              verbose=True, retry=3)
-        self.node.remoter.run('sudo yum install -y collectd')
+        if self.node.is_rhel_like():
+            self.node.remoter.run('sudo yum install -y epel-release', retry=3)
+            self.node.remoter.run('sudo yum upgrade ca-certificates -y '
+                                  '--disablerepo=epel',
+                                  ignore_status=True,
+                                  verbose=True, retry=3)
+            self.node.remoter.run('sudo yum install -y collectd')
+        else:
+            self.node.remoter.run('sudo apt-get install -y collectd')
         self._setup_collectd()
         self._set_exporter_path()
         self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
@@ -449,4 +488,7 @@ WantedBy=multi-user.target
                                self.collectd_exporter_tarball,
                                self.collectd_exporter_system_base_dir),
                               verbose=False)
-        self.collectd_exporter_setup()
+        if self.node.is_rhel_like() or self.node.is_ubuntu16():
+            self.collectd_exporter_setup()
+        else:
+            self.collectd_exporter_service_setup()
