@@ -322,6 +322,9 @@ class AWSNode(cluster.BaseNode):
             self._instance.reload()
 
     def restart(self):
+        result = self.remoter.run('curl http://169.254.169.254/latest/meta-data/instance-type -s')
+        if result.stdout[:2] in ['i3']:
+            self.remoter.run('sudo rm -f /etc/scylla/ami_configured')
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
