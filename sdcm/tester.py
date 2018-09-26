@@ -936,11 +936,17 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         def _view_build_finished(live_nodes_amount):
             result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE keyspace_name='{0}' "
                                                        "AND view_name='{1}'".format(ks, view)))
-            self.log.debug('_wait_for_view result: {}'.format(result))
+            self.log.debug('View build status result: {}'.format(result))
             return len([status for status in result  if status[0] == 'SUCCESS']) >= live_nodes_amount
 
         attempts = 20
-        live_nodes_amount = len([node for node in cluster.nodelist() if node.status == 'UP'])
+        nodes_status = cluster.get_nodetool_status()
+        live_nodes_amount = 0
+        for dc in nodes_status.itervalues():
+            for ip in dc.itervalues():
+                if ip['state'] == 'UN':
+                    live_nodes_amount += 1
+
         while attempts > 0:
             if _view_build_finished(live_nodes_amount):
                 return
@@ -954,8 +960,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         def _check_build_started():
             result = self.rows_to_list(session.execute("SELECT last_token FROM system.views_builds_in_progress "
                                                   "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
-            self.log.debug('_wait_for_view_build_start: {}'.format(result))
-            return result != [[None]]
+            self.log.debug('View build in progress: {}'.format(result))
+            return result != []
 
         self.log.debug("Ensure view building started.")
         start = time.time()
