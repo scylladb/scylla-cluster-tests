@@ -660,6 +660,9 @@ class BaseNode(object):
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
 
+    def reboot(self):
+        raise NotImplementedError('Derived classes must implement reboot')
+
     @log_run_info
     def start_task_threads(self):
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created

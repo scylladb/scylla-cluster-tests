@@ -322,8 +322,11 @@ class AWSNode(cluster.BaseNode):
             self._instance.reload()
 
     def restart(self):
-        result = self.remoter.run('curl http://169.254.169.254/latest/meta-data/instance-type -s')
-        if result.stdout[:2] in ['i3']:
+        # We differenciate between "Restart" and "Reboot".
+        # Restart in AWS will be a Stop and Start of an instance.
+        # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
+        # need to setup the instance and treat it as a new instance.
+        if ('i2' or 'i3') in self._instance.instance_type:
             self.remoter.run('sudo rm -f /etc/scylla/ami_configured')
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
@@ -333,7 +336,14 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
-        self.wait_db_up()
+
+    def reboot(self, hard=True):
+        if hard:
+            self.log.debug('Hardly rebooting node')
+            self._instance.reboot()
+        else:
+            self.log.debug('Softly rebooting node')
+            self.remoter.run('sudo reboot')
 
     def destroy(self):
         self.stop_task_threads()
