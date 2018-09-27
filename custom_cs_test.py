@@ -17,7 +17,7 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.data_path import get_data_path
+from sdcm.utils import get_data_dir_path
 
 
 class CustomCsTest(ClusterTester):
@@ -34,7 +34,7 @@ class CustomCsTest(ClusterTester):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
-        cs_custom_config = get_data_path('cassandra-stress-custom.yaml')
+        cs_custom_config = get_data_dir_path('cassandra-stress-custom.yaml')
         with open(cs_custom_config, 'r') as cs_custom_config_file:
             self.log.info('Using custom cassandra-stress config:')
             self.log.info(cs_custom_config_file.read())
