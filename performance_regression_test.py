@@ -169,10 +169,10 @@ class PerformanceRegressionTest(ClusterTester):
         self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     # do not run this test on 2.2 while this feature is not available
-    def test_write_with_mv_populated(self):
+    def test_mv_write_populated(self):
         self._write_with_mv(on_populated=True)
 
-    def test_write_with_mv_not_populated(self):
+    def test_mv_write_not_populated(self):
         self._write_with_mv(on_populated=False)
 
     def _write_with_mv(self, on_populated):
@@ -219,10 +219,10 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_write')
         self.check_regression()
 
-    def test_read_with_mv_populated(self):
+    def test_mv_read_populated(self):
         self._read_with_mv(on_populated=True)
 
-    def test_read_with_mv_not_populated(self):
+    def test_mv_read_not_populated(self):
         self._read_with_mv(on_populated=False)
 
     def _read_with_mv(self, on_populated):
