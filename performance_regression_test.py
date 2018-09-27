@@ -396,7 +396,7 @@ class PerformanceRegressionTest(ClusterTester):
 
             self.update_test_details()
 
-        time.sleep(60)
+        time.sleep(600)
 
         # Run WRITE workload
         self.create_test_stats(sub_type='write')
@@ -407,7 +407,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-        time.sleep(60)
+        time.sleep(600)
 
         # Run READ workload
         self.create_test_stats(sub_type='read')
@@ -417,7 +417,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-        time.sleep(60)
+        time.sleep(600)
 
         # run MIXED workload
         self.create_test_stats(sub_type='mixed')
