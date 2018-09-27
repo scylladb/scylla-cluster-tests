@@ -126,9 +126,11 @@ class EC2Client(object):
             raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
         prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
         price_avg = round(sum(prices) / len(prices), 4)
-        price_desired = (price_avg + min(prices)) / 4
-        price_desired = round(price_desired, 4)
-        price = (dict(min=min(prices), max=max(prices), avg=price_avg, desired=price_desired))
+        price_min = min(prices)
+        price_desired = (price_avg + price_min) / 4
+        if price_desired < price_min:
+            price_desired = price_min
+        price = (dict(min=price_min, max=max(prices), avg=price_avg, desired=round(price_desired, 4)))
         logger.info('Spot bid price: %s', price)
         return price
 
@@ -333,7 +335,7 @@ if __name__ == '__main__':
                    'Groups': ['sg-5e79983a']}]
     user_data = '--clustername cluster-scale-test-xxx --bootstrap true --totalnodes 3'
 
-    ec2 = EC2Client()
+    ec2 = EC2Client(region_name='us-east1')
     instance_type = 'm3.medium'
     image_id = 'ami-56373b2d'
     avail_zone = ec2.get_subnet_info(network_if[0]['SubnetId'])['AvailabilityZone']
