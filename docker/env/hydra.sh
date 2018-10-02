@@ -45,5 +45,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -v /var/tmp:/var/tmp \
     -v ~:/root \
     -w ${WORK_DIR} \
+    -e JOB_NAME=${JOB_NAME} \
+    -e BUILD_URL=${BUILD_URL} \
     scylladb/hydra:v${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"

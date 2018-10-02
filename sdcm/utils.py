@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
+import os
 import logging
 import time
 import datetime
@@ -129,7 +130,10 @@ class Distro(Enum):
 
 def get_data_dir_path(*args):
     import sdcm
-    import os
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     data_dir = os.path.join(sdcm_path, "../data_dir", *args)
     return os.path.abspath(data_dir)
+
+
+def get_job_name():
+    return os.environ.get('JOB_NAME', 'local_run')

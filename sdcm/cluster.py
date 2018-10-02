@@ -37,7 +37,7 @@ from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -2479,7 +2479,7 @@ class BaseMonitorSet(object):
 
     @staticmethod
     def generate_s3_url(file_path):
-        job_name = os.environ.get('JOB_NAME', "local_run")
+        job_name = get_job_name()
         file_name = os.path.basename(os.path.normpath(file_path))
         return "https://cloudius-jenkins-test.s3.amazonaws.com/{job_name}/{file_name}".format(**locals())
 

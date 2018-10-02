@@ -13,6 +13,7 @@ from math import sqrt
 from collections import defaultdict
 import es
 from results_analyze import PerformanceResultsAnalyzer
+from utils import get_job_name
 
 logger = logging.getLogger(__name__)
 
@@ -277,11 +278,8 @@ class TestStatsMixin(Stats):
     def get_test_details(self):
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        test_details['job_name'] = os.environ.get('JOB_NAME', 'local_run')
-        if os.environ.get('BUILD_URL'):
-            test_details['job_url'] = os.environ.get('BUILD_URL', '')
-
+        test_details['job_name'] = get_job_name()
+        test_details['job_url'] = os.environ.get('BUILD_URL', '')
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
