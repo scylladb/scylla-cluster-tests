@@ -32,7 +32,7 @@ from textwrap import dedent
 from avocado.utils import path
 from avocado.utils import process
 from avocado.utils import script
-
+from datetime import datetime
 from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
@@ -2512,8 +2512,9 @@ class BaseMonitorSet(object):
                 version = self.monitoring_version.replace('.', '-')
                 grafana_url = "http://%s:%s/dashboard/db/%s-per-server-metrics-nemesis-%s?from=%s&to=now" % (
                     node.public_ip_address, self.grafana_port, scylla_pkg, version, start_time)
+                datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                 snapshot_path = os.path.join(node.logdir,
-                                             "grafana-snapshot-%s.png" % n)
+                                             "grafana-screenshot-%s-%s.png" % (datetime_now, n))
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                             "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                 grafana_url, snapshot_path), shell=True)
