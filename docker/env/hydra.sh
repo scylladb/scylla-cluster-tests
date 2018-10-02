@@ -47,5 +47,6 @@ docker run --rm ${TTY_STDIN} --privileged \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
+    --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
+    /bin/bash -c "/usr/libexec/postfix/master -w; ${TERM_SET_SIZE} eval ${CMD}"

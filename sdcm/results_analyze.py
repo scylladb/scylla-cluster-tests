@@ -309,6 +309,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results.throughput',
                        'hits.hits._source.versions']
         tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path, size=self._limit)
+
         if not tests_filtered:
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
