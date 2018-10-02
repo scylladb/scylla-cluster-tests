@@ -32,6 +32,7 @@
     </div>
     <div>
         <span> Throughput stats (based on data from Prometheus): </span>
+        {% if throughput_results %}
         <ul>
         {% for key, val in throughput_results.iteritems()|sort %}
             <li>
@@ -39,6 +40,10 @@
             </li>
         {% endfor %}
         </ul>
+
+        {% else %}
+        <span>ERROR - see log for details</span>
+        {% endif %}
     </div>
 
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}

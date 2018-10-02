@@ -11,9 +11,12 @@ import yaml
 from textwrap import dedent
 from math import sqrt
 from collections import defaultdict
+
+from requests import ConnectionError
+
 import es
 from results_analyze import PerformanceResultsAnalyzer
-from utils import get_job_name
+from utils import get_job_name, retrying
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,7 @@ class PrometheusDBStats(object):
     def scylla_scrape_interval(self):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
+    @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError,))
     def request(self, url):
         response = requests.get(url)
         result = json.loads(response.content)
@@ -322,23 +326,27 @@ class TestStatsMixin(Stats):
 
     def get_scylla_throughput(self):
         if self.monitors:
-            self.log.info("Calculating throughput stats from PrometheusDB...")
-            ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
-            offset = 120  # 2 minutes offset
-            ps_results = ps.get_scylladb_throughput(start_time=int(self._stats["test_details"]["start_time"] + offset),
-                                                    end_time=int(time.time() - offset))  # op/s
-            if len(ps_results) <= 3:
-                self.log.error("Not enough data from Prometheus: %s" % ps_results)
+            try:
+                self.log.info("Calculating throughput stats from PrometheusDB...")
+                ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+                offset = 120  # 2 minutes offset
+                ps_results = ps.get_scylladb_throughput(start_time=int(self._stats["test_details"]["start_time"] + offset),
+                                                        end_time=int(time.time() - offset))  # op/s
+                if len(ps_results) <= 3:
+                    self.log.error("Not enough data from Prometheus: %s" % ps_results)
+                    return
+                throughput = self._stats["results"]["throughput"]
+                ops_per_sec = [float(val) for _, val in ps_results]
+                throughput["max"] = max(ops_per_sec)
+                # filter all values that is less than 1% of max at he beginning and at the end
+                ops_filtered = filter(lambda x: x >= throughput["max"] * 0.01, ops_per_sec)
+                throughput["min"] = min(ops_filtered)
+                throughput["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
+                throughput["stdev"] = stddev(ops_filtered)
+                self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
+            except Exception as e:
+                self.log.error("Exception when calculating PrometheusDB stats: %s" % e)
                 return
-            throughput = self._stats["results"]["throughput"]
-            ops_per_sec = [float(val) for _, val in ps_results]
-            throughput["max"] = max(ops_per_sec)
-            # filter all values that is less than 1% of max at he beginning and at the end
-            ops_filtered = filter(lambda x: x >= throughput["max"] * 0.01, ops_per_sec)
-            throughput["min"] = min(ops_filtered)
-            throughput["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
-            throughput["stdev"] = stddev(ops_filtered)
-            self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
         else:
             self.log.warning("Unable to get stats from Prometheus. "
                              "Probably scylla monitoring nodes were not provisioned.")
