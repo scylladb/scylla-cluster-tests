@@ -2410,12 +2410,16 @@ class BaseMonitorSet(object):
             run_script = dedent("""
                 cd {0.monitor_install_path}
                 sudo systemctl start docker
+                mkdir -p {0.monitoring_data_dir}
+                chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
             """.format(self))
         else:
             run_script = dedent("""
                 cd {0.monitor_install_path}
                 sudo service docker start
+                mkdir -p {0.monitoring_data_dir}
+                chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
             """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script)
