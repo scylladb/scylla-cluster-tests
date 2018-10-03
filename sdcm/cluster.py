@@ -2442,8 +2442,6 @@ class BaseMonitorSet(object):
     def download_monitoring_data_dir(self, node):
         try:
             local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
-            node.remoter.run('sudo chown -R %s:%s %s' %
-                             (node.remoter.user, node.remoter.user, self.monitoring_data_dir))
             node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
             return local_monitoring_data_dir
         except Exception as e:
