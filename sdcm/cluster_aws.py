@@ -340,7 +340,7 @@ class AWSNode(cluster.BaseNode):
     def reboot(self, hard=True):
         if hard:
             self.log.debug('Hardly rebooting node')
-            self._instance.reboot()
+            self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot')
