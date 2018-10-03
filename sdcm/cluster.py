@@ -2005,6 +2005,8 @@ class BaseLoaderSet(object):
             if line.startswith('Results:'):
                 enable_parse = True
                 continue
+            if line == '':
+                continue
             if line == 'END':
                 break
             if not enable_parse:
