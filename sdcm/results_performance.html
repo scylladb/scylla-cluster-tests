@@ -84,11 +84,14 @@
 
 
     <h3>Dashboard:</h3>
-    <li><a href={{ dashboard_master }}>Perf-Regression Master</a></li>
-    {% if grafana_snapshot %}
-        <h3>Grafana Screenshot:</h3>
+    <ul>
+        <li><a href={{ dashboard_master }}>Kibana</a></li>
+        {% if grafana_snapshot %}
         <li><a href={{ grafana_snapshot }}>Download Grafana Screenshot</a></li>
-        <p>&nbsp;</p>
-        <img src={{ grafana_snapshot }}  height="50%" width="50%">
+        {% endif %}
+    </ul>
+    {% if grafana_snapshot %}
+    <h3>Grafana Screenshot:</h3>
+    <img src="{{ grafana_snapshot }}"  height="50%" width="50%">
     {% endif %}
 {% endblock %}
