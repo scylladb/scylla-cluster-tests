@@ -17,7 +17,7 @@ experimental: 'true'
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com', 'julia.yakovlev@scylladb.com']
+email_recipients: ['roy@scylladb.com', 'shlomi@scylladb.com', 'bentsi@scylladb.com']
 
 backends: !mux
     gce: !mux
