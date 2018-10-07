@@ -2340,10 +2340,11 @@ class BaseMonitorSet(object):
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
         db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
         if sct_metrics:
+            temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
             prometheus_yaml_template = os.path.join(self.monitor_install_path, "prometheus", template_fn)
-            local_template_tmp = os.path.join("/tmp", template_fn + ".orig")
-            local_template = os.path.join("/tmp", template_fn)
+            local_template_tmp = os.path.join(temp_dir, template_fn + ".orig")
+            local_template = os.path.join(temp_dir, template_fn)
             node.remoter.receive_files(src=prometheus_yaml_template,
                                        dst=local_template_tmp)
             with open(local_template_tmp) as f:
@@ -2360,7 +2361,7 @@ class BaseMonitorSet(object):
                 yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
             node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
-            process.run("rm -f {local_template_tmp} {local_template}".format(**locals()))
+            process.run("rm -rf {temp_dir}".format(**locals()))
         self._monitoring_targets = " ".join(db_targets_list)
         configure_script = dedent("""
             cd {0.monitor_install_path}
@@ -2393,7 +2394,6 @@ class BaseMonitorSet(object):
             description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
           }
         """)
-        import tempfile
         with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
             f.write(conf)
             node.send_files(src=f.name, dst=f.name)
