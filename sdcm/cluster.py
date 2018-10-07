@@ -2534,9 +2534,9 @@ class BaseMonitorSet(object):
     def download_monitor_data(self):
         for node in self.nodes:
             try:
-                self.stop_scylla_monitoring(node)
+                # self.stop_scylla_monitoring(node)
                 monitoring_data_dir_path = self.download_monitoring_data_dir(node)
-                self.start_scylla_monitoring(node)
+                # self.start_scylla_monitoring(node)
                 shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
                 zipped_data_path = '%s.zip' % node.logdir
                 return self.upload_file_to_s3(zipped_data_path)
