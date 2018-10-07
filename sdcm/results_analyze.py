@@ -207,7 +207,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # check if stats exists
         if 'results' not in test_doc['_source'] or 'stats_average' not in test_doc['_source']['results'] or \
                 'stats_total' not in test_doc['_source']['results']:
-            self.log.error('Cannot find results for test: {}!'.format(test_doc['_id']))
+            self.log.error('Cannot find one of the fields: results, results.stats_average, '
+                           'results.stats_total for test id: {}!'.format(test_doc['_id']))
             return None
         stats_average = self._remove_non_stat_keys(test_doc['_source']['results']['stats_average'])
         stats_total = test_doc['_source']['results']['stats_total']
