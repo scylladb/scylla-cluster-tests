@@ -2,7 +2,7 @@
 cassandra_stress_duration: 240
 # cassandra-stress command. You can specify everything but the -node parameter,
 # which is going to be provided by the test suite infrastructure
-stress_cmd: cassandra-stress write cl=QUORUM duration=240m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 limit=5000/s -col 'size=FIXED(1) n=FIXED(10240)' -pop seq=1..100000000
+stress_cmd: cassandra-stress write cl=QUORUM duration=240m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 throttle=5000/s -col 'size=FIXED(1) n=FIXED(10240)' -pop seq=1..100000000
 n_db_nodes: 3
 # If you want to use more than 1 loader node, I recommend
 # increasing the size of the DB instance (instance_type_db parameter),
