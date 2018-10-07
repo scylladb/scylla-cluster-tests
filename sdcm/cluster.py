@@ -2013,8 +2013,8 @@ class BaseLoaderSet(object):
                 continue
 
             split_idx = line.index(':')
-            key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            key = line[:split_idx].strip().lower()
+            value = line[split_idx + 1:].split()[0].replace(",", "")
             results[key] = value
             m = re.findall('.*READ:(\d+), WRITE:(\d+)]', line)
             if m:  # parse results for mixed workload
