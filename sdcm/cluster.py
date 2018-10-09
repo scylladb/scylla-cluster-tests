@@ -1822,6 +1822,17 @@ class BaseLoaderSet(object):
     def __init__(self, params):
         self._loader_queue = []
         self.params = params
+        self.cassandra_stress_version = ""
+
+    def get_cassandra_stress_version(self, node):
+        if not self.cassandra_stress_version:
+            result = node.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
+            match = re.match("Version: (.*)", result.stdout)
+            if match:
+                self.cassandra_stress_version = match.group(1)
+            else:
+                self.log.error("C-S version not found!")
+                self.cassandra_stress_version = "unknown"
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -1859,6 +1870,7 @@ class BaseLoaderSet(object):
             node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
             node.remoter.run("source $HOME/.bashrc")
             node.remoter.run("go get github.com/scylladb/scylla-bench")
+        self.get_cassandra_stress_version(node)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -1875,6 +1887,9 @@ class BaseLoaderSet(object):
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
                           profile=None, node_list=[], round_robin=False):
+        if self.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
+            stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
+
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
         else:
