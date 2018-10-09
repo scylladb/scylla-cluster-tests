@@ -328,7 +328,7 @@ class AWSNode(cluster.BaseNode):
         # Restart in AWS will be a Stop and Start of an instance.
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
         # need to setup the instance and treat it as a new instance.
-        if ('i2' or 'i3') in self._instance.instance_type:
+        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             self.remoter.run('sudo rm -f /etc/scylla/ami_configured')
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)

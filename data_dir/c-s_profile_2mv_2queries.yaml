@@ -1,0 +1,64 @@
+keyspace: mview
+
+keyspace_definition: |
+
+  CREATE KEYSPACE IF NOT EXISTS mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+table: users
+
+table_definition: |
+
+  CREATE TABLE IF NOT EXISTS users (
+    userid bigint,
+    initials int,
+    first_name text,
+    last_name text,
+    password text,
+    email text,
+    address text,
+    userdata blob,
+    last_access timeuuid,
+    PRIMARY KEY(userid)
+  );
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW mview.users_by_address AS SELECT userid, address FROM mview.users WHERE address IS NOT NULL and userid IS NOT NULL PRIMARY KEY (address, userid);
+  - CREATE MATERIALIZED VIEW mview.users_by_initials AS SELECT userid, initials FROM mview.users WHERE initials IS NOT NULL and userid IS NOT NULL PRIMARY KEY (initials, userid);
+
+columnspec:
+  - name: userid
+    population: exp(1..10000000)
+
+  - name: initials
+    size: fixed(2)
+    population: gaussian(1..20000)
+
+  - name: first_name
+    size: fixed(5)
+
+  - name: last_name
+    size: fixed(5)
+
+  - name: password
+    size: fixed(80) # sha-512
+
+  - name: email
+    size: uniform(16..50)
+
+  - name: address
+    size: uniform(16..50)
+
+  - name: userdata
+    size: fixed(10240)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  mv_p_read1:
+    cql: select * from mview.users_by_address where address = ?
+    fields: samerow
+  mv_p_read2:
+    cql: select * from mview.users_by_initials where initials = ?
+    fields: samerow
