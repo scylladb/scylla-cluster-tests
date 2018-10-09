@@ -1683,35 +1683,53 @@ class BaseScyllaCluster(object):
                     else:
                         self.log.error("Unknown ScyllaDB version")
 
-    def cfstat_reached_threshold(self, key, threshold, keyspace):
+    def run_cqlsh(self, node, cql_cmd, timeout=60, verbose=True):
+        cqlsh_out = node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), timeout=timeout, verbose=verbose)
+        return cqlsh_out.stdout
+
+    def get_test_keyspaces(self):
+        out = self.run_cqlsh(node=self.nodes[0], cql_cmd='select keyspace_name from system_schema.keyspaces')
+        return [ks.strip() for ks in out.split('\n')[3:-3] if 'system' not in ks]
+
+    def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
         Find whether a certain cfstat key in all nodes reached a certain value.
 
         :param key: cfstat key, example, 'Space used (total)'.
         :param threshold: threshold value for cfstats key. Example, 2432043080.
-        :param keyspace: keyspace name or table full name(example: 'keyspace1.standard1')
+        :param keyspace: keyspace name or table full name(example: 'keyspace1.standard1'). If keyspaces is None,
+                         receive all
         :return: Whether all nodes reached that threshold or not.
         """
-        tcpdump = self.params.get('tcpdump')
-        cfstats = [node.get_cfstats(keyspace, tcpdump)[key] for node in self.nodes]
-        self.log.debug("Current cfstats: %s" % cfstats)
+        if not keyspaces:
+            keyspaces = self.get_test_keyspaces()
+
+        self.log.debug("Waiting for threshold: %s" % (threshold))
+        node = self.nodes[0]
+        node_space = 0
+        # Calculate space on the disk of all test keyspaces on the one node.
+        # It's decided to check the threshold on one node only
+        for keyspace_name in keyspaces:
+            self.log.debug("Get cfstats on the node %s for %s keyspace" % (node.name, keyspace_name))
+            node_space += node.get_cfstats(keyspace_name)[key]
+        self.log.debug("Current cfstats on the node %s for %s keyspaces: %s" % (node.name, keyspaces, node_space))
         reached_threshold = True
-        if max(cfstats) < threshold:
+        if node_space < threshold:
             reached_threshold = False
         if reached_threshold:
-            self.log.debug("Done waiting on cfstats: %s" % cfstats)
+            self.log.debug("Done waiting on cfstats: %s" % node_space)
         return reached_threshold
-
-    def wait_cfstat_reached_threshold(self, key, threshold, keyspace):
-        text = "Waiting until cfstat '%s' reaches value '%s'" % (
-            key, threshold)
-        wait.wait_for(func=self.cfstat_reached_threshold, step=10,
-                      text=text, key=key, threshold=threshold, keyspace=keyspace)
 
     def wait_total_space_used_per_node(self, size=None, keyspace='keyspace1'):
         if size is None:
             size = int(self.params.get('space_node_threshold'))
-        self.wait_cfstat_reached_threshold('Space used (total)', size, keyspace)
+        if size:
+            if keyspace and not isinstance(keyspace, list):
+                keyspace = [keyspace]
+            key = 'Space used (total)'
+            wait.wait_for(func=self.cfstat_reached_threshold, step=10, timeout=300,
+                          text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
+                          key=key, threshold=size, keyspaces=keyspace)
 
     def add_nemesis(self, nemesis, loaders, monitoring_set, **kwargs):
         self.nemesis.append(nemesis(cluster=self,
@@ -2013,6 +2031,8 @@ class BaseLoaderSet(object):
 
         for line in lines:
             line.strip()
+            if not line:
+                continue
             # Parse loader & cpu info
             if line.startswith('TAG:'):
                 ret = re.findall("TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
