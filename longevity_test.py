@@ -16,6 +16,7 @@
 import os
 import re
 import time
+import yaml
 from avocado import main
 
 from sdcm.tester import ClusterTester
@@ -29,7 +30,9 @@ class LongevityTest(ClusterTester):
     """
 
     def _run_all_stress_cmds(self, stress_queue, params):
-        stress_cmds = self.params.get('stress_cmd')
+        stress_cmds = params['stress_cmd']
+        if not isinstance(stress_cmds, list):
+            stress_cmds = [stress_cmds]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
         stress_multiplier = self.params.get('stress_multiplier', default=1)
         if stress_multiplier > 1:
@@ -62,7 +65,10 @@ class LongevityTest(ClusterTester):
         if 'profile' in stress_cmd:
             cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
             cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
-            params.update({'profile': cs_profile})
+            with open(cs_profile, 'r') as yaml_stream:
+                profile = yaml.safe_load(yaml_stream)
+                keyspace_name = profile['keyspace']
+            params.update({'profile': cs_profile, 'keyspace_name': keyspace_name})
 
         if 'compression' in stress_cmd:
             if 'keyspace_name' not in params:
@@ -72,6 +78,10 @@ class LongevityTest(ClusterTester):
         return params
 
     default_params = {'timeout': 650000}
+
+    @staticmethod
+    def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
+        return '{}{}'.format(keyspace_pref, ks_number)
 
     def test_custom_time(self):
         """
@@ -86,7 +96,7 @@ class LongevityTest(ClusterTester):
         verify_queue = list()
 
         # prepare write workload
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
         keyspace_num = self.params.get('keyspace_num', default=1)
         pre_create_schema = self.params.get('pre_create_schema', default=False)
 
@@ -97,23 +107,24 @@ class LongevityTest(ClusterTester):
                 self._pre_create_schema()
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
-            if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
+            if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
-                    keyspace_name = 'keyspace{}'.format(i)
-                    write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd,
-                                                              keyspace_name=keyspace_name, round_robin=True))
-                    time.sleep(2)
+                    keyspace_name = self._get_keyspace_name(i)
+                    self._run_all_stress_cmds(write_queue, params={'stress_cmd':prepare_write_cmd,
+                                                                   'keyspace_name': keyspace_name,
+                                                                   'round_robin': True})
             # Not using round_robin and all keyspaces will run on all loaders
             else:
-                write_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, keyspace_num=keyspace_num))
-            # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
-            # pay attention to the fact it checks only on keyspace1
-            self.db_cluster.wait_total_space_used_per_node()
+                self._run_all_stress_cmds(write_queue, params={'stress_cmd':prepare_write_cmd,
+                                                               'keyspace_num': keyspace_num})
 
             # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
             # all keys were written succesfully
             if self.params.get('nemesis_during_prepare', default='true').lower() == 'true':
+                # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
+                # pay attention to the fact it checks only on keyspace1
+                self.db_cluster.wait_total_space_used_per_node(keyspace=None)
                 self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
             # Wait on the queue till all threads come back.
@@ -127,46 +138,37 @@ class LongevityTest(ClusterTester):
             # In case we would like to verify all keys were written successfully before we start other stress / nemesis
             prepare_verify_cmd = self.params.get('prepare_verify_cmd', default=None)
             if prepare_verify_cmd:
-                verify_queue.append(self.run_stress_thread(stress_cmd=prepare_verify_cmd, keyspace_num=keyspace_num))
+                self._run_all_stress_cmds(verify_queue, params={'stress_cmd': prepare_verify_cmd,
+                                                                'keyspace_num': keyspace_num})
 
                 for stress in verify_queue:
                     self.verify_stress_thread(queue=stress)
 
-        # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
-        if keyspace_num > 1 and self.params.get('round_robin', default='').lower() == 'true':
+        stress_cmd = self.params.get('stress_cmd', default=None)
+        if stress_cmd:
+            # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
+            if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
-                    keyspace_name = 'keyspace{}'.format(i)
-                    params = {'keyspace_name': keyspace_name, 'round_robin': True}
+                    keyspace_name = self._get_keyspace_name(i)
+                    params = {'keyspace_name': keyspace_name, 'round_robin': True, 'stress_cmd': stress_cmd}
 
                     self._run_all_stress_cmds(stress_queue, params)
 
-        # The old method when we run all stress_cmds for all keyspace on the same loader
-        else:
-                params = {'keyspace_num': keyspace_num}
+            # The old method when we run all stress_cmds for all keyspace on the same loader
+            else:
+                params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
                 self._run_all_stress_cmds(stress_queue, params)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
-            self.db_cluster.wait_total_space_used_per_node()
+            self.db_cluster.wait_total_space_used_per_node(keyspace=None)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-
-        # The below sleep is a temporary HACK to wait some time before we start reading until more data will be written.
-        # It wasn't necessary in the past because we had the wait_total_space_used, however now we have more keyspaces
-        # and tables while wait_total_space_used is checking only keyspace1.
-        # Todo: refactor wait_total_space_used to consider all keyspaces/tables in our stress list.
-
-        time.sleep(600)
 
         stress_read_cmd = self.params.get('stress_read_cmd', default=None)
         if stress_read_cmd:
-            for stress_cmd in stress_read_cmd:
-                self.log.debug('stress read cmd: {}'.format(stress_cmd))
-                if 'compression' in stress_cmd:
-                    keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
-                    stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=keyspace_name))
-                else:
-                    stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd))
+            params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_read_cmd}
+            self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
             self.verify_stress_thread(queue=stress)

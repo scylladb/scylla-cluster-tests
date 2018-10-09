@@ -161,6 +161,7 @@ class Nemesis(object):
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
     def disrupt_restart_then_repair_node(self):
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
@@ -287,9 +288,11 @@ class Nemesis(object):
                     self._add_and_init_new_cluster_node()
                 # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
                 # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+                # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+                test_keyspaces = self.cluster.get_test_keyspaces()
                 for node in self.cluster.nodes:
-                        # TODO: wherever we have keyspace1 hardcoded, to replace it with a list of keyspaces.
-                        node.remoter.run('nodetool --host localhost cleanup keyspace1', verbose=True)
+                    for keyspace in test_keyspaces:
+                        node.remoter.run('nodetool --host localhost cleanup {}'.format(keyspace), verbose=True)
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
@@ -458,8 +461,11 @@ class Nemesis(object):
 
     def disrupt_nodetool_cleanup(self):
         self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
-        cmd = 'nodetool -h localhost cleanup keyspace1'
-        self._run_nodetool(cmd, self.target_node)
+        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        for keyspace in test_keyspaces:
+            cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
+            self._run_nodetool(cmd, self.target_node)
 
     def _run_in_cqlsh(self, cmd, node=None):
         if not node:
