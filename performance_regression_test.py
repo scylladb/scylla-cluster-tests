@@ -359,25 +359,12 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
 
-    def test_latency(self):
-        """
-        Test steps:
-
-        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
-        with round_robin and list of stress_cmd - the data will load several times faster.
-        2. Run WRITE workload with gauss population.
-        """
-
-        # TO DO: add limit ops based on results.
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        base_cmd_w = self.params.get('stress_cmd_w')
-        base_cmd_r = self.params.get('stress_cmd_r')
-        base_cmd_m = self.params.get('stress_cmd_m')
-
-        stress_queue = list()
+    def preload_data(self):
         # if test require a pre-population of data
+        prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
             self.create_test_stats(sub_type='write-prepare')
+            stress_queue = list()
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
             if not isinstance(prepare_write_cmd, basestring) and len(prepare_write_cmd) > 1:
@@ -403,21 +390,11 @@ class PerformanceRegressionTest(ClusterTester):
                 self.get_stress_results(queue=stress, store_results=False)
 
             self.update_test_details()
+        else:
+            self.log.warning("No prepare command defined in YAML!")
 
-        time.sleep(600)
-
-        # Run WRITE workload
-        self.create_test_stats(sub_type='write')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details()
-        # TEMP check if possible
-        self.display_results(results, test_name='test_latency')
-        self.check_regression()
-
-        time.sleep(600)
-
-        # Run READ workload
+    def run_read_workload(self):
+        base_cmd_r = self.params.get('stress_cmd_r')
         self.create_test_stats(sub_type='read')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
@@ -425,15 +402,40 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-        time.sleep(600)
+    def run_write_workload(self):
+        base_cmd_w = self.params.get('stress_cmd_w')
+        self.create_test_stats(sub_type='write')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details()
+        self.display_results(results, test_name='test_latency')
+        self.check_regression()
 
-        # run MIXED workload
+    def run_mixed_workload(self):
+        base_cmd_m = self.params.get('stress_cmd_m')
         self.create_test_stats(sub_type='mixed')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
         self.check_regression()
+
+    def test_latency(self):
+        """
+        Test steps:
+
+        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
+        with round_robin and list of stress_cmd - the data will load several times faster.
+        2. Run WRITE workload with gauss population.
+        """
+        # TO DO: add limit ops based on results.
+        self.preload_data()
+        time.sleep(60)
+        self.run_write_workload()
+        time.sleep(60)
+        self.run_read_workload()
+        time.sleep(60)
+        self.run_mixed_workload()
 
     def test_uniform_counter_update_bench(self):
         """
