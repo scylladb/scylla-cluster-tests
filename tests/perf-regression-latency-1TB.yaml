@@ -1,16 +1,16 @@
-test_duration: 500
-prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..250000000",
-                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=250000000..500000000",
-                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=500000000..750000000",
-                    "cassandra-stress write no-warmup cl=QUORUM n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=750000000..1000000000"]
+test_duration: 300
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..250000000",
+                    "cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=250000000..500000000",
+                    "cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=500000000..750000000",
+                    "cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=750000000..1000000000"]
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 limit=15000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
-stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 limit=10000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 limit=9000/s' -errors ignore -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=15000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=9000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
-user_prefix: 'perf-regression-VERSION'
+user_prefix: 'perf-regression-latency-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
@@ -21,7 +21,7 @@ experimental: 'true'
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'larisau@scylladb.com']
+email_recipients: ['roy@scylladb.com', 'shlomi@scylladb.com', 'bentsi@scylladb.com']
 
 backends: !mux
     gce: !mux
@@ -49,11 +49,11 @@ backends: !mux
 
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.large'
+        user_credentials_path: '~/.ssh/scylla-qa-ec2'
+        instance_type_loader: 'c4.2xlarge'
         instance_type_monitor: t2.small
         instance_type_db: 'i3.4xlarge'
         us_east_1:
-            user_credentials_path: ''
             region_name: 'us-east-1'
             security_group_ids: 'sg-5e79983a'
             subnet_id: 'subnet-c327759a'

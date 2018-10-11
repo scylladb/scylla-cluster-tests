@@ -20,7 +20,7 @@ import random
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.data_path import get_data_path
+from sdcm.utils import get_data_dir_path
 from sdcm import nemesis
 from sdcm import prometheus
 
@@ -39,7 +39,7 @@ class GrowClusterTest(ClusterTester):
         self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def get_stress_cmd_profile(self):
-        cs_custom_config = get_data_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
+        cs_custom_config = get_data_dir_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
         with open(cs_custom_config, 'r') as cs_custom_config_file:
             self.log.info('Using custom cassandra-stress config:')
             self.log.info(cs_custom_config_file.read())

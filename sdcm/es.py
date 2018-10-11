@@ -1,6 +1,8 @@
 import logging
 import elasticsearch
 
+from sdcm.results_analyze import BaseResultsAnalyzer
+
 logger = logging.getLogger(__name__)
 
 
@@ -10,8 +12,9 @@ class ES(object):
     """
 
     def __init__(self, *args, **kwargs):
-        self._url = kwargs.get('url', 'http://ec2-54-174-18-71.compute-1.amazonaws.com:9200/')
-        self._es = elasticsearch.Elasticsearch([self._url])
+        self._conf = BaseResultsAnalyzer.get_conf()
+        self._es = elasticsearch.Elasticsearch([self._conf["es_url"]], verify_certs=False,
+                                               http_auth=(self._conf["es_user"], self._conf["es_password"]))
 
     def _create_index(self, index):
         self._es.indices.create(index=index, ignore=400)

@@ -1,41 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>{{ subject }}</title>
-    <style>
-        .blue   { color: blue; }
-        .fbold  { font-weight: bold; }
-        .red    { color: red; }
-        .green  { color: green; }
-        .orange { color: orange; }
-        .notice { font-size:120%; }
-        .small { font-size:80%; }
-        #results_table {
-            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
-            border-collapse: collapse;
-            width: 50%;
-        }
-
-        #results_table td, #results_table th {
-            border: 1px solid #ddd;
-            padding: 8px;
-        }
-
-        #results_table tr:nth-child(even){background-color: #f2f2f2;}
-
-        #results_table tr:hover {background-color: #ddd;}
-
-        #results_table th {
-            padding-top: 12px;
-            padding-bottom: 12px;
-            text-align: left;
-            background-color: #85C1E9;
-            color: white;
-        }
-    </style>
-</head>
-
-<body>
+{% extends 'results_base.html' %}
+{% block body %}
     <h3>Test: {{ subject }}</h3>
     <h3>
         <span>Test start time: </span>
@@ -50,6 +14,8 @@
         <span class="blue"> {{ test_version.date }} </span>
         <span> , Commit Id: </span>
         <span class="blue"> {{ test_version.commit_id }}</span>
+        <span> , Hostname: </span>
+        <span class="blue"> {{ hostname }}</span>
     </div>
     {% if not full_report %}
     <br>
@@ -88,7 +54,7 @@
                         {% if stat == "Best (commit id)" or stat == "Last (commit id)" %}
                             {{ '%g (%s)' % (cur_stat) }}
                         {% elif stat.startswith("Diff") %}
-                            {{ '%.2f' % cur_stat }}
+                            {{ '%.1f' % cur_stat }}
                         {% else %}
                             {{ '%g' % cur_stat }}
                         {% endif %}
@@ -104,6 +70,4 @@
 
     <h3>Dashboard:</h3>
     <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
-
-</body>
-</html>
+{% endblock %}

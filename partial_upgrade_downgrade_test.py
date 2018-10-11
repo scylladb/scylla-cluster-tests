@@ -17,7 +17,7 @@
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.data_path import get_data_path
+from sdcm.utils import get_data_dir_path
 from sdcm.nemesis import UpgradeNemesis
 from sdcm.nemesis import log_time_elapsed
 
@@ -27,7 +27,7 @@ class PartialUpgradeDowngradeNemesis(UpgradeNemesis):
     # downgrade a single node
     def downgrade_node(self, node):
         self.log.info('Downgrading a Node')
-        scylla_repo = get_data_path('scylla.repo.downgrade')
+        scylla_repo = get_data_dir_path('scylla.repo.downgrade')
         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')

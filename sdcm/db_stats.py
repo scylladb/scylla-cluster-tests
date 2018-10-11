@@ -1,15 +1,26 @@
 import re
 import datetime
+import time
 import os
 import subprocess
 import platform
 import logging
+import requests
+import json
+import yaml
 from textwrap import dedent
+from math import sqrt
+from collections import defaultdict
+
+from requests import ConnectionError
 
 import es
-from results_analyze import ResultsAnalyzer
+from results_analyze import PerformanceResultsAnalyzer
+from utils import get_job_name, retrying
 
 logger = logging.getLogger(__name__)
+
+ES_DOC_TYPE = "test_stats"
 
 
 class CassandraStressCmdParseError(Exception):
@@ -24,6 +35,11 @@ class CassandraStressCmdParseError(Exception):
 
     def __repr__(self):
         return self.__str__()
+
+
+def stddev(lst):
+    mean = float(sum(lst)) / len(lst)
+    return sqrt(sum((x - mean)**2 for x in lst) / len(lst))
 
 
 def get_stress_cmd_params(cmd):
@@ -59,10 +75,12 @@ def get_stress_cmd_params(cmd):
                     cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
 
             for temp in cmd.split(' -')[1:]:
-                k = temp.split()[0]
-                match = re.search('(-' + k + '\s+([^-| ]+))', cmd)
-                if match:
-                    cmd_params[k] = match.group(2).strip()
+                try:
+                    k, v = temp.split(" ", 1)
+                except ValueError as e:
+                    logger.warning("%s:%s" % (temp, e))
+                else:
+                    cmd_params[k] = v.strip().replace("'", "")
             if 'rate' in cmd_params:
                 # split rate section on separate items
                 if 'threads' in cmd_params['rate']:
@@ -98,6 +116,78 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
+class PrometheusDBStats(object):
+    def __init__(self, host, port=9090):
+        self.host = host
+        self.port = port
+        self.range_query_url = "http://{0.host}:{0.port}/api/v1/query_range?query=".format(self)
+        self.config = self.get_configuration()
+
+    @property
+    def scylla_scrape_interval(self):
+        return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
+
+    @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError,))
+    def request(self, url):
+        response = requests.get(url)
+        result = json.loads(response.content)
+        logger.debug("Response from Prometheus server: %s", str(result)[:200])
+        if result["status"] == "success":
+            return result
+        else:
+            logger.error("Prometheus returned error: %s", result)
+
+    def get_configuration(self):
+        result = self.request(url="http://{0.host}:{0.port}/api/v1/status/config".format(self))
+        configs = yaml.safe_load(result["data"]["yaml"])
+        logger.debug("Parsed Prometheus configs: %s", configs)
+        new_scrape_configs = {}
+        for conf in configs["scrape_configs"]:
+            new_scrape_configs[conf["job_name"]] = conf
+        configs["scrape_configs"] = new_scrape_configs
+        return configs
+
+    def query(self, query, start, end):
+        """
+        :param start_time=<rfc3339 | unix_timestamp>: Start timestamp.
+        :param end_time=<rfc3339 | unix_timestamp>: End timestamp.
+
+        :param query:
+        :return: {
+                  metric: { },
+                  values: [[linux_timestamp1, value1], [linux_timestamp2, value2]...[linux_timestampN, valueN]]
+                 }
+        """
+        url = "http://{0.host}:{0.port}/api/v1/query_range?query=".format(self)
+        step = self.scylla_scrape_interval
+        _query = "{url}{query}&start={start}&end={end}&step={step}".format(**locals())
+        logger.debug("Query to PrometheusDB: %s" % _query)
+        result = self.request(url=_query)
+        if result:
+            return result["data"]["result"]
+        else:
+            logger.error("Prometheus query unsuccessful!")
+            return []
+
+    def get_scylladb_throughput(self, start_time, end_time):
+        """
+        Get Scylla throughput (ops/second) from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if end_time - start_time < 120:
+            logger.warning("Time difference too low to make a query [start_time: %s, end_time: %s" % (start_time,
+                                                                                                      end_time))
+            return []
+        # the query is taken from the Grafana Dashborad definition
+        q = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
+        results = self.query(query=q, start=start_time, end=end_time)
+        if results:
+            return results[0]["values"]
+        else:
+            return []
+
+
 class Stats(object):
     """
     This class is responsible for creating and updating database entry(document in Elasticsearch DB)
@@ -107,14 +197,13 @@ class Stats(object):
     """
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
-        self._test_type = kwargs.get('test_type', None)
         self._test_id = kwargs.get('test_id', None)
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
     def _create(self):
-        es.ES().create(self._test_index, self._test_type, self._test_id, self._stats)
+        es.ES().create(self._test_index, ES_DOC_TYPE, self._test_id, self._stats)
 
     def update(self, data):
         """
@@ -122,7 +211,7 @@ class Stats(object):
         :param data: data dictionary
         """
         try:
-            es.ES().update(self._test_index, self._test_type, self._test_id, data)
+            es.ES().update(self._test_index, ES_DOC_TYPE, self._test_id, data)
         except Exception as ex:
             logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
 
@@ -138,7 +227,7 @@ class TestStatsMixin(Stats):
 
     @staticmethod
     def _create_test_id():
-        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
 
     def _init_stats(self):
         return {k: {} for k in self.KEYS}
@@ -192,28 +281,27 @@ class TestStatsMixin(Stats):
 
     def get_test_details(self):
         test_details = {}
-        test_details['test_name'] = self._test_type
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-
-        test_details['job_name'] = os.environ.get('JOB_NAME', 'local_run')
-        if os.environ.get('BUILD_URL'):
-            test_details['job_url'] = os.environ.get('BUILD_URL', '')
-
+        test_details['job_name'] = get_job_name()
+        test_details['job_url'] = os.environ.get('BUILD_URL', '')
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
-
+        test_details['start_time'] = time.time()
+        test_details['grafana_snapshot'] = ""
         return test_details
 
     def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
-        self._test_type = self.params.id.name
-        if sub_type:
-            self._test_type = '{}_{}'.format(self._test_type, sub_type)
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
+        if sub_type:
+            self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
+        else:
+            self._stats['test_details']['test_name'] = self.params.id.name
+        self._stats['results']['throughput'] = defaultdict(dict)
         self._create()
 
     def update_stress_cmd_details(self, cmd, prefix=''):
@@ -235,6 +323,33 @@ class TestStatsMixin(Stats):
             self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
+
+    def get_scylla_throughput(self):
+        if self.monitors:
+            try:
+                self.log.info("Calculating throughput stats from PrometheusDB...")
+                ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+                offset = 120  # 2 minutes offset
+                ps_results = ps.get_scylladb_throughput(start_time=int(self._stats["test_details"]["start_time"] + offset),
+                                                        end_time=int(time.time() - offset))  # op/s
+                if len(ps_results) <= 3:
+                    self.log.error("Not enough data from Prometheus: %s" % ps_results)
+                    return
+                throughput = self._stats["results"]["throughput"]
+                ops_per_sec = [float(val) for _, val in ps_results]
+                throughput["max"] = max(ops_per_sec)
+                # filter all values that is less than 1% of max at he beginning and at the end
+                ops_filtered = filter(lambda x: x >= throughput["max"] * 0.01, ops_per_sec)
+                throughput["min"] = min(ops_filtered)
+                throughput["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
+                throughput["stdev"] = stddev(ops_filtered)
+                self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
+            except Exception as e:
+                self.log.error("Exception when calculating PrometheusDB stats: %s" % e)
+                return
+        else:
+            self.log.warning("Unable to get stats from Prometheus. "
+                             "Probably scylla monitoring nodes were not provisioned.")
 
     def update_stress_results(self, results):
         if 'stats' not in self._stats['results']:
@@ -269,16 +384,13 @@ class TestStatsMixin(Stats):
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False, scylla_conf=False):
-        if not self._stats:
-            return
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if self.monitors:
-            url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
-            self._stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            # setup grafana_snapshot value only when snapshot is successfully uploaded
-            if snapshot_uploaded:
-                self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+            test_start_time = self._stats['test_details']['start_time']
+            self.get_scylla_throughput()
+            self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
+            self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
 
         if scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
             node = self.db_cluster.nodes[0]
@@ -290,7 +402,8 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
 
         self._stats['status'] = self.status
-        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
+        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details'],
+                       'results': {'throughput': self._stats['results']['throughput']}}
         if errors:
             update_data.update({'errors': errors})
         if coredumps:
@@ -298,7 +411,7 @@ class TestStatsMixin(Stats):
         self.update(update_data)
 
     def check_regression(self):
-        ra = ResultsAnalyzer(index=self._test_index,
+        ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=ES_DOC_TYPE,
                              send_email=self.params.get('send_email', default=True),
                              email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
@@ -306,12 +419,3 @@ class TestStatsMixin(Stats):
             ra.check_regression(self._test_id, is_gce)
         except Exception as ex:
             logger.exception('Failed to check regression: %s', ex)
-
-
-if __name__ == '__main__':
-    import pdb
-    pdb.set_trace()
-    obj = Stats(test_index='longevitytest',
-                test_type='longevity_test.py:LongevityTest.test_custom_time',
-                test_id='2018-04-29 11:41:59')
-    obj.update({'nemesis': {}})

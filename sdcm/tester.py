@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .data_path import get_data_path
+from .utils import get_data_dir_path
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -198,7 +198,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         :return: db_stats.Stats object
         """
         return db_stats.Stats(test_index=self._test_index,
-                              test_type=self._test_type,
                               test_id=self._test_id)
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
@@ -249,7 +248,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                                  n_nodes=db_info['n_nodes'],
                                                  params=self.params)
 
-        scylla_repo = get_data_path('scylla.repo')
+        scylla_repo = get_data_dir_path('scylla.repo')
         self.loaders = LoaderSetOpenStack(openstack_image=self.params.get('openstack_image'),
                                           openstack_image_username=self.params.get('openstack_image_username'),
                                           openstack_network=self.params.get('openstack_network'),
@@ -973,12 +972,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
-    @staticmethod
-    def get_s3_url(file_name):
-        return 'https://cloudius-jenkins-test.s3.amazonaws.com/%s/%s' % (
-            os.environ.get('JOB_NAME', "local_run"), os.path.basename(
-                os.path.normpath(file_name)))
-
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
         self.kill_stress_thread()
@@ -1016,39 +1009,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     node.instance.stop()
                 self.db_cluster = None
 
-        snapshot_uploaded = False
         if self.monitors is not None:
             self.monitors.get_backtraces()
-            self.monitors.get_monitor_snapshot()
-            self.monitors.download_monitor_data()
-
-            # upload prometheus data
-            monitoring_data_path_pattern = os.path.join(self.logdir, '*monitor*/*monitor*/monitoring_data/')
-            monitoring_data_dir = glob.glob(monitoring_data_path_pattern)
-            file_path = os.path.normpath(self.job.logdir)
-            if not monitoring_data_dir:
-                self.log.warning("No monitoring data found for path pattern %s" % monitoring_data_path_pattern)
-            else:
-                monitoring_data_dir = monitoring_data_dir[0]  # glob returns list
-                shutil.make_archive(file_path, 'zip', monitoring_data_dir)
-                result_path = '%s.zip' % file_path
-                with open(result_path) as fh:
-                    mydata = fh.read()
-                    url_s3 = ClusterTester.get_s3_url(result_path)
-                    self.log.info("uploading prometheus data on %s" % url_s3)
-                    response = requests.put(url_s3, data=mydata)
-                    self.log.info(response.text)
-
-            grafana_snapshots = glob.glob(os.path.join(self.logdir, '*monitor*/*grafana-snapshot*'))
-            if grafana_snapshots:
-                result_path = '%s.png' % file_path
-                with open(grafana_snapshots[0]) as fh:
-                    mydata = fh.read()
-                    url_s3 = ClusterTester.get_s3_url(result_path)
-                    self.log.info("uploading grafana snapshot data on %s" % url_s3)
-                    response = requests.put(url_s3, data=mydata)
-                    snapshot_uploaded = response.ok
-                    self.log.info(response.text)
 
             if self._failure_post_behavior == 'destroy':
                 self.monitors.destroy()
@@ -1065,7 +1027,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.credentials = []
 
         if self.create_stats:
-            self.update_test_details(db_cluster_errors, db_cluster_coredumps, snapshot_uploaded)
+            self.update_test_details(db_cluster_errors, db_cluster_coredumps)
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %

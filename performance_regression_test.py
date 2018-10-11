@@ -169,10 +169,10 @@ class PerformanceRegressionTest(ClusterTester):
         self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     # do not run this test on 2.2 while this feature is not available
-    def test_write_with_mv_populated(self):
+    def test_mv_write_populated(self):
         self._write_with_mv(on_populated=True)
 
-    def test_write_with_mv_not_populated(self):
+    def test_mv_write_not_populated(self):
         self._write_with_mv(on_populated=False)
 
     def _write_with_mv(self, on_populated):
@@ -219,10 +219,10 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_write')
         self.check_regression()
 
-    def test_read_with_mv_populated(self):
+    def test_mv_read_populated(self):
         self._read_with_mv(on_populated=True)
 
-    def test_read_with_mv_not_populated(self):
+    def test_mv_read_not_populated(self):
         self._read_with_mv(on_populated=False)
 
     def _read_with_mv(self, on_populated):
@@ -276,11 +276,14 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_r = self.params.get('stress_cmd_r')
 
-        self.create_test_stats()
+        self.create_test_stats(sub_type='write-prepare')
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
         self.get_stress_results(queue=stress_queue, store_results=False)
+        self.update_test_details()
 
+        # run a read workload
+        self.create_test_stats()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
         results = self.get_stress_results(queue=stress_queue)
 
@@ -339,12 +342,14 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        self.create_test_stats()
+        self.create_test_stats(sub_type='write-prepare')
         # run a write workload as a preparation
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
         self.get_stress_results(queue=stress_queue, store_results=False)
+        self.update_test_details()
 
         # run a mixed workload
+        self.create_test_stats()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
         results = self.get_stress_results(queue=stress_queue)
 
@@ -367,11 +372,10 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_r = self.params.get('stress_cmd_r')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        self.create_test_stats(sub_type='write')
-
         stress_queue = list()
         # if test require a pre-population of data
         if prepare_write_cmd:
+            self.create_test_stats(sub_type='write-prepare')
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
             if not isinstance(prepare_write_cmd, basestring) and len(prepare_write_cmd) > 1:
@@ -392,12 +396,15 @@ class PerformanceRegressionTest(ClusterTester):
                     stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
                                                                prefix='preload-'))
 
-        for stress in stress_queue:
-            self.get_stress_results(queue=stress, store_results=False)
+            for stress in stress_queue:
+                self.get_stress_results(queue=stress, store_results=False)
 
-        time.sleep(60)
+            self.update_test_details()
+
+        time.sleep(600)
 
         # Run WRITE workload
+        self.create_test_stats(sub_type='write')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -405,7 +412,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-        time.sleep(60)
+        time.sleep(600)
 
         # Run READ workload
         self.create_test_stats(sub_type='read')
@@ -415,7 +422,7 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-        time.sleep(60)
+        time.sleep(600)
 
         # run MIXED workload
         self.create_test_stats(sub_type='mixed')

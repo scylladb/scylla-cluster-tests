@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 set -e
 CMD=$@
-DOCKER_ENV_DIR=$(dirname $(readlink $0 ))
+DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
 VERSION=$(cat ${DOCKER_ENV_DIR}/version)
 PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
+
+# if running on Build server
+if [[ ${USER} == "jenkins" ]]; then
+    echo "Running on Build Server..."
+else
+    TTY_STDIN="-it"
+    TERM_SET_SIZE="export COLUMNS=`tput cols`; export LINES=`tput lines`;"
+fi
 
 if ! docker --version; then
     echo "Docker not installed!!! Please run 'install-hydra.sh'!"
@@ -27,7 +35,8 @@ else
 fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
-docker run --rm -it --privileged \
+
+docker run --rm ${TTY_STDIN} --privileged \
     -h SCT-CONTAINER \
     -v /var/run:/run \
     -v ${SCT_DIR}:${WORK_DIR} \
@@ -36,5 +45,8 @@ docker run --rm -it --privileged \
     -v /var/tmp:/var/tmp \
     -v ~:/root \
     -w ${WORK_DIR} \
+    -e JOB_NAME=${JOB_NAME} \
+    -e BUILD_URL=${BUILD_URL} \
+    --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "export COLUMNS=`tput cols`; export LINES=`tput lines`; eval $CMD"
+    /bin/bash -c "/usr/libexec/postfix/master -w; ${TERM_SET_SIZE} eval ${CMD}"

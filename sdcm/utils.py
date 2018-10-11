@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
+import os
 import logging
 import time
 import datetime
@@ -116,6 +117,7 @@ def log_run_info(arg):
     else:
         return lambda f: _inner(f, arg)
 
+
 class Distro(Enum):
     UNKNOWN = 0
     CENTOS7 = 1
@@ -124,3 +126,14 @@ class Distro(Enum):
     UBUNTU16 = 4
     DEBIAN8 = 5
     DEBIAN9 = 6
+
+
+def get_data_dir_path(*args):
+    import sdcm
+    sdcm_path = os.path.realpath(sdcm.__path__[0])
+    data_dir = os.path.join(sdcm_path, "../data_dir", *args)
+    return os.path.abspath(data_dir)
+
+
+def get_job_name():
+    return os.environ.get('JOB_NAME', 'local_run')

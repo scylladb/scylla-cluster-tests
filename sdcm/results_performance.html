@@ -1,0 +1,97 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>Test: {{ test_name }}</h3>
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_start_time }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ test_version.version }} </span>
+    </h3>
+    <div>
+        <span> Version Details: </span>
+        <li>
+            <span> build date: </span>
+            <span class="blue"> {{ test_version.date }} </span>
+        </li>
+        <li>
+            <span> commit id: </span>
+            <span class="blue"> {{ test_version.commit_id }} </span>
+        </li>
+    </div>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in setup_details.iteritems()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    <div>
+        <span> Throughput stats (based on data from Prometheus): </span>
+        {% if throughput_results %}
+        <ul>
+        {% for key, val in throughput_results.iteritems()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ "%.1f" % val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+
+        {% else %}
+        <span>ERROR - see log for details</span>
+        {% endif %}
+    </div>
+
+    {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
+    <h2>{{ stat_name }}</h2>
+    <table id="results_table">
+        <tr>
+            <th>Version compared to</th>
+            <th>Current</th>
+            <th>Best</th>
+            <th>Diff best</th>
+            <th>Commit</th>
+        </tr>
+        {% for cmp_res in res_list %}
+        {% set stat=cmp_res.res.get(stat_name) %}
+        <tr>
+            <td> <span class="fbold">{{ cmp_res.version_dst }}</span></td>
+            <td>{{ stat.val }}</td>
+            <td>{{ stat.best_val }}</td>
+            <td>
+                {% with status = stat.status, percent = stat.percent,
+                   percent_abs = stat.percent|replace('%', '')|int %}
+                    {% if status == 'Regression' and percent_abs > 4 %}
+                        <span class="red fbold">-
+                    {% elif status == 'Progress' and percent_abs > 4 %}
+                        <span class="green fbold">+
+                    {% else %}
+                        <span>
+                    {% endif %}
+                    {{ percent }}
+                {% endwith %}
+                </span>
+            </td>
+            <td>{{ stat.best_id }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endfor %}
+
+
+    <h3>Dashboard:</h3>
+    <ul>
+        <li><a href={{ dashboard_master }}>Kibana</a></li>
+        {% if grafana_snapshot %}
+        <li><a href={{ grafana_snapshot }}>Download Grafana Screenshot</a></li>
+        {% endif %}
+    </ul>
+    {% if grafana_snapshot %}
+    <h3>Grafana Screenshot:</h3>
+    <img src="{{ grafana_snapshot }}"  height="50%" width="50%">
+    {% endif %}
+{% endblock %}

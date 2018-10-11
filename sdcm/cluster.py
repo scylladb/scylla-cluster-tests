@@ -22,6 +22,8 @@ import tempfile
 import threading
 import time
 import uuid
+
+import requests
 import yaml
 import shutil
 
@@ -30,15 +32,12 @@ from textwrap import dedent
 from avocado.utils import path
 from avocado.utils import process
 from avocado.utils import script
-
+from datetime import datetime
 from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
-from . import data_path
 from . import wait
-from .utils import log_run_info, retrying
-from .utils import Distro
-
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -457,7 +456,7 @@ class BaseNode(object):
     def install_sct_log_formatter(self):
         result = self.remoter.run('test -e /var/tmp/sct_log_formatter', verbose=False, ignore_status=True)
         if result.exit_status != 0:
-            sct_log_formatter = data_path.get_data_path('sct_log_formatter')
+            sct_log_formatter = get_data_dir_path('sct_log_formatter')
             self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
             self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
             self._sct_log_formatter_installed = True
@@ -1823,6 +1822,17 @@ class BaseLoaderSet(object):
     def __init__(self, params):
         self._loader_queue = []
         self.params = params
+        self.cassandra_stress_version = ""
+
+    def get_cassandra_stress_version(self, node):
+        if not self.cassandra_stress_version:
+            result = node.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
+            match = re.match("Version: (.*)", result.stdout)
+            if match:
+                self.cassandra_stress_version = match.group(1)
+            else:
+                self.log.error("C-S version not found!")
+                self.cassandra_stress_version = "unknown"
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -1860,6 +1870,7 @@ class BaseLoaderSet(object):
             node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
             node.remoter.run("source $HOME/.bashrc")
             node.remoter.run("go get github.com/scylladb/scylla-bench")
+        self.get_cassandra_stress_version(node)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -1876,6 +1887,9 @@ class BaseLoaderSet(object):
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
                           profile=None, node_list=[], round_robin=False):
+        if self.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
+            stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
+
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
         else:
@@ -2006,14 +2020,16 @@ class BaseLoaderSet(object):
             if line.startswith('Results:'):
                 enable_parse = True
                 continue
+            if line == '':
+                continue
             if line == 'END':
                 break
             if not enable_parse:
                 continue
 
             split_idx = line.index(':')
-            key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            key = line[:split_idx].strip().lower()
+            value = line[split_idx + 1:].split()[0].replace(",", "")
             results[key] = value
             m = re.findall('.*READ:(\d+), WRITE:(\d+)]', line)
             if m:  # parse results for mixed workload
@@ -2227,11 +2243,11 @@ class BaseMonitorSet(object):
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.grafana_start_time = None
         self.monitor_install_path_base = "/var/lib/scylla"
-        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-branch-1.0")
+        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-branch-2.0")
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
         self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
+        self.phantomjs_installed = False
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
@@ -2331,18 +2347,19 @@ class BaseMonitorSet(object):
         install_script = dedent("""
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/branch-1.0.zip
-            unzip branch-1.0.zip
+            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/branch-2.0.zip
+            unzip branch-2.0.zip
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
         db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
         if sct_metrics:
+            temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
             prometheus_yaml_template = os.path.join(self.monitor_install_path, "prometheus", template_fn)
-            local_template_tmp = os.path.join("/tmp", template_fn + ".orig")
-            local_template = os.path.join("/tmp", template_fn)
+            local_template_tmp = os.path.join(temp_dir, template_fn + ".orig")
+            local_template = os.path.join(temp_dir, template_fn)
             node.remoter.receive_files(src=prometheus_yaml_template,
                                        dst=local_template_tmp)
             with open(local_template_tmp) as f:
@@ -2359,7 +2376,7 @@ class BaseMonitorSet(object):
                 yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
             node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
-            process.run("rm -f {local_template_tmp} {local_template}".format(**locals()))
+            process.run("rm -rf {temp_dir}".format(**locals()))
         self._monitoring_targets = " ".join(db_targets_list)
         configure_script = dedent("""
             cd {0.monitor_install_path}
@@ -2392,7 +2409,6 @@ class BaseMonitorSet(object):
             description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
           }
         """)
-        import tempfile
         with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
             f.write(conf)
             node.send_files(src=f.name, dst=f.name)
@@ -2411,12 +2427,16 @@ class BaseMonitorSet(object):
             run_script = dedent("""
                 cd {0.monitor_install_path}
                 sudo systemctl start docker
+                mkdir -p {0.monitoring_data_dir}
+                chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
             """.format(self))
         else:
             run_script = dedent("""
                 cd {0.monitor_install_path}
                 sudo service docker start
+                mkdir -p {0.monitoring_data_dir}
+                chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
             """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script)
@@ -2427,7 +2447,7 @@ class BaseMonitorSet(object):
 
         def _register_grafana_json(json_filename):
             url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
-            json_path = data_path.get_data_path(json_filename)
+            json_path = get_data_dir_path(json_filename)
             result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                  (url, json_path), ignore_status=True)
             return result.exit_status == 0
@@ -2437,10 +2457,13 @@ class BaseMonitorSet(object):
                       json_filename=sct_dashboard_json)
 
     def download_monitoring_data_dir(self, node):
-        local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
-        node.remoter.run('sudo chown -R %s:%s %s' %
-                         (node.remoter.user, node.remoter.user, self.monitoring_data_dir))
-        node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
+        try:
+            local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
+            node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
+            return local_monitoring_data_dir
+        except Exception as e:
+            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+            return ""
 
     @log_run_info
     def install_scylla_monitoring(self, node):
@@ -2454,49 +2477,88 @@ class BaseMonitorSet(object):
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % kill_script)
 
-    def get_monitor_snapshot(self):
-        """
-        Take snapshot for grafana monitor in the end of test
-        """
-        phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
-        phantomjs_tar = os.path.basename(phantomjs_url)
-        if not self.grafana_start_time:
-            self.log.error("grafana isn't setup, skip to get snapshot")
-            return
-        start_time = str(self.grafana_start_time).split('.')[0] + '000'
-
-        try:
-            process.run('curl "{}" -o {} -L'.format(phantomjs_url, phantomjs_tar))
-            process.run('yum install -y bzip2 && tar xvfj {}'.format(phantomjs_tar))
+    def install_phantom_js(self):
+        if not self.phantomjs_installed:
+            phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
+            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
+            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
+            install_phantom_js_script = dedent("""
+                sudo rm -rf {phantomjs_base}*
+                sudo yum install -y bzip2 fontconfig bitmap-fonts
+                curl {phantomjs_url} -o {phantomjs_tar} -L
+                tar xvfj {phantomjs_tar}
+            """.format(**locals()))
+            process.run("bash -ce '%s'" % install_phantom_js_script)
             process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                         "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
                         shell=True)
+            self.phantomjs_installed = True
+        else:
+            self.log.debug("PhantomJS is already installed!")
 
+    @staticmethod
+    def generate_s3_url(file_path):
+        job_name = get_job_name()
+        file_name = os.path.basename(os.path.normpath(file_path))
+        return "https://cloudius-jenkins-test.s3.amazonaws.com/{job_name}/{file_name}".format(**locals())
+
+    def upload_file_to_s3(self, file_path):
+        try:
+            s3_url = self.generate_s3_url(file_path)
+            with open(file_path) as fh:
+                mydata = fh.read()
+                self.log.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
+                response = requests.put(s3_url, data=mydata)
+                self.log.debug(response)
+                return s3_url if response.ok else ""
+        except Exception as e:
+            self.log.debug("Unable to upload to S3: %s" % e)
+            return ""
+
+    def get_grafana_screenshot(self, test_start_time=None):
+        """
+            Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
+        """
+        if not test_start_time:
+            self.log.error("No start time for test")
+            return
+        start_time = str(test_start_time).split('.')[0] + '000'
+
+        try:
+            self.install_phantom_js()
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 version = self.monitoring_version.replace('.', '-')
-                grafana_url = "http://%s:3000/dashboard/db/%s-per-server-metrics-%s?from=%s&to=now" % (
-                    node.public_ip_address, scylla_pkg, version, start_time)
+                grafana_url = "http://%s:%s/dashboard/db/%s-per-server-metrics-nemesis-%s?from=%s&to=now" % (
+                    node.public_ip_address, self.grafana_port, scylla_pkg, version, start_time)
+                datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                 snapshot_path = os.path.join(node.logdir,
-                                             "grafana-snapshot-%s.png" % n)
-                process.run("sudo yum install fontconfig bitmap-fonts -y")
+                                             "grafana-screenshot-%s-%s.png" % (datetime_now, n))
                 process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                             "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                 grafana_url, snapshot_path), shell=True)
+                # since there is only one monitoring node returning here
+                return self.upload_file_to_s3(snapshot_path)
+
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
+        return ""
 
     @log_run_info
     def download_monitor_data(self):
         for node in self.nodes:
             try:
-                self.stop_scylla_monitoring(node)
-                self.download_monitoring_data_dir(node)
-                self.start_scylla_monitoring(node)
+                # self.stop_scylla_monitoring(node)
+                monitoring_data_dir_path = self.download_monitoring_data_dir(node)
+                # self.start_scylla_monitoring(node)
+                shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
+                zipped_data_path = '%s.zip' % node.logdir
+                return self.upload_file_to_s3(zipped_data_path)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
+        return ""
 
 
 class NoMonitorSet(object):
