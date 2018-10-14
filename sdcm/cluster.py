@@ -1824,6 +1824,17 @@ class BaseScyllaCluster(object):
         self.get_scylla_version()
         self.set_traffic_control()
 
+    def restart_scylla(self, nodes=None):
+        if nodes:
+            nodes_to_restart = nodes
+        else:
+            nodes_to_restart = self.nodes
+        self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])
+        for node in nodes_to_restart:
+            node.stop_scylla(verify_down=True)
+            node.start_scylla(verify_up=True)
+            self.log.debug("'{0.name}' restarted.".format(node))
+
 
 class BaseLoaderSet(object):
 
