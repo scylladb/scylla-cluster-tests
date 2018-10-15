@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path
+from .utils import get_data_dir_path, log_run_info
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -1094,3 +1094,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.verify_stress_thread(queue=stress)
 
         return write_queue
+
+    @log_run_info
+    def alter_table_to_in_memory(self, key_space_name="keyspace1", table_name="standard1", node=None):
+        if not node:
+            node = self.db_cluster.nodes[0]
+        compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
+        cql_cmd = "ALTER table {key_space_name}.{table_name} " \
+                  "WITH in_memory=true AND compaction={compaction_strategy}".format(**locals())
+        node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), verbose=True)
