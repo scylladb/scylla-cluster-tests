@@ -72,6 +72,7 @@ backends: !mux
             ami_id_db_scylla: 'AMI-ID'
             ami_id_loader: 'AMI-ID'
             ami_id_monitor: 'AMI-ID'
+            aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'

@@ -57,7 +57,7 @@ class EC2Client(object):
                 return self._get_ec2_client()
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
-                               user_data='', count=1, duration=0, request_type='one-time'):
+                               user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None):
         """
         Create a spot instance request
         :return: list of request id-s
@@ -72,6 +72,9 @@ class EC2Client(object):
                                            },
                       ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
                       )
+        logger.debug("block_device_mappings: %s" % block_device_mappings)
+        if block_device_mappings:
+            params['LaunchSpecification']['BlockDeviceMappings'] = block_device_mappings
         if not duration:
             params.update({'AvailabilityZoneGroup': region_name})
         else:
@@ -88,7 +91,8 @@ class EC2Client(object):
         logger.debug('Spot requests: %s', request_ids)
         return request_ids
 
-    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3):
+    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
+                            block_device_mappings=None):
         spot_price = self._get_spot_price(instance_type)
         fleet_config = {'LaunchSpecifications':
                         [
@@ -106,7 +110,8 @@ class EC2Client(object):
             fleet_config['LaunchSpecifications'][0].update({'KeyName': key_pair})
         if user_data:
             fleet_config['LaunchSpecifications'][0].update({'UserData': self._encode_user_data(user_data)})
-
+        if block_device_mappings:
+            fleet_config['LaunchSpecifications'][0]['BlockDeviceMappings'] = block_device_mappings
         logger.info('Sending spot fleet request with params: %s', fleet_config)
         resp = self._client.request_spot_fleet(DryRun=False,
                                                SpotFleetRequestConfig=fleet_config)
@@ -229,7 +234,7 @@ class EC2Client(object):
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
-                              count=1, duration=0):
+                              count=1, duration=0, block_device_mappings=None):
         """
         Create spot instances
 
@@ -248,7 +253,8 @@ class EC2Client(object):
         price_desired = spot_price['desired']
         while not instance_ids and price_desired <= spot_price['avg']:
             request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
-                                                      key_pair, user_data, count, duration)
+                                                      key_pair, user_data, count, duration,
+                                                      block_device_mappings=block_device_mappings)
             instance_ids, resp = self._wait_for_request_done(request_ids)
             if not instance_ids and resp == STATUS_PRICE_TOO_LOW:
                 price_desired = round(price_desired * self._price_index, 4)
@@ -267,7 +273,8 @@ class EC2Client(object):
         instances = [self.get_instance(instance_id) for instance_id in instance_ids]
         return instances
 
-    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3):
+    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
+                          block_device_mappings=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -280,7 +287,7 @@ class EC2Client(object):
         :return: list of instance id-s
         """
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
-                                              user_data, count)
+                                              user_data, count, block_device_mappings=block_device_mappings)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR

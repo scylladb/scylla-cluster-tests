@@ -73,6 +73,7 @@ backends: !mux
             ami_id_db_cassandra: 'ami-3eff0028'
             ami_db_cassandra_user: 'ubuntu'
             ami_id_monitor: 'ami-29035f52'
+            aws_root_disk_size_monitor: 20  # GB
             ami_monitor_user: 'centos'
 
 databases: !mux
