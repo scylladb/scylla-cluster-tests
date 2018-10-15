@@ -156,7 +156,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
 
         # for saving test details in DB
-        self.create_stats = True
+        self.create_stats = self.params.get(key='store_results_in_elasticsearch',default=True)
 
     @clean_resources_on_exception
     def setUp(self):
@@ -195,10 +195,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def get_stats_obj(self):
         """
         Allow access db stats object to external objects like Nemesis - for updates
-        :return: db_stats.Stats object
+        :return: db_stats.Stats object or None if param store_results_in_elasticsearch set to False in yaml.
         """
-        return db_stats.Stats(test_index=self._test_index,
-                              test_id=self._test_id)
+        if self.params.get(key='store_results_in_elasticsearch',default=True):
+            return db_stats.Stats(test_index=self._test_index,
+                                  test_id=self._test_id)
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:

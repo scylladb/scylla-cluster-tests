@@ -15,6 +15,7 @@ nemesis_interval: 5
 nemesis_during_prepare: 'true'
 failure_post_behavior: destroy
 space_node_threshold: 167000
+store_results_in_elasticsearch: False
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
