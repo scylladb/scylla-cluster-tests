@@ -135,8 +135,8 @@ class AWSCluster(cluster.BaseCluster):
                            network_if=interfaces,
                            key_pair=self._credentials[dc_idx].key_pair_name,
                            user_data=ec2_user_data,
-                           count=count)
-
+                           count=count,
+                           block_device_mappings=self._ec2_block_device_mappings)
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
             spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
