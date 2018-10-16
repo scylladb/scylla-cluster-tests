@@ -202,7 +202,7 @@ class Stats(object):
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
-    def _create(self):
+    def create(self):
         es.ES().create(self._test_index, ES_DOC_TYPE, self._test_id, self._stats)
 
     def update(self, data):
@@ -288,6 +288,7 @@ class TestStatsMixin(Stats):
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
         test_details['grafana_snapshot'] = ""
+        test_details['prometheus_report'] = ""
         return test_details
 
     def create_test_stats(self, sub_type=None):
@@ -302,25 +303,21 @@ class TestStatsMixin(Stats):
         else:
             self._stats['test_details']['test_name'] = self.params.id.name
         self._stats['results']['throughput'] = defaultdict(dict)
-        self._create()
+        self.create()
 
-    def update_stress_cmd_details(self, cmd, prefix=''):
-        section = '{0}cassandra-stress'.format(prefix)
+    def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
+        section = '{prefix}{stresser}'.format(**locals())
         if section not in self._stats['test_details']:
-            self._stats['test_details'][section] = [] if self.create_stats else {}
-        cmd_params = get_stress_cmd_params(cmd)
+            self._stats['test_details'][section] = [] if aggregate else {}
+        if stresser == "cassandra-stress":
+            cmd_params = get_stress_cmd_params(cmd)
+        elif stresser == "scylla-bench":
+            cmd_params = get_stress_bench_cmd_params(cmd)
+        else:
+            cmd_params = None
+            self.log.warning("Unknown stresser: %s" % stresser)
         if cmd_params:
-            self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
-                self._stats['test_details'][section].update(cmd_params)
-            self.update(dict(test_details=self._stats['test_details']))
-
-    def update_bench_stress_cmd_details(self, cmd, prefix=''):
-        section = '{0}scylla-bench'.format(prefix)
-        if section not in self._stats['test_details']:
-            self._stats['test_details'][section] = [] if self.create_stats else {}
-        cmd_params = get_stress_bench_cmd_params(cmd)
-        if cmd_params:
-            self._stats['test_details'][section].append(cmd_params) if self.create_stats else\
+            self._stats['test_details'][section].append(cmd_params) if aggregate else\
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
 
@@ -385,30 +382,31 @@ class TestStatsMixin(Stats):
             self._stats['results']['stats_total'] = total_stats
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
-        self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self.monitors:
-            test_start_time = self._stats['test_details']['start_time']
-            self.get_scylla_throughput()
-            self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
-            self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
+        if self.create_stats:
+            self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            if self.monitors:
+                test_start_time = self._stats['test_details']['start_time']
+                self.get_scylla_throughput()
+                self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
+                self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
 
-        if scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
-            node = self.db_cluster.nodes[0]
-            res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
-            self._stats['test_details']['scylla_args'] = res.stdout.strip()
-            res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
-            self._stats['test_details']['io_conf'] = res.stdout.strip()
-            res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
-            self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
+            if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
+                node = self.db_cluster.nodes[0]
+                res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
+                self._stats['test_details']['scylla_args'] = res.stdout.strip()
+                res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
+                self._stats['test_details']['io_conf'] = res.stdout.strip()
+                res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
+                self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
 
-        self._stats['status'] = self.status
-        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details'],
-                       'results': {'throughput': self._stats['results']['throughput']}}
-        if errors:
-            update_data.update({'errors': errors})
-        if coredumps:
-            update_data.update({'coredumps': coredumps})
-        self.update(update_data)
+            self._stats['status'] = self.status
+            update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details'],
+                           'results': {'throughput': self._stats['results']['throughput']}}
+            if errors:
+                update_data.update({'errors': errors})
+            if coredumps:
+                update_data.update({'coredumps': coredumps})
+            self.update(update_data)
 
     def check_regression(self):
         ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=ES_DOC_TYPE,

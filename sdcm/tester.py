@@ -168,6 +168,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.connections = []
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
+        if self.create_stats:
+            self.create_test_stats()
         self.init_resources()
         self.db_cluster.wait_for_init()
         if self.cs_db_cluster:
@@ -179,8 +181,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # cancel reuse cluster - for new nodes added during the test
         cluster.Setup.reuse_cluster(False)
 
-        if self.create_stats:
-            self.create_test_stats()
 
     def get_nemesis_class(self):
         """
@@ -197,7 +197,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         Allow access db stats object to external objects like Nemesis - for updates
         :return: db_stats.Stats object or None if param store_results_in_elasticsearch set to False in yaml.
         """
-        if self.params.get(key='store_results_in_elasticsearch',default=True):
+        if self.create_stats:
             return db_stats.Stats(test_index=self._test_index,
                                   test_id=self._test_id)
 
@@ -668,12 +668,13 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     @clean_resources_on_exception
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
-                          keyspace_name='', round_robin=False):
+                          keyspace_name='', round_robin=False, stats_aggregate_cmds=True):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_stress_cmd_details(stress_cmd, prefix)
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -684,11 +685,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                               round_robin=round_robin)
 
     @clean_resources_on_exception
-    def run_stress_thread_bench(self, stress_cmd, duration=None):
+    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_bench_stress_cmd_details(stress_cmd)
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -707,7 +709,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # to run out of memory when writing the XML report. Since
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
-        if results:
+        if results and self.create_stats:
             self.update_stress_results(results)
         else:
             self.log.warning('There is no stress results, probably stress thread has failed.')
@@ -719,14 +721,15 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     @clean_resources_on_exception
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
-        if store_results:
+        if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
 
     @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
-        self.update_stress_results(results)
+        if self.create_stats:
+            self.update_stress_results(results)
         return results
 
     def get_auth_provider(self, user, password):
@@ -1037,8 +1040,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     cr.destroy()
                 self.credentials = []
 
-        if self.create_stats:
-            self.update_test_details(db_cluster_errors, db_cluster_coredumps)
+        self.update_test_details(db_cluster_errors, db_cluster_coredumps)
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %

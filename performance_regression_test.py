@@ -37,7 +37,6 @@ class PerformanceRegressionTest(ClusterTester):
 
     def __init__(self, *args, **kwargs):
         super(PerformanceRegressionTest, self).__init__(*args, **kwargs)
-        self.create_stats = False
 
     def display_single_result(self, result):
         self.log.info(self.str_pattern % (result['op rate'],
@@ -151,7 +150,7 @@ class PerformanceRegressionTest(ClusterTester):
         if save_stats:
             self.create_test_stats(sub_type=sub_type)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
-                                              prefix=prefix)
+                                              prefix=prefix, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue, store_results=True)
         if save_stats:
             self.update_test_details(scylla_conf=True)
@@ -212,7 +211,8 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_w = self.params.get('stress_cmd_w')
         self.create_test_stats()
         # run a workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
+                                              stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.update_test_details(scylla_conf=True)
@@ -278,13 +278,14 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.create_test_stats(sub_type='write-prepare')
         # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
+                                              stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=False)
         self.update_test_details()
 
         # run a read workload
         self.create_test_stats()
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.update_test_details(scylla_conf=True)
@@ -344,13 +345,14 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.create_test_stats(sub_type='write-prepare')
         # run a write workload as a preparation
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
+                                              stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=False)
         self.update_test_details()
 
         # run a mixed workload
         self.create_test_stats()
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.update_test_details(scylla_conf=True)
@@ -388,13 +390,14 @@ class PerformanceRegressionTest(ClusterTester):
                     params.update({'stress_cmd': stress_cmd})
 
                     # Run all stress commands
+                    params.update(dict(stats_aggregate_cmds=False))
                     self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
                     stress_queue.append(self.run_stress_thread(**params))
 
             # One stress cmd command
             else:
                     stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
-                                                               prefix='preload-'))
+                                                               prefix='preload-', stats_aggregate_cmds=False))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
@@ -405,7 +408,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # Run WRITE workload
         self.create_test_stats(sub_type='write')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
         # TEMP check if possible
@@ -416,7 +419,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # Run READ workload
         self.create_test_stats(sub_type='read')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
@@ -426,7 +429,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # run MIXED workload
         self.create_test_stats(sub_type='mixed')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
@@ -443,7 +446,7 @@ class PerformanceRegressionTest(ClusterTester):
                       "32 -concurrency 512 -replication-factor 3")
 
         self.create_test_stats()
-        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r)
+        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r, stats_aggregate_cmds=False)
         results = self.get_stress_results_bench(queue=stress_queue)
 
         self.update_test_details(scylla_conf=True)
@@ -489,7 +492,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         self.create_test_stats(sub_type='write')
         self._scylla_bench_prepare_table()
-        self.run_stress_thread_bench(stress_cmd=cmd_w)
+        self.run_stress_thread_bench(stress_cmd=cmd_w, stats_aggregate_cmds=False)
         start_timestamp = int(time.time())
         self.db_cluster.wait_total_space_used_per_node(700 * KB * KB * KB, 'scylla_bench.test')  # 700GB
 
@@ -498,7 +501,7 @@ class PerformanceRegressionTest(ClusterTester):
                  "-rows-per-request=1000000 -no-lower-bound -start-timestamp=%s -duration=60m" % start_timestamp)
 
         self.create_test_stats(sub_type='read')
-        stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r)
+        stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r, stats_aggregate_cmds=False)
         results = self.get_stress_results_bench(queue=stress_queue)
         self.update_test_details()
         self.display_results(results, test_name='test_timeseries_read_bench')
@@ -519,7 +522,8 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Run stress test with user profile {}'.format(user_profile))
             assert os.path.exists(user_profile), 'File not found: {}'.format(user_profile)
             self.log.debug('Stress cmd: {}'.format(stress_cmd))
-            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, profile=user_profile)
+            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, profile=user_profile,
+                                                  stats_aggregate_cmds=False)
             results = self.get_stress_results(queue=stress_queue)
             self.update_test_details(scylla_conf=True)
             self.display_results(results, test_name=test_name)
