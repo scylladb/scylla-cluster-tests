@@ -170,7 +170,7 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
             node.remoter.run('sudo yum downgrade scylla\* -y')
             if new_introduced_pkgs:
-                node.remoter.run('sudo yum install %s -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated' % node.scylla_pkg())
+                node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
             if node.is_rhel_like():
                 node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
             else:
