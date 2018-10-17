@@ -172,7 +172,7 @@ class Nemesis(object):
 
     def disrupt_hard_reboot_node(self):
         self._set_current_disruption('HardRebootNode %s' % self.target_node)
-        self.target_node.reboot(hard=true)
+        self.target_node.reboot(hard=True)
         self.log.info('Waiting scylla services to start after node reboot')
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
@@ -180,7 +180,7 @@ class Nemesis(object):
 
     def disrupt_soft_reboot_node(self):
         self._set_current_disruption('SoftRebootNode %s' % self.target_node)
-        self.target_node.reboot(hard=false)
+        self.target_node.reboot(hard=False)
         self.log.info('Waiting scylla services to start after node reboot')
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
