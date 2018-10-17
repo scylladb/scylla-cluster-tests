@@ -144,7 +144,8 @@ class UpgradeTest(FillDatabaseData):
         cmd = "DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
         # recover the system tables
         if self.db_cluster.params.get('recover_system_tables', default=None):
-            node.remoter.run(cmd, verbose=True)
+            node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
+            node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
         node.remoter.run('sudo systemctl start scylla-server.service')
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
