@@ -9,6 +9,13 @@ logger = logging.getLogger(__name__)
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
 
+class ScyllaMgmtCli(object): #TODO
+    """
+    Provides communication with scylla-manager via sctool cli
+    """
+
+    def __init__(self):
+        pass
 
 class ScyllaMgmt(object):
     """
