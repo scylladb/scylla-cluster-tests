@@ -2386,7 +2386,7 @@ class BaseMonitorSet(object):
             mkdir -p {0.monitoring_conf_dir}
             ./genconfig.py -ns -d {0.monitoring_conf_dir} {0._monitoring_targets}
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % configure_script)
+        node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
         if alert_manager:
             self.configure_alert_manager(node)
 
@@ -2442,7 +2442,7 @@ class BaseMonitorSet(object):
                 chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}
             """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % run_script)
+        node.remoter.run("sudo bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
 
     def add_sct_dashboards_to_grafana(self, node):
