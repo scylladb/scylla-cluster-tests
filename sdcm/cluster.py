@@ -2418,6 +2418,8 @@ class BaseMonitorSet(object):
             node.remoter.run("chmod 777 %s" % f.name)
             node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(process.CmdError,),
+              message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
             self.stop_scylla_monitoring(node)
