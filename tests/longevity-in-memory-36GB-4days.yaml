@@ -1,0 +1,81 @@
+test_duration: 5760
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=36000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..36000000"
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..36000000 -log interval=5",
+             "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000"
+            ]
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..36000000 -log interval=5",
+                  "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000"]
+n_db_nodes: 6
+n_loaders: 3
+n_monitor_nodes: 1
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 5
+user_prefix: 'longevity-36gb-in-memory-VERSION'
+failure_post_behavior: keep
+space_node_threshold: 644245094
+ip_ssh_connections: 'private'
+
+server_encrypt: 'true'
+# Setting client encryption to false for now, till we will find the way to make c-s work with that
+client_encrypt: 'false'
+
+# 80GB in-memory storage - 36GB table is 45% of total in-memory store as recommended
+append_scylla_args: '--blocked-reactor-notify-ms 1000 --in-memory-storage-size-mb 80000'
+
+# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
+instance_provision: 'on_demand'
+
+# scylla-manager configuration
+# if running on aws and use_mgmt is true, the monitor image should not contain scylla
+use_mgmt: false
+mgmt_port: 10090
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/f4a2920f80c4bf178217c2553ad65ad7/centos/scylladb-2017.1.repo'
+scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-1.0/latest/scylla-manager.repo'
+
+
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_network: 'qa-vpc'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 2
+        gce_instance_type_loader: 'n1-standard-4'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-2'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'SCYLLA_REPO_FILE_URL'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+    aws: !mux
+        cluster_backend: 'aws'
+        user_credentials_path: '~/.ssh/scylla-qa-ec2'
+        instance_type_loader: 'c4.4xlarge'
+        instance_type_monitor: 'c4.2xlarge'
+        instance_type_db: 'i3.4xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-ec4a72c4'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_db_scylla_user: 'centos'
+            ami_id_loader: 'AMI_ID'
+            ami_loader_user: 'centos'
+            ami_id_monitor: 'AMI_ID'
+            ami_monitor_user: 'centos'
+            aws_root_disk_size_monitor: 20  # GB
+
+databases: !mux
+    scylla:
+        db_type: scylla
+
