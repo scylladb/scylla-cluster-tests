@@ -1848,6 +1848,24 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
+        if node.is_ubuntu14():
+            node.remoter.run('sudo apt-get install software-properties-common -y')
+            node.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
+            node.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
+            node.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+        elif node.is_debian8():
+            node.remoter.run('echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list')
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install gnupg-curl -y')
+            node.remoter.run('sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
+            node.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19')
+            node.remoter.run('echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
+            node.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+
         node.download_scylla_repo(self.params.get('scylla_repo'))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
