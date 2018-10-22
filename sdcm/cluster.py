@@ -440,6 +440,8 @@ class BaseNode(object):
                                        '-u scylla-server.service '
                                        '-u scylla-jmx.service '
                                        '-o json | /var/tmp/sct_log_formatter')
+            elif self.file_exists('/usr/bin/scylla'):
+                db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
             else:
                 # Here we are assuming we're using a cassandra image, based
                 # on older Ubuntu
