@@ -489,7 +489,7 @@ WantedBy=multi-user.target
                                self.collectd_exporter_tarball,
                                self.collectd_exporter_system_base_dir),
                               verbose=False)
-        if self.node.is_rhel_like() or self.node.is_ubuntu16():
-            self.collectd_exporter_setup()
-        else:
+        if self.node.is_ubuntu14():
             self.collectd_exporter_service_setup()
+        else:
+            self.collectd_exporter_setup()
