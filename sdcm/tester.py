@@ -343,6 +343,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         gce_image_db = self.params.get('gce_image_db')
         if not gce_image_db:
             gce_image_db = self.params.get('gce_image')
+        gce_image_monitor = self.params.get('gce_image_monitor')
+        if not gce_image_monitor:
+            gce_image_monitor = self.params.get('gce_image')
         cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db', default=0),
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db', default=0)}
         common_params = dict(gce_image_username=self.params.get('gce_image_username'),
@@ -375,7 +378,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if monitor_info['n_nodes'] > 0:
             monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor', default=0)}
-            self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image'),
+            self.monitors = MonitorSetGCE(gce_image=gce_image_monitor,
                                           gce_image_type=monitor_info['disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
                                           gce_n_local_ssd=monitor_info['n_local_ssd'],
