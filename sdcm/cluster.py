@@ -2282,7 +2282,10 @@ class BaseMonitorSet(object):
             return
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
-        self.start_scylla_monitoring(node)
+        try:
+            self.start_scylla_monitoring(node)
+        except process.CmdError:
+            self.reconfigure_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
         # be captured.
