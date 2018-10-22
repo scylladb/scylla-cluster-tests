@@ -60,7 +60,7 @@ class UpgradeTest(FillDatabaseData):
             # flush all memtables to SSTables
             node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
-            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.stop_scylla_server()
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
             # and all the rest
@@ -190,8 +190,7 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
         if self.db_cluster.params.get('test_sst3', default=None):
             node.remoter.run('sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
-        node.remoter.run('sudo systemctl start scylla-server.service')
-        node.wait_db_up(verbose=True)
+        node.start_scylla_server()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
