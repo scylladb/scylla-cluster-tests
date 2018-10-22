@@ -404,7 +404,7 @@ LoadPlugin processes
             if self.node.is_rhel_like() or self.node.is_ubuntu16():
                 self.node.remoter.run('sudo systemctl restart collectd.service')
             else:
-                self.node.remoter.run('sudo service collectd start')
+                self.node.remoter.run('sudo service collectd restart')
 
 
     def collectd_exporter_setup(self):
