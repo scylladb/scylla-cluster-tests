@@ -1095,6 +1095,7 @@ client_encryption_options:
         # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
+        rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
         # mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
         # mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
@@ -1115,8 +1116,9 @@ client_encryption_options:
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        # self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
-        # self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
+        self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
+        self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
+        self.remoter.run('sudo ssh-keygen -y -f {} > {}'.format(rsa_id_dst, rsa_id_dst_pub)) # generate ssh public key from private key.
 
         # mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
         #              'database':
