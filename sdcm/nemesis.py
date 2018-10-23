@@ -630,7 +630,38 @@ class Nemesis(object):
         disrupt_func = getattr(self, disrupt_func_name)
         disrupt_func()
 
-    def disrupt_mgmt_repair(self):
+    def disrupt_mgmt_repair_cli(self):
+        if not self.cluster.params.get('use_mgmt', default=None):
+            self.log.warning('Scylla-manager configuration is not defined!')
+            return
+
+        manager_node = self.monitoring_set.nodes[0]
+        mgmt_client = mgmt.ScyllaMgmtCli(manager_node=manager_node)
+
+        sleep = 30
+        self.log.info('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
+        time.sleep(sleep)
+
+        cluster_name = self.cluster.name
+        self.log.debug("Searching Manager for cluster : {}".format(cluster_name))
+
+        cluster_id = mgmt_client.get_cluster(cluster_name)
+        if not cluster_id:
+            self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
+            ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
+                                                  len(self.cluster.datacenter) > 1 else 'private_ip_address'
+            targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
+            cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, host=targets[0])
+
+        task_id = mgmt_client.run_repair(cluster_id=cluster_id)
+        is_task_done = mgmt_client.wait_for_task_status_done(task_id=task_id, cluster_id=cluster_id)
+
+        assert is_task_done == True
+
+        version = mgmt_client.get_manager_version()
+        self.log.debug("sctool version is : {}".format(version))
+
+    def disrupt_mgmt_repair_api(self):
         self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
             self.log.warning('Scylla-manager configuration is not defined!')
@@ -858,7 +889,6 @@ class NodeToolCleanupMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
 
-
 class ChaosMonkey(Nemesis):
 
     @log_time_elapsed_and_status
@@ -1031,7 +1061,19 @@ class MgmtRepair(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_mgmt_repair()
+        self.log.info('disrupt_mgmt_repair_cli Nemesis begin')
+        self.disrupt_mgmt_repair_cli()
+        self.log.info('disrupt_mgmt_repair_cli Nemesis end')
+        # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
+# class MgmtCli(Nemesis):
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.log.info('disrupt_mgmt_repair_cli Nemesis begin')
+#         self.disrupt_mgmt_repair_cli()
+#         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
+
 
 
 class AbortRepairMonkey(Nemesis):
