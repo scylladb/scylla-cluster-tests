@@ -274,7 +274,7 @@ class TestStatsMixin(Stats):
         new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
         setup_details['cpu_platform'] = 'UNKNOWN'
-        if is_gce:
+        if is_gce and self.db_cluster:
             setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get('cpuPlatform', 'UNKNOWN')
 
         return setup_details
