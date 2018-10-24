@@ -440,6 +440,8 @@ class BaseNode(object):
                                        '-u scylla-server.service '
                                        '-u scylla-jmx.service '
                                        '-o json | /var/tmp/sct_log_formatter')
+            elif self.file_exists('/usr/bin/scylla'):
+                db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
             else:
                 # Here we are assuming we're using a cassandra image, based
                 # on older Ubuntu
@@ -1046,9 +1048,12 @@ client_encryption_options:
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
             elif self.is_debian8():
-                self.remoter.run('sudo apt-get install software-properties-common -y')
-                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
-                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
+                self.remoter.run('echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list')
+                self.remoter.run('sudo apt-get update')
+                self.remoter.run('sudo apt-get install gnupg-curl -y')
+                self.remoter.run('sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
+                self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19')
+                self.remoter.run('echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
@@ -1845,6 +1850,31 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
+        if node.is_ubuntu14():
+            install_java_script = dedent("""
+                apt-get install software-properties-common -y
+                add-apt-repository -y ppa:openjdk-r/ppa
+                add-apt-repository -y ppa:scylladb/ppa
+                apt-get update
+                apt-get install -y openjdk-8-jre-headless
+                update-java-alternatives -s java-1.8.0-openjdk-amd64
+            """)
+            node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
+
+        elif node.is_debian8():
+            install_java_script = dedent("""
+                echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list
+                apt-get update
+                apt-get install gnupg-curl -y
+                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+                apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
+                apt-get update
+                apt-get install -y openjdk-8-jre-headless -t jessie-backports
+                update-java-alternatives -s java-1.8.0-openjdk-amd64
+            """)
+            node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
+
         node.download_scylla_repo(self.params.get('scylla_repo'))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
@@ -2437,7 +2467,7 @@ class BaseMonitorSet(object):
         else:
             run_script = dedent("""
                 cd {0.monitor_install_path}
-                sudo service docker start
+                sudo service docker start || true
                 mkdir -p {0.monitoring_data_dir}
                 chmod 777 {0.monitoring_data_dir}
                 ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -v {0.monitoring_version}

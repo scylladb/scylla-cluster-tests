@@ -394,8 +394,9 @@ LoadPlugin processes
         return "/etc/collectd.d/scylla.conf"
 
     def start_collectd_service(self):
-        # Disable SELinux to allow the unix socket plugin to work
-        self.node.remoter.run('sudo setenforce 0', ignore_status=True)
+        if self.node.is_rhel_like():
+            # Disable SELinux to allow the unix socket plugin to work
+            self.node.remoter.run('sudo setenforce 0', ignore_status=True)
         if self.node.is_rhel_like() or self.node.is_ubuntu16():
             self.node.remoter.run('sudo systemctl enable collectd.service')
         if self.node.is_docker():
@@ -404,7 +405,7 @@ LoadPlugin processes
             if self.node.is_rhel_like() or self.node.is_ubuntu16():
                 self.node.remoter.run('sudo systemctl restart collectd.service')
             else:
-                self.node.remoter.run('sudo service collectd start')
+                self.node.remoter.run('sudo service collectd restart')
 
 
     def collectd_exporter_setup(self):
@@ -488,7 +489,7 @@ WantedBy=multi-user.target
                                self.collectd_exporter_tarball,
                                self.collectd_exporter_system_base_dir),
                               verbose=False)
-        if self.node.is_rhel_like() or self.node.is_ubuntu16():
-            self.collectd_exporter_setup()
-        else:
+        if self.node.is_ubuntu14():
             self.collectd_exporter_service_setup()
+        else:
+            self.collectd_exporter_setup()

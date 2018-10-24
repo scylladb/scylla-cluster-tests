@@ -40,9 +40,9 @@ class UpgradeTest(FillDatabaseData):
     upgrade_rollback_mode = None
 
     def upgrade_node(self, node):
-        new_scylla_repo = self.db_cluster.params.get('new_scylla_repo', None,  None)
-        new_version = self.db_cluster.params.get('new_version', None,  '')
-        upgrade_node_packages = self.db_cluster.params.get('upgrade_node_packages')
+        new_scylla_repo = self.params.get('new_scylla_repo', None,  None)
+        new_version = self.params.get('new_version', None,  '')
+        upgrade_node_packages = self.params.get('upgrade_node_packages')
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
@@ -60,7 +60,7 @@ class UpgradeTest(FillDatabaseData):
             # flush all memtables to SSTables
             node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
-            node.remoter.run('sudo systemctl stop scylla-server.service')
+            node.stop_scylla_server()
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
             # and all the rest
@@ -118,6 +118,8 @@ class UpgradeTest(FillDatabaseData):
                 else:
                     node.remoter.run('sudo apt-get update')
                     node.remoter.run('sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
+        if self.params.get('test_sst3', default=None):
+            node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
         node.start_scylla_server()
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
@@ -128,7 +130,7 @@ class UpgradeTest(FillDatabaseData):
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
         #fixme: auto identify new_introduced_pkgs, remove this parameter
-        new_introduced_pkgs = self.db_cluster.params.get('new_introduced_pkgs', default=None)
+        new_introduced_pkgs = self.params.get('new_introduced_pkgs', default=None)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         # flush all memtables to SSTables
@@ -162,7 +164,8 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run('sudo apt-get remove scylla\* -y')
                 node.remoter.run('sudo apt-get install %s -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated' % node.scylla_pkg())
                 node.remoter.run('for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                node.remoter.run('sudo systemctl daemon-reload')
+                if not node.is_ubuntu14():
+                    node.remoter.run('sudo systemctl daemon-reload')
         elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run('sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
         else:
@@ -170,21 +173,24 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
             node.remoter.run('sudo yum downgrade scylla\* -y')
             if new_introduced_pkgs:
-                node.remoter.run('sudo yum install %s -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated' % node.scylla_pkg())
+                node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
             if node.is_rhel_like():
                 node.remoter.run('for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
             else:
                 node.remoter.run('for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                node.remoter.run('sudo systemctl daemon-reload')
+                if not node.is_ubuntu14():
+                    node.remoter.run('sudo systemctl daemon-reload')
 
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall("system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
         cmd = "DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
         # recover the system tables
-        if self.db_cluster.params.get('recover_system_tables', default=None):
-            node.remoter.run(cmd, verbose=True)
-        node.remoter.run('sudo systemctl start scylla-server.service')
-        node.wait_db_up(verbose=True)
+        if self.params.get('recover_system_tables', default=None):
+            node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
+            node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
+        if self.params.get('test_sst3', default=None):
+            node.remoter.run('sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
+        node.start_scylla_server()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
