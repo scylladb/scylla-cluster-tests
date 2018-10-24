@@ -1091,14 +1091,12 @@ client_encryption_options:
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
-        # mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
-        # mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
         self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.download_scylla_repo(scylla_repo)
@@ -1120,23 +1118,45 @@ client_encryption_options:
         self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
         self.remoter.run('sudo ssh-keygen -y -f {} > {}'.format(rsa_id_dst, rsa_id_dst_pub)) # generate ssh public key from private key.
 
-        # mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
-        #              'database':
-        #                  {'hosts': db_hosts,
-        #                   'timeout': '5s'},
-        #              'ssh':
-        #                  {'user': self._ssh_login_info['user'],
-        #                   'identity_file': rsa_id_dst}
-        #              }
-        # (_, conf_file) = tempfile.mkstemp(dir='/tmp')
-        # with open(conf_file, 'w') as fd:
-        #     yaml.dump(mgmt_conf, fd, default_flow_style=False)
-        # self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)
-        # self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+
+
+    def config_scylla_manager(self, mgmt_port, db_hosts):
+        """
+        this code was took out from  install_mgmt() method.
+        it may be usefull for manager testing future enhancements.
+        :param mgmt_port:
+        :param db_hosts:
+        :return:
+        """
+        # only support for centos
+        self.log.debug('Install scylla-manager')
+        rsa_id_dst = '/tmp/scylla-test'
+        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
+        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
+
+        mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
+                     'database':
+                         {'hosts': db_hosts,
+                          'timeout': '5s'},
+                     'ssh':
+                         {'user': self._ssh_login_info['user'],
+                          'identity_file': rsa_id_dst}
+                     }
+        (_, conf_file) = tempfile.mkstemp(dir='/tmp')
+        with open(conf_file, 'w') as fd:
+            yaml.dump(mgmt_conf, fd, default_flow_style=False)
+        self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)
+        self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
+        if self.is_docker():
+            self.remoter.run('sudo supervisorctl start scylla-manager')
+        else:
+            self.remoter.run('sudo systemctl restart scylla-manager.service')
+
+
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
