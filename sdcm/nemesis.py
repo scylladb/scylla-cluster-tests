@@ -636,7 +636,7 @@ class Nemesis(object):
             return
 
         manager_node = self.monitoring_set.nodes[0]
-        mgmt_client = mgmt.ScyllaMgmtCli(manager_node=manager_node)
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
 
         sleep = 30
         self.log.info('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
@@ -645,21 +645,23 @@ class Nemesis(object):
         cluster_name = self.cluster.name
         self.log.debug("Searching Manager for cluster : {}".format(cluster_name))
 
-        cluster_id = mgmt_client.get_cluster(cluster_name)
-        if not cluster_id:
+        mgr_cluster = manager_tool.get_cluster(cluster_name)
+        if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
                                                   len(self.cluster.datacenter) > 1 else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-            cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, host=targets[0])
+            mgr_cluster = manager_tool.add_cluster(cluster_name=cluster_name, host=targets[0])
 
-        task_id = mgmt_client.run_repair(cluster_id=cluster_id)
-        is_task_done = mgmt_client.wait_for_task_status_done(task_id=task_id, cluster_id=cluster_id)
+        mgr_task = mgr_cluster.create_repair_task()
+        mgr_task.stop()
+        mgr_task.start()
 
+        is_task_done = mgr_task.wait_for_status_done()
         assert is_task_done == True
+        self.log.info('Task: {} is done.'.format(mgr_task.id))
 
-        version = mgmt_client.get_manager_version()
-        self.log.debug("sctool version is : {}".format(version))
+        self.log.debug("sctool version is : {}".format(manager_tool.version))
 
     def disrupt_mgmt_repair_api(self):
         self._set_current_disruption('ManagementRepair')
