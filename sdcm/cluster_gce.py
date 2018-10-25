@@ -2,6 +2,8 @@ import os
 import time
 import cluster
 
+from libcloud.common.google import ResourceNotFoundError
+
 
 def _prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
@@ -119,9 +121,16 @@ class GCENode(cluster.BaseNode):
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot')
 
+    def _safe_destroy(self):
+        try:
+            self._gce_service.ex_get_node(self.name)
+            self._instance.destroy()
+        except ResourceNotFoundError as e:
+            self.log.debug("Instance doesn't exist, skip destroy: %s" % e)
+
     def destroy(self):
         self.stop_task_threads()
-        self._instance_wait_safe(self._instance.destroy)
+        self._instance_wait_safe(self._safe_destroy)
         self.log.info('Destroyed')
 
 
