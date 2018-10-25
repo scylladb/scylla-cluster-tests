@@ -206,7 +206,7 @@ class LongevityTest(ClusterTester):
                 AND speculative_retry = '99.0PERCENTILE';
         """)
 
-    def _pre_create_schema(self):
+    def _pre_create_schema(self, in_memory=False):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -222,7 +222,8 @@ class LongevityTest(ClusterTester):
             self.create_ks(session, keyspace_name, rf=3)
             self.log.debug('{} Created'.format(keyspace_name))
             self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
-                           columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'})
+                           columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
+                           in_memory=in_memory)
 
     def _flush_all_nodes(self):
         """

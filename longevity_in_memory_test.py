@@ -11,7 +11,5 @@ class InMemoryLongevetyTest(LongevityTest):
         super(InMemoryLongevetyTest, self).__init__(*args, **kwargs)
 
     def test_in_mem_longevity(self):
-        self._pre_create_schema()
-        self.alter_table_to_in_memory()
-        self.db_cluster.restart_scylla()
+        self._pre_create_schema(in_memory=True)
         self.test_custom_time()
