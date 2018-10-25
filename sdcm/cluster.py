@@ -2312,7 +2312,10 @@ class BaseMonitorSet(object):
             return
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
-        self.start_scylla_monitoring(node)
+        try:
+            self.start_scylla_monitoring(node)
+        except process.CmdError:
+            self.reconfigure_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
         # be captured.
@@ -2448,6 +2451,8 @@ class BaseMonitorSet(object):
             node.remoter.run("chmod 777 %s" % f.name)
             node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(process.CmdError,),
+              message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
             self.stop_scylla_monitoring(node)
