@@ -67,7 +67,7 @@ class ManagerTask(ScyllaLogicObj):
         assert self.status != TaskStatus.RUNNING
 
     def start(self):
-        cmd = "task start {} -c {}".format(self.id, self.mgr_cluster.id)
+        cmd = "task start --continue {} -c {}".format(self.id, self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
         assert self.status not in [TaskStatus.STOPPED]
 
@@ -118,7 +118,8 @@ class ManagerTask(ScyllaLogicObj):
         :param list_status:
         :return:
         """
-        if check_task_progress:
+        status = self.status
+        if check_task_progress and status != TaskStatus.NEW: # check progress for all statuses except 'NEW'
             progress = self.progress
         return self.status in list_status
 
@@ -176,7 +177,7 @@ class ManagerCluster(ScyllaLogicObj):
         cmd = "repair -c {}".format(self.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd)
         if not res:
-            raise ScyllaManagerError("Unknown failure for sctool commands")
+            raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
 
         if "no matching units found" in res.stderr:
             raise ScyllaManagerError("Manager cannot run repair where no keyspace exists.")
