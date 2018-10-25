@@ -631,6 +631,7 @@ class Nemesis(object):
         disrupt_func()
 
     def disrupt_mgmt_repair_cli(self):
+        self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
             self.log.warning('Scylla-manager configuration is not defined!')
             return
