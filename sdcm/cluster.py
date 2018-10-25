@@ -1128,6 +1128,15 @@ client_encryption_options:
         """
         this code was took out from  install_mgmt() method.
         it may be usefull for manager testing future enhancements.
+
+        Usage may be:
+            if self.params.get('mgmt_db_local', default=True):
+                mgmt_db_hosts = ['127.0.0.1']
+            else:
+                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
+            node.config_scylla_manager(mgmt_port=self.params.get('mgmt_port', default=10090),
+                              db_hosts=mgmt_db_hosts)
+
         :param mgmt_port:
         :param db_hosts:
         :return:
@@ -2371,14 +2380,8 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            if self.params.get('mgmt_db_local', default=True):
-                mgmt_db_hosts = ['127.0.0.1']
-            else:
-                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'),
-                              mgmt_port=self.params.get('mgmt_port', default=10090),
-                              db_hosts=mgmt_db_hosts)
+                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
