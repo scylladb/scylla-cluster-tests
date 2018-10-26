@@ -874,13 +874,13 @@ class LimitedChaosMonkey(Nemesis):
         #  - ModifyTableMonkey
         #  - EnospcMonkey
         #  - StopWaitStartMonkey
-        #  - RestartNodeMonkey
+        #  - RestartThenRepairNodeMonkey
         self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
                                                          'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
-                                                         'disrupt_restart_node'])
+                                                         'disrupt_restart_then_repair_node'])
 
 
 class AllMonkey(Nemesis):
