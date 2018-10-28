@@ -22,8 +22,8 @@ table_definition: |
   );
 
 extra_definitions:
-  - CREATE INDEX users_address_ind ON sec_index.users (address)
-  - CREATE INDEX users_last_access_ind ON sec_index.users (last_access)
+  - CREATE INDEX IF NOT EXISTS  users_address_ind ON sec_index.users (address)
+  - CREATE INDEX IF NOT EXISTS  users_last_access_ind ON sec_index.users (last_access)
 
 columnspec:
   - name: userid

@@ -22,9 +22,9 @@ table_definition: |
   );
 
 extra_definitions:
-  - CREATE INDEX users_last_name_ind ON sec_index.users (last_name)
-  - CREATE INDEX users_first_name_ind ON sec_index.users (first_name)
-  - CREATE INDEX users_initials_ind ON sec_index.users (initials)
+  - CREATE INDEX IF NOT EXISTS  users_last_name_ind ON sec_index.users (last_name)
+  - CREATE INDEX IF NOT EXISTS  users_first_name_ind ON sec_index.users (first_name)
+  - CREATE INDEX IF NOT EXISTS  users_initials_ind ON sec_index.users (initials)
 
 columnspec:
   - name: userid
