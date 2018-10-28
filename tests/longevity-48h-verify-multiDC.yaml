@@ -1,17 +1,17 @@
-test_duration: 2880
+test_duration: 2860
 prepare_write_cmd:  "cassandra-stress write cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
 prepare_verify_cmd: "cassandra-stress read  cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=00200300..600200300"]
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=100m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
+stress_cmd: ["cassandra-stress write cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=00200300..600200300"]
+stress_read_cmd: ["cassandra-stress read cl=ONE duration=100m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
 cassandra_stress_duration: 10080
 cassandra_stress_threads: 1000
 cassandra_stress_population_size: 100000000000
 n_db_nodes: '3 3'
 n_loaders: 1
 n_monitor_nodes: 1
-nemesis_class_name: 'NoOpMonkey'
+nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
-user_prefix: 'yaron-2-3-0-multidc'
+user_prefix: 'sct-multidc'
 failure_post_behavior: keep
 space_node_threshold: 6442
 ip_ssh_connections: 'public'
