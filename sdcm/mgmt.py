@@ -22,8 +22,6 @@ class TaskStatus(Enum):
    ERROR = "ERROR"
    STOPPED = "STOPPED"
 
-
-
    @staticmethod
    def from_str(output_str):
         output_str = output_str.upper()
@@ -212,9 +210,7 @@ class ScyllaManagerTool(object):
         return res.stdout
 
     def _mgr_remoter_run(self, cmd):
-        result = self.manager_node.remoter.run(cmd)
-        logger.debug("[_mgr_remoter_run]: result: {} , result.stdout: {} , result.stderr: {}".format(result,result.stdout, result.stderr))
-        return result
+        return self.manager_node.remoter.run(cmd)
 
     def run_sctool_cmd(self, cmd, is_verify_errorless_result = False):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
