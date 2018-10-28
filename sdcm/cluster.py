@@ -1101,7 +1101,7 @@ client_encryption_options:
         self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
-        if self.is_docker(): #TODO: check non-docker env to remove packages as well for manager installation best practice.
+        if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
         self.remoter.run('sudo yum install -y scylla-manager')
@@ -1110,7 +1110,6 @@ client_encryption_options:
                 self.remoter.run('echo no| sudo scyllamgr_setup')
             except Exception as ex:
                 self.log.warning(ex)
-                pass
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
