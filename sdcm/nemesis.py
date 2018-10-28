@@ -659,7 +659,7 @@ class Nemesis(object):
         mgr_task.start()
 
         is_task_done = mgr_task.wait_for_status_done()
-        assert is_task_done == True
+        assert is_task_done == True, 'Task: {} final status is: {}.'.format(mgr_task.id, str(mgr_task.status))
         self.log.info('Task: {} is done.'.format(mgr_task.id))
 
         self.log.debug("sctool version is : {}".format(manager_tool.version))
@@ -1068,16 +1068,6 @@ class MgmtRepair(Nemesis):
         self.disrupt_mgmt_repair_cli()
         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
         # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
-
-# class MgmtCli(Nemesis):
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.log.info('disrupt_mgmt_repair_cli Nemesis begin')
-#         self.disrupt_mgmt_repair_cli()
-#         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
-
-
 
 class AbortRepairMonkey(Nemesis):
 
