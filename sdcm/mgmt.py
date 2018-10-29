@@ -14,6 +14,13 @@ MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
 
 from enum import Enum
 
+class ScyllaManagerError(Exception):
+    """
+    A custom exception for Manager related errors
+    """
+    pass
+
+
 class TaskStatus(Enum):
    NEW = "NEW"
    RUNNING = "RUNNING"
@@ -22,29 +29,14 @@ class TaskStatus(Enum):
    ERROR = "ERROR"
    STOPPED = "STOPPED"
 
-   @staticmethod
-   def from_str(output_str):
-        output_str = output_str.upper()
-        if output_str in ('NEW'):
-            return TaskStatus.NEW
-        elif output_str in ('RUNNING'):
-            return TaskStatus.RUNNING
-        elif output_str in ('DONE'):
-            return TaskStatus.DONE
-        elif output_str in ('ERROR'):
-            return TaskStatus.ERROR
-        elif output_str in ('UNKNOWN'):
-            return TaskStatus.UNKNOWN
-        elif output_str in ('STOPPED'):
-            return TaskStatus.STOPPED
-        else:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+   @classmethod
+   def from_str(cls, output_str):
+       try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+       except AttributeError:
+           raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
-class ScyllaManagerError(Exception):
-    """
-    A custom exception for Manager related errors
-    """
-    pass
 
 class ScyllaLogicObj(object):
 
@@ -64,10 +56,20 @@ class ManagerTask(ScyllaLogicObj):
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
         assert self.status != TaskStatus.RUNNING
 
-    def start(self):
-        cmd = "task start --continue {} -c {}".format(self.id, self.mgr_cluster.id)
+    def start(self, use_continue=False, **kwargs):
+        str_continue = '--continue=true' if use_continue else '--continue=false'
+        cmd = "task start {} -c {} {}".format(self.id, self.mgr_cluster.id, str_continue)
+        cmd = self._add_kwargs_to_cmd(cmd=cmd, **kwargs)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
         assert self.status not in [TaskStatus.STOPPED]
+
+    def _add_kwargs_to_cmd(self, cmd, **kwargs):
+        for k, v in kwargs.items():
+            cmd += ' --{}={}'.format(k, v)
+        return cmd
+
+    def continue_repair(self):
+        self.start(use_continue=True)
 
     @property
     def status(self):
@@ -76,6 +78,14 @@ class ManagerTask(ScyllaLogicObj):
         """
         cmd = "task list -c {}".format(self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        # expecting output of:
+        # cluster: sce
+        # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
+        # │ task                                        │ next run                      │ ret. │ properties │ status │
+        # ├─────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
+        # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 05 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
+        # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
+        # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
         if self.id not in res.stdout:
             logger.error("Encountered an error on '{}' command response: {}".format(cmd, str(res.stdout)))
             raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
@@ -89,6 +99,18 @@ class ManagerTask(ScyllaLogicObj):
         logger.debug("Task: {} status is: {}".format(self.id,str(status)))
         return status
 
+    def _get_output_value(self, res, filter_param, value_offset_in_table):
+        if not res or filter_param not in res.stdout:
+            raise ScyllaManagerError("Encountered an error on sctool command response: {} not found in output: {}".format(filter_param, str(res)))
+        lines = res.stdout.split('\n')
+        ret_val = 'N/A'
+        for line in lines:
+            if filter_param in line:
+                ret_val = line.split()[value_offset_in_table]
+                break
+        logger.debug("Task: {} {} is: {}".format(self.id, filter_param, ret_val))
+        return ret_val
+
     @property
     def progress(self):
         """
@@ -98,17 +120,18 @@ class ManagerTask(ScyllaLogicObj):
             return "0%"
         cmd = "task progress {} -c {}".format(self.id, self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd)
+        # expecting output of:
+        # ╭─────────────┬─────────────────────╮
+        # │ Status      │ DONE                │
+        # │ Start time  │ 28 Oct 18 15:02 UTC │
+        # │ End time    │ 28 Oct 18 16:14 UTC │
+        # │ Duration    │ 1h12m23s            │
+        # │ Progress    │ 100%                │
+        # │ Datacenters │ [datacenter1]       │
+        # ├─────────────┼─────────────────────┤
         if not res or "Progress" not in res.stdout:
-            logger.error("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
-            raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
-        lines = res.stdout.split('\n')
-        progress = 'N/A'
-        for line in lines:
-            if "Progress" in line:
-                progress = line.split()[3]
-                break
-        logger.debug("Task: {} progress is: {}".format(self.id,progress))
-        return progress
+            raise ScyllaManagerError("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
+        return self._get_output_value(res=res, filter_param="Progress", value_offset_in_table=3)
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
@@ -121,16 +144,17 @@ class ManagerTask(ScyllaLogicObj):
             progress = self.progress
         return self.status in list_status
 
-    def wait_for_status(self, list_status, check_task_progress=True):
+    def wait_for_status(self, list_status, check_task_progress=True, timeout=3600):
         text = "Waiting until task: {} reaches status of: {}".format(self.id, list_status)
         is_status_reached = False
         is_status_reached = wait.wait_for(func=self.is_status_in_list, step=60,
-                                          text=text, list_status=list_status, check_task_progress=check_task_progress, timeout=3600)
+                                          text=text, list_status=list_status, check_task_progress=check_task_progress, timeout=timeout)
         return is_status_reached
 
-    def wait_for_status_done(self):
+    def wait_for_status_done(self, timeout=3600):
         """
-        Wait and report that task is eventually reaching a 'final' status. meaning one of: done/error/stopped
+        1) Wait for task to reach a 'final' status. meaning one of: done/error/stopped
+        2) check and return true/false if the final status is 'done'.
         :return:
         """
         logger.debug("Waiting for task: {} to be done..".format(self.id))
@@ -143,7 +167,7 @@ class ManagerTask(ScyllaLogicObj):
         if cur_status == TaskStatus.NEW:
             logger.debug("Waiting for task: {} to start..".format(self.id))
             list_status = [TaskStatus.RUNNING, TaskStatus.ERROR, TaskStatus.DONE]
-            res = self.wait_for_status(list_status=list_status)
+            res = self.wait_for_status(list_status=list_status, timeout=timeout)
             if not res:
                 raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
             cur_status = self.status
@@ -153,7 +177,7 @@ class ManagerTask(ScyllaLogicObj):
         if cur_status == TaskStatus.RUNNING:
             logger.debug("Waiting for task: {} to finish running..".format(self.id))
             list_status = [TaskStatus.DONE, TaskStatus.ERROR]
-            res = self.wait_for_status(list_status=list_status)
+            res = self.wait_for_status(list_status=list_status, timeout=timeout)
             if not res:
                 raise ScyllaManagerError("Unexpected result on waiting for task {} status {}".format(self.id, list_status))
             cur_status = self.status
@@ -180,6 +204,7 @@ class ManagerCluster(ScyllaLogicObj):
         if "no matching units found" in res.stderr:
             raise ScyllaManagerError("Manager cannot run repair where no keyspace exists.")
 
+        # expected result output is to have a format of: "repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d"
         if 'repair' not in res.stdout:
             logger.error("Encountered an error on '{}' command response".format(cmd))
             raise ScyllaManagerError(res.stderr)
@@ -223,6 +248,12 @@ class ScyllaManagerTool(object):
         cmd = 'cluster list'
         res = self.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
 
+        # expecting output of:
+        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
+        # │ cluster id                           │ name │ host        │ ssh user       │
+        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce  │ 10.142.0.25 │ scylla-manager │
+        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
         if not res.stdout or cluster_name not in res.stdout:
             logger.debug('Cluster {} not found in scylla-manager'.format(cluster_name))
             return None
