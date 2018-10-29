@@ -30,7 +30,7 @@ class MgmtCliTest(ClusterTester):
     """
 
 
-    def test_mgmt_cli(self):
+    def test_mgmt_repair_nemesis(self):
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd)
