@@ -67,6 +67,8 @@ TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
+SCYLLA_DIR = "/var/lib/scylla"
+
 
 logger = logging.getLogger(__name__)
 
