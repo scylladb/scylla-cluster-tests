@@ -1,7 +1,7 @@
 test_duration: 2860
 prepare_write_cmd:  "cassandra-stress write cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
 prepare_verify_cmd: "cassandra-stress read  cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
-stress_cmd: ["cassandra-stress write cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=00200300..600200300"]
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=00200300..600200300"]
 stress_read_cmd: ["cassandra-stress read cl=ONE duration=100m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
 cassandra_stress_duration: 10080
 cassandra_stress_threads: 1000
@@ -9,7 +9,7 @@ cassandra_stress_population_size: 100000000000
 n_db_nodes: '3 3'
 n_loaders: 1
 n_monitor_nodes: 1
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'LimitedChaosMonkey'
 nemesis_interval: 5
 user_prefix: 'sct-multidc'
 failure_post_behavior: keep
@@ -30,19 +30,21 @@ backends: !mux
         cluster_backend: 'aws'
         # From 0.19 on, iotune will require bigger disk, so let's use a big
         # loader instance by default.
-        instance_type_loader: 'c4.large'
+        instance_type_loader: 'c5.large'
         # Size of AWS monitor instance
-        instance_type_monitor: i3.large
+        instance_type_monitor: t3.small
         us_east_1_and_us_west_2:
             user_credentials_path: '~/.ssh/scylla-qa-ec2'
             region_name: 'us-east-1 us-west-2'
             security_group_ids: 'sg-c5e1f7a0 sg-81703ae4'
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
-            ami_id_db_scylla: 'ami-0fc423ac17a75570d ami-0da599147b1d9e80d'
+            ami_id_db_scylla: 'ami-40a0e756 ami-77e78617'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-0fc423ac17a75570d'
+            ami_id_loader: 'ami-40a0e756'
             ami_loader_user: 'centos'
-            ami_id_monitor: 'ami-010f2b2749b78a6c5'
+            ami_id_db_cassandra: 'ami-ada2b6c4'
+            ami_db_cassandra_user: 'ubuntu'
+            ami_id_monitor: 'ami-40a0e756'
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'
@@ -73,4 +75,4 @@ backends: !mux
 databases: !mux
     scylla:
         db_type: scylla
-        instance_type_db: 'i3.large'
+        instance_type_db: 'i3.2xlarge'
