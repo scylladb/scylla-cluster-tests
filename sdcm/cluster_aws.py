@@ -8,6 +8,7 @@ import yaml
 from botocore.exceptions import WaiterError, ClientError
 import boto3.session
 from avocado.utils import runtime as avocado_runtime
+from textwrap import dedent
 
 import cluster
 import ec2_client
@@ -329,11 +330,15 @@ class AWSNode(cluster.BaseNode):
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
         # need to setup the instance and treat it as a new instance.
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            self.remoter.run('sudo rm -f /etc/scylla/ami_configured')
-            self.remoter.run('sudo sed -e \'/.*scylla/ s/^/# /g\' -i /etc/fstab')
-            output = self.remoter.run('grep replace_address: /etc/scylla/scylla.yaml')
-            if 'replace_address:' not in output:
-                self.remoter.run('echo replace_address: %s >> /etc/scylla/scylla.yaml' %
+            clean_script = dedent("""
+                sudo rm -f /etc/scylla/ami_configured
+                sudo sed -e '/.*scylla/ s/^/# /g' -i /etc/fstab
+                sudo sed -e 's/replace_address_on_first_boot/#replace_address_on_first_boot/g' -i /etc/scylla/scylla.yaml
+            """)
+            self.remoter.run("sudo bash -cxe '%s'" % clean_script)
+            output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
+            if 'replace_address:' not in output.stdout:
+                self.remoter.run('sudo echo replace_address: %s >> /etc/scylla/scylla.yaml' %
                                  self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
