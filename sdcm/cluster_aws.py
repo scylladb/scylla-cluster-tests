@@ -330,6 +330,11 @@ class AWSNode(cluster.BaseNode):
         # need to setup the instance and treat it as a new instance.
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             self.remoter.run('sudo rm -f /etc/scylla/ami_configured')
+            self.remoter.run('sudo sed -e \'/.*scylla/ s/^/# /g\' -i /etc/fstab')
+            output = self.remoter.run('grep replace_address: /etc/scylla/scylla.yaml')
+            if 'replace_address:' not in output:
+                self.remoter.run('echo replace_address: %s >> /etc/scylla/scylla.yaml' %
+                                 self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
