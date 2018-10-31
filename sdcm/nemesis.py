@@ -639,20 +639,14 @@ class Nemesis(object):
         manager_node = self.monitoring_set.nodes[0]
         manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
 
-        sleep = 30
-        self.log.info('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
-        time.sleep(sleep)
-
         cluster_name = self.cluster.name
-        self.log.debug("Searching Manager for cluster : {}".format(cluster_name))
-
         mgr_cluster = manager_tool.get_cluster(cluster_name)
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
                                                   len(self.cluster.datacenter) > 1 else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-            mgr_cluster = manager_tool.add_cluster(cluster_name=cluster_name, host=targets[0])
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
         mgr_task = mgr_cluster.create_repair_task()
         mgr_task.stop()
