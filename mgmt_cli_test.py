@@ -18,6 +18,7 @@ import re
 import time
 from avocado import main
 
+from sdcm import mgmt
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
@@ -43,6 +44,35 @@ class MgmtCliTest(ClusterTester):
                                     monitoring_set=self.monitors,
                                     )
         self.db_cluster.start_nemesis()
+
+    def test_mgmt_cluster_crud(self):
+
+        manager_node = self.monitors.nodes[0]
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
+
+        cluster_name = 'mgr_cluster1'
+        ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
+                                              len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+        hosts = [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes]
+        selected_host = hosts[0]
+
+        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
+
+        cluster_orig_name = mgr_cluster.name
+        mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
+        assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
+
+        # the below test currently fails and under clarification
+        # new_ssh_user="super-scylla-manager"
+        # mgr_cluster.update(ssh_user=new_ssh_user)
+        # assert mgr_cluster.ssh_user == new_ssh_user, "Cluster ssh-user wasn't changed after update command"
+
+        if len(hosts) > 1:
+            mgr_cluster.update(host=hosts[1])
+            assert mgr_cluster.host == hosts[1], "Cluster host wasn't changed after update command"
+        mgr_cluster.delete()
+        mgr_cluster2 = manager_tool.add_cluster(name=cluster_name, host=selected_host)
+
 
 
 if __name__ == '__main__':
