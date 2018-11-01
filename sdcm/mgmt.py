@@ -1,4 +1,5 @@
 # coding: utf-8
+from avocado.utils import process
 import requests
 import logging
 import json
@@ -43,6 +44,37 @@ class ScyllaLogicObj(object):
 
     def __init__(self, id):
         self.id = id
+
+    def _get_output_table_value(self, table_result, column_num, filter_param=None):
+        """
+        extract a column value out of an sctool output table
+        :param table_result:
+        :param column_num:
+        :param filter_param:
+        :return:
+        """
+        filter_param_updated = filter_param or self.id # default filtering (if not given) is by the scylla-object-id.
+        if not table_result or filter_param_updated not in table_result.stdout:
+            raise ScyllaManagerError("Encountered an error on sctool command response: {} not found in output: {}".format(filter_param_updated, str(table_result)))
+
+        # example expected output is:
+        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
+        # │ cluster id                           │ name │ host        │ ssh user       │
+        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
+        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
+        lines = table_result.stdout.split('\n')
+        title = filter_param or [s.split() for s in lines[1].split("│")][column_num][0] # get the column title (or given filter name)
+        ret_val = 'N/A'
+        for line in lines:
+            if filter_param_updated in line:
+                list_line = [s if s else 'EMPTY' for s in line.split("│")]
+                list_line_no_spaces = [s.split()[0] for s in list_line]
+                ret_val = list_line_no_spaces[column_num]
+                break
+        logger.debug("{}: {} {} is: {}".format(type(self), self.id, title, ret_val))
+        return ret_val
+
 
 
 class ManagerTask(ScyllaLogicObj):
@@ -100,18 +132,6 @@ class ManagerTask(ScyllaLogicObj):
         logger.debug("Task: {} status is: {}".format(self.id,str(status)))
         return status
 
-    def _get_output_value(self, res, filter_param, value_offset_in_table):
-        if not res or filter_param not in res.stdout:
-            raise ScyllaManagerError("Encountered an error on sctool command response: {} not found in output: {}".format(filter_param, str(res)))
-        lines = res.stdout.split('\n')
-        ret_val = 'N/A'
-        for line in lines:
-            if filter_param in line:
-                ret_val = line.split()[value_offset_in_table]
-                break
-        logger.debug("Task: {} {} is: {}".format(self.id, filter_param, ret_val))
-        return ret_val
-
     @property
     def progress(self):
         """
@@ -130,9 +150,7 @@ class ManagerTask(ScyllaLogicObj):
         # │ Progress    │ 100%                │
         # │ Datacenters │ [datacenter1]       │
         # ├─────────────┼─────────────────────┤
-        if not res or "Progress" not in res.stdout:
-            raise ScyllaManagerError("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
-        return self._get_output_value(res=res, filter_param="Progress", value_offset_in_table=3)
+        return self._get_output_table_value(table_result=res, filter_param="Progress", column_num=2)
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
@@ -192,7 +210,7 @@ class ManagerCluster(ScyllaLogicObj):
 
     def __init__(self, mgr_tool, cluster_id):
         if not mgr_tool:
-            raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager' host parameter is given")
+            raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
         ScyllaLogicObj.__init__(self, id=cluster_id)
         self.mgr_tool = mgr_tool
 
@@ -215,6 +233,79 @@ class ManagerCluster(ScyllaLogicObj):
 
         return ManagerTask(task_id=task_id, mgr_cluster=self) # return the manager's new repair-task-id
 
+    def delete(self):
+        """
+        $ sctool cluster delete
+        """
+
+        cmd = "cluster delete -c {}".format(self.id)
+        res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+
+    def update(self, name=None, host=None, ssh_identity_file=None, ssh_user=None):
+        """
+        $ sctool cluster update --help
+        Modify a cluster
+
+        Usage:
+          sctool cluster update [flags]
+
+        Flags:
+          -h, --help                     help for update
+              --host string              hostname or IP of one of the cluster nodes
+          -n, --name alias               alias you can give to your cluster
+              --ssh-identity-file path   path to identity file containing SSH private key
+              --ssh-user name            SSH user name used to connect to the cluster nodes
+        """
+        cmd = "cluster update -c {}".format(self.id)
+        if name:
+            cmd+=" --name={}".format(name)
+        if host:
+            cmd+=" --host={}".format(host)
+        if ssh_identity_file:
+            cmd+=" --ssh-identity-file={}".format(ssh_identity_file)
+        if ssh_user:
+            cmd+=" --ssh-user={}".format(ssh_user)
+        res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+
+    @property
+    def host(self):
+        """
+        Gets the Cluster host as represented in Manager
+        """
+        # expecting output of:
+        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
+        # │ cluster id                           │ name │ host        │ ssh user       │
+        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
+        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
+        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=3)
+
+    @property
+    def name(self):
+        """
+        Gets the Cluster name as represented in Manager
+        """
+        # expecting output of:
+        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
+        # │ cluster id                           │ name │ host        │ ssh user       │
+        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
+        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
+        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=2)
+
+    @property
+    def ssh_user(self):
+        """
+        Gets the Cluster ssh_user as represented in Manager
+        """
+        # expecting output of:
+        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
+        # │ cluster id                           │ name │ host        │ ssh user       │
+        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
+        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
+        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=4)
+
 def verify_errorless_result(cmd, res):
     if not res or res.stderr:
         logger.error("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
@@ -227,6 +318,9 @@ class ScyllaManagerTool(object):
 
     def __init__(self, manager_node):
         self.manager_node = manager_node
+        sleep = 30
+        logger.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
+        time.sleep(sleep)
 
     @property
     def version(self):
@@ -240,10 +334,22 @@ class ScyllaManagerTool(object):
 
     def run_sctool_cmd(self, cmd, is_verify_errorless_result = False):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
-        res = self._mgr_remoter_run(cmd='sudo sctool {}'.format(cmd))
+        try:
+            res = self._mgr_remoter_run(cmd='sudo sctool {}'.format(cmd))
+        except process.CmdError as e:
+            raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, e))
+
         if is_verify_errorless_result:
             verify_errorless_result(cmd=cmd, res=res)
         return res
+
+    @property
+    def cluster_list(self):
+        """
+        Gets the Manager's Cluster list
+        """
+        cmd = "cluster list"
+        return self.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
 
     def get_cluster(self, cluster_name):
         cmd = 'cluster list'
@@ -291,10 +397,13 @@ class ScyllaManagerTool(object):
         res = self._mgr_remoter_run(cmd=cmd)
         verify_errorless_result(cmd=cmd, res=res)
 
-    def add_cluster(self, cluster_name, host):
+
+
+
+    def add_cluster(self, name, host):
         """
         Add cluster to management
-        :param cluster_name: cluster name
+        :param name: cluster name
         :param host: cluster node IP-s
         :return: cluster id
 
@@ -304,19 +413,17 @@ class ScyllaManagerTool(object):
         --ssh-user name            SSH user name used to connect to the cluster nodes
 
         """
-        logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, cluster_name))
+        logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
         self.scylla_mgr_ssh_setup(node_ip=host)
         identity_file_centos = '/tmp/scylla-test'
         ssh_user='scylla-manager'
         manager_identity_file=MANAGER_IDENTITY_FILE
-        sctool_cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file, ssh_user, cluster_name)
+        sctool_cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file, ssh_user, name)
         logger.debug("Cluster add command is: {}".format(sctool_cmd))
         res = self.run_sctool_cmd(sctool_cmd)
         if not res or 'Cluster added' not in res.stderr:
-            logger.error("Encountered an error on 'sctool cluster add' command response")
-            logger.error(res)
-            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response")
-        cluster_id = res.stdout.split('\n')[0] # return MgrCluster instance with the manager's new cluster-id
+            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
+        cluster_id = res.stdout.split('\n')[0] # return ManagerCluster instance with the manager's new cluster-id
         return ManagerCluster(mgr_tool=self, cluster_id=cluster_id)
 
 
