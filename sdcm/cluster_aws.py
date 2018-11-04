@@ -349,13 +349,15 @@ class AWSNode(cluster.BaseNode):
             self.stop_scylla_server(verify_down=False)
             self.start_scylla_server(verify_up=False)
 
-    def reboot(self, hard=True):
+    def reboot(self, hard=True, verify_ssh=True):
         if hard:
             self.log.debug('Hardly rebooting node')
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot', ignore_status=True)
+        if verify_ssh:
+            self.wait_ssh_up()
 
     def destroy(self):
         self.stop_task_threads()
