@@ -129,7 +129,7 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[0])
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -192,8 +192,8 @@ class AWSCluster(cluster.BaseCluster):
 
         return instances
 
-    def _get_instances(self):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[0])
+    def _get_instances(self, dc_idx):
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
         return [ec2.get_instance_by_private_ip(ip) for ip in self._node_private_ips]
 
     def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
@@ -214,7 +214,7 @@ class AWSCluster(cluster.BaseCluster):
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
-            instances = self._get_instances()
+            instances = self._get_instances(dc_idx)
         else:
             instances = self._create_instances(count, ec2_user_data, dc_idx)
 
