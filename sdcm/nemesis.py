@@ -37,10 +37,11 @@ from sdcm.utils import remote_get_file
 
 class Nemesis(object):
 
-    def __init__(self, cluster, loaders, monitoring_set, termination_event, **kwargs):
-        self.cluster = cluster
-        self.loaders = loaders
-        self.monitoring_set = monitoring_set
+    def __init__(self, tester_obj, termination_event):
+        self.tester = tester_obj  # ClusterTester object
+        self.cluster = tester_obj.db_cluster
+        self.loaders = tester_obj.loaders
+        self.monitoring_set = tester_obj.monitors
         self.target_node = None
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
@@ -58,7 +59,6 @@ class Nemesis(object):
         self.interval = 0
         self.start_time = time.time()
         self.stats = {}
-        self.db_stats = kwargs.get('db_stats', None)
         self.metrics_srv = prometheus.nemesis_metrics_obj()
         self._random_sequence = None
 
@@ -69,8 +69,8 @@ class Nemesis(object):
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]['cnt'] += 1
         self.log.info('Update nemesis info: %s', self.stats)
-        if self.db_stats:
-            self.db_stats.update({'nemesis': self.stats})
+        if self.tester.create_stats:
+            self.tester.update({'nemesis': self.stats})
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]

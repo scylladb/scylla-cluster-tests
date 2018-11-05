@@ -1743,11 +1743,9 @@ class BaseScyllaCluster(object):
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace)
 
-    def add_nemesis(self, nemesis, loaders, monitoring_set, **kwargs):
-        self.nemesis.append(nemesis(cluster=self,
-                                    loaders=loaders,
-                                    monitoring_set=monitoring_set,
-                                    termination_event=self.termination_event, **kwargs))
+    def add_nemesis(self, nemesis, tester_obj):
+        self.nemesis.append(nemesis(tester_obj=tester_obj,
+                                    termination_event=self.termination_event))
 
     def clean_nemesis(self):
         self.nemesis = []

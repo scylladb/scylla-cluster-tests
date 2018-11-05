@@ -26,8 +26,7 @@ class EnospcTest(ClusterTester):
     """
     def test_enospc_nodes(self):
         self.db_cluster.add_nemesis(nemesis=EnospcAllNodesMonkey,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
+                                    tester_obj=self)
 
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),

@@ -36,8 +36,7 @@ class MaintainanceTest(ClusterTester):
                                               duration=240)
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.add_nemesis(nemesis=nemesis_class,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
+                                    tester_obj=self)
         # Wait another 10 minutes
         time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)

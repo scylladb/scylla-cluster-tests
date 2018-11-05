@@ -199,15 +199,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         class_name = self.params.get('nemesis_class_name')
         return getattr(nemesis, class_name)
 
-    def get_stats_obj(self):
-        """
-        Allow access db stats object to external objects like Nemesis - for updates
-        :return: db_stats.Stats object or None if param store_results_in_elasticsearch set to False in yaml.
-        """
-        if self.create_stats:
-            return db_stats.Stats(test_index=self._test_index,
-                                  test_id=self._test_id)
-
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
             loader_info['n_nodes'] = self.params.get('n_loaders')
