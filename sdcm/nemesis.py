@@ -676,6 +676,20 @@ class Nemesis(object):
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
 
+    def disrupt_validate_hh_short_downtime(self):
+        """
+            Validates that hinted handoff mechanism works: there were no drops and errors
+            during short stop of one of the nodes in cluster
+        """
+        self._set_current_disruption("ValidateHintedHandoffShortDowntime")
+        start_time = time.time()
+        self.target_node.stop_scylla()
+        time.sleep(10)
+        self.target_node.start_scylla()
+        time.sleep(120)  # Wait to complete hints sending
+        assert self.tester.hints_sending_in_progress() is False, "Hints are sent too slow"
+        self.tester.verify_no_drops_and_errors(starting_from=start_time)
+
 
 def log_time_elapsed_and_status(method):
     """
@@ -1046,3 +1060,9 @@ class NodeTerminateAndReplace(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
+
+
+class ValidateHintedHandoffShortDowntime(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_validate_hh_short_downtime()
