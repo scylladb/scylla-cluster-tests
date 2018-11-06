@@ -1,6 +1,5 @@
 {
     "dashboard": {
-        "id": null,
         "title": "Scylla Per Server Metrics Nemesis 3.0",
         "tags": [
             "3.0"
@@ -11,7 +10,6 @@
         "gnetId": null,
         "graphTooltip": 1,
         "hideControls": true,
-        "id": 2,
         "links": [],
         "refresh": "30s",
         "rows": [
@@ -758,7 +756,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "ms",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
@@ -4664,10 +4662,6 @@
             }
         ],
         "schemaVersion": 14,
-        "style": "dark",
-        "tags": [
-            "master"
-        ],
         "templating": {
             "list": [
                 {
@@ -4803,7 +4797,7 @@
             ]
         },
         "time": {
-            "from": "now-6h",
+            "from": "now-1h",
             "to": "now"
         },
         "timepicker": {
@@ -4832,8 +4826,6 @@
                 "30d"
             ]
         },
-        "timezone": "browser",
-        "title": "Scylla Per Server Metrics Nemesis Master",
         "version": 1
     }
 }
