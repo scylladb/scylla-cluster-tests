@@ -556,7 +556,7 @@ class Nemesis(object):
             replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: dclocal_read_repair_chance = 0.1
         """
-        self._modify_table_property(name="dclocal_read_repair_chance", val=random.random())
+        self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
 
     def modify_table_default_time_to_live(self):
         """
@@ -565,7 +565,7 @@ class Nemesis(object):
             is exceeded, Cassandra tombstones the table.
             default: default_time_to_live = 0
         """
-        self._modify_table_property(name="default_time_to_live", val=random.randint(60, 600))  # max allowed TTL - 20 years (630720000)
+        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 630720000))  # max allowed TTL - 20 years (630720000)
 
     def modify_table_max_index_interval(self):
         """
@@ -600,7 +600,7 @@ class Nemesis(object):
             not limited to replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: read_repair_chance = 0.0
         """
-        self._modify_table_property(name="read_repair_chance", val=random.random())
+        self._modify_table_property(name="read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
 
     def modify_table_speculative_retry(self):
         """
