@@ -1,12 +1,11 @@
 test_duration: 5760
-prepare_write_cmd: "cassandra-stress write cl=QUORUM n=36000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..36000000"
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..36000000 -log interval=5",
-             "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000"
-            ]
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..36000000 -log interval=5",
-                  "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000"]
-n_db_nodes: 6
-n_loaders: 3
+prepare_write_cmd: ["cassandra-stress write         cl=QUORUM n=36000000     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..36000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10",
+                    "cassandra-stress counter_write cl=QUORUM n=12345678     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..12345678"]
+stress_cmd:        ["cassandra-stress mixed         cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..36000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
+stress_read_cmd:   ["cassandra-stress read          cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..36000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10",
+                    "cassandra-stress counter_read  cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10  -pop seq=1..12345678"]
+n_db_nodes: 5
+n_loaders: 2
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
@@ -60,8 +59,8 @@ backends: !mux
     aws: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_loader: 'c4.2xlarge'
+        instance_type_monitor: 't2.small'
         instance_type_db: 'i3.4xlarge'
         us_east_1:
             region_name: 'us-east-1'
