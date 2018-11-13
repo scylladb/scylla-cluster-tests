@@ -26,6 +26,7 @@ import threading
 from avocado.utils import process
 
 from sdcm.cluster import SCYLLA_YAML_PATH
+from sdcm.mgmt import TaskStatus
 from .utils import get_data_dir_path
 from .log import SDCMAdapter
 from . import prometheus
@@ -649,11 +650,8 @@ class Nemesis(object):
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
         mgr_task = mgr_cluster.create_repair_task()
-        mgr_task.stop()
-        mgr_task.start()
-
-        is_task_done = mgr_task.wait_for_status_done()
-        assert is_task_done == True, 'Task: {} final status is: {}.'.format(mgr_task.id, str(mgr_task.status))
+        task_final_status = mgr_task.wait_and_get_final_status()
+        assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(mgr_task.id, str(mgr_task.status))
         self.log.info('Task: {} is done.'.format(mgr_task.id))
 
         self.log.debug("sctool version is : {}".format(manager_tool.version))
