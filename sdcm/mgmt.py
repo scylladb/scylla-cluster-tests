@@ -87,14 +87,16 @@ class ManagerTask(ScyllaLogicObj):
     def stop(self):
         cmd = "task stop {} -c {}".format(self.id, self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
-        assert self.status != TaskStatus.RUNNING
+        return self.wait_and_get_final_status(timeout=30, step=3)
 
     def start(self, use_continue=False, **kwargs):
         str_continue = '--continue=true' if use_continue else '--continue=false'
         cmd = "task start {} -c {} {}".format(self.id, self.mgr_cluster.id, str_continue)
         cmd = self._add_kwargs_to_cmd(cmd=cmd, **kwargs)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
-        assert self.status not in [TaskStatus.STOPPED]
+        list_all_task_status = [s for s in TaskStatus.__dict__ if not s.startswith("__")]
+        list_expected_task_status = [status for status in list_all_task_status if status != TaskStatus.STOPPED]
+        return self.wait_for_status(list_status=list_expected_task_status, timeout=30, step=3)
 
     def _add_kwargs_to_cmd(self, cmd, **kwargs):
         for k, v in kwargs.items():
@@ -163,48 +165,24 @@ class ManagerTask(ScyllaLogicObj):
             progress = self.progress
         return self.status in list_status
 
-    def wait_for_status(self, list_status, check_task_progress=True, timeout=3600):
+    def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
         text = "Waiting until task: {} reaches status of: {}".format(self.id, list_status)
-        is_status_reached = False
-        is_status_reached = wait.wait_for(func=self.is_status_in_list, step=60,
+        is_status_reached = wait.wait_for(func=self.is_status_in_list, step=step,
                                           text=text, list_status=list_status, check_task_progress=check_task_progress, timeout=timeout)
         return is_status_reached
 
-    def wait_for_status_done(self, timeout=3600):
+    def wait_and_get_final_status(self, timeout=3600, step=120):
         """
         1) Wait for task to reach a 'final' status. meaning one of: done/error/stopped
-        2) check and return true/false if the final status is 'done'.
+        2) return the final status.
         :return:
         """
-        logger.debug("Waiting for task: {} to be done..".format(self.id))
-        cur_status = self.status
-        if cur_status == TaskStatus.DONE:
-            return True
-        if cur_status in [TaskStatus.ERROR, TaskStatus.STOPPED]:
-            return False
-
-        if cur_status == TaskStatus.NEW:
-            logger.debug("Waiting for task: {} to start..".format(self.id))
-            list_status = [TaskStatus.RUNNING, TaskStatus.ERROR, TaskStatus.DONE]
-            res = self.wait_for_status(list_status=list_status, timeout=timeout)
-            if not res:
-                raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
-            cur_status = self.status
-            if cur_status == TaskStatus.ERROR:
-                return False
-
-        if cur_status == TaskStatus.RUNNING:
-            logger.debug("Waiting for task: {} to finish running..".format(self.id))
-            list_status = [TaskStatus.DONE, TaskStatus.ERROR]
-            res = self.wait_for_status(list_status=list_status, timeout=timeout)
-            if not res:
-                raise ScyllaManagerError("Unexpected result on waiting for task {} status {}".format(self.id, list_status))
-            cur_status = self.status
-            if cur_status == TaskStatus.ERROR:
-                return False
-        final_state = self.status
-        logger.debug("Task: {} final state is: {}".format(self.id, str(final_state)))
-        return self.status == TaskStatus.DONE
+        list_final_status = [TaskStatus.ERROR, TaskStatus.STOPPED, TaskStatus.DONE]
+        logger.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, [str(s) for s in list_final_status]))
+        res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
+        if not res:
+            raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
+        return self.status
 
 class ManagerCluster(ScyllaLogicObj):
 
