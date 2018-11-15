@@ -228,6 +228,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     def _get_setup_details(self, test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
+        if "aws" in setup_details['cluster_backend']:
+            setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
         for sp in QueryFilter(test_doc, is_gce).setup_instance_params():
             setup_details.update([(sp.replace('gce_', ''), test_doc['_source']['setup_details'].get(sp))])
         return setup_details
