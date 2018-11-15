@@ -67,7 +67,7 @@ backends: !mux
         #us_east_1:
         #  gce_datacenter: 'us-east1-b'
         multi_dcs:
-          gce_datacenter: 'AMI_ID_EAST AMI_ID_WEST'
+          gce_datacenter: 'us-east1-b us-west1-b us-east4-b'
 
 databases: !mux
     scylla:
