@@ -20,6 +20,7 @@ from functools import wraps
 import boto3.session
 import libvirt
 from avocado import Test
+from avocado.utils.process import CmdError
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
@@ -51,8 +52,9 @@ from .utils import get_data_dir_path, log_run_info, retrying
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
-from aexpect.utils.process import CmdError
 from sdcm.db_stats import PrometheusDBStats
+from results_analyze import PerformanceResultsAnalyzer
+
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -1157,3 +1159,13 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, "Waiting for Scylla data dir to reach '{size}', " \
                              "current size is: '{used}'".format(**locals())
+
+    def check_regression(self):
+        ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                             send_email=self.params.get('send_email', default=True),
+                             email_recipients=self.params.get('email_recipients', default=None))
+        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
+        try:
+            ra.check_regression(self._test_id, is_gce)
+        except Exception as ex:
+            self.log.exception('Failed to check regression: %s', ex)

@@ -1,12 +1,13 @@
 import os
 import logging
 import math
-import yaml
-import elasticsearch
 import jinja2
 import pprint
+from es import ES
 from send_email import Email
 from datetime import datetime
+from db_stats import TestStatsMixin
+
 
 log = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=2)
@@ -103,9 +104,8 @@ class QueryFilterScyllaBench(QueryFilter):
 class BaseResultsAnalyzer(object):
     def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
                  email_template_fp="", query_limit=1000, logger=None):
-        self._conf = self.get_conf()
-        self._es = elasticsearch.Elasticsearch([self._conf["es_url"]], verify_certs=False,
-                                               http_auth=(self._conf["es_user"], self._conf["es_password"]))
+        self._es = ES()
+        self._conf = self._es._conf
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
@@ -113,12 +113,6 @@ class BaseResultsAnalyzer(object):
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
         self.log = logger if logger else log
-
-    @staticmethod
-    def get_conf():
-        conf_file = os.path.abspath(__file__).replace('.py', '.yaml').rstrip('c')
-        with open(conf_file) as cf:
-            return yaml.safe_load(cf)
 
     def get_all(self):
         """
@@ -392,7 +386,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        test_version=test_version_info,
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),
-                       throughput_results=doc["_source"]["results"]["throughput"],
+                       prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
                        grafana_snapshot=self._get_grafana_snapshot(doc))
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))

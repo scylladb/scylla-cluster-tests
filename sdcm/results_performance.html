@@ -30,22 +30,26 @@
         {% endfor %}
         </ul>
     </div>
-    <div>
-        <span> Throughput stats (based on data from Prometheus): </span>
-        {% if throughput_results %}
-        <ul>
-        {% for key, val in throughput_results.iteritems()|sort %}
-            <li>
-                {{ key }}: <span class="blue"> {{ "%.1f" % val }} </span>
-            </li>
-        {% endfor %}
-        </ul>
-
-        {% else %}
-        <span>ERROR - see log for details</span>
-        {% endif %}
-    </div>
-
+    <h1>Prometheus stats</h1>
+    {% set metrics=("min", "avg", "max", "stdev") %}
+    {% for stat_name in prometheus_stats.keys() %}
+    {% if prometheus_stats.get(stat_name) %}
+    <h2>{{ stat_name }}</h2>
+    <table id="results_table">
+        <tr>
+            {% for metric in metrics %}
+            <th>{{ metric }}</th>
+            {% endfor %}
+        </tr>
+        <tr>
+            {% for metric in metrics %}
+            <td>{{ prometheus_stats[stat_name][metric] }} </td>
+            {% endfor %}
+        </tr>
+    </table>
+    {% endif %}
+    {% endfor %}
+    <h1>Cassandra-stress stats</h1>
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
     <h2>{{ stat_name }}</h2>
     <table id="results_table">

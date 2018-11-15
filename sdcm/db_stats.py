@@ -10,17 +10,13 @@ import json
 import yaml
 from textwrap import dedent
 from math import sqrt
-from collections import defaultdict
 
 from requests import ConnectionError
 
-import es
-from results_analyze import PerformanceResultsAnalyzer
+from es import ES
 from utils import get_job_name, retrying
 
 logger = logging.getLogger(__name__)
-
-ES_DOC_TYPE = "test_stats"
 
 
 class CassandraStressCmdParseError(Exception):
@@ -222,12 +218,14 @@ class Stats(object):
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)
+        self._es_doc_type = "test_stats"
+        self.es = ES()
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
     def create(self):
-        es.ES().create(self._test_index, ES_DOC_TYPE, self._test_id, self._stats)
+        self.es.create_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=self._stats)
 
     def update(self, data):
         """
@@ -235,7 +233,7 @@ class Stats(object):
         :param data: data dictionary
         """
         try:
-            es.ES().update(self._test_index, ES_DOC_TYPE, self._test_id, data)
+            self.es.update_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=data)
         except Exception as ex:
             logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
 
@@ -439,12 +437,3 @@ class TestStatsMixin(Stats):
                 update_data.update({'coredumps': coredumps})
             self.update(update_data)
 
-    def check_regression(self):
-        ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=ES_DOC_TYPE,
-                             send_email=self.params.get('send_email', default=True),
-                             email_recipients=self.params.get('email_recipients', default=None))
-        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
-        try:
-            ra.check_regression(self._test_id, is_gce)
-        except Exception as ex:
-            logger.exception('Failed to check regression: %s', ex)
