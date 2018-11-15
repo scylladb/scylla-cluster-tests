@@ -51,7 +51,10 @@
     {% endfor %}
     <h1>Cassandra-stress stats comparison</h1>
     {% if cs_raw_cmd %}
-    <p>Cassandra-stress command: {{ cs_raw_cmd }} </p>
+    <h3>Command</h3>
+    <table id="results_table">
+    <tr><td>{{ cs_raw_cmd }}</td></tr>
+    </table>
     {% endif %}
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
     <h2>{{ stat_name }}</h2>
@@ -90,9 +93,10 @@
     {% endfor %}
 
 
-    <h3>Dashboard:</h3>
+    <h3>Links:</h3>
     <ul>
         <li><a href={{ dashboard_master }}>Kibana</a></li>
+        <li><a href="{{ job_url }}">Jenkins job</a></li>
         {% if grafana_snapshot %}
         <li><a href={{ grafana_snapshot }}>Download Grafana Screenshot</a></li>
         {% endif %}

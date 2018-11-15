@@ -391,7 +391,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        setup_details=self._get_setup_details(doc, is_gce),
                        prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
                        grafana_snapshot=self._get_grafana_snapshot(doc),
-                       cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "")
+                       cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
+                       job_url=doc['_source']['test_details'].get('job_url', "")
+                       )
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))
 
