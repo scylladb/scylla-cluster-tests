@@ -49,7 +49,10 @@
     </table>
     {% endif %}
     {% endfor %}
-    <h1>Cassandra-stress stats</h1>
+    <h1>Cassandra-stress stats comparison</h1>
+    {% if cs_raw_cmd %}
+    <p>Cassandra-stress command: {{ cs_raw_cmd }} </p>
+    {% endif %}
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
     <h2>{{ stat_name }}</h2>
     <table id="results_table">

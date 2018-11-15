@@ -44,7 +44,9 @@ def get_stress_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-    cmd_params = {}
+    cmd_params = {
+        "raw_cmd": cmd
+    }
     try:
         cmd = cmd.strip().split('cassandra-stress')[1].strip()
         if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:

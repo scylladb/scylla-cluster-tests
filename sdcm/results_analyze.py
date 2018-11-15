@@ -383,13 +383,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
+        cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
                        test_version=test_version_info,
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),
                        prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
-                       grafana_snapshot=self._get_grafana_snapshot(doc))
+                       grafana_snapshot=self._get_grafana_snapshot(doc),
+                       cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "")
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))
 
