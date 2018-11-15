@@ -35,13 +35,13 @@ backends: !mux
             region_name: 'us-east-1 us-west-2'
             security_group_ids: 'sg-c5e1f7a0 sg-81703ae4'
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
-            ami_id_db_scylla: 'ami-40a0e756 ami-77e78617'
+            ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-40a0e756'
+            ami_id_loader: 'AMI_ID_EAST'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-40a0e756'
+            ami_id_monitor: 'AMI_ID_EAST'
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'
@@ -67,7 +67,7 @@ backends: !mux
         #us_east_1:
         #  gce_datacenter: 'us-east1-b'
         multi_dcs:
-          gce_datacenter: 'us-east1-b us-west1-b us-east4-b'
+          gce_datacenter: 'AMI_ID_EAST AMI_ID_WEST'
 
 databases: !mux
     scylla:
