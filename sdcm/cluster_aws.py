@@ -331,9 +331,9 @@ class AWSNode(cluster.BaseNode):
         # need to setup the instance and treat it as a new instance.
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             clean_script = dedent("""
-                sudo rm -f /etc/scylla/ami_configured
-                sudo sed -e '/.*scylla/ s/^/# /g' -i /etc/fstab
+                sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                 sudo sed -e 's/replace_address_on_first_boot/#replace_address_on_first_boot/g' -i /etc/scylla/scylla.yaml
+                sudo sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
             output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
@@ -348,6 +348,11 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
+
+        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+            self.stop_scylla_server(verify_down=False)
+            self.start_scylla_server(verify_up=False)
 
     def reboot(self, hard=True):
         if hard:
