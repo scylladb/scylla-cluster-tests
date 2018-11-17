@@ -246,6 +246,7 @@ class TestStatsMixin(Stats):
     """
     KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
+    PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
 
     def __init__(self, *args, **kwargs):
         super(TestStatsMixin, self).__init__(*args, **kwargs)

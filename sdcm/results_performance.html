@@ -34,7 +34,7 @@
     {% set metrics=("min", "avg", "max", "stdev") %}
     {% for stat_name in prometheus_stats.keys() %}
     {% if prometheus_stats.get(stat_name) %}
-    <h2>{{ stat_name }}</h2>
+    <h2>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</h2>
     <table id="results_table">
         <tr>
             {% for metric in metrics %}
@@ -43,7 +43,7 @@
         </tr>
         <tr>
             {% for metric in metrics %}
-            <td>{{ prometheus_stats[stat_name][metric] }} </td>
+            <td>{{ "%.1f" % prometheus_stats[stat_name][metric] }} </td>
             {% endfor %}
         </tr>
     </table>
