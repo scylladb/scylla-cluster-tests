@@ -19,6 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
+from sdcm.mgmt import HostStatus
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
@@ -55,15 +56,10 @@ class MgmtCliTest(ClusterTester):
         4) delete the cluster from manager and re-add again.
         """
 
-        manager_node = self.monitors.nodes[0]
-        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
-
-        cluster_name = 'mgr_cluster1'
-        ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
-                                              len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
-        hosts = [getattr(n, ip_addr_attr) for n in self.db_cluster.nodes]
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=self.monitors.nodes[0])
+        hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
-
+        cluster_name = 'mgr_cluster1'
         mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
 
         # Run the repair test
@@ -84,6 +80,35 @@ class MgmtCliTest(ClusterTester):
             assert mgr_cluster.host == hosts[1], "Cluster host wasn't changed after update command"
         mgr_cluster.delete()
         mgr_cluster2 = manager_tool.add_cluster(name=cluster_name, host=selected_host)
+
+    def _get_cluster_hosts_ip(self):
+        return [node_data[1] for node_data in self._get_cluster_hosts_with_ips()]
+
+    def _get_cluster_hosts_with_ips(self):
+        ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
+                                              len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+        return [[n, getattr(n, ip_addr_attr)] for n in self.db_cluster.nodes]
+
+    def test_mgmt_cluster_healthcheck(self):
+
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=self.monitors.nodes[0])
+        selected_host_ip = self._get_cluster_hosts_ip()[0]
+        mgr_cluster = manager_tool.add_cluster(name='mgr_cluster1', host=selected_host_ip)
+
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            assert host_health.status == HostStatus.UP , "Not all hosts status is 'UP'"
+
+        other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
+        other_host.stop_scylla_server()
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
+        self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
+        sleep = 20 # healthcheck_task.next_run_interval()
+        self.log.debug('Sleep {} seconds, waiting for health-check task to run after node down'.format(sleep))
+        time.sleep(sleep)
+
+        dict_host_health = mgr_cluster.get_hosts_health()
+        assert dict_host_health[other_host_ip].status == HostStatus.DOWN , "Host: {} status is not 'DOWN'".format(other_host_ip)
 
 
 
