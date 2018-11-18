@@ -22,6 +22,17 @@ class ScyllaManagerError(Exception):
     """
     pass
 
+class HostStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+
+    @classmethod
+    def from_str(cls, output_str):
+       try:
+           output_str = output_str.upper()
+           return getattr(cls, output_str)
+       except AttributeError:
+           raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 class TaskStatus(Enum):
    NEW = "NEW"
@@ -42,10 +53,15 @@ class TaskStatus(Enum):
 
 class ScyllaLogicObj(object):
 
-    def __init__(self, id):
+    def __init__(self, id, mgr_tool):
         self.id = id
+        self.mgr_tool = mgr_tool
+
+    def get_property(self, parsed_table, column_name):
+        return self.mgr_tool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
     def _get_output_table_value(self, table_result, column_num, filter_param=None):
+
         """
         extract a column value out of an sctool output table
         :param table_result:
@@ -80,9 +96,8 @@ class ScyllaLogicObj(object):
 class ManagerTask(ScyllaLogicObj):
 
     def __init__(self, task_id, mgr_cluster):
-        ScyllaLogicObj.__init__(self, id=task_id)
+        ScyllaLogicObj.__init__(self, id=task_id, mgr_tool=mgr_cluster.mgr_tool)
         self.mgr_cluster = mgr_cluster
-        self.mgr_tool = mgr_cluster.mgr_tool
 
     def stop(self):
         cmd = "task stop {} -c {}".format(self.id, self.mgr_cluster.id)
@@ -107,32 +122,36 @@ class ManagerTask(ScyllaLogicObj):
         self.start(use_continue=True)
 
     @property
+    def next_run(self):
+        """
+        Gets the task's next run value
+        """
+        # ╭──────────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────│
+        # │ task                                             │ next run                      │ ret. │ properties │ status │
+        # ├──────────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────│
+        # │ healthcheck/7fb6f1a7-aafc-4950-90eb-dc64729e8ecb │ 18 Nov 18 20:32:08 UTC (+15s) │ 0    │            │ NEW    │
+        # │ repair/22b68423-4332-443d-b8b4-713005ea6049      │ 19 Nov 18 00:00:00 UTC (+7d)  │ 3    │            │ NEW    │
+        # ╰──────────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
+        cmd = "task list -c {}".format(self.mgr_cluster.id)
+        res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        return self.get_property(parsed_table=res, column_name='next run')
+
+    @property
     def status(self):
         """
         Gets the repair task's status
         """
         cmd = "task list -c {}".format(self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        return self.get_property(parsed_table=res, column_name='status')
+
         # expecting output of:
-        # cluster: sce
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                        │ next run                      │ ret. │ properties │ status │
         # ├─────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
         # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 05 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
         # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
-        if self.id not in res.stdout:
-            logger.error("Encountered an error on '{}' command response: {}".format(cmd, str(res.stdout)))
-            raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
-        lines = res.stdout.split('\n')
-        status = TaskStatus.UNKNOWN
-        for line in lines:
-            if self.id in line:
-                raw_status = line.split()[-2]
-                status = TaskStatus.from_str(raw_status)
-                break
-        logger.debug("Task: {} status is: {}".format(self.id,str(status)))
-        return status
 
     @property
     def progress(self):
@@ -152,7 +171,7 @@ class ManagerTask(ScyllaLogicObj):
         # │ Progress    │ 100%                │
         # │ Datacenters │ [datacenter1]       │
         # ├─────────────┼─────────────────────┤
-        return self._get_output_table_value(table_result=res, filter_param="Progress", column_num=2)
+        return self.mgr_tool.get_table_value(parsed_table=res, identifier="Progress")
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
@@ -184,13 +203,21 @@ class ManagerTask(ScyllaLogicObj):
             raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
         return self.status
 
+
+class RepairTask(ManagerTask):
+    def __init__(self, task_id, mgr_cluster):
+        ManagerTask.__init__(self, task_id=task_id, mgr_cluster=mgr_cluster)
+
+class HealthcheckTask(ManagerTask):
+    def __init__(self, task_id, mgr_cluster):
+        ManagerTask.__init__(self, task_id=task_id, mgr_cluster=mgr_cluster)
+
 class ManagerCluster(ScyllaLogicObj):
 
     def __init__(self, mgr_tool, cluster_id):
         if not mgr_tool:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
-        ScyllaLogicObj.__init__(self, id=cluster_id)
-        self.mgr_tool = mgr_tool
+        ScyllaLogicObj.__init__(self, id=cluster_id, mgr_tool=mgr_tool)
 
     def create_repair_task(self):
         cmd = "repair -c {}".format(self.id)
@@ -256,7 +283,8 @@ class ManagerCluster(ScyllaLogicObj):
         # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
         # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
         # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=3)
+
+        return self.get_property(parsed_table=self.mgr_tool.cluster_list, column_name='host')
 
     @property
     def name(self):
@@ -269,7 +297,7 @@ class ManagerCluster(ScyllaLogicObj):
         # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
         # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
         # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=2)
+        return self.get_property(parsed_table=self.mgr_tool.cluster_list, column_name='name')
 
     @property
     def ssh_user(self):
@@ -282,7 +310,43 @@ class ManagerCluster(ScyllaLogicObj):
         # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
         # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
         # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-        return self._get_output_table_value(table_result=self.mgr_tool.cluster_list, column_num=4)
+        return self.get_property(parsed_table=self.mgr_tool.cluster_list, column_name='ssh user')
+
+    def get_healthcheck_task(self):
+        cmd = "task list -c {}".format(self.id)
+        parsed_table = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        healthcheck_id = self.mgr_tool.get_table_value(parsed_table=parsed_table, column_name="task", identifier="healthcheck/", is_search_substring=True)
+        return HealthcheckTask(task_id=healthcheck_id, mgr_cluster=self)
+
+    def get_hosts_health(self):
+        """
+        Gets the Manager's Cluster Nodes status
+        """
+        # $ sctool status -c cluster1
+        # ╭───────────────┬────────┬──────────╮
+        # │ Host          │ Status │ RTT (ms) │
+        # ├───────────────┼────────┼──────────┤
+        # │ 18.234.77.216 │ UP     │ 0.92761  │
+        # │ 54.203.234.42 │ DOWN   │ 0        │
+        # ╰───────────────┴────────┴──────────╯
+        cmd = "status -c {}".format(self.id)
+        parsed_table = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        dict_hosts_health = {}
+        if len(parsed_table) < 2:
+            logger.debug("Cluster: {} has no hosts health report".format(self.id))
+        else:
+            for line in parsed_table[1:]:
+                host = line[0]
+                status = line[1]
+                rtt = line[2]
+                dict_hosts_health[host] = HostHealth(status=HostStatus.from_str(status), rtt=rtt)
+        logger.debug("Cluster {} Hosts Health is: {}".format(self.id, dict_hosts_health.items()))
+        return dict_hosts_health
+
+class HostHealth():
+    def __init__(self,status,rtt):
+        self.status = status
+        self.rtt = rtt
 
 def verify_errorless_result(cmd, res):
     if not res or res.stderr:
@@ -304,13 +368,13 @@ class ScyllaManagerTool(object):
     def version(self):
         cmd = "version"
         res = self.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
-        logger.info("Manager version is: {}".format(res.stdout))
-        return res.stdout
+        logger.info("Manager version is: {}".format(res))
+        return res
 
     def _mgr_remoter_run(self, cmd):
         return self.manager_node.remoter.run(cmd)
 
-    def run_sctool_cmd(self, cmd, is_verify_errorless_result = False):
+    def run_sctool_cmd(self, cmd, is_verify_errorless_result = False, parse_table_res = True):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._mgr_remoter_run(cmd='sudo sctool {}'.format(cmd))
@@ -319,7 +383,56 @@ class ScyllaManagerTool(object):
 
         if is_verify_errorless_result:
             verify_errorless_result(cmd=cmd, res=res)
+        if parse_table_res:
+            res = self.parse_sctool_result_table(res=res)
         return res
+
+    def parse_sctool_result_table(self, res):
+        parsed_table = []
+        lines = res.stdout.split('\n')
+        filtered_lines = [line for line in lines if not (line.startswith('╭') or line.startswith('├') or line.startswith(
+            '╰'))]  # filter out the dashes lines
+        for line in filtered_lines:
+            list_line = [s if s else 'EMPTY' for s in line.split("│")] # filter out spaces and "|" column seperators
+            list_line_no_spaces = [s.split() for s in list_line if s != 'EMPTY']
+            list_line_with_multiple_words_join = []
+            for words in list_line_no_spaces:
+                list_line_with_multiple_words_join.append(" ".join(words))
+            parsed_table.append(list_line_with_multiple_words_join)
+        return parsed_table
+
+    def get_table_value(self, parsed_table, identifier, column_name=None, is_search_substring=False):
+        """
+
+        :param parsed_table:
+        :param column_name:
+        :param identifier:
+        :return:
+        """
+
+        # example expected parsed_table input is:
+        # [['Host', 'Status', 'RTT'],
+        #  ['18.234.77.216', 'UP', '0.92761'],
+        #  ['54.203.234.42', 'DOWN', '0']]
+        # usage flow example: mgr_cluster1.host -> mgr_cluster1.get_property -> get_table_value
+
+        if not parsed_table or not is_found_in_table(parsed_table=parsed_table, identifier=identifier, is_search_substring=is_search_substring):
+            raise ScyllaManagerError("Encountered an error retrieving sctool table value: {} not found in: {}".format(identifier, str(parsed_table)))
+        column_titles = [title.upper() for title in parsed_table[0]] # get all table column titles capital (for comparison)
+        if column_name and column_name.upper() not in column_titles:
+            raise ScyllaManagerError("Column name: {} not found in table: {}".format(column_name, parsed_table))
+        column_name_index = column_titles.index(column_name.upper()) if column_name else 1  # "1" is used in a case like "task progress" where no column names exist.
+        ret_val = 'N/A'
+        for row in parsed_table:
+            if is_search_substring:
+                if any(identifier in cur_str for cur_str in row):
+                    ret_val = row[column_name_index]
+                    break
+            elif identifier in row:
+                ret_val = row[column_name_index]
+                break
+        logger.debug("{} {} value is:{}".format(identifier, column_name, ret_val))
+        return ret_val
 
     @property
     def cluster_list(self):
@@ -398,12 +511,20 @@ class ScyllaManagerTool(object):
         manager_identity_file=MANAGER_IDENTITY_FILE
         sctool_cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file, ssh_user, name)
         logger.debug("Cluster add command is: {}".format(sctool_cmd))
-        res = self.run_sctool_cmd(sctool_cmd)
+        res = self.run_sctool_cmd(sctool_cmd, parse_table_res=False)
         if not res or 'Cluster added' not in res.stderr:
             raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
         cluster_id = res.stdout.split('\n')[0] # return ManagerCluster instance with the manager's new cluster-id
         return ManagerCluster(mgr_tool=self, cluster_id=cluster_id)
 
+def is_found_in_table(parsed_table, identifier, is_search_substring = False):
+    full_rows_list = []
+    for row in parsed_table:
+        full_rows_list += row
+    if is_search_substring:
+        return any(identifier in cur_str for cur_str in full_rows_list)
+
+    return identifier in full_rows_list
 
 class ScyllaMgmt(object):
     """
