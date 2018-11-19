@@ -326,7 +326,8 @@ class Nemesis(object):
             sstable_md5 = 'f641f561067dd612ff95f2b89bd12530'
         if not skip_download:
             remote_get_file(node.remoter, sstable_url, sstable_file,
-                            hash_expected=sstable_md5, retries=2)
+                            hash_expected=sstable_md5, retries=2,
+                            user_agent=self.cluster.params.get('user_agent'))
 
         self.log.debug('Make sure keyspace1.standard1 exists')
         result = self._run_nodetool('nodetool --host localhost cfstats keyspace1.standard1',
