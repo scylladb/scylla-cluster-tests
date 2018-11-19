@@ -372,7 +372,7 @@ class ManagerCluster(ScyllaLogicObj):
                 dict_hosts_health[host] = HostHealth(status=HostStatus.from_str(status), rtt=rtt)
         logger.debug("Cluster {} Hosts Health is:".format(self.id))
         for ip, health in dict_hosts_health.items():
-            logger.debug(ip, health.status, health.rtt)
+            logger.debug("{}: {},{}".format(ip, health.status, health.rtt))
         return dict_hosts_health
 
 class HostHealth():
