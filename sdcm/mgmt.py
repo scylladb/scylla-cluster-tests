@@ -41,6 +41,7 @@ class TaskStatus(Enum):
    UNKNOWN = "UNKNOWN"
    ERROR = "ERROR"
    STOPPED = "STOPPED"
+   STARTING = "STARTING"
 
    @classmethod
    def from_str(cls, output_str):
@@ -104,10 +105,8 @@ class ManagerTask(ScyllaLogicObj):
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
         return self.wait_and_get_final_status(timeout=30, step=3)
 
-    def start(self, use_continue=False, **kwargs):
-        str_continue = '--continue=true' if use_continue else '--continue=false'
-        cmd = "task start {} -c {} {}".format(self.id, self.mgr_cluster.id, str_continue)
-        cmd = self._add_kwargs_to_cmd(cmd=cmd, **kwargs)
+    def start(self, cmd=None):
+        cmd = cmd or "task start {} -c {}".format(self.id, self.mgr_cluster.id)
         res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
         list_all_task_status = [s for s in TaskStatus.__dict__ if not s.startswith("__")]
         list_expected_task_status = [status for status in list_all_task_status if status != TaskStatus.STOPPED]
@@ -118,8 +117,23 @@ class ManagerTask(ScyllaLogicObj):
             cmd += ' --{}={}'.format(k, v)
         return cmd
 
-    def continue_repair(self):
-        self.start(use_continue=True)
+    @property
+    def history(self):
+        """
+        Gets the task's history table
+        """
+        # ╭──────────────────────────────────────┬────────────────────────┬────────────────────────┬──────────┬───────╮
+        # │ id                                   │ start time             │ end time               │ duration │ status│                                                                                                                                                                  │
+        # ├──────────────────────────────────────┼────────────────────────┼────────────────────────┼──────────┼───────┤
+        # │ e4f70414-ebe7-11e8-82c4-12c0dad619c2 │ 19 Nov 18 10:43:04 UTC │ 19 Nov 18 10:43:04 UTC │ 0s       │ NEW   │
+        # │ 7f564891-ebe6-11e8-82c3-12c0dad619c2 │ 19 Nov 18 10:33:04 UTC │ 19 Nov 18 10:33:04 UTC │ 0s       │ NEW   │
+        # │ 19b58cb3-ebe5-11e8-82c2-12c0dad619c2 │ 19 Nov 18 10:23:04 UTC │ 19 Nov 18 10:23:04 UTC │ 0s       │ NEW   │
+        # │ b414cde5-ebe3-11e8-82c1-12c0dad619c2 │ 19 Nov 18 10:13:04 UTC │ 19 Nov 18 10:13:04 UTC │ 0s       │ NEW   │
+        # │ 4e741c3d-ebe2-11e8-82c0-12c0dad619c2 │ 19 Nov 18 10:03:04 UTC │ 19 Nov 18 10:03:04 UTC │ 0s       │ NEW   │
+        # ╰──────────────────────────────────────┴────────────────────────┴────────────────────────┴──────────┴───────╯
+        cmd = "task history {} -c {}".format(self.id, self.mgr_cluster.id)
+        res = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+        return res # or can be specified like: self.get_property(parsed_table=res, column_name='status')
 
     @property
     def next_run(self):
@@ -208,6 +222,14 @@ class RepairTask(ManagerTask):
     def __init__(self, task_id, mgr_cluster):
         ManagerTask.__init__(self, task_id=task_id, mgr_cluster=mgr_cluster)
 
+    def start(self, use_continue=False, **kwargs):
+        str_continue = '--continue=true' if use_continue else '--continue=false'
+        cmd = "task start {} -c {} {}".format(self.id, self.mgr_cluster.id, str_continue)
+        ManagerTask.start(self, cmd=cmd)
+
+    def continue_repair(self):
+        self.start(use_continue=True)
+
 class HealthcheckTask(ManagerTask):
     def __init__(self, task_id, mgr_cluster):
         ManagerTask.__init__(self, task_id=task_id, mgr_cluster=mgr_cluster)
@@ -236,7 +258,7 @@ class ManagerCluster(ScyllaLogicObj):
         task_id = res.stdout.split('\n')[0]
         logger.debug("Created task id is: {}".format(task_id))
 
-        return ManagerTask(task_id=task_id, mgr_cluster=self) # return the manager's new repair-task-id
+        return RepairTask(task_id=task_id, mgr_cluster=self) # return the manager's object with new repair-task-id
 
     def delete(self):
         """
@@ -329,8 +351,16 @@ class ManagerCluster(ScyllaLogicObj):
         # │ 18.234.77.216 │ UP     │ 0.92761  │
         # │ 54.203.234.42 │ DOWN   │ 0        │
         # ╰───────────────┴────────┴──────────╯
+        # or where all nodes up:
+        # ╭────────────────┬────────┬──────────╮
+        # │ Host           │ Status │ RTT (ms) │
+        # ├────────────────┼────────┼──────────┤
+        # │ 34.220.201.186 │ UP     │ 152.76   │
+        # │ 54.164.46.117  │ UP     │ 0.82     │
+        # ╰────────────────┴────────┴──────────╯
         cmd = "status -c {}".format(self.id)
         parsed_table = self.mgr_tool.run_sctool_cmd(cmd=cmd, is_verify_errorless_result=True)
+
         dict_hosts_health = {}
         if len(parsed_table) < 2:
             logger.debug("Cluster: {} has no hosts health report".format(self.id))
@@ -340,7 +370,9 @@ class ManagerCluster(ScyllaLogicObj):
                 status = line[1]
                 rtt = line[2]
                 dict_hosts_health[host] = HostHealth(status=HostStatus.from_str(status), rtt=rtt)
-        logger.debug("Cluster {} Hosts Health is: {}".format(self.id, dict_hosts_health.items()))
+        logger.debug("Cluster {} Hosts Health is:".format(self.id))
+        for ip, health in dict_hosts_health.items():
+            logger.debug(ip, health.status, health.rtt)
         return dict_hosts_health
 
 class HostHealth():
@@ -392,13 +424,15 @@ class ScyllaManagerTool(object):
         lines = res.stdout.split('\n')
         filtered_lines = [line for line in lines if not (line.startswith('╭') or line.startswith('├') or line.startswith(
             '╰'))]  # filter out the dashes lines
+        filtered_lines = [line for line in filtered_lines if line]
         for line in filtered_lines:
             list_line = [s if s else 'EMPTY' for s in line.split("│")] # filter out spaces and "|" column seperators
             list_line_no_spaces = [s.split() for s in list_line if s != 'EMPTY']
             list_line_with_multiple_words_join = []
             for words in list_line_no_spaces:
                 list_line_with_multiple_words_join.append(" ".join(words))
-            parsed_table.append(list_line_with_multiple_words_join)
+            if list_line_with_multiple_words_join:
+                parsed_table.append(list_line_with_multiple_words_join)
         return parsed_table
 
     def get_table_value(self, parsed_table, identifier, column_name=None, is_search_substring=False):
