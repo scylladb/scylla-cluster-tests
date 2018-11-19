@@ -94,16 +94,22 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.ScyllaManagerTool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         mgr_cluster = manager_tool.add_cluster(name='mgr_cluster1', host=selected_host_ip)
+        other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
 
+        sleep = 40
+        self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
+        time.sleep(sleep)
+
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
+        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP , "Not all hosts status is 'UP'"
 
-        other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
+        # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
-        sleep = 20 # healthcheck_task.next_run_interval()
         self.log.debug('Sleep {} seconds, waiting for health-check task to run after node down'.format(sleep))
         time.sleep(sleep)
 
