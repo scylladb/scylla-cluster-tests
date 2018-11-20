@@ -1162,6 +1162,7 @@ client_encryption_options:
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
+    @log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -1186,6 +1187,7 @@ client_encryption_options:
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
+    @log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
