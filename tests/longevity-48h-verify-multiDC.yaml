@@ -29,7 +29,7 @@ backends: !mux
         # loader instance by default.
         instance_type_loader: 'c5.large'
         # Size of AWS monitor instance
-        instance_type_monitor: t3.small
+        instance_type_monitor: i3.large # t3.small
         us_east_1_and_us_west_2:
             user_credentials_path: '~/.ssh/scylla-qa-ec2'
             region_name: 'us-east-1 us-west-2'
