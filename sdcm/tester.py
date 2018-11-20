@@ -900,7 +900,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             query = ('%s AND speculative_retry=\'%s\'' %
                      (query, speculative_retry))
         if in_memory:
-            query += ' AND in_memory=true compaction={"class": "InMemoryCompactionStrategy"}'
+            query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
         if compact_storage:
             query += ' AND COMPACT STORAGE'
 

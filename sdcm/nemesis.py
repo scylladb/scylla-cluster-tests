@@ -162,7 +162,7 @@ class Nemesis(object):
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
-    def disrupt_restart_then_repair_node(self):
+    def _disabled_disrupt_restart_then_repair_node(self):
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
         self.log.info('Waiting scylla services to start after node restart')
@@ -556,7 +556,7 @@ class Nemesis(object):
             replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: dclocal_read_repair_chance = 0.1
         """
-        self._modify_table_property(name="dclocal_read_repair_chance", val=random.random())
+        self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
 
     def modify_table_default_time_to_live(self):
         """
@@ -565,7 +565,7 @@ class Nemesis(object):
             is exceeded, Cassandra tombstones the table.
             default: default_time_to_live = 0
         """
-        self._modify_table_property(name="default_time_to_live", val=random.randint(60, 600))  # max allowed TTL - 20 years (630720000)
+        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 630720000))  # max allowed TTL - 20 years (630720000)
 
     def modify_table_max_index_interval(self):
         """
@@ -600,7 +600,7 @@ class Nemesis(object):
             not limited to replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: read_repair_chance = 0.0
         """
-        self._modify_table_property(name="read_repair_chance", val=random.random())
+        self._modify_table_property(name="read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
 
     def modify_table_speculative_retry(self):
         """
@@ -768,7 +768,7 @@ class RestartThenRepairNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_restart_then_repair_node()
+        self._disabled_disrupt_restart_then_repair_node()
 
 class HardRebootNodeMonkey(Nemesis):
 
@@ -886,7 +886,8 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
-                                                         'disrupt_restart_then_repair_node'])
+                                                         'disrupt_hard_reboot_node','disrupt_soft_reboot_node'])
+                                                         #'disrupt_restart_then_repair_node'])
 
 
 class AllMonkey(Nemesis):

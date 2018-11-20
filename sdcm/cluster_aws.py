@@ -130,7 +130,7 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[0])
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -193,8 +193,8 @@ class AWSCluster(cluster.BaseCluster):
 
         return instances
 
-    def _get_instances(self):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[0])
+    def _get_instances(self, dc_idx):
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
         return [ec2.get_instance_by_private_ip(ip) for ip in self._node_private_ips]
 
     def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
@@ -215,7 +215,7 @@ class AWSCluster(cluster.BaseCluster):
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
-            instances = self._get_instances()
+            instances = self._get_instances(dc_idx)
         else:
             instances = self._create_instances(count, ec2_user_data, dc_idx)
 
@@ -331,9 +331,8 @@ class AWSNode(cluster.BaseNode):
         # need to setup the instance and treat it as a new instance.
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             clean_script = dedent("""
-                sudo rm -f /etc/scylla/ami_configured
-                sudo sed -e '/.*scylla/ s/^/# /g' -i /etc/fstab
-                sudo sed -e 's/replace_address_on_first_boot/#replace_address_on_first_boot/g' -i /etc/scylla/scylla.yaml
+                sed -e '/.*scylla/s/^/#/g' -i /etc/fstab                
+                sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
             output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
@@ -348,6 +347,11 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
+
+        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+            self.stop_scylla_server(verify_down=False)
+            self.start_scylla_server(verify_up=False)
 
     def reboot(self, hard=True):
         if hard:
