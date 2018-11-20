@@ -1,8 +1,8 @@
 test_duration: 2860
 prepare_write_cmd:  "cassandra-stress write cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
 prepare_verify_cmd: "cassandra-stress read  cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"]
-stress_read_cmd: ["cassandra-stress read cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"]
+stress_cmd: "cassandra-stress write cl=QUORUM duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
+stress_read_cmd: "cassandra-stress read cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
 n_db_nodes: '3 3'
 n_loaders: 1
 n_monitor_nodes: 1
@@ -41,7 +41,7 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-267fdc30' # Clean CentOS image
+            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'
