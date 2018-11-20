@@ -41,7 +41,7 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'AMI_ID_EAST'
+            ami_id_monitor: 'ami-267fdc30' # Clean CentOS image
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'

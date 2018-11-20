@@ -45,7 +45,15 @@ class MgmtCliTest(ClusterTester):
                                     )
         self.db_cluster.start_nemesis()
 
-    def test_mgmt_cluster_crud(self):
+    def test_mgmt_cluster(self):
+        """
+
+        Test steps:
+        1) add a cluster to manager.
+        2) run a full system repair and wait for its end ok.
+        3) update the cluster attributes in manager: name/host/ssh-user
+        4) delete the cluster from manager and re-add again.
+        """
 
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
@@ -58,11 +66,15 @@ class MgmtCliTest(ClusterTester):
 
         mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
 
+        # Run the repair test
+        self.test_mgmt_repair_nemesis()
+
+        # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
-        # the below test currently fails and under clarification
+        # the below test currently fails: https://github.com/scylladb/mermaid/issues/741
         # new_ssh_user="super-scylla-manager"
         # mgr_cluster.update(ssh_user=new_ssh_user)
         # assert mgr_cluster.ssh_user == new_ssh_user, "Cluster ssh-user wasn't changed after update command"
