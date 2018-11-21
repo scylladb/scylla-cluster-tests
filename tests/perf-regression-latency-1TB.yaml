@@ -4,9 +4,9 @@ prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=250000000 -schema
                     "cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=500000000..750000000",
                     "cassandra-stress write no-warmup cl=ALL n=250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=750000000..1000000000"]
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=15000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
-stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=9000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=15000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=90m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100 throttle=9000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..1000000000,500000000,50000000)' "
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
@@ -14,7 +14,7 @@ user_prefix: 'perf-regression-latency-VERSION'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
-#ip_ssh_connections: 'private'
+ip_ssh_connections: 'private'
 round_robin: 'true'
 instance_provision: 'on_demand'
 experimental: 'true'
