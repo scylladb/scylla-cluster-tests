@@ -47,11 +47,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-<<<<<<< HEAD
-from .utils import get_data_dir_path
-=======
 from .utils import get_data_dir_path, log_run_info, retrying
->>>>>>> 0d23a77... Hinted handoff test (#680)
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
