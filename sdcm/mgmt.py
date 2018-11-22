@@ -55,7 +55,7 @@ class TaskStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
-class ScyllaLogicObj(object):
+class ScyllaManagerBase(object):
 
     def __init__(self, id, manager_node):
         self.id = id
@@ -66,10 +66,10 @@ class ScyllaLogicObj(object):
         return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
 
-class ManagerTask(ScyllaLogicObj):
+class ManagerTask(ScyllaManagerBase):
 
     def __init__(self, task_id, cluster_id, manager_node):
-        ScyllaLogicObj.__init__(self, id=task_id, manager_node=manager_node)
+        ScyllaManagerBase.__init__(self, id=task_id, manager_node=manager_node)
         self.cluster_id = cluster_id
 
     def stop(self):
@@ -210,12 +210,12 @@ class HealthcheckTask(ManagerTask):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
 
-class ManagerCluster(ScyllaLogicObj):
+class ManagerCluster(ScyllaManagerBase):
 
     def __init__(self, manager_node, cluster_id):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
-        ScyllaLogicObj.__init__(self, id=cluster_id, manager_node=manager_node)
+        ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
 
     def create_repair_task(self):
         cmd = "repair -c {}".format(self.id)
@@ -380,7 +380,7 @@ class ManagerCluster(ScyllaLogicObj):
             self.rtt = rtt
 
 
-class MgrUtils():
+class MgrUtils(object):
 
     @staticmethod
     def verify_errorless_result(cmd, res):
@@ -389,13 +389,13 @@ class MgrUtils():
             raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
 
 
-class ScyllaManagerTool(ScyllaLogicObj):
+class ScyllaManagerTool(ScyllaManagerBase):
     """
     Provides communication with scylla-manager, operating sctool commands and ssh-scripts.
     """
 
     def __init__(self, manager_node):
-        ScyllaLogicObj.__init__(self, id="MANAGER", manager_node=manager_node)
+        ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         # self._manager_node = manager_node
         sleep = 30
         logger.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
