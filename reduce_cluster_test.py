@@ -106,8 +106,7 @@ class ReduceClusterTest(ClusterTester):
         self.log.info('Starting to reduce cluster: %s' % str(start))
 
         self.db_cluster.add_nemesis(nemesis=DecommissionNoAddMonkey,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors)
+                                    tester_obj=self)
         # Have c-s run for 2 + 3 minutes before we start to do decommission
         time.sleep(2 * 60)
         while len(self.db_cluster.nodes) > cluster_target_size:

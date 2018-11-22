@@ -37,10 +37,11 @@ from sdcm.utils import remote_get_file
 
 class Nemesis(object):
 
-    def __init__(self, cluster, loaders, monitoring_set, termination_event, **kwargs):
-        self.cluster = cluster
-        self.loaders = loaders
-        self.monitoring_set = monitoring_set
+    def __init__(self, tester_obj, termination_event):
+        self.tester = tester_obj  # ClusterTester object
+        self.cluster = tester_obj.db_cluster
+        self.loaders = tester_obj.loaders
+        self.monitoring_set = tester_obj.monitors
         self.target_node = None
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
@@ -58,7 +59,6 @@ class Nemesis(object):
         self.interval = 0
         self.start_time = time.time()
         self.stats = {}
-        self.db_stats = kwargs.get('db_stats', None)
         self.metrics_srv = prometheus.nemesis_metrics_obj()
         self._random_sequence = None
 
@@ -69,8 +69,8 @@ class Nemesis(object):
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]['cnt'] += 1
         self.log.info('Update nemesis info: %s', self.stats)
-        if self.db_stats:
-            self.db_stats.update({'nemesis': self.stats})
+        if self.tester.create_stats:
+            self.tester.update({'nemesis': self.stats})
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
@@ -676,6 +676,20 @@ class Nemesis(object):
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
 
+    def disrupt_validate_hh_short_downtime(self):
+        """
+            Validates that hinted handoff mechanism works: there were no drops and errors
+            during short stop of one of the nodes in cluster
+        """
+        self._set_current_disruption("ValidateHintedHandoffShortDowntime")
+        start_time = time.time()
+        self.target_node.stop_scylla()
+        time.sleep(10)
+        self.target_node.start_scylla()
+        time.sleep(120)  # Wait to complete hints sending
+        assert self.tester.hints_sending_in_progress() is False, "Hints are sent too slow"
+        self.tester.verify_no_drops_and_errors(starting_from=start_time)
+
 
 def log_time_elapsed_and_status(method):
     """
@@ -1045,3 +1059,9 @@ class NodeTerminateAndReplace(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
+
+
+class ValidateHintedHandoffShortDowntime(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_validate_hh_short_downtime()

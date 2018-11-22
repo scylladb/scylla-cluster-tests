@@ -17,6 +17,8 @@ failure_post_behavior: destroy
 space_node_threshold: 167000
 store_results_in_elasticsearch: False
 
+hinted_handoff_enabled: true
+
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: false

@@ -233,7 +233,8 @@ class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):
         node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
                           cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'),
-                          append_conf=self.params.get('append_conf'))
+                          append_conf=self.params.get('append_conf'),
+                          hinted_handoff_enabled=self._param_enabled('hinted_handoff_enabled'))
 
         node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
         # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846

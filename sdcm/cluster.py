@@ -67,6 +67,8 @@ TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
+SCYLLA_DIR = "/var/lib/scylla"
+
 
 logger = logging.getLogger(__name__)
 
@@ -874,7 +876,7 @@ class BaseNode(object):
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
                      server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
-                     debug_install=False):
+                     debug_install=False, hinted_handoff_enabled=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -910,6 +912,9 @@ class BaseNode(object):
             p = re.compile('[# ]*cluster_name:.*')
             scylla_yaml_contents = p.sub('cluster_name: {0}'.format(cluster_name),
                                          scylla_yaml_contents)
+
+        p = re.compile('[# ]*hinted_handoff_enabled:.*')
+        scylla_yaml_contents = p.sub('hinted_handoff_enabled: {}'.format(str(hinted_handoff_enabled).lower()), scylla_yaml_contents)
 
         if enable_exp:
             scylla_yaml_contents += "\nexperimental: true\n"
@@ -1150,6 +1155,7 @@ client_encryption_options:
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
+    @log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -1174,6 +1180,7 @@ client_encryption_options:
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
+    @log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -1731,11 +1738,9 @@ class BaseScyllaCluster(object):
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace)
 
-    def add_nemesis(self, nemesis, loaders, monitoring_set, **kwargs):
-        self.nemesis.append(nemesis(cluster=self,
-                                    loaders=loaders,
-                                    monitoring_set=monitoring_set,
-                                    termination_event=self.termination_event, **kwargs))
+    def add_nemesis(self, nemesis, tester_obj):
+        self.nemesis.append(nemesis(tester_obj=tester_obj,
+                                    termination_event=self.termination_event))
 
     def clean_nemesis(self):
         self.nemesis = []
@@ -1768,7 +1773,8 @@ class BaseScyllaCluster(object):
                           server_encrypt=self._param_enabled('server_encrypt'),
                           client_encrypt=self._param_enabled('client_encrypt'),
                           append_conf=self.params.get('append_conf'),
-                          append_scylla_args=self.params.get('append_scylla_args'))
+                          append_scylla_args=self.params.get('append_scylla_args'),
+                          hinted_handoff_enabled=self._param_enabled('hinted_handoff_enabled'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
