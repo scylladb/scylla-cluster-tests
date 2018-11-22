@@ -33,6 +33,12 @@ class MgmtCliTest(ClusterTester):
 
 
     def test_mgmt_repair_nemesis(self):
+        """
+
+            Test steps:
+            1) Run cassandra stress on cluster.
+            2) Add cluster to Manager and run full repair via Nemesis
+        """
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd)
@@ -46,14 +52,13 @@ class MgmtCliTest(ClusterTester):
                                     )
         self.db_cluster.start_nemesis()
 
-    def test_mgmt_cluster(self):
+    def test_mgmt_cluster_crud(self):
         """
 
         Test steps:
         1) add a cluster to manager.
-        2) run a full system repair and wait for its end ok.
-        3) update the cluster attributes in manager: name/host/ssh-user
-        4) delete the cluster from manager and re-add again.
+        2) update the cluster attributes in manager: name/host/ssh-user
+        3) delete the cluster from manager and re-add again.
         """
 
         manager_tool = mgmt.ScyllaManagerTool(manager_node=self.monitors.nodes[0])
@@ -61,9 +66,6 @@ class MgmtCliTest(ClusterTester):
         selected_host = hosts[0]
         cluster_name = 'mgr_cluster1'
         mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
-
-        # Run the repair test
-        self.test_mgmt_repair_nemesis()
 
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
@@ -88,6 +90,17 @@ class MgmtCliTest(ClusterTester):
         ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
                                               len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in self.db_cluster.nodes]
+
+    def test_manager_sanity(self):
+        """
+        Test steps:
+        1) Run the repair test.
+        2) Run test_mgmt_cluster test.
+        :return:
+        """
+
+        self.test_mgmt_repair_nemesis()
+        self.test_mgmt_cluster()
 
     def test_mgmt_cluster_healthcheck(self):
 
