@@ -10,17 +10,13 @@ import json
 import yaml
 from textwrap import dedent
 from math import sqrt
-from collections import defaultdict
 
 from requests import ConnectionError
 
-import es
-from results_analyze import PerformanceResultsAnalyzer
+from es import ES
 from utils import get_job_name, retrying
 
 logger = logging.getLogger(__name__)
-
-ES_DOC_TYPE = "test_stats"
 
 
 class CassandraStressCmdParseError(Exception):
@@ -48,7 +44,9 @@ def get_stress_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-    cmd_params = {}
+    cmd_params = {
+        "raw_cmd": cmd
+    }
     try:
         cmd = cmd.strip().split('cassandra-stress')[1].strip()
         if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
@@ -169,23 +167,47 @@ class PrometheusDBStats(object):
             logger.error("Prometheus query unsuccessful!")
             return []
 
-    def get_scylladb_throughput(self, start_time, end_time):
-        """
-        Get Scylla throughput (ops/second) from PrometheusDB
-
-        :return: list of tuples (unix time, op/s)
-        """
+    @staticmethod
+    def _check_start_end_time(start_time, end_time):
         if end_time - start_time < 120:
             logger.warning("Time difference too low to make a query [start_time: %s, end_time: %s" % (start_time,
                                                                                                       end_time))
-            return []
-        # the query is taken from the Grafana Dashborad definition
-        q = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
+            return False
+        return True
+
+    def _get_query_values(self, q, start_time, end_time):
         results = self.query(query=q, start=start_time, end=end_time)
         if results:
             return results[0]["values"]
         else:
             return []
+
+    def get_throughput(self, start_time, end_time):
+        """
+        Get Scylla throughput (ops/second) from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if not self._check_start_end_time(start_time, end_time):
+            return []
+        # the query is taken from the Grafana Dashborad definition
+        q = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
+        return self._get_query_values(q, start_time, end_time)
+
+    def get_latency(self, start_time, end_time, latency_type):
+        """latency values are returned in microseconds"""
+        assert latency_type in ["read", "write"]
+        if not self._check_start_end_time(start_time, end_time):
+            return []
+        q = "histogram_quantile(0.99, sum(rate(scylla_storage_proxy_" \
+            "coordinator_%s_latency_bucket{}[30s])) by (le))" % latency_type
+        return self._get_query_values(q, start_time, end_time)
+
+    def get_latency_read_99(self, start_time, end_time):
+        return self.get_latency(start_time, end_time, latency_type="read")
+
+    def get_latency_write_99(self, start_time, end_time):
+        return self.get_latency(start_time, end_time, latency_type="write")
 
 
 class Stats(object):
@@ -198,12 +220,14 @@ class Stats(object):
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)
+        self._es_doc_type = "test_stats"
+        self.es = ES()
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
     def create(self):
-        es.ES().create(self._test_index, ES_DOC_TYPE, self._test_id, self._stats)
+        self.es.create_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=self._stats)
 
     def update(self, data):
         """
@@ -211,7 +235,7 @@ class Stats(object):
         :param data: data dictionary
         """
         try:
-            es.ES().update(self._test_index, ES_DOC_TYPE, self._test_id, data)
+            self.es.update_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=data)
         except Exception as ex:
             logger.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
 
@@ -221,6 +245,8 @@ class TestStatsMixin(Stats):
     This mixin is responsible for saving test details and statistics in database.
     """
     KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
+    PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
+    PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
 
     def __init__(self, *args, **kwargs):
         super(TestStatsMixin, self).__init__(*args, **kwargs)
@@ -302,7 +328,8 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
         else:
             self._stats['test_details']['test_name'] = self.params.id.name
-        self._stats['results']['throughput'] = defaultdict(dict)
+        for stat in self.PROMETHEUS_STATS:
+            self._stats['results'][stat] = {}
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
@@ -321,32 +348,37 @@ class TestStatsMixin(Stats):
                 self._stats['test_details'][section].update(cmd_params)
             self.update(dict(test_details=self._stats['test_details']))
 
-    def get_scylla_throughput(self):
-        if self.monitors:
-            try:
-                self.log.info("Calculating throughput stats from PrometheusDB...")
-                ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
-                offset = 120  # 2 minutes offset
-                ps_results = ps.get_scylladb_throughput(start_time=int(self._stats["test_details"]["start_time"] + offset),
-                                                        end_time=int(time.time() - offset))  # op/s
-                if len(ps_results) <= 3:
-                    self.log.error("Not enough data from Prometheus: %s" % ps_results)
-                    return
-                throughput = self._stats["results"]["throughput"]
-                ops_per_sec = [float(val) for _, val in ps_results]
-                throughput["max"] = max(ops_per_sec)
-                # filter all values that is less than 1% of max at he beginning and at the end
-                ops_filtered = filter(lambda x: x >= throughput["max"] * 0.01, ops_per_sec)
-                throughput["min"] = min(ops_filtered)
-                throughput["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
-                throughput["stdev"] = stddev(ops_filtered)
-                self.log.debug("Throughput stats: %s", self._stats["results"]["throughput"])
-            except Exception as e:
-                self.log.error("Exception when calculating PrometheusDB stats: %s" % e)
-                return
-        else:
-            self.log.warning("Unable to get stats from Prometheus. "
-                             "Probably scylla monitoring nodes were not provisioned.")
+    def _calc_stats(self, ps_results):
+        try:
+            if not ps_results or len(ps_results) <= 3:
+                self.log.error("Not enough data from Prometheus: %s" % ps_results)
+                return {}
+            stat = {}
+            ops_per_sec = [float(val) for _, val in ps_results if val.lower() != "nan"]  # float("nan") is not a number
+            stat["max"] = max(ops_per_sec)
+            # filter all values that are less than 1% of max
+            ops_filtered = filter(lambda x: x >= stat["max"] * 0.01, ops_per_sec)
+            stat["min"] = min(ops_filtered)
+            stat["avg"] = float(sum(ops_filtered)) / len(ops_filtered)
+            stat["stdev"] = stddev(ops_filtered)
+            self.log.debug("Stats: %s", stat)
+            return stat
+        except Exception as e:
+            self.log.error("Exception when calculating PrometheusDB stats: %s" % e)
+            return {}
+
+    def get_prometheus_stats(self):
+        self.log.info("Calculating throughput stats from PrometheusDB...")
+        ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        offset = 120  # 2 minutes offset
+        start = int(self._stats["test_details"]["start_time"] + offset)
+        end = int(time.time() - offset)
+        prometheus_stats = {}
+        for stat in self.PROMETHEUS_STATS:
+            stat_calc_func = getattr(ps, "get_" + stat)
+            prometheus_stats[stat] = self._calc_stats(ps_results=stat_calc_func(start_time=start, end_time=end))
+        self._stats['results'].update(prometheus_stats)
+        return prometheus_stats
 
     def update_stress_results(self, results):
         if 'stats' not in self._stats['results']:
@@ -383,10 +415,11 @@ class TestStatsMixin(Stats):
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         if self.create_stats:
+            update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             if self.monitors:
                 test_start_time = self._stats['test_details']['start_time']
-                self.get_scylla_throughput()
+                update_data['results'] = self.get_prometheus_stats()
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
                 self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
 
@@ -400,20 +433,10 @@ class TestStatsMixin(Stats):
                 self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
 
             self._stats['status'] = self.status
-            update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details'],
-                           'results': {'throughput': self._stats['results']['throughput']}}
+            update_data.update({'status': self._stats['status'], 'test_details': self._stats['test_details']})
             if errors:
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
             self.update(update_data)
 
-    def check_regression(self):
-        ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=ES_DOC_TYPE,
-                             send_email=self.params.get('send_email', default=True),
-                             email_recipients=self.params.get('email_recipients', default=None))
-        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
-        try:
-            ra.check_regression(self._test_id, is_gce)
-        except Exception as ex:
-            logger.exception('Failed to check regression: %s', ex)

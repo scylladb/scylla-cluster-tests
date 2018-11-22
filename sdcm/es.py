@@ -1,25 +1,32 @@
+import os
+import yaml
 import logging
 import elasticsearch
-
-from sdcm.results_analyze import BaseResultsAnalyzer
 
 logger = logging.getLogger(__name__)
 
 
-class ES(object):
+class ES(elasticsearch.Elasticsearch):
     """
     Provides interface for Elasticsearch DB
     """
+    def __init__(self):
+        self._conf = self.get_conf()
+        super(ES, self).__init__(hosts=[self._conf["es_url"]], verify_certs=False,
+                                 http_auth=(self._conf["es_user"], self._conf["es_password"]))
 
-    def __init__(self, *args, **kwargs):
-        self._conf = BaseResultsAnalyzer.get_conf()
-        self._es = elasticsearch.Elasticsearch([self._conf["es_url"]], verify_certs=False,
-                                               http_auth=(self._conf["es_user"], self._conf["es_password"]))
+    @staticmethod
+    def get_conf():
+
+        conf_file = os.path.join(os.path.dirname(__file__), "results_analyze.yaml")
+        print conf_file
+        with open(conf_file) as cf:
+            return yaml.safe_load(cf)
 
     def _create_index(self, index):
-        self._es.indices.create(index=index, ignore=400)
+        self.indices.create(index=index, ignore=400)
 
-    def create(self, index, doc_type, doc_id, body):
+    def create_doc(self, index, doc_type, doc_id, body):
         """
         Add document in json format
         """
@@ -29,34 +36,34 @@ class ES(object):
         logger.info('DOC_ID: %s', doc_id)
         logger.info('BODY: %s', body)
         self._create_index(index)
-        self._es.create(index=index, doc_type=doc_type, id=doc_id, body=body)
+        self.create(index=index, doc_type=doc_type, id=doc_id, body=body)
 
-    def update(self, index, doc_type, doc_id, body):
+    def update_doc(self, index, doc_type, doc_id, body):
         """
         Update document with partial data
         """
         logger.info('Update doc %s with info %s', doc_id, body)
-        self._es.update(index=index, doc_type=doc_type, id=doc_id, body=dict(doc=body))
+        self.update(index=index, doc_type=doc_type, id=doc_id, body=dict(doc=body))
 
     def get_all(self, index, limit=1000):
         """
         Search for documents for the certain index
         """
-        return self._es.search(index=index, size=limit)
+        return self.search(index=index, size=limit)
 
     def get_doc(self, index, doc_id, doc_type='_all'):
         """
         Get document by id
         """
-        doc = self._es.get(index=index, doc_type=doc_type, id=doc_id, ignore=[400, 404])
+        doc = self.get(index=index, doc_type=doc_type, id=doc_id, ignore=[400, 404])
         if not doc['found']:
             logger.warning('Document not found: %s %s', doc_id, doc_type)
             return None
         return doc
 
-    def delete(self, index, doc_type, doc_id):
+    def delete_doc(self, index, doc_type, doc_id):
         """
         Delete document
         """
         if self.get_doc(index, doc_id, doc_type):
-            self._es.delete(index=index, doc_type=doc_type, id=doc_id)
+            self.delete(index=index, doc_type=doc_type, id=doc_id)

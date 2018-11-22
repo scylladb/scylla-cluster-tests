@@ -162,8 +162,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                   'test_args': test_args,
                                   'test_run_date': self.test_run_date})
                 if update_db:
-                    self._es.create(index=self._es_index, doc_type=self._es_doc_type,
-                                    id="%s_%s" % (self.test_run_date, test_type), body=datastore)
+                    self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
+                                        id="%s_%s" % (self.test_run_date, test_type), body=datastore)
                 results[test_type] = datastore
         return results
 
