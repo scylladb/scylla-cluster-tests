@@ -100,7 +100,7 @@ class MgmtCliTest(ClusterTester):
         """
 
         self.test_mgmt_repair_nemesis()
-        self.test_mgmt_cluster()
+        self.test_mgmt_cluster_crud()
 
     def test_mgmt_cluster_healthcheck(self):
 
