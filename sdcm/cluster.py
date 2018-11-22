@@ -1113,9 +1113,12 @@ client_encryption_options:
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
-        self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
-        self.remoter.run('sudo ssh-keygen -y -f {} > {}'.format(rsa_id_dst, rsa_id_dst_pub)) # generate ssh public key from private key.
+        ssh_config_script = dedent("""        
+                chmod 0400 {rsa_id_dst}
+                chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
+                ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
+        """.format(**locals())) # generate ssh public key from private key.
+        self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
