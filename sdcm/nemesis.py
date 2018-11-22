@@ -886,6 +886,7 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
+                                                         'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
                                                          'disrupt_restart_then_repair_node'])
 
 
