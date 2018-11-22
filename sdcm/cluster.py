@@ -304,6 +304,9 @@ class BaseNode(object):
         if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
             self.distro = Distro.RHEL7
 
+        if self.distro:
+            return self.distro
+
         result = self.remoter.run('cat /etc/issue', ignore_status=True)
         if 'Ubuntu 14.04' in result.stdout:
             self.distro = Distro.UBUNTU14
