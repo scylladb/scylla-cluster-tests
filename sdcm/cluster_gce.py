@@ -119,7 +119,7 @@ class GCENode(cluster.BaseNode):
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
-            self.remoter.run('sudo reboot')
+            self.remoter.run('sudo reboot', ignore_status=True)
 
     def _safe_destroy(self):
         try:
