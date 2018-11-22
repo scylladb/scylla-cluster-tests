@@ -331,14 +331,10 @@ class AWSNode(cluster.BaseNode):
         # need to setup the instance and treat it as a new instance.
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             clean_script = dedent("""
-                sed -e '/.*scylla/s/^/#/g' -i /etc/fstab                
-                sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
+                sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
+                sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
-            output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
-            if 'replace_address:' not in output.stdout:
-                self.remoter.run('sudo echo replace_address: %s >> /etc/scylla/scylla.yaml' %
-                                 self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
@@ -359,7 +355,7 @@ class AWSNode(cluster.BaseNode):
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
-            self.remoter.run('sudo reboot')
+            self.remoter.run('sudo reboot', ignore_status=True)
 
     def destroy(self):
         self.stop_task_threads()

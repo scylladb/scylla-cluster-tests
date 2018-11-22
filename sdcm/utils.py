@@ -33,16 +33,19 @@ def _remote_get_hash(remoter, file_path):
         return None
 
 
-def _remote_get_file(remoter, src, dst):
-    result = remoter.run('curl -L {} -o {}'.format(src, dst), ignore_status=True)
+def _remote_get_file(remoter, src, dst, user_agent=None):
+    cmd = 'curl -L {} -o {}'.format(src, dst)
+    if user_agent:
+        cmd += ' --user-agent %s' % user_agent
+    result = remoter.run(cmd, ignore_status=True)
 
 
-def remote_get_file(remoter, src, dst, hash_expected=None, retries=1):
+def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):
     if not hash_expected:
-        _remote_get_file(remoter, src, dst)
+        _remote_get_file(remoter, src, dst, user_agent)
         return
     while retries > 0 and _remote_get_hash(remoter, dst) != hash_expected:
-        _remote_get_file(remoter, src, dst)
+        _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
     #assert _remote_get_hash(remoter, dst) == hash_expected
 
