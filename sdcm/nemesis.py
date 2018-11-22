@@ -162,7 +162,7 @@ class Nemesis(object):
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
-    def _disabled_disrupt_restart_then_repair_node(self):
+    def disrupt_restart_then_repair_node(self):
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
         self.log.info('Waiting scylla services to start after node restart')
@@ -768,7 +768,7 @@ class RestartThenRepairNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self._disabled_disrupt_restart_then_repair_node()
+        self.disrupt_restart_then_repair_node()
 
 class HardRebootNodeMonkey(Nemesis):
 
@@ -886,8 +886,7 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
-                                                         'disrupt_hard_reboot_node','disrupt_soft_reboot_node'])
-                                                         #'disrupt_restart_then_repair_node'])
+                                                         'disrupt_restart_then_repair_node'])
 
 
 class AllMonkey(Nemesis):
