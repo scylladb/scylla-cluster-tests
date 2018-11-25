@@ -113,13 +113,15 @@ class GCENode(cluster.BaseNode):
         # So, for now we will keep restart the same as hard reboot.
         self._instance_wait_safe(self._instance.reboot)
 
-    def reboot(self, hard=True):
+    def reboot(self, hard=True, verify_ssh=True):
         if hard:
             self.log.debug('Hardly rebooting node')
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot', ignore_status=True)
+        if verify_ssh:
+            self.wait_ssh_up()
 
     def _safe_destroy(self):
         try:
