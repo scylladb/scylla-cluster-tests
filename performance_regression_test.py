@@ -430,11 +430,11 @@ class PerformanceRegressionTest(ClusterTester):
         """
         # TO DO: add limit ops based on results.
         self.preload_data()
-        time.sleep(60)
-        self.run_write_workload()
-        time.sleep(60)
+        self.wait_no_compactions_running()
         self.run_read_workload()
-        time.sleep(60)
+        self.wait_no_compactions_running()
+        self.run_write_workload()
+        self.wait_no_compactions_running()
         self.run_mixed_workload()
 
     def test_uniform_counter_update_bench(self):

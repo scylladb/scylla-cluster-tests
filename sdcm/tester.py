@@ -1169,3 +1169,14 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             ra.check_regression(self._test_id, is_gce)
         except Exception as ex:
             self.log.exception('Failed to check regression: %s', ex)
+
+    @retrying(n=15, sleep_time=60, allowed_exceptions=(AssertionError,))
+    def wait_no_compactions_running(self):
+        q = "sum(scylla_compaction_manager_compactions{})"
+        now = time.time()
+        results = self.prometheusDB.query(query=q, start=now - 60, end=now)
+        self.log.debug("scylla_hints_manager_sent: %s" % results)
+        assert results, "No results from Prometheus"
+        # if all are zeros the result will be False, otherwise there are still compactions
+        assert any([float(v[1]) for v in results[0]["values"]]) is False, \
+            "Waiting until all compactions settle down"
