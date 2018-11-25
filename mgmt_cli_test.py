@@ -41,7 +41,7 @@ class MgmtCliTest(ClusterTester):
         """
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
-        stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd)
+        stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
 
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
