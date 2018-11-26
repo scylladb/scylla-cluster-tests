@@ -138,12 +138,14 @@ class PerformanceRegressionTest(ClusterTester):
         # Create materialized view
         view_name = base_table_name + '_mv'
         self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session, mv_columns=['"C0"', 'key'])
+        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
+                                      mv_columns=['"C0"', 'key'])
 
         # Wait for the materialized view is built
         self._wait_for_view(self.db_cluster, session, ks_name, view_name)
 
-    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='', save_stats=True):
+    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',
+                  save_stats=True):
         if debug_message:
             self.log.debug(debug_message)
 
@@ -164,7 +166,7 @@ class PerformanceRegressionTest(ClusterTester):
         return self._stats['results']['stats_total']['op rate']
 
     def assert_mv_performance(self, ops_without_mv, ops_with_mv, failure_message):
-        self.log.debug('Assert performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
+        self.log.debug('Performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
         self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     # do not run this test on 2.2 while this feature is not available
@@ -188,18 +190,19 @@ class PerformanceRegressionTest(ClusterTester):
         # Run a write workload without MV
         ops_without_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_without_mv',
                                         test_name=test_name, keyspace_num=1,
-                                        debug_message='First start of write cassandra-stress command: {}'.format(base_cmd_w))
+                                        debug_message='First write cassandra-stress command: {}'.format(base_cmd_w))
 
         # Create MV
         self.prepare_mv(on_populated=on_populated)
 
         # Start cassandra-stress writes again now with MV
         ops_with_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_with_mv',
-                                    test_name=test_name, keyspace_num=1,
-                                    debug_message='Second start of write cassandra-stress command: {}'.format(base_cmd_w))
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second write cassandra-stress command: {}'.format(base_cmd_w))
 
-        self.assert_mv_performance(ops_without_mv, ops_with_mv, 'Throughput of stress run with materialized view is more than {} times lower then '
-                                                                'throughput of stress run without materialized view'.format(self.ops_threshold_prc/100))
+        self.assert_mv_performance(ops_without_mv, ops_with_mv,
+                                   'Throughput of run with materialized view is more than {} times lower then '
+                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
 
     def test_write(self):
         """
@@ -246,24 +249,26 @@ class PerformanceRegressionTest(ClusterTester):
                        save_stats=False)
 
         # run a read workload
-        ops_without_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_without_mv', test_name=test_name,
-                                        keyspace_num=1, debug_message='First start of read cassandra-stress command: {}'.format(base_cmd_r))
+        ops_without_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_without_mv',
+                                        test_name=test_name, keyspace_num=1,
+                                        debug_message='First read cassandra-stress command: {}'.format(base_cmd_r))
 
         self.prepare_mv(on_populated=on_populated)
 
         # If the MV was created on the empty base table, populate it before reads
         if not on_populated:
             self._workload(stress_cmd=base_cmd_w, stress_num=2, test_name=test_name, prefix='preload-', keyspace_num=1,
-                            debug_message='Prepare the test before second run cassandra-stress command: {}'.format(base_cmd_w),
-                            save_stats=False)
+                           debug_message='Prepare test before second cassandra-stress command: {}'.format(base_cmd_w),
+                           save_stats=False)
 
         # run a read workload
         ops_with_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_with_mv',
-                                    test_name=test_name, keyspace_num=1,
-                                    debug_message='Second start of read cassandra-stress command: {}'.format(base_cmd_r))
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second read cassandra-stress command: {}'.format(base_cmd_r))
 
-        self.assert_mv_performance(ops_without_mv, ops_with_mv, 'Throughput of stress run with materialized view is more than {} times lower then '
-                                                                'throughput of stress run without materialized view'.format(self.ops_threshold_prc/100))
+        self.assert_mv_performance(ops_without_mv, ops_with_mv,
+                                   'Throughput of run with materialized view is more than {} times lower then '
+                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
 
     def test_read(self):
         """
@@ -316,15 +321,16 @@ class PerformanceRegressionTest(ClusterTester):
                        save_stats=False)
 
         # run a mixed workload without MV
-        ops_without_mv = self._workload(stress_cmd=base_cmd_m, stress_num=2, sub_type='mixed_without_mv', test_name=test_name, keyspace_num=1,
-                                        debug_message='First start of mixed cassandra-stress command: {}'.format(base_cmd_m))
+        ops_without_mv = self._workload(stress_cmd=base_cmd_m, stress_num=2, sub_type='mixed_without_mv',
+                                        test_name=test_name, keyspace_num=1,
+                                        debug_message='First mixed cassandra-stress command: {}'.format(base_cmd_m))
 
         self.prepare_mv(on_populated=on_populated)
 
         # run a mixed workload with MV
         ops_with_mv = self._workload(stress_cmd=base_cmd_p, stress_num=2, sub_type='mixed_with_mv',
-                                        test_name=test_name, keyspace_num=1,
-                                        debug_message='Second start of mixed cassandra-stress command: {}'.format(
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second start of mixed cassandra-stress command: {}'.format(
                                             base_cmd_p))
 
         self.assert_mv_performance(ops_without_mv, ops_with_mv,
@@ -459,7 +465,8 @@ class PerformanceRegressionTest(ClusterTester):
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
         session.execute("""
-            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  AND durable_writes = true;
+            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  
+            AND durable_writes = true;
         """)
         session.execute("""
             CREATE TABLE scylla_bench.test (
@@ -471,7 +478,8 @@ class PerformanceRegressionTest(ClusterTester):
                 AND bloom_filter_fp_chance = 0.01
                 AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
                 AND comment = ''
-                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60', 'compaction_window_unit': 'MINUTES'}
+                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60', 
+                'compaction_window_unit': 'MINUTES'}
                 AND compression = {}
                 AND crc_check_chance = 1.0
                 AND dclocal_read_repair_chance = 0.1
@@ -584,6 +592,7 @@ class PerformanceRegressionTest(ClusterTester):
             run_workload(cmd_mv, cmd_mv_profile)
             drop_mv(get_mv_name(cmd_mv_profile))
             time.sleep(60)
+
 
 if __name__ == '__main__':
     main()
