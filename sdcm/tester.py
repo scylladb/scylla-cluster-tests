@@ -1170,7 +1170,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         except Exception as ex:
             self.log.exception('Failed to check regression: %s', ex)
 
-    @retrying(n=15, sleep_time=60, allowed_exceptions=(AssertionError,))
+    # Wait for up to 40 mins that there are no running compactions
+    @retrying(n=40, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_no_compactions_running(self):
         q = "sum(scylla_compaction_manager_compactions{})"
         now = time.time()
