@@ -335,6 +335,10 @@ class AWSNode(cluster.BaseNode):
                 sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
+            output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
+            if 'replace_address:' not in output.stdout:
+                self.remoter.run('sudo echo replace_address: %s >> /etc/scylla/scylla.yaml' %
+                                 self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
