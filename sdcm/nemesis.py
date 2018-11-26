@@ -26,6 +26,7 @@ import threading
 from avocado.utils import process
 
 from sdcm.cluster import SCYLLA_YAML_PATH
+from sdcm.mgmt import TaskStatus
 from .utils import get_data_dir_path
 from .log import SDCMAdapter
 from . import prometheus
@@ -631,7 +632,32 @@ class Nemesis(object):
         disrupt_func = getattr(self, disrupt_func_name)
         disrupt_func()
 
-    def disrupt_mgmt_repair(self):
+    def disrupt_mgmt_repair_cli(self):
+        self._set_current_disruption('ManagementRepair')
+        if not self.cluster.params.get('use_mgmt', default=None):
+            self.log.warning('Scylla-manager configuration is not defined!')
+            return
+
+        manager_node = self.monitoring_set.nodes[0]
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
+
+        cluster_name = self.cluster.name
+        mgr_cluster = manager_tool.get_cluster(cluster_name)
+        if not mgr_cluster:
+            self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
+            ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
+                                                  len(self.cluster.datacenter) > 1 else 'private_ip_address'
+            targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
+
+        mgr_task = mgr_cluster.create_repair_task()
+        task_final_status = mgr_task.wait_and_get_final_status()
+        assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(mgr_task.id, str(mgr_task.status))
+        self.log.info('Task: {} is done.'.format(mgr_task.id))
+
+        self.log.debug("sctool version is : {}".format(manager_tool.version))
+
+    def disrupt_mgmt_repair_api(self):
         self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
             self.log.warning('Scylla-manager configuration is not defined!')
@@ -873,7 +899,6 @@ class NodeToolCleanupMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
 
-
 class ChaosMonkey(Nemesis):
 
     @log_time_elapsed_and_status
@@ -1047,8 +1072,10 @@ class MgmtRepair(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_mgmt_repair()
-
+        self.log.info('disrupt_mgmt_repair_cli Nemesis begin')
+        self.disrupt_mgmt_repair_cli()
+        self.log.info('disrupt_mgmt_repair_cli Nemesis end')
+        # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
 
 class AbortRepairMonkey(Nemesis):
 

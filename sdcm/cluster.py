@@ -1098,13 +1098,12 @@ client_encryption_options:
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, mgmt_port, db_hosts):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
+        rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
-        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
-        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
         self.remoter.run('sudo yum install -y epel-release', retry=3)
         self.download_scylla_repo(scylla_repo)
@@ -1117,12 +1116,45 @@ client_encryption_options:
             try:
                 self.remoter.run('echo no| sudo scyllamgr_setup')
             except Exception as ex:
-                pass
+                self.log.warning(ex)
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        self.remoter.run('sudo chmod 0400 {}'.format(rsa_id_dst))
-        self.remoter.run('sudo chown {}:{} {}'.format(mgmt_user, mgmt_user, rsa_id_dst))
+        ssh_config_script = dedent("""        
+                chmod 0400 {rsa_id_dst}
+                chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
+                ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
+        """.format(**locals())) # generate ssh public key from private key.
+        self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
+
+        if self.is_docker():
+            self.remoter.run('sudo supervisorctl start scylla-manager')
+        else:
+            self.remoter.run('sudo systemctl restart scylla-manager.service')
+
+
+    def config_scylla_manager(self, mgmt_port, db_hosts):
+        """
+        this code was took out from  install_mgmt() method.
+        it may be usefull for manager testing future enhancements.
+
+        Usage may be:
+            if self.params.get('mgmt_db_local', default=True):
+                mgmt_db_hosts = ['127.0.0.1']
+            else:
+                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
+            node.config_scylla_manager(mgmt_port=self.params.get('mgmt_port', default=10090),
+                              db_hosts=mgmt_db_hosts)
+
+        :param mgmt_port:
+        :param db_hosts:
+        :return:
+        """
+        # only support for centos
+        self.log.debug('Install scylla-manager')
+        rsa_id_dst = '/tmp/scylla-test'
+        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
+        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
 
         mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
                      'database':
@@ -1141,6 +1173,8 @@ client_encryption_options:
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+
+
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
@@ -2367,14 +2401,8 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            if self.params.get('mgmt_db_local', default=True):
-                mgmt_db_hosts = ['127.0.0.1']
-            else:
-                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'),
-                              mgmt_port=self.params.get('mgmt_port', default=10090),
-                              db_hosts=mgmt_db_hosts)
+                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
@@ -2390,6 +2418,7 @@ class BaseMonitorSet(object):
     def install_scylla_monitoring_prereqs(self, node):
         if node.is_rhel_like():
             prereqs_script = dedent("""
+                yum install -y epel-release
                 yum install -y python-pip unzip wget docker
                 pip install --upgrade pip
                 pip install pyyaml
