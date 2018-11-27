@@ -1,9 +1,0 @@
-es_url: 'https://ES_URL_ID.us-east-1.aws.found.io:9243'
-es_user: ''
-es_password: ''
-kibana_url: 'https://KIBANA_URL_ID.us-east-1.aws.found.io:9243'
-email:
-  send: True
-  server: localhost
-  sender: 'scylla@scylladb.com'
-  recipients: ["bentsi@scylladb.com"]

@@ -3,6 +3,8 @@ import yaml
 import logging
 import elasticsearch
 
+from sdcm.keystore import KeyStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,11 +19,8 @@ class ES(elasticsearch.Elasticsearch):
 
     @staticmethod
     def get_conf():
-
-        conf_file = os.path.join(os.path.dirname(__file__), "results_analyze.yaml")
-        print conf_file
-        with open(conf_file) as cf:
-            return yaml.safe_load(cf)
+        ks = KeyStore()
+        return ks.get_elasticsearch_credentials()
 
     def _create_index(self, index):
         self.indices.create(index=index, ignore=400)
