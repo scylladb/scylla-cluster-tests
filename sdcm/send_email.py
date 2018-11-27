@@ -3,6 +3,7 @@ import os.path
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from sdcm.keystore import KeyStore
 
 
 class Email(object):
@@ -10,20 +11,33 @@ class Email(object):
     Responsible for sending emails
     """
 
-    def __init__(self, server='localhost', sender='scylla@scylladb.com', recipients=[]):
-        """
-        :param server: mail server ip/name
-        :param sender: email address to send from
-        :param recipients: list of email addresses to send to
-        """
-        self.server = server
-        self.sender = sender
-        self.recipients = recipients
+    def __init__(self):
+        self.sender = "qa@scylladb.com"
+        self._password = ""
+        self._user = ""
+        self._server_host = "smtp.gmail.com"
+        self._server_port = "587"
+        self._conn = None
+        self._retrieve_credentials()
+        self._connect()
 
-    def send(self, subject, content, html=True, files=()):
+    def _retrieve_credentials(self):
+        ks = KeyStore()
+        creds = ks.get_email_credentials()
+        self._user = creds["user"]
+        self._password = creds["password"]
+
+    def _connect(self):
+        self.conn = smtplib.SMTP(host=self._server_host, port=self._server_port)
+        self.conn.ehlo()
+        self.conn.starttls()
+        self.conn.login(user=self._user, password=self._password)
+
+    def send(self, subject, content, recipients, html=True, files=()):
         """
         :param subject: text
         :param content: text/html
+        :param recipients: iterable, list of recipients
         :param html: True/False
         :param files: paths of the files that will be attached to the email
         :return:
@@ -31,7 +45,7 @@ class Email(object):
         msg = MIMEMultipart()
         msg['subject'] = subject
         msg['from'] = self.sender
-        msg['to'] = ','.join(self.recipients)
+        msg['to'] = ','.join(recipients)
         if html:
             text_part = MIMEText(content, "html")
         else:
@@ -45,6 +59,8 @@ class Email(object):
                 )
             part['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(path)
             msg.attach(part)
-        ms = smtplib.SMTP(self.server)
-        ms.sendmail(self.sender, self.recipients, msg.as_string())
-        ms.quit()
+
+        self.conn.sendmail(self.sender, recipients, msg.as_string())
+
+    def __del__(self):
+        self.conn.quit()

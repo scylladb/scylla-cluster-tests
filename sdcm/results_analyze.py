@@ -162,10 +162,8 @@ class BaseResultsAnalyzer(object):
     def send_email(self, subject, content, html=True, files=()):
         if self._send_email and self._email_recipients:
             self.log.debug('Send email to {}'.format(self._email_recipients))
-            em = Email(self._conf['email']['server'],
-                       self._conf['email']['sender'],
-                       self._email_recipients)
-            em.send(subject, content, html, files=files)
+            em = Email()
+            em.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self._send_email, self._email_recipients)
