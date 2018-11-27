@@ -25,7 +25,7 @@ append_scylla_args: "--in-memory-storage-size-mb 80000"
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'shlomi@scylladb.com', 'bentsi@scylladb.com']
+email_recipients: ['qa@scylladb.com', 'dev-int@scylladb.com']
 
 backends: !mux
     gce: !mux
