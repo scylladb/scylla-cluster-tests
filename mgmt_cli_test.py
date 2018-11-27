@@ -119,7 +119,6 @@ class MgmtCliTest(ClusterTester):
 
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
-        healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
         self.log.debug('Sleep {} seconds, waiting for health-check task to run after node down'.format(sleep))
         time.sleep(sleep)
