@@ -46,10 +46,7 @@ class MgmtCliTest(ClusterTester):
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
-        self.db_cluster.add_nemesis(nemesis=MgmtRepair,
-                                    loaders=self.loaders,
-                                    monitoring_set=self.monitors,
-                                    )
+        self.db_cluster.add_nemesis(nemesis=MgmtRepair, tester_obj=self)
         self.db_cluster.start_nemesis()
 
     def test_mgmt_cluster_crud(self):
