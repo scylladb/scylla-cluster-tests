@@ -2448,12 +2448,13 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
+        branch = self.params.get('monitor_branch', default='branch-2.0')
         install_script = dedent("""
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/branch-2.0.zip
+            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{1}.zip
             unzip branch-2.0.zip
-        """.format(self))
+        """.format(self, branch))
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):

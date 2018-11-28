@@ -8,6 +8,7 @@ n_db_nodes: 3
 n_loaders: 1
 #round_robin: 'true' # when num loader more than 1
 n_monitor_nodes: 1
+monitor_branch: 'branch-2.0' # In case you would like to run the test with newer monitoring branch e.g. master
 keyspace_num: 1
 user_prefix: 'sample-configuration-tst'
 nemesis_class_name: 'NoOpMonkey' # no nemesis will be applied
