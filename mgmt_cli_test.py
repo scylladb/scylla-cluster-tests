@@ -24,13 +24,14 @@ from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
 
+
 class MgmtCliTest(ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
 
     :avocado: enable
     """
-
+    MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -69,14 +70,15 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
-        # the below test currently fails: https://github.com/scylladb/mermaid/issues/741
-        # new_ssh_user="super-scylla-manager"
-        # mgr_cluster.update(ssh_user=new_ssh_user)
-        # assert mgr_cluster.ssh_user == new_ssh_user, "Cluster ssh-user wasn't changed after update command"
+        origin_ssh_user=mgr_cluster.ssh_user
+        origin_rsa_id = self.MANAGER_IDENTITY_FILE
+        new_ssh_user="centos"
+        new_rsa_id = '/tmp/scylla-test'
 
-        if len(hosts) > 1:
-            mgr_cluster.update(host=hosts[1])
-            assert mgr_cluster.host == hosts[1], "Cluster host wasn't changed after update command"
+        mgr_cluster.update(ssh_user=new_ssh_user, ssh_identity_file=new_rsa_id)
+        assert mgr_cluster.ssh_user == new_ssh_user, "Cluster ssh-user wasn't changed after update command"
+
+        mgr_cluster.update(ssh_user=origin_ssh_user, ssh_identity_file=origin_rsa_id)
         mgr_cluster.delete()
         mgr_cluster2 = manager_tool.add_cluster(name=cluster_name, host=selected_host)
 
@@ -98,6 +100,7 @@ class MgmtCliTest(ClusterTester):
 
         self.test_mgmt_repair_nemesis()
         self.test_mgmt_cluster_crud()
+        self.test_mgmt_cluster_healthcheck()
 
     def test_mgmt_cluster_healthcheck(self):
 
@@ -125,6 +128,7 @@ class MgmtCliTest(ClusterTester):
 
         dict_host_health = mgr_cluster.get_hosts_health()
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN , "Host: {} status is not 'DOWN'".format(other_host_ip)
+        other_host.start_scylla_server()
 
 
 
