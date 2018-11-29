@@ -2349,8 +2349,10 @@ class BaseMonitorSet(object):
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
+        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.0')
         self.monitor_install_path_base = "/var/lib/scylla"
-        self.monitor_install_path = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-branch-2.0")
+        self.monitor_install_path = os.path.join(self.monitor_install_path_base,
+                                                 "scylla-grafana-monitoring-{}".format(self.monitor_branch))
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
         self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
         self.phantomjs_installed = False
@@ -2448,13 +2450,12 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
-        branch = self.params.get('monitor_branch', default='branch-2.0')
         install_script = dedent("""
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{1}.zip
-            unzip {1}.zip
-        """.format(self, branch))
+            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{0.monitor_branch}.zip
+            unzip {0.monitor_branch}.zip
+        """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
