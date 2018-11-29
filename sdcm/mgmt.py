@@ -280,20 +280,6 @@ class ManagerCluster(ScyllaManagerBase):
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     @property
-    def host(self):
-        """
-        Gets the Cluster host as represented in Manager
-        """
-        # expecting output of:
-        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
-        # │ cluster id                           │ name │ host        │ ssh user       │
-        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
-        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
-        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-
-        return self.get_property(parsed_table=self._cluster_list, column_name='host')
-
-    @property
     def name(self):
         """
         Gets the Cluster name as represented in Manager
