@@ -2453,7 +2453,7 @@ class BaseMonitorSet(object):
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
             wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{1}.zip
-            unzip branch-2.0.zip
+            unzip {1}.zip
         """.format(self, branch))
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
