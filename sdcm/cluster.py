@@ -291,32 +291,42 @@ class BaseNode(object):
         self.scylla_version = ''
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
-        self.distro = None
+        self._distro = None
 
-    def _get_distro(self):
+    @property
+    def distro(self):
         # Distro attribute won't be changed, only need to detect once.
-        if self.distro:
-            return self.distro
+        return self._distro
+
+    @distro.setter
+    def distro(self, new_distro):
+        self._distro = new_distro
+
+    def probe_distro(self):
+        # Probe the distro type
+        distro = None
 
         result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
         if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
-            self.distro = Distro.CENTOS7
+            distro = Distro.CENTOS7
         if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
-            self.distro = Distro.RHEL7
+            distro = Distro.RHEL7
 
-        result = self.remoter.run('cat /etc/issue', ignore_status=True)
-        if 'Ubuntu 14.04' in result.stdout:
-            self.distro = Distro.UBUNTU14
-        elif 'Ubuntu 16.04' in result.stdout:
-            self.distro = Distro.UBUNTU16
-        elif 'Debian GNU/Linux 8' in result.stdout:
-            self.distro = Distro.DEBIAN8
-        elif 'Debian GNU/Linux 9' in result.stdout:
-            self.distro = Distro.DEBIAN9
-        else:
+        if not distro:
+            result = self.remoter.run('cat /etc/issue', ignore_status=True)
+            if 'Ubuntu 14.04' in result.stdout:
+                distro = Distro.UBUNTU14
+            elif 'Ubuntu 16.04' in result.stdout:
+                distro = Distro.UBUNTU16
+            elif 'Debian GNU/Linux 8' in result.stdout:
+                distro = Distro.DEBIAN8
+            elif 'Debian GNU/Linux 9' in result.stdout:
+                distro = Distro.DEBIAN9
+
+        if not distro:
             self.log.debug("Failed to detect the distro name, %s" % result.stdout)
 
-        return self.distro
+        return distro
 
     def is_centos7(self):
         return self.distro == Distro.CENTOS7
@@ -698,7 +708,7 @@ class BaseNode(object):
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
         if not self.distro:
-            self.distro = self._get_distro()
+            self.distro = self.probe_distro()
 
     def is_port_used(self, port, service_name):
         try:
