@@ -145,7 +145,7 @@ class Nemesis(object):
 
         # Let's wait for the target Node to have their services re-started
         self.log.info('Waiting scylla services to be restarted after we killed them...')
-        self.target_node.wait_db_up()
+        self.target_node.wait_db_up(timeout=14400)
         self.log.info('Waiting JMX services to be restarted after we killed them...')
         self.target_node.wait_jmx_up()
 
