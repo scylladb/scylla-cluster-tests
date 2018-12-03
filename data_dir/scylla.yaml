@@ -175,12 +175,6 @@ backends: !mux
         cluster_backend: 'gce'
         # Put here the path to your user credentials (usually $HOME/.ssh/google_compute_engine). Generated using the gcloud utility
         user_credentials_path: ''
-        # The json file is used for the library to auth against the GCE service. Generated using the gcloud utility
-        gce_user_credentials: '/path/to/credentials.json'
-        # Look for the service account in Compute Engine settings web page
-        gce_service_account_email: 'your-service-account@email.com'
-        # Look for the project ID in Compute Engine settings web page
-        gce_project: 'your-gce-project-id'
         gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
         # Your e-mail user (if foo@yourcompany.com, foo is the user)
         gce_image_username: 'your-gce-username'
