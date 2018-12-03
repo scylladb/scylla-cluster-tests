@@ -280,20 +280,6 @@ class ManagerCluster(ScyllaManagerBase):
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     @property
-    def host(self):
-        """
-        Gets the Cluster host as represented in Manager
-        """
-        # expecting output of:
-        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
-        # │ cluster id                           │ name │ host        │ ssh user       │
-        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
-        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
-        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-
-        return self.get_property(parsed_table=self._cluster_list, column_name='host')
-
-    @property
     def name(self):
         """
         Gets the Cluster name as represented in Manager
@@ -343,35 +329,36 @@ class ManagerCluster(ScyllaManagerBase):
         """
         Gets the Manager's Cluster Nodes status
         """
-        # $ sctool status -c cluster1
-        # ╭───────────────┬────────┬──────────╮
-        # │ Host          │ Status │ RTT (ms) │
-        # ├───────────────┼────────┼──────────┤
-        # │ 18.234.77.216 │ UP     │ 0.92761  │
-        # │ 54.203.234.42 │ DOWN   │ 0        │
-        # ╰───────────────┴────────┴──────────╯
-        # or where all nodes up:
-        # ╭────────────────┬────────┬──────────╮
-        # │ Host           │ Status │ RTT (ms) │
-        # ├────────────────┼────────┼──────────┤
-        # │ 34.220.201.186 │ UP     │ 152.76   │
-        # │ 54.164.46.117  │ UP     │ 0.82     │
-        # ╰────────────────┴────────┴──────────╯
+        # Datacenter: us-eastscylla_node_east
+        # $ sctool status  -c mgr_cluster1
+        # ╭──────────┬────────────────╮
+        # │ CQL      │ Host           │
+        # ├──────────┼────────────────┤
+        # │ UP (1ms) │ 18.233.164.181 │
+        # ╰──────────┴────────────────╯
+        # Datacenter: us-west-2scylla_node_west
+        # ╭────────────┬───────────────╮
+        # │ CQL        │ Host          │
+        # ├────────────┼───────────────┤
+        # │ UP (180ms) │ 54.245.183.30 │
+        # ╰────────────┴───────────────╯
         cmd = "status -c {}".format(self.id)
-        parsed_table = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+        dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
         dict_hosts_health = {}
-        if len(parsed_table) < 2:
-            logger.debug("Cluster: {} has no hosts health report".format(self.id))
-        else:
-            for line in parsed_table[1:]:
-                host = line[0]
-                status = line[1]
-                rtt = line[2]
-                dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt)
-        logger.debug("Cluster {} Hosts Health is:".format(self.id))
-        for ip, health in dict_hosts_health.items():
-            logger.debug("{}: {},{}".format(ip, health.status, health.rtt))
+        for dc_name, hosts_table in dict_status_tables.items():
+            if len(hosts_table) < 2:
+                logger.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
+            else:
+                for line in hosts_table[1:]:
+                    host = line[1]
+                    list_cql = line[0].split()
+                    status = list_cql[0]
+                    rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt)
+            logger.debug("Cluster {} Hosts Health is:".format(self.id))
+            for ip, health in dict_hosts_health.items():
+                logger.debug("{}: {},{}".format(ip, health.status, health.rtt))
         return dict_hosts_health
 
     class _HostHealth():
@@ -425,7 +412,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # │ bf6571ef-21d9-4cf1-9f67-9d05bc07b32e │ Prod     │ 10.142.0.26 │ scylla-manager │
         # ╰──────────────────────────────────────┴──────────┴─────────────┴────────────────╯
         try:
-            cluster_id = self.sctool.get_table_value(parsed_table=self.cluster_list, column_name="cluster id", identifier=cluster_name)
+            cluster_id = self.sctool.get_table_value(parsed_table=self.cluster_list, column_name="cluster id",
+                                                     identifier=cluster_name)
         except ScyllaManagerError as e:
             logger.warning("Cluster name not found in Scylla-Manager: {}".format(e))
             return None
@@ -491,7 +479,7 @@ class SCTool(object):
     def _remoter_run(self, cmd):
         return self.manager_node.remoter.run(cmd)
 
-    def run(self, cmd, is_verify_errorless_result=False, parse_table_res=True):
+    def run(self, cmd, is_verify_errorless_result=False, parse_table_res=True, is_multiple_tables=False):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
@@ -502,6 +490,9 @@ class SCTool(object):
             MgrUtils.verify_errorless_result(cmd=cmd, res=res)
         if parse_table_res:
             res = self.parse_result_table(res=res)
+            if is_multiple_tables:
+                dict_res_tables = self.parse_result_multiple_tables(res=res)
+                return dict_res_tables
         return res
 
     def parse_result_table(self, res):
@@ -521,6 +512,44 @@ class SCTool(object):
                 parsed_table.append(list_line_with_multiple_words_join)
         return parsed_table
 
+    def parse_result_multiple_tables(self, res):
+        """
+
+        # Datacenter: us-eastscylla_node_east
+        # ╭──────────┬────────────────╮
+        # │ CQL      │ Host           │
+        # ├──────────┼────────────────┤
+        # │ UP (1ms) │ 18.233.164.181 │
+        # ╰──────────┴────────────────╯
+        # Datacenter: us-west-2scylla_node_west
+        # ╭────────────┬───────────────╮
+        # │ CQL        │ Host          │
+        # ├────────────┼───────────────┤
+        # │ UP (180ms) │ 54.245.183.30 │
+        # ╰────────────┴───────────────╯
+        # the above output example was translated to a single table that includes both 2 DC's values:
+        # [['Datacenter: us-eastscylla_node_east'],
+        #  ['CQL', 'Host'],
+        #  ['UP (1ms)', '18.233.164.181'],
+        #  ['Datacenter: us-west-2scylla_node_west'],
+        #  ['CQL', 'Host'],
+        #  ['UP (180ms)', '54.245.183.30']]
+        :param res:
+        :return:
+        """
+        if not any(len(line) == 1 for line in res):  # "1" means a table title like DC-name is found.
+            return {"single_table": res}
+
+        dict_res_tables = {}
+        cur_table = None
+        for line in res:
+            if len(line) == 1:  # "1" means it is the table title like DC name.
+                cur_table = line[0]
+                dict_res_tables[cur_table] = []
+            else:
+                dict_res_tables[cur_table].append(line)
+        return dict_res_tables
+
     def get_table_value(self, parsed_table, identifier, column_name=None, is_search_substring=False):
         """
 
@@ -537,7 +566,7 @@ class SCTool(object):
         # usage flow example: mgr_cluster1.host -> mgr_cluster1.get_property -> get_table_value
 
         if not parsed_table or not self._is_found_in_table(parsed_table=parsed_table, identifier=identifier,
-                                                     is_search_substring=is_search_substring):
+                                                           is_search_substring=is_search_substring):
             raise ScyllaManagerError(
                 "Encountered an error retrieving sctool table value: {} not found in: {}".format(identifier,
                                                                                                  str(parsed_table)))
