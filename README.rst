@@ -82,9 +82,16 @@ To run SCT tests locally run following::
 Run a test
 ----------
 
-Example running avocado using Hydra on AWS using `sample.yaml` configuration file::
+Example running avocado using Hydra using `sample.yaml` configuration file
 
-    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml"
+on AWS::
+
+    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/aws"
+
+on GCE::
+
+    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/gce"
+
 
 You can also enter the containerized SCT environment using::
 
@@ -92,11 +99,6 @@ You can also enter the containerized SCT environment using::
 
 Depending on which backend hardware/cloud provider/virtualization you will use, relevant configuration of those backend
 services should be done.
-
-Configuring Google Cloud
-------------------------
-
-TBD
 
 Configuring test run configuration YAML
 ---------------------------------------

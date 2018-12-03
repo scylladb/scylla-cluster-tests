@@ -30,6 +30,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from sdcm.keystore import KeyStore
 from . import cluster
 from . import nemesis
 from .cluster_libvirt import LoaderSetLibvirt
@@ -322,14 +323,15 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
 
         user_prefix = self.params.get('user_prefix', None)
-        service_account_email = self.params.get('gce_service_account_email', None)
-        user_credentials = self.params.get('gce_user_credentials', None)
         gce_datacenter = self.params.get('gce_datacenter', None).split()
-        project = self.params.get('gce_project', None)
         service_cls = get_driver(Provider.GCE)
+        ks = KeyStore()
+        gcp_credentials = ks.get_gcp_credentials()
         services = []
         for i in gce_datacenter:
-            services.append(service_cls(service_account_email, user_credentials, datacenter=i, project=project))
+            services.append(service_cls(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                                        gcp_credentials["private_key"], datacenter=i,
+                                        project=gcp_credentials["project_id"]))
         if len(services) > 1:
             assert len(services) == len(db_info['n_nodes'])
         user_credentials = self.params.get('user_credentials_path', None)

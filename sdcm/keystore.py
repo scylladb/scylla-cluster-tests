@@ -18,6 +18,9 @@ class KeyStore(object):
     def get_elasticsearch_credentials(self):
         return self._get_json("es.json")
 
+    def get_gcp_credentials(self):
+        return self._get_json("gcp.json")
+
     def get_qa_ssh_keys(self):
         # TODO
         pass
