@@ -1,21 +1,22 @@
 test_duration: 3600
-prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=48h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..10000000 -log interval=30"
-stress_cmd: ["cassandra-stress read cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..10000000 -log interval=10"]
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=1000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..1000000 -log interval=90"
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=12h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..1000000 -log interval=90"]
 keyspace_num: 1000
 n_db_nodes: 6
 n_loaders: 20
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
-nemesis_interval: 15
+nemesis_interval: 30
 user_prefix: 'longevity-1000-keyspaces-VERSION'
 failure_post_behavior: keep
-space_node_threshold: 6442450
+space_node_threshold: 1024
 ip_ssh_connections: 'private'
 experimental: 'true'
 round_robin: 'true'
 pre_create_schema: True
-nemesis_during_prepare: 'true'
-#instance_provision: 'spot_low_price'
+nemesis_during_prepare: 'false'
+instance_provision: 'spot_low_price'
+append_scylla_args: '--blocked-reactor-notify-ms 1000'
 
 
 backends: !mux
@@ -42,7 +43,7 @@ backends: !mux
     aws: !mux
         cluster_backend: 'aws'
         instance_type_loader: 'c4.8xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_monitor: 't2.large'
         instance_type_db: 'i3.8xlarge'
         us_east_1:
             region_name: 'us-east-1'
@@ -51,6 +52,7 @@ backends: !mux
             ami_id_db_scylla: 'AMI_ID'
             ami_id_loader: 'AMI_ID'
             ami_id_monitor: 'AMI_ID'
+            aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
