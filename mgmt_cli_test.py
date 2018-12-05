@@ -43,12 +43,11 @@ class MgmtCliTest(ClusterTester):
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
-
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
-        self.db_cluster.add_nemesis(nemesis=MgmtRepair, tester_obj=self)
-        self.db_cluster.start_nemesis()
+        mgmt_nemesis = MgmtRepair(tester_obj=self, termination_event=self.db_cluster.termination_event)
+        mgmt_nemesis.disrupt()
 
     def test_mgmt_cluster_crud(self):
         """
@@ -139,12 +138,25 @@ class MgmtCliTest(ClusterTester):
         upgrade_to_version = self.params.get('scylla_mgmt_upgrade_to_repo')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
-
+        selected_host = self._get_cluster_hosts_ip()[0]
+        cluster_name = 'mgr_cluster1'
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name,
+                                                                                                      host=selected_host)
+        self.log.info('Running some stress and repair before upgrade')
         self.test_mgmt_repair_nemesis()
 
-        self.log.info('Running Manager upgrade from: {} to: {}'.format(manager_tool.version, upgrade_to_version))
+        repair_task_list = mgr_cluster.repair_task_list
+
+        manager_from_version = manager_tool.version
+        self.log.info('Running Manager upgrade from: {} to: {}'.format(manager_from_version, upgrade_to_version))
         manager_node.upgrade_mgmt(scylla_mgmt_repo=upgrade_to_version)
         self.log.info('The Manager version after upgrade is: {}'.format(manager_tool.version))
+
+        assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after upgrade."
+        # verify all repair tasks exist
+        for repair_task in repair_task_list:
+            self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
+
 
 if __name__ == '__main__':
     main()
