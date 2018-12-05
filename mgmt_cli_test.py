@@ -130,7 +130,21 @@ class MgmtCliTest(ClusterTester):
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN , "Host: {} status is not 'DOWN'".format(other_host_ip)
         other_host.start_scylla_server()
 
+    def test_manager_upgrade(self):
+        """
+        Test steps:
+        1) Run the repair test.
+        2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_repo').
+        """
+        upgrade_to_version = self.params.get('scylla_mgmt_upgrade_to_repo')
+        manager_node = self.monitors.nodes[0]
+        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
 
+        self.test_mgmt_repair_nemesis()
+
+        self.log.info('Running Manager upgrade from: {} to: {}'.format(manager_tool.version, upgrade_to_version))
+        manager_node.upgrade_mgmt(scylla_mgmt_repo=upgrade_to_version)
+        self.log.info('The Manager version after upgrade is: {}'.format(manager_tool.version))
 
 if __name__ == '__main__':
     main()
