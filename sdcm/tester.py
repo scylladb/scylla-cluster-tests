@@ -1183,3 +1183,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # if all are zeros the result will be False, otherwise there are still compactions
         assert any([float(v[1]) for v in results[0]["values"]]) is False, \
             "Waiting until all compactions settle down"
+
+    def run_fstrim_on_all_db_nodes(self):
+        """
+        This function will run fstrim command all db nodes in the cluster to clear any bad state of the disks.
+        :return:
+        """
+        for node in self.db_cluster.nodes:
+            node.remoter.run('sudo fstrim -v /var/lib/scylla')
