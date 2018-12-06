@@ -38,6 +38,7 @@ class PerformanceRegressionTest(ClusterTester):
     def __init__(self, *args, **kwargs):
         super(PerformanceRegressionTest, self).__init__(*args, **kwargs)
 
+    # Helpers
     def display_single_result(self, result):
         self.log.info(self.str_pattern % (result['op rate'],
                                           result['partition rate'],
@@ -125,25 +126,6 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
-    def prepare_mv(self, on_populated=False):
-        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
-
-        ks_name = 'keyspace1'
-        base_table_name = 'standard1'
-        if not on_populated:
-            # Truncate base table before materialized view creation
-            self.log.debug('Truncate base table: {0}.{1}'.format(ks_name, base_table_name))
-            self.truncate_cf(ks_name, base_table_name, session)
-
-        # Create materialized view
-        view_name = base_table_name + '_mv'
-        self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
-                                      mv_columns=['"C0"', 'key'])
-
-        # Wait for the materialized view is built
-        self._wait_for_view(self.db_cluster, session, ks_name, view_name)
-
     def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',
                   save_stats=True):
         if debug_message:
@@ -164,206 +146,6 @@ class PerformanceRegressionTest(ClusterTester):
 
     def _get_total_ops(self):
         return self._stats['results']['stats_total']['op rate']
-
-    def assert_mv_performance(self, ops_without_mv, ops_with_mv, failure_message):
-        self.log.debug('Performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
-        self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
-
-    # do not run this test on 2.2 while this feature is not available
-    def test_mv_write_populated(self):
-        self._write_with_mv(on_populated=True)
-
-    def test_mv_write_not_populated(self):
-        self._write_with_mv(on_populated=False)
-
-    def _write_with_mv(self, on_populated):
-        """
-        Test steps:
-
-        1. Run a write workload
-        2. Create materialized view
-        3. Run a write workload
-        """
-        test_name = 'test_write_with_mv_{}populated'.format('' if on_populated else 'not_')
-        base_cmd_w = self.params.get('stress_cmd_w')
-
-        # Run a write workload without MV
-        ops_without_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_without_mv',
-                                        test_name=test_name, keyspace_num=1,
-                                        debug_message='First write cassandra-stress command: {}'.format(base_cmd_w))
-
-        # Create MV
-        self.prepare_mv(on_populated=on_populated)
-
-        # Start cassandra-stress writes again now with MV
-        ops_with_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_with_mv',
-                                     test_name=test_name, keyspace_num=1,
-                                     debug_message='Second write cassandra-stress command: {}'.format(base_cmd_w))
-
-        self.assert_mv_performance(ops_without_mv, ops_with_mv,
-                                   'Throughput of run with materialized view is more than {} times lower then '
-                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
-
-    def test_write(self):
-        """
-        Test steps:
-
-        1. Run a write workload
-        """
-        # run a write workload
-        base_cmd_w = self.params.get('stress_cmd_w')
-        self.create_test_stats()
-        # run a workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
-                                              stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
-        self.update_test_details(scylla_conf=True)
-        self.display_results(results, test_name='test_write')
-        self.check_regression()
-
-    def test_mv_read_populated(self):
-        self._read_with_mv(on_populated=True)
-
-    def test_mv_read_not_populated(self):
-        self._read_with_mv(on_populated=False)
-
-    def _read_with_mv(self, on_populated):
-        """
-        Test steps:
-
-        1. Run a write workload as a preparation
-        2. Run a read workload
-        3. Create MV
-        4. Run a read workload again
-        """
-        test_name = 'test_read_with_mv_{}populated'.format('' if on_populated else 'not_')
-        base_cmd_p = self.params.get('prepare_write_cmd')
-        base_cmd_w = self.params.get('stress_cmd_w')
-        base_cmd_r = self.params.get('stress_cmd_r')
-
-        self.create_test_stats()
-        # prepare schema and data before read
-        self._workload(stress_cmd=base_cmd_p, stress_num=2, test_name=test_name, prefix='preload-', keyspace_num=1,
-                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_p),
-                       save_stats=False)
-
-        # run a read workload
-        ops_without_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_without_mv',
-                                        test_name=test_name, keyspace_num=1,
-                                        debug_message='First read cassandra-stress command: {}'.format(base_cmd_r))
-
-        self.prepare_mv(on_populated=on_populated)
-
-        # If the MV was created on the empty base table, populate it before reads
-        if not on_populated:
-            self._workload(stress_cmd=base_cmd_w, stress_num=2, test_name=test_name, prefix='preload-', keyspace_num=1,
-                           debug_message='Prepare test before second cassandra-stress command: {}'.format(base_cmd_w),
-                           save_stats=False)
-
-        # run a read workload
-        ops_with_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_with_mv',
-                                     test_name=test_name, keyspace_num=1,
-                                     debug_message='Second read cassandra-stress command: {}'.format(base_cmd_r))
-
-        self.assert_mv_performance(ops_without_mv, ops_with_mv,
-                                   'Throughput of run with materialized view is more than {} times lower then '
-                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
-
-    def test_read(self):
-        """
-        Test steps:
-
-        1. Run a write workload as a preparation
-        2. Run a read workload
-        """
-
-        base_cmd_w = self.params.get('prepare_write_cmd')
-        base_cmd_r = self.params.get('stress_cmd_r')
-
-        self.create_test_stats(sub_type='write-prepare')
-        # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
-                                              stats_aggregate_cmds=False)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-        self.update_test_details()
-
-        # run a read workload
-        self.create_test_stats()
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
-        self.update_test_details(scylla_conf=True)
-        self.display_results(results, test_name='test_read')
-        self.check_regression()
-
-    def test_mixed_with_mv_populated(self):
-        self._mixed_with_mv(on_populated=True)
-
-    def test_mixed_with_mv_not_populated(self):
-        self._mixed_with_mv(on_populated=False)
-
-    def _mixed_with_mv(self, on_populated):
-        """
-        Test steps:
-
-        1. Run a write workload as a preparation
-        2. Run a mixed workload
-        """
-        test_name = 'test_mixed_with_mv_{}populated'.format('' if on_populated else 'not_')
-        base_cmd_p = self.params.get('prepare_write_cmd')
-        base_cmd_m = self.params.get('stress_cmd_m')
-
-        self.create_test_stats()
-        # run a write workload as a preparation
-        self._workload(stress_cmd=base_cmd_p, stress_num=2, test_name=test_name, keyspace_num=1, prefix='preload-',
-                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_p),
-                       save_stats=False)
-
-        # run a mixed workload without MV
-        ops_without_mv = self._workload(stress_cmd=base_cmd_m, stress_num=2, sub_type='mixed_without_mv',
-                                        test_name=test_name, keyspace_num=1,
-                                        debug_message='First mixed cassandra-stress command: {}'.format(base_cmd_m))
-
-        self.prepare_mv(on_populated=on_populated)
-
-        # run a mixed workload with MV
-        ops_with_mv = self._workload(stress_cmd=base_cmd_p, stress_num=2, sub_type='mixed_with_mv',
-                                     test_name=test_name, keyspace_num=1,
-                                     debug_message='Second start of mixed cassandra-stress command: {}'.format(
-                                            base_cmd_p))
-
-        self.assert_mv_performance(ops_without_mv, ops_with_mv,
-                                   'Throughput of stress run with materialized view is more than {} times lower then '
-                                   'throughput of stress run without materialized view'.format(
-                                       self.ops_threshold_prc / 100))
-
-    def test_mixed(self):
-        """
-        Test steps:
-
-        1. Run a write workload as a preparation
-        2. Run a mixed workload
-        """
-
-        base_cmd_w = self.params.get('prepare_write_cmd')
-        base_cmd_m = self.params.get('stress_cmd_m')
-
-        self.create_test_stats(sub_type='write-prepare')
-        # run a write workload as a preparation
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
-                                              stats_aggregate_cmds=False)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-        self.update_test_details()
-
-        # run a mixed workload
-        self.create_test_stats()
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
-        self.update_test_details(scylla_conf=True)
-        self.display_results(results, test_name='test_mixed')
-        self.check_regression()
 
     def preload_data(self):
         # if test require a pre-population of data
@@ -426,40 +208,133 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-    def test_latency(self):
+    def prepare_mv(self, on_populated=False):
+        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
+
+        ks_name = 'keyspace1'
+        base_table_name = 'standard1'
+        if not on_populated:
+            # Truncate base table before materialized view creation
+            self.log.debug('Truncate base table: {0}.{1}'.format(ks_name, base_table_name))
+            self.truncate_cf(ks_name, base_table_name, session)
+
+        # Create materialized view
+        view_name = base_table_name + '_mv'
+        self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
+        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
+                                      mv_columns=['"C0"', 'key'])
+
+        # Wait for the materialized view is built
+        self._wait_for_view(self.db_cluster, session, ks_name, view_name)
+
+    def _write_with_mv(self, on_populated):
         """
         Test steps:
 
-        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
-        with round_robin and list of stress_cmd - the data will load several times faster.
-        2. Run WRITE workload with gauss population.
+        1. Run a write workload
+        2. Create materialized view
+        3. Run a write workload
         """
-        # TO DO: add limit ops based on results.
-        self.preload_data()
-        self.wait_no_compactions_running()
-        self.run_read_workload()
-        self.wait_no_compactions_running()
-        self.run_write_workload()
-        self.wait_no_compactions_running()
-        self.run_mixed_workload()
+        test_name = 'test_write_with_mv_{}populated'.format('' if on_populated else 'not_')
+        base_cmd_w = self.params.get('stress_cmd_w')
 
-    def test_uniform_counter_update_bench(self):
+        # Run a write workload without MV
+        ops_without_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_without_mv',
+                                        test_name=test_name, keyspace_num=1,
+                                        debug_message='First write cassandra-stress command: {}'.format(base_cmd_w))
+
+        # Create MV
+        self.prepare_mv(on_populated=on_populated)
+
+        # Start cassandra-stress writes again now with MV
+        ops_with_mv = self._workload(stress_cmd=base_cmd_w, stress_num=2, sub_type='write_with_mv',
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second write cassandra-stress command: {}'.format(base_cmd_w))
+
+        self.assert_mv_performance(ops_without_mv, ops_with_mv,
+                                   'Throughput of run with materialized view is more than {} times lower then '
+                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
+
+    def _read_with_mv(self, on_populated):
         """
         Test steps:
 
-        1. Run workload: -workload uniform -mode counter_update -duration 30m
+        1. Run a write workload as a preparation
+        2. Run a read workload
+        3. Create MV
+        4. Run a read workload again
         """
-        base_cmd_r = ("scylla-bench -workload uniform -mode counter_update -duration 30m "
-                      "-partition-count 50000000 -clustering-row-count 1 -connection-count "
-                      "32 -concurrency 512 -replication-factor 3")
+        test_name = 'test_read_with_mv_{}populated'.format('' if on_populated else 'not_')
+        base_cmd_p = self.params.get('prepare_write_cmd')
+        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_r = self.params.get('stress_cmd_r')
 
         self.create_test_stats()
-        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r, stats_aggregate_cmds=False)
-        results = self.get_stress_results_bench(queue=stress_queue)
+        # prepare schema and data before read
+        self._workload(stress_cmd=base_cmd_p, stress_num=2, test_name=test_name, prefix='preload-', keyspace_num=1,
+                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_p),
+                       save_stats=False)
 
-        self.update_test_details(scylla_conf=True)
-        self.display_results(results, test_name='test_read_bench')
-        self.check_regression()
+        # run a read workload
+        ops_without_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_without_mv',
+                                        test_name=test_name, keyspace_num=1,
+                                        debug_message='First read cassandra-stress command: {}'.format(base_cmd_r))
+
+        self.prepare_mv(on_populated=on_populated)
+
+        # If the MV was created on the empty base table, populate it before reads
+        if not on_populated:
+            self._workload(stress_cmd=base_cmd_w, stress_num=2, test_name=test_name, prefix='preload-', keyspace_num=1,
+                           debug_message='Prepare test before second cassandra-stress command: {}'.format(base_cmd_w),
+                           save_stats=False)
+
+        # run a read workload
+        ops_with_mv = self._workload(stress_cmd=base_cmd_r, stress_num=2, sub_type='read_with_mv',
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second read cassandra-stress command: {}'.format(base_cmd_r))
+
+        self.assert_mv_performance(ops_without_mv, ops_with_mv,
+                                   'Throughput of run with materialized view is more than {} times lower then '
+                                   'throughput of run without materialized view'.format(self.ops_threshold_prc/100))
+
+    def _mixed_with_mv(self, on_populated):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a mixed workload
+        """
+        test_name = 'test_mixed_with_mv_{}populated'.format('' if on_populated else 'not_')
+        base_cmd_p = self.params.get('prepare_write_cmd')
+        base_cmd_m = self.params.get('stress_cmd_m')
+
+        self.create_test_stats()
+        # run a write workload as a preparation
+        self._workload(stress_cmd=base_cmd_p, stress_num=2, test_name=test_name, keyspace_num=1, prefix='preload-',
+                       debug_message='Prepare the test, run cassandra-stress command: {}'.format(base_cmd_p),
+                       save_stats=False)
+
+        # run a mixed workload without MV
+        ops_without_mv = self._workload(stress_cmd=base_cmd_m, stress_num=2, sub_type='mixed_without_mv',
+                                        test_name=test_name, keyspace_num=1,
+                                        debug_message='First mixed cassandra-stress command: {}'.format(base_cmd_m))
+
+        self.prepare_mv(on_populated=on_populated)
+
+        # run a mixed workload with MV
+        ops_with_mv = self._workload(stress_cmd=base_cmd_p, stress_num=2, sub_type='mixed_with_mv',
+                                     test_name=test_name, keyspace_num=1,
+                                     debug_message='Second start of mixed cassandra-stress command: {}'.format(
+                                            base_cmd_p))
+
+        self.assert_mv_performance(ops_without_mv, ops_with_mv,
+                                   'Throughput of stress run with materialized view is more than {} times lower then '
+                                   'throughput of stress run without materialized view'.format(
+                                       self.ops_threshold_prc / 100))
+
+    def assert_mv_performance(self, ops_without_mv, ops_with_mv, failure_message):
+        self.log.debug('Performance results. Ops without MV: {0}; Ops with MV: {1}'.format(ops_without_mv, ops_with_mv))
+        self.assertLessEqual(ops_without_mv, (ops_with_mv * self.ops_threshold_prc) / 100, failure_message)
 
     def _scylla_bench_prepare_table(self):
         node = self.db_cluster.nodes[0]
@@ -492,32 +367,97 @@ class PerformanceRegressionTest(ClusterTester):
                 AND speculative_retry = 'NONE';
         """)
 
-    def test_timeseries_bench(self):
+    # Base Tests
+    def test_write(self):
         """
-        Timeseries write/read workload
+        Test steps:
+
+        1. Run a write workload
         """
-        cmd_w = ("scylla-bench -workload=timeseries -mode=write -replication-factor=3 "
-                 "-partition-count=5000 -clustering-row-count=1000000 -clustering-row-size=200 "
-                 "-concurrency=48 -max-rate=150000 -rows-per-request=5000")
+        # run a write workload
+        base_cmd_w = self.params.get('stress_cmd_w')
+        self.create_test_stats()
+        # run a workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
+                                              stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
 
-        self.create_test_stats(sub_type='write')
-        self._scylla_bench_prepare_table()
-        self.run_stress_thread_bench(stress_cmd=cmd_w, stats_aggregate_cmds=False)
-        start_timestamp = int(time.time())
-        self.db_cluster.wait_total_space_used_per_node(700 * KB * KB * KB, 'scylla_bench.test')  # 700GB
-
-        cmd_r = ("scylla-bench -workload=timeseries -mode=read -partition-count=5000 -concurrency=1 "
-                 "-replication-factor=3 -write-rate=30 -clustering-row-count=1000000 -clustering-row-size=200 "
-                 "-rows-per-request=1000000 -no-lower-bound -start-timestamp=%s -duration=60m" % start_timestamp)
-
-        self.create_test_stats(sub_type='read')
-        stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r, stats_aggregate_cmds=False)
-        results = self.get_stress_results_bench(queue=stress_queue)
-        self.update_test_details()
-        self.display_results(results, test_name='test_timeseries_read_bench')
+        self.update_test_details(scylla_conf=True)
+        self.display_results(results, test_name='test_write')
         self.check_regression()
-        self.kill_stress_thread()
 
+    def test_read(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a read workload
+        """
+
+        base_cmd_w = self.params.get('prepare_write_cmd')
+        base_cmd_r = self.params.get('stress_cmd_r')
+
+        self.create_test_stats(sub_type='write-prepare')
+        # run a write workload
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
+                                              stats_aggregate_cmds=False)
+        self.get_stress_results(queue=stress_queue, store_results=False)
+        self.update_test_details()
+
+        # run a read workload
+        self.create_test_stats()
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.update_test_details(scylla_conf=True)
+        self.display_results(results, test_name='test_read')
+        self.check_regression()
+
+    def test_mixed(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a mixed workload
+        """
+
+        base_cmd_w = self.params.get('prepare_write_cmd')
+        base_cmd_m = self.params.get('stress_cmd_m')
+
+        self.create_test_stats(sub_type='write-prepare')
+        # run a write workload as a preparation
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
+                                              stats_aggregate_cmds=False)
+        self.get_stress_results(queue=stress_queue, store_results=False)
+        self.update_test_details()
+
+        # run a mixed workload
+        self.create_test_stats()
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
+
+        self.update_test_details(scylla_conf=True)
+        self.display_results(results, test_name='test_mixed')
+        self.check_regression()
+
+    def test_latency(self):
+        """
+        Test steps:
+
+        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
+        with round_robin and list of stress_cmd - the data will load several times faster.
+        2. Run WRITE workload with gauss population.
+        """
+        # TO DO: add limit ops based on results.
+        self.preload_data()
+        self.wait_no_compactions_running()
+        self.run_read_workload()
+        self.wait_no_compactions_running()
+        self.run_write_workload()
+        self.wait_no_compactions_running()
+        self.run_mixed_workload()
+
+    # MV Tests
     def test_mv_write(self):
         """
         Test steps:
@@ -592,6 +532,70 @@ class PerformanceRegressionTest(ClusterTester):
             run_workload(cmd_mv, cmd_mv_profile)
             drop_mv(get_mv_name(cmd_mv_profile))
             time.sleep(60)
+
+    def test_mv_write_populated(self):
+        self._write_with_mv(on_populated=True)
+
+    def test_mv_write_not_populated(self):
+        self._write_with_mv(on_populated=False)
+
+    def test_mv_read_populated(self):
+        self._read_with_mv(on_populated=True)
+
+    def test_mv_read_not_populated(self):
+        self._read_with_mv(on_populated=False)
+
+    def test_mixed_with_mv_populated(self):
+        self._mixed_with_mv(on_populated=True)
+
+    def test_mixed_with_mv_not_populated(self):
+        self._mixed_with_mv(on_populated=False)
+
+    # Counter Tests
+    def test_uniform_counter_update_bench(self):
+        """
+        Test steps:
+
+        1. Run workload: -workload uniform -mode counter_update -duration 30m
+        """
+        base_cmd_r = ("scylla-bench -workload uniform -mode counter_update -duration 30m "
+                      "-partition-count 50000000 -clustering-row-count 1 -connection-count "
+                      "32 -concurrency 512 -replication-factor 3")
+
+        self.create_test_stats()
+        stress_queue = self.run_stress_thread_bench(stress_cmd=base_cmd_r, stats_aggregate_cmds=False)
+        results = self.get_stress_results_bench(queue=stress_queue)
+
+        self.update_test_details(scylla_conf=True)
+        self.display_results(results, test_name='test_read_bench')
+        self.check_regression()
+
+    # Large Partition Tests
+    def test_timeseries_bench(self):
+        """
+        Timeseries write/read workload
+        """
+        cmd_w = ("scylla-bench -workload=timeseries -mode=write -replication-factor=3 "
+                 "-partition-count=5000 -clustering-row-count=1000000 -clustering-row-size=200 "
+                 "-concurrency=48 -max-rate=150000 -rows-per-request=5000")
+
+        self.create_test_stats(sub_type='write')
+        self._scylla_bench_prepare_table()
+        self.run_stress_thread_bench(stress_cmd=cmd_w, stats_aggregate_cmds=False)
+        start_timestamp = int(time.time())
+        self.db_cluster.wait_total_space_used_per_node(700 * KB * KB * KB, 'scylla_bench.test')  # 700GB
+
+        cmd_r = ("scylla-bench -workload=timeseries -mode=read -partition-count=5000 -concurrency=1 "
+                 "-replication-factor=3 -write-rate=30 -clustering-row-count=1000000 -clustering-row-size=200 "
+                 "-rows-per-request=1000000 -no-lower-bound -start-timestamp=%s -duration=60m" % start_timestamp)
+
+        self.create_test_stats(sub_type='read')
+        stress_queue = self.run_stress_thread_bench(stress_cmd=cmd_r, stats_aggregate_cmds=False)
+        results = self.get_stress_results_bench(queue=stress_queue)
+        self.update_test_details()
+        self.display_results(results, test_name='test_timeseries_read_bench')
+        self.check_regression()
+        self.kill_stress_thread()
 
 
 if __name__ == '__main__':
