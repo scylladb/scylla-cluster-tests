@@ -60,8 +60,8 @@
     <h2>{{ stat_name }}</h2>
     <table id="results_table">
         <tr>
+            <th>Current test result</th>
             <th>Version compared to</th>
-            <th>Version under test</th>
             <th>Best</th>
             <th>Diff best</th>
             <th>Commit</th>
@@ -69,8 +69,8 @@
         {% for cmp_res in res_list %}
         {% set stat=cmp_res.res.get(stat_name) %}
         <tr>
-            <td> <span class="fbold">{{ cmp_res.version_dst }}</span></td>
             <td>{{ stat.val }}</td>
+            <td> <span class="fbold">{{ cmp_res.version_dst }}</span></td>
             <td>{{ stat.best_val }}</td>
             <td>
                 {% with status = stat.status, percent = stat.percent,
