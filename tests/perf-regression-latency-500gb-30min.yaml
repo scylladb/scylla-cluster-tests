@@ -18,6 +18,7 @@ ip_ssh_connections: 'private'
 round_robin: 'true'
 instance_provision: 'spot_duration'
 experimental: 'true'
+append_scylla_args: '--blocked-reactor-notify-ms 4'
 
 # email definitions to send regression report
 send_email: true

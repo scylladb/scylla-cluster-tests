@@ -15,6 +15,8 @@ space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
 server_encrypt: 'true'
+append_scylla_args: '--blocked-reactor-notify-ms 500'
+
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'on_demand'
