@@ -377,6 +377,7 @@ class PerformanceRegressionTest(ClusterTester):
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
         self.create_test_stats()
+        self.run_fstrim_on_all_db_nodes()
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
                                               stats_aggregate_cmds=False)
@@ -398,6 +399,7 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_r = self.params.get('stress_cmd_r')
 
         self.create_test_stats(sub_type='write-prepare')
+        self.run_fstrim_on_all_db_nodes()
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
                                               stats_aggregate_cmds=False)
@@ -406,6 +408,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # run a read workload
         self.create_test_stats()
+        self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
@@ -425,6 +428,7 @@ class PerformanceRegressionTest(ClusterTester):
         base_cmd_m = self.params.get('stress_cmd_m')
 
         self.create_test_stats(sub_type='write-prepare')
+        self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
                                               stats_aggregate_cmds=False)
@@ -433,6 +437,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         # run a mixed workload
         self.create_test_stats()
+        self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
@@ -448,13 +453,16 @@ class PerformanceRegressionTest(ClusterTester):
         with round_robin and list of stress_cmd - the data will load several times faster.
         2. Run WRITE workload with gauss population.
         """
-        # TO DO: add limit ops based on results.
+        self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
         self.run_read_workload()
         self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
         self.run_write_workload()
         self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
         self.run_mixed_workload()
 
     # MV Tests
