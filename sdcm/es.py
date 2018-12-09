@@ -3,7 +3,7 @@ import yaml
 import logging
 import elasticsearch
 
-from sdcm.keystore import KeyStore
+from keystore import KeyStore
 
 logger = logging.getLogger(__name__)
 

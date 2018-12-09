@@ -30,7 +30,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from sdcm.keystore import KeyStore
+from keystore import KeyStore
 from . import cluster
 from . import nemesis
 from .cluster_libvirt import LoaderSetLibvirt
@@ -53,7 +53,7 @@ from .utils import get_data_dir_path, log_run_info, retrying
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
-from sdcm.db_stats import PrometheusDBStats
+from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
 
 
