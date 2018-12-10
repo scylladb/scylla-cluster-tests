@@ -1119,19 +1119,41 @@ client_encryption_options:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
-        # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
 
-        self.remoter.run('sudo yum install -y epel-release', retry=3)
+        if self.is_debian():
+            install_transport_https = dedent("""
+                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                sudo apt-get install apt-transport-https
+                        """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
+            install_open_jdk = dedent("""
+                            sudo add-apt-repository -y ppa:openjdk-r/ppa
+                            sudo apt install -t jessie-backports  openjdk-8-jre-headless ca-certificates-java sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
+                                    """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
+
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum install -y epel-release', retry=3)
+        else:
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
+
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
-        self.remoter.run('sudo yum install -y scylla-manager')
+
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum install -y scylla-manager')
+        else:
+            self.remoter.run('sudo apt-get update')
+            self.remoter.run('sudo apt-get install -y scylla-manager')
+
         if self.is_docker():
             try:
                 self.remoter.run('echo no| sudo scyllamgr_setup')
@@ -1144,14 +1166,13 @@ client_encryption_options:
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
-        """.format(**locals())) # generate ssh public key from private key.
+        """.format(**locals()))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
-
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
