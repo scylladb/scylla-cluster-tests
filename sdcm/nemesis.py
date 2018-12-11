@@ -129,7 +129,7 @@ class Nemesis(object):
             return result
         except process.CmdError, details:
             err = ("nodetool command '%s' failed on node %s: %s" %
-                   (cmd, self.target_node, details.result))
+                   (cmd, node, details.result))
             self.error_list.append(err)
             self.log.error(err)
             return None
