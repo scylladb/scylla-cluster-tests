@@ -479,6 +479,13 @@ class ScyllaManagerTool(ScyllaManagerBase):
         cluster_id = res.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
 
+    def upgrade(self, scylla_mgmt_upgrade_to_repo):
+        manager_from_version = self.version
+        logger.debug('Running Manager upgrade from: {} to version in repo: {}'.format(manager_from_version, scylla_mgmt_upgrade_to_repo))
+        self.manager_node.upgrade_mgmt(scylla_mgmt_repo=scylla_mgmt_upgrade_to_repo)
+        new_manager_version = self.version
+        logger.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
+        return new_manager_version
 
 class SCTool(object):
 
