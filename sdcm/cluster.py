@@ -1111,7 +1111,15 @@ client_encryption_options:
     def upgrade_mgmt(self, scylla_mgmt_repo):
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         self.log.debug('Upgrade scylla-manager via repo: {}'.format(scylla_mgmt_repo))
-        self.remoter.run('sudo yum update scylla-manager -y')
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum update scylla-manager -y')
+        else:
+            self.remoter.run('sudo apt-get update')
+            # Upgrade should update packages of:
+            # 1) scylla-manager
+            # 2) scylla-manager-client
+            # 3) scylla-manager-server
+            self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager*')
         time.sleep(3)
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
@@ -1128,11 +1136,15 @@ client_encryption_options:
             install_transport_https = dedent("""
                 if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
                 sudo apt-get install apt-transport-https
+                sudo apt-get update
+                sudo apt-get install gnupg-curl
+                sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
                         """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
             install_open_jdk = dedent("""
-                            sudo add-apt-repository -y ppa:openjdk-r/ppa
-                            sudo apt install -t jessie-backports  openjdk-8-jre-headless ca-certificates-java sudo update-java-alternatives -s java-1.8.0-openjdk-amd64
+                             sudo apt-get install -t jessie-backports ca-certificates-java -y
+                            sudo apt-get install -y openjdk-8-jre-headless
+                            sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
                                     """)
             self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
 
