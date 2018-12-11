@@ -98,11 +98,18 @@
         <li><a href={{ dashboard_master }}>Kibana</a></li>
         <li><a href="{{ job_url }}">Jenkins job</a></li>
         {% if grafana_snapshot %}
-        <li><a href={{ grafana_snapshot }}>Download Grafana Screenshot</a></li>
+        {% if grafana_snapshot[0] %}
+        <li><a href={{ grafana_snapshot[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+        {% endif %}
+        {% if grafana_snapshot[1] %}
+        <li><a href={{ grafana_snapshot[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+        {% endif %}
         {% endif %}
     </ul>
     {% if grafana_snapshot %}
     <h3>Grafana Screenshot:</h3>
-    <img src="{{ grafana_snapshot }}"  height="50%" width="50%">
+    {% for snapshot in grafana_snapshot %}
+    <img src="{{ snapshot }}"  height="50%" width="50%">
+    {% endfor %}
     {% endif %}
 {% endblock %}
