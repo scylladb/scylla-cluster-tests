@@ -222,7 +222,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return None
 
     def _get_grafana_snapshot(self, test_doc):
-        return test_doc['_source']['test_details'].get('grafana_snapshot')
+        grafana_snapshot = test_doc['_source']['test_details'].get('grafana_snapshot')
+        return grafana_snapshot if isinstance(grafana_snapshot, list) else [grafana_snapshot]
 
     def _get_setup_details(self, test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
