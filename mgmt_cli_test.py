@@ -135,7 +135,7 @@ class MgmtCliTest(ClusterTester):
         1) Run the repair test.
         2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_repo').
         """
-        upgrade_to_version = self.params.get('scylla_mgmt_upgrade_to_repo')
+        scylla_mgmt_upgrade_to_repo = self.params.get('scylla_mgmt_upgrade_to_repo')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
         selected_host = self._get_cluster_hosts_ip()[0]
@@ -148,9 +148,7 @@ class MgmtCliTest(ClusterTester):
         repair_task_list = mgr_cluster.repair_task_list
 
         manager_from_version = manager_tool.version
-        self.log.info('Running Manager upgrade from: {} to: {}'.format(manager_from_version, upgrade_to_version))
-        manager_node.upgrade_mgmt(scylla_mgmt_repo=upgrade_to_version)
-        self.log.info('The Manager version after upgrade is: {}'.format(manager_tool.version))
+        manager_tool.upgrade(scylla_mgmt_upgrade_to_repo=scylla_mgmt_upgrade_to_repo)
 
         assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after upgrade."
         # verify all repair tasks exist
