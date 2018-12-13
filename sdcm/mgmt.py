@@ -1,4 +1,6 @@
 # coding: utf-8
+from textwrap import dedent
+
 from avocado.utils import process
 import requests
 import logging
@@ -385,6 +387,13 @@ class MgrUtils(object):
             raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
 
 
+def get_scylla_manager_tool(manager_node):
+    if manager_node.is_rhel_like():
+        return ScyllaManagerToolRedhatLike(manager_node=manager_node)
+    else:
+        return ScyllaManagerToolNonRedhat(manager_node=manager_node)
+
+
 class ScyllaManagerTool(ScyllaManagerBase):
     """
     Provides communication with scylla-manager, operating sctool commands and ssh-scripts.
@@ -486,6 +495,69 @@ class ScyllaManagerTool(ScyllaManagerBase):
         new_manager_version = self.version
         logger.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
         return new_manager_version
+
+    def rollback_upgrade(self, manager_node):
+        raise NotImplementedError
+
+class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
+
+    def __init__(self, manager_node):
+        ScyllaManagerTool.__init__(self, manager_node=manager_node)
+        self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+
+    def rollback_upgrade(self, scylla_mgmt_repo):
+
+        remove_post_upgrade_repo = dedent("""
+                        sudo systemctl stop scylla-manager
+                        cqlsh -e 'DROP KEYSPACE scylla_manager'
+                        sudo rm -rf {}
+                        sudo yum clean all
+                        sudo rm -rf /var/cache/yum
+                    """.format(self.manager_repo_path))
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
+
+        # Downgrade to pre-upgrade scylla-manager repository
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        downgrade_to_pre_upgrade_repo = dedent("""
+                                sudo yum downgrade scylla-manager* -y
+                                sleep 2
+                                sudo systemctl daemon-reload
+                                sudo systemctl restart scylla-manager
+                                sleep 3
+                            """)
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % downgrade_to_pre_upgrade_repo)
+
+        # Rollback the Scylla Manager database???
+
+
+
+class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
+    def __init__(self, manager_node):
+        ScyllaManagerTool.__init__(self, manager_node=manager_node)
+        self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+
+    def rollback_upgrade(self, scylla_mgmt_repo):
+
+        remove_post_upgrade_repo = dedent("""
+                        sudo systemctl stop scylla-manager
+                        cqlsh -e 'DROP KEYSPACE scylla_manager'
+                        sudo rm -rf {}
+                        sudo apt-get update
+                    """.format(self.manager_repo_path))
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
+
+        # Downgrade to pre-upgrade scylla-manager repository
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        downgrade_to_pre_upgrade_repo = dedent("""
+                                sudo apt-get install scylla-manager=<package-version-number -y
+                                sudo yum downgrade scylla-manager* -y
+                                sleep 2
+                                sudo systemctl restart scylla-manager
+                            """)
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % downgrade_to_pre_upgrade_repo)
+
+        # Rollback the Scylla Manager database???
+
 
 class SCTool(object):
 
