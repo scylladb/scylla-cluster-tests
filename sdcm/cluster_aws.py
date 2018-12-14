@@ -347,6 +347,7 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
+        self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
