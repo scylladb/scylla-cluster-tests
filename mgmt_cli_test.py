@@ -167,7 +167,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         manager_from_version = manager_tool.version
         manager_tool.rollback_upgrade(scylla_mgmt_repo=scylla_mgmt_repo)
-        assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after downgrade."
+        assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
 
 
 if __name__ == '__main__':

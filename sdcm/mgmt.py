@@ -507,6 +507,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 
     def rollback_upgrade(self, scylla_mgmt_repo):
 
+        manager_from_version = self.version
         remove_post_upgrade_repo = dedent("""
                         sudo systemctl stop scylla-manager
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
@@ -518,6 +519,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 
         # Downgrade to pre-upgrade scylla-manager repository
         self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+
         downgrade_to_pre_upgrade_repo = dedent("""
                                 sudo yum downgrade scylla-manager* -y
                                 sleep 2
@@ -537,7 +539,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
 
     def rollback_upgrade(self, scylla_mgmt_repo):
-
+        manager_from_version = self.version[0]
         remove_post_upgrade_repo = dedent("""
                         sudo systemctl stop scylla-manager
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
@@ -548,9 +550,13 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
 
         # Downgrade to pre-upgrade scylla-manager repository
         self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
+        rollback_to_version = res.stdout.split()[1]
+        logger.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
         downgrade_to_pre_upgrade_repo = dedent("""
-                                sudo apt-get install scylla-manager=<package-version-number -y
-                                sudo yum downgrade scylla-manager* -y
+                                sudo apt-get remove scylla-manager* -y
+                                sleep 2
+                                sudo apt-get install scylla-manager* -y
                                 sleep 2
                                 sudo systemctl restart scylla-manager
                             """)
