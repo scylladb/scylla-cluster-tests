@@ -541,24 +541,33 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
     def rollback_upgrade(self, scylla_mgmt_repo):
         manager_from_version = self.version[0]
         remove_post_upgrade_repo = dedent("""
-                        sudo systemctl stop scylla-manager
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
+                        sudo systemctl stop scylla-manager
+                        sudo systemctl stop scylla-server.service
+                        sudo apt-get remove scylla-manager -y
+                        sudo apt-get remove scylla-manager-server -y
+                        sudo apt-get remove scylla-manager-client -y
                         sudo rm -rf {}
+                        sudo apt-get clean
                         sudo apt-get update
-                    """.format(self.manager_repo_path))
+                    """.format(self.manager_repo_path)) # +" /var/lib/scylla-manager/*"))
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
 
         # Downgrade to pre-upgrade scylla-manager repository
         self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        res = self.manager_node.remoter.run('sudo apt-get update')
         res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
         rollback_to_version = res.stdout.split()[1]
         logger.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
+        # self.manager_node.install_mgmt(scylla_mgmt_repo=scylla_mgmt_repo)
         downgrade_to_pre_upgrade_repo = dedent("""
-                                sudo apt-get remove scylla-manager* -y
-                                sleep 2
-                                sudo apt-get install scylla-manager* -y
-                                sleep 2
-                                sudo systemctl restart scylla-manager
+                                    
+                                sudo apt-get install scylla-manager -y
+                                sudo systemctl unmask scylla-manager.service
+                                sudo systemctl enable scylla-manager
+                                echo yes| sudo scyllamgr_setup
+                                sudo systemctl restart scylla-manager.service
+                                sleep 25
                             """)
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % downgrade_to_pre_upgrade_repo)
 

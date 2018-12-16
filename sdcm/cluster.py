@@ -1023,6 +1023,8 @@ client_encryption_options:
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        if not self.is_rhel_like():
+            self.remoter.run('sudo apt-get update')
 
     def clean_scylla(self):
         """
