@@ -18,6 +18,10 @@ nemesis_during_prepare: 'false'
 instance_provision: 'spot_low_price'
 append_scylla_args: '--blocked-reactor-notify-ms 1000'
 
+use_mgmt: true
+mgmt_port: 10090
+scylla_repo_m: SCYLLA_ENTERPRISE_REPO
+scylla_mgmt_repo: SCYLLA_MGR_REPO
 
 backends: !mux
     gce: !mux
@@ -51,7 +55,7 @@ backends: !mux
             subnet_id: 'subnet-c327759a'
             ami_id_db_scylla: 'AMI_ID'
             ami_id_loader: 'AMI_ID'
-            ami_id_monitor: 'AMI_ID'
+            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
             aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
