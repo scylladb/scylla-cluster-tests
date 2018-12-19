@@ -159,11 +159,21 @@ def register_cleanup(cleanup='destroy'):
 
 
 class Setup(object):
+
+    KEEP_ALIVE = False
+
     REUSE_CLUSTER = False
 
     @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
+
+    @classmethod
+    def keep_cluster(cls, val='destroy'):
+        if val in 'keep':
+            cls.KEEP_ALIVE = True
+        else:
+            cls.KEEP_ALIVE = False
 
 
 class NodeError(Exception):

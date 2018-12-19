@@ -156,12 +156,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.set_duration(self._duration)
 
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
+        cluster.Setup.keep_cluster(self._failure_post_behavior)
 
         # for saving test details in DB
-        self.create_stats = self.params.get(key='store_results_in_elasticsearch',default=True)
+        self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
-
 
     @clean_resources_on_exception
     def setUp(self):
