@@ -180,6 +180,24 @@ class Nemesis(object):
         self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
 
+    def disrupt_multiple_hard_reboot_node(self):
+
+        num_of_reboots = random.randint(2, 10)
+        for i in range(num_of_reboots):
+            self._set_current_disruption('MultipleHardRebootNode %s' % self.target_node)
+            self.log.debug("Rebooting {} out of {} times".format(i+1,num_of_reboots))
+            self.target_node.reboot(hard=True)
+            if random.choice([True,False]):
+                self.log.info('Waiting scylla services to start after node reboot')
+                self.target_node.wait_db_up()
+            else:
+                self.log.info('Waiting JMX services to start after node reboot')
+                self.target_node.wait_jmx_up()
+            sleep_time = random.randint(0,100)
+            self.log.info('Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
+            time.sleep(sleep_time)
+
+
     def disrupt_soft_reboot_node(self):
         self._set_current_disruption('SoftRebootNode %s' % self.target_node)
         self.target_node.reboot(hard=False)
@@ -810,6 +828,12 @@ class RestartThenRepairNodeMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_then_repair_node()
+
+class MultipleHardRebootNodeMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_multiple_hard_reboot_node()
 
 class HardRebootNodeMonkey(Nemesis):
 
