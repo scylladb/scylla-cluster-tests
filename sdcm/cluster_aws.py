@@ -275,13 +275,16 @@ class AWSNode(cluster.BaseNode):
             tags_list = [{'Key': 'Name', 'Value': name},
                          {'Key': 'workspace', 'Value': cluster.WORKSPACE},
                          {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
-            if cluster.TEST_DURATION >= 24 * 60:
+            if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
                 self.log.info('Test duration set to %s. '
+                              'Keep cluster on failure %s. '
                               'Tagging node with {"keep": "alive"}',
-                              cluster.TEST_DURATION)
+                              cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
                 tags_list.append({'Key': 'keep', 'Value': 'alive'})
+
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
+
 
     @property
     def public_ip_address(self):
