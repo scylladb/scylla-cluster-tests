@@ -49,7 +49,8 @@ backends: !mux
             ami_id_db_scylla: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
             ami_id_monitor: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
             ami_id_loader: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
-            aws_root_disk_size_monitor: 10  # GB
+            aws_root_disk_size_monitor: 10  # GB, remove this field if default disk size should be used
+            aws_root_disk_name_monitor: "/dev/sda1"  # use "/dev/xvda" for Debian 8 image
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
