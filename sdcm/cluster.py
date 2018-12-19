@@ -1098,7 +1098,9 @@ client_encryption_options:
         Setup scylla
         :param disks: list of disk names
         """
-        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(','.join(disks)))
+        result = self.remoter.run('ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        devname = result.stdout.strip()
+        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
