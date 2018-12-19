@@ -2,7 +2,7 @@
 stevedore==1.11.0
 PyYAML==3.11
 pystache==0.5.4
-libvirt-python==4.1.0
+libvirt-python==4.9.0
 fabric==1.12.0
 # avocado-framework
 avocado-framework==36.4
