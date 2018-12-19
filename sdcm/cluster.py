@@ -50,7 +50,6 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                            "Encrypted": False}}]
 
 CREDENTIALS = []
-EC2_INSTANCES = []
 OPENSTACK_INSTANCES = []
 OPENSTACK_SERVICE = None
 LIBVIRT_DOMAINS = []
@@ -105,18 +104,11 @@ def remove_if_exists(file_path):
 
 
 def cleanup_instances(behavior='destroy'):
-    global EC2_INSTANCES
     global OPENSTACK_INSTANCES
     global OPENSTACK_SERVICE
     global CREDENTIALS
     global LIBVIRT_DOMAINS
     global LIBVIRT_IMAGES
-
-    for ec2_instance in EC2_INSTANCES:
-        if behavior == 'destroy':
-            ec2_instance.terminate()
-        elif behavior == 'stop':
-            ec2_instance.stop()
 
     for openstack_instance in OPENSTACK_INSTANCES:
         if behavior == 'destroy':
