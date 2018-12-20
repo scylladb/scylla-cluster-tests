@@ -78,7 +78,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         #           }
         # }
         allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
-        metrics = ("aio", "frag/s", "cpu", "time (s)")
+        higher_better = ('frag/s',)
+        lower_better = ('aio',)
+        metrics = higher_better + lower_better
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
@@ -90,29 +92,52 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
 
+            def get_best_result_for_metrica():
+
+                if metrica in higher_better:
+                    best_result = max(list_of_results_from_db, key=get_metrica_val)
+                elif metrica in lower_better:
+                    best_result = min(list_of_results_from_db, key=get_metrica_val)
+
+                return best_result
+
+            def get_diffs():
+                if metrica in higher_better:
+                    diff_best = ((best_result_val - cur_val) / cur_val) * 100 if cur_val > 0 else cur_val * 100
+                    diff_last = ((last_val - cur_val) / cur_val) * 100 if last_val > 0 else cur_val * 100
+                elif metrica in lower_better:
+                    diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if cur_val > 0 else cur_val * 100
+                    diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else last_val * 100
+                return (diff_last, diff_best)
+
             if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
+            cur_val = float(current_result["results"]["stats"][metrica])
+
             last_val = get_metrica_val(list_of_results_from_db[last_idx])
             last_commit = get_commit_id(list_of_results_from_db[last_idx])
-            cur_val = float(current_result["results"]["stats"][metrica])
-            min_result = min(list_of_results_from_db, key=get_metrica_val)
-            min_result_val = get_metrica_val(min_result)
-            min_result_commit = get_commit_id(min_result)
-            diff_last = ((cur_val - last_val)/last_val)*100 if last_val > 0 else last_val * 100
-            diff_best = ((cur_val - min_result_val)/min_result_val)*100 if min_result_val > 0 else min_result_val * 100
+
+            best_result = get_best_result_for_metrica()
+            best_result_val = get_metrica_val(best_result)
+            best_result_commit = get_commit_id(best_result)
+
+            diff_last, diff_best = get_diffs()
+
             stats = {
                 "Current": cur_val,
                 "Last (commit id)": (last_val, last_commit),
-                "Best (commit id)": (min_result_val, min_result_commit),
+                "Best (commit id)": (best_result_val, best_result_commit),
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
                 "has_regression": False,
             }
-            if diff_last > 5 or diff_best > 5:
+
+            if (diff_last > 5 or diff_best > 5):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
+
             report_results[test_type][metrica] = stats
 
         for test_type, current_result in current_results.iteritems():
