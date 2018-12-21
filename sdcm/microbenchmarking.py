@@ -50,6 +50,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.results.stats.cpu",
             "hits.hits._source.results.stats.time (s)",
             "hits.hits._source.results.stats.frag/s",
+            "hits.hits._source.results.stats.mad f/s",
+            "hits.hits._source.results.stats.max f/s",
+            "hits.hits._source.results.stats.min f/s",
             "hits.hits._source.versions",
         )
 
@@ -57,7 +60,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         cur_version = cur_version_info["version"]
         tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                          q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
-                                                                                                      cur_version[:3]))
+                                                                                                     cur_version[:3]))
         assert tests_filtered, "No results from DB"
         results = tests_filtered["hits"]["hits"]
         sorted_by_type = defaultdict(list)
@@ -80,14 +83,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
         higher_better = ('frag/s',)
         lower_better = ('aio',)
-        metrics = higher_better + lower_better
+        not_regression = ('mad f/s', 'max f/s', 'min f/s')
+        metrics = higher_better + lower_better + not_regression
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
                                                                                   self._run_date_pattern))
 
             def get_metrica_val(x):
-                return float(x["_source"]["results"]["stats"][metrica])
+                return float(x["_source"]["results"]["stats"].get(metrica, 0))
 
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
@@ -98,23 +102,33 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     best_result = max(list_of_results_from_db, key=get_metrica_val)
                 elif metrica in lower_better:
                     best_result = min(list_of_results_from_db, key=get_metrica_val)
-
+                else:
+                    best_result = {
+                        "_source": {
+                            "versions": {"scylla-server": {"commit_id": "N/A"}},
+                            "results": {"stats": {}}
+                        }
+                    }
                 return best_result
 
             def get_diffs():
                 if metrica in higher_better:
                     diff_best = ((best_result_val - cur_val) / cur_val) * 100 if cur_val > 0 else cur_val * 100
-                    diff_last = ((last_val - cur_val) / cur_val) * 100 if last_val > 0 else cur_val * 100
+                    diff_last = ((last_val - cur_val) / cur_val) * 100 if cur_val > 0 else cur_val * 100
                 elif metrica in lower_better:
-                    diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if cur_val > 0 else cur_val * 100
+                    diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else best_result_val * 100
                     diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else last_val * 100
+                else:
+                    diff_best = 0
+                    diff_last = 0
+
                 return (diff_last, diff_best)
 
             if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
-            cur_val = float(current_result["results"]["stats"][metrica])
+            cur_val = float(current_result["results"]["stats"].get(metrica, 0))
 
             last_val = get_metrica_val(list_of_results_from_db[last_idx])
             last_commit = get_commit_id(list_of_results_from_db[last_idx])
