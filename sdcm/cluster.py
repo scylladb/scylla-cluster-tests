@@ -2448,7 +2448,7 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
-        else:
+        elif node.is_debian8():
             prereqs_script = dedent("""
                 curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
@@ -2459,6 +2459,8 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
+        else:
+            raise ValueError('Unsupported Distro found: {}'.format(node.distro))
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
