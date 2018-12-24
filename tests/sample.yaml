@@ -19,8 +19,6 @@ space_node_threshold: 167000
 store_results_in_elasticsearch: False
 # if enabling sst3 feature during upgrade test
 test_sst3: False
-# user_agent that is used for downloading files from s3
-#user_agent:
 
 hinted_handoff_enabled: true
 
