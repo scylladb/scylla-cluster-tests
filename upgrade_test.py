@@ -260,6 +260,14 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Re-Populate DB with many types of tables and data')
         self.fill_db_data()
 
+        ### sst3 workload (20m): prepare write
+        self.log.info('Starting c-s sst3 workload for 20m to prepare data')
+        stress_cmd_sst3_prepare = self.params.get('stress_cmd_sst3_prepare')
+        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_prepare, profile='data_dir/sst3_schema.yaml')
+
+        # wait for the 20m sst3 workload to finish
+        self.verify_stress_thread(sst3_stress_queue)
+
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
@@ -338,6 +346,30 @@ class UpgradeTest(FillDatabaseData):
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
+
+        ### sst3 workload: verify data by simple read cl=ALL
+        self.log.info('Starting c-s sst3 workload to verify data by simple read')
+        stress_cmd_sst3_verify_read = self.params.get('stress_cmd_sst3_verify_read')
+        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_read, profile='data_dir/sst3_schema.yaml')
+
+        # wait for the read sst3 workload to finish
+        self.verify_stress_thread(sst3_stress_queue)
+
+        ### sst3 workload: verify data by multiple ops
+        self.log.info('Starting c-s sst3 workload to verify data by multiple ops')
+        stress_cmd_sst3_verify_more = self.params.get('stress_cmd_sst3_verify_more')
+        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_more, profile='data_dir/sst3_schema.yaml')
+
+        # wait for the sst3 workload to finish
+        self.verify_stress_thread(sst3_stress_queue)
+
+        ### sst3 workload: verify data by delete 1/10 data
+        self.log.info('Starting c-s sst3 workload to verify data by delete')
+        stress_cmd_sst3_verify_delete = self.params.get('stress_cmd_sst3_verify_delete')
+        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_delete, profile='data_dir/sst3_schema.yaml')
+
+        # wait for the sst3 workload to finish
+        self.verify_stress_thread(sst3_stress_queue)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
