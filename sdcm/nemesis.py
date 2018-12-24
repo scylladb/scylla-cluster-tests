@@ -28,6 +28,7 @@ from avocado.utils import process
 from sdcm.cluster import SCYLLA_YAML_PATH
 from .utils import get_data_dir_path
 from .log import SDCMAdapter
+from .keystore import KeyStore
 from . import prometheus
 from . import mgmt
 from avocado.utils import wait
@@ -325,9 +326,11 @@ class Nemesis(object):
             sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
             sstable_md5 = 'f641f561067dd612ff95f2b89bd12530'
         if not skip_download:
+            ks = KeyStore()
+            creds = ks.get_scylladb_upload_credentials()
             remote_get_file(node.remoter, sstable_url, sstable_file,
                             hash_expected=sstable_md5, retries=2,
-                            user_agent=self.cluster.params.get('user_agent'))
+                            user_agent=creds['user_agent'])
 
         self.log.debug('Make sure keyspace1.standard1 exists')
         result = self._run_nodetool('nodetool --host localhost cfstats keyspace1.standard1',
