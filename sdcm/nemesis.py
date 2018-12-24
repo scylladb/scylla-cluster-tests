@@ -197,6 +197,19 @@ class Nemesis(object):
             self.log.info('Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
             time.sleep(sleep_time)
 
+    def disrupt_invoke_second_rebuild(self):
+
+        self._set_current_disruption('InvokeSecondRebuild %s' % self.target_node)
+        self.log.info("First, corrupt DB data of node: {}".format(self.target_node))
+        self._destroy_data()
+
+        def _invoke_rebuild(self):
+            rebuild_cmd = 'nodetool -h localhost rebuild &>/dev/null &'
+            result = self._run_nodetool(rebuild_cmd, self.target_node)
+
+        for i in range(1,6):
+            self.log.info("Starting rebuild {}/5 on node: {}".format(i, self.target_node))
+            _invoke_rebuild(self)
 
     def disrupt_soft_reboot_node(self):
         self._set_current_disruption('SoftRebootNode %s' % self.target_node)
@@ -835,6 +848,13 @@ class MultipleHardRebootNodeMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_multiple_hard_reboot_node()
 
+class InvokeSecondRebuildMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_invoke_second_rebuild()
+
+# disrupt_invoke_second_rebuild
 class HardRebootNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
