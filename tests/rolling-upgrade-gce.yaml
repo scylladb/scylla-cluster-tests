@@ -10,6 +10,10 @@ prepare_write_stress: cassandra-stress write no-warmup cl=QUORUM n=10000000 -sch
 stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3) compression=SnappyCompressor' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=1000 -pop seq=1..10000000 -log interval=5
 stress_cmd_read_clall: cassandra-stress read no-warmup cl=ALL n=10000000 -schema 'replication(factor=3) compression=DeflateCompressor' -port jmx=6868 -mode cql3 native compression=none -rate threads=1000 -pop seq=1..10000000 -log interval=5
 stress_cmd_read_20m: cassandra-stress read no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_sst3_prepare: cassandra-stress user no-warmup profile=/tmp/sst3_schema.yaml  ops'(insert=1)' cl=QUORUM n=10000000 -rate threads=1000 -pop seq=1..10000000
+stress_cmd_sst3_verify_read: cassandra-stress user no-warmup profile=/tmp/sst3_schema.yaml  ops'(read1=1)' cl=ALL n=10000000 -rate threads=1000 -pop seq=1..10000000
+stress_cmd_sst3_verify_more: cassandra-stress user no-warmup profile=/tmp/sst3_schema.yaml  ops'(read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1,alter_table=1)' cl=ALL n=10000000 -rate threads=200 -pop seq=1..10000000
+stress_cmd_sst3_verify_delete: cassandra-stress user no-warmup profile=/tmp/sst3_schema.yaml  ops'(delete_row=1)' cl=ALL n=1000000 -rate threads=200 -pop seq=1..1000000
 
 user_prefix: 'rolling-upgrade-VERSION'
 failure_post_behavior: destroy
