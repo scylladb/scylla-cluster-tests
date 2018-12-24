@@ -252,6 +252,11 @@ class UpgradeTest(FillDatabaseData):
         well, upgrade all nodes to new version in the end.
         """
 
+        self.log.info('Populate DB with many types of tables and data')
+        self.fill_db_data()
+        self.log.info('Run some Queries to verify data BEFORE UPGRADE')
+        self.verify_db_data()
+
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
@@ -327,6 +332,10 @@ class UpgradeTest(FillDatabaseData):
 
         # wait for the 20m read workload to finish
         self.verify_stress_thread(read_20m_stress_queue)
+
+        self.log.info('Run some Queries to verify data AFTER UPGRADE')
+        self.verify_db_data()
+
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
 
