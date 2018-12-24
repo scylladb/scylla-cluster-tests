@@ -21,6 +21,9 @@ class KeyStore(object):
     def get_gcp_credentials(self):
         return self._get_json("gcp.json")
 
+    def get_scylladb_upload_credentials(self):
+        return self._get_json("scylladb_upload.json")
+
     def get_qa_ssh_keys(self):
         # TODO
         pass
