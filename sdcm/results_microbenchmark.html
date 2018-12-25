@@ -31,7 +31,15 @@
         <tr>
             <th>Stat</th>
             {% for stat in stats_names %}
-            <th>{{ stat }}</th>
+                {% if stat == "Best, commit, date" or stat == "Last, commit, date" %}
+                    {% set stat_header = stat.split(',') %}
+                    <th>
+                        <div style='text-align: center'>{{ stat_header[0] }}</div>
+                        <div style='text-align: center'>{{ '(#%s, %s)' % (stat_header[1].strip(), stat_header[2].strip()) }}</div>
+                    </th>
+                {% else %}
+                    <th>{{ stat }}</th>
+                {% endif %}
             {% endfor %}
         </tr>
         {% for metrica in metrics %}
@@ -41,24 +49,42 @@
                 <td>{{ metrica }}</td>
                 {% for stat in stats_names %}
                     {% set cur_stat = stats.get(stat) %}
-                    <td>
-                        {% if ((stat == "Current") and stats.get("Diff best [%]") < 0) or (stat.startswith("Diff") and cur_stat < 0) %}
-                            <span class="notice green fbold">
-                        {% elif stat.startswith("Diff") and cur_stat > 10 %}
-                            <span class="notice red fbold">
-                        {% elif stat.startswith("Diff") and cur_stat > 5 %}
-                            <span class="orange fbold">
+                    {% if stat == 'Stats' %}
+                        <td style='padding:0px'>
+                    {% else %}
+                        <td>
+                    {% endif %}
+                        {% if stat == 'Stats' %}
+                            {% if cur_stat %}
+                                    {% for submetrica, value in stats.get(stat).iteritems() %}
+                                        <div class="divRow">
+                                            <div class="divCellLeft">{{ submetrica[:3] }}</div>
+                                            <div class="divCellRight">{{ value }}</div>
+                                        </div>
+                                    {% endfor %}
+                            {% else %}
+                                <div style='text-align: center; width: 100%'>-</div>
+                            {% endif %}
                         {% else %}
-                            <span>
+                            {% if (stat.startswith("Diff") and cur_stat > 0) %}
+                                <span class="notice green fbold">
+                            {% elif stat.startswith("Diff") and cur_stat < -10 %}
+                                <span class="notice red fbold">
+                            {% elif stat.startswith("Diff") and cur_stat < -5 %}
+                                <span class="orange fbold">
+                            {% else %}
+                                <span>
+                            {% endif %}
+                            {% if stat == "Best, commit, date" or stat == "Last, commit, date" %}
+                                <div style='text-align: center'>{{ '%g' % cur_stat[0] }}</div>
+                                <div style='text-align: center'>{{ '(#%s, %s)' % (cur_stat[1], cur_stat[2]) }}</div>
+                            {% elif stat.startswith("Diff") %}
+                                {{ '%.1f' % cur_stat }}
+                            {% else %}
+                                {{ '%g' % cur_stat }}
+                            {% endif %}
+                                </span>
                         {% endif %}
-                        {% if stat == "Best (commit id)" or stat == "Last (commit id)" %}
-                            {{ '%g (%s)' % (cur_stat) }}
-                        {% elif stat.startswith("Diff") %}
-                            {{ '%.1f' % cur_stat }}
-                        {% else %}
-                            {{ '%g' % cur_stat }}
-                        {% endif %}
-                            </span>
                     </td>
                 {% endfor %}
             </tr>
