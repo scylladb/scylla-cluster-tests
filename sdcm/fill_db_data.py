@@ -415,20 +415,22 @@ class FillDatabaseData(ClusterTester):
         # select_key_in_test: Query for KEY IN (...)
         {
             'create_tables': ["""CREATE TABLE select_key_in_test (
-                                  userid uuid PRIMARY KEY,
+                                  userid uuid,
                                   firstname text,
                                   lastname text,
-                                  age int);"""],
+                                  age int,
+                                  PRIMARY KEY(userid, age));"""],
             'truncates': ['TRUNCATE select_key_in_test'],
             'inserts': [
                 "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
                 "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, 'Samwise', 'Gamgee', 33)",
             ],
             'queries': [
-                "SELECT firstname, lastname FROM select_key_in_test WHERE userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479)"],
+                "SELECT firstname, lastname FROM select_key_in_test WHERE userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479) order by age"],
             'results': [
                 [['Frodo', 'Baggins'], ['Samwise', 'Gamgee']]
             ],
+            'disable_paging': True,
             'min_version': '',
             'max_version': '',
             'skip': ''},
