@@ -57,7 +57,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         cur_version = cur_version_info["version"]
         tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                          q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
-                                                                                                      cur_version[:3]))
+                                                                                                     cur_version[:3]))
         assert tests_filtered, "No results from DB"
         results = tests_filtered["hits"]["hits"]
         sorted_by_type = defaultdict(list)
@@ -75,11 +75,20 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         #               "Diff last [%]":
         #               "Best":
         #               "Diff best [%]":
-        #           }
+        #           },
+        #           "frag/s":{
+        #               "Current":
+        #               "Stats": { submetrica: }
+        #               "Last":
+        #               "Diff last [%]":
+        #               "Best":
+        #               "Diff best [%]":
+        #           },
         # }
-        allowed_stats = ("Current", "Last (commit id)", "Diff last [%]", "Best (commit id)", "Diff best [%]")
+        allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
         higher_better = ('frag/s',)
         lower_better = ('aio',)
+        submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
         metrics = higher_better + lower_better
 
         def set_results_for(metrica):
@@ -92,6 +101,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
 
+            def get_commit_date(x):
+                return datetime.datetime.strptime(x["_source"]['versions']['scylla-server']['date'],
+                                                  "%Y%m%d").date()
+
             def get_best_result_for_metrica():
 
                 if metrica in higher_better:
@@ -102,12 +115,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 return best_result
 
             def get_diffs():
+                diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else cur_val * 100
+                diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else cur_val * 100
+
                 if metrica in higher_better:
-                    diff_best = ((best_result_val - cur_val) / cur_val) * 100 if cur_val > 0 else cur_val * 100
-                    diff_last = ((last_val - cur_val) / cur_val) * 100 if cur_val > 0 else cur_val * 100
-                elif metrica in lower_better:
-                    diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else best_result_val * 100
-                    diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else last_val * 100
+                    diff_best = -diff_best
+                    diff_last = -diff_last
+
+                diff_last = -diff_last if diff_last != 0 else 0
+                diff_best = -diff_best if diff_best != 0 else 0
                 return (diff_last, diff_best)
 
             if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
@@ -118,27 +134,35 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
             last_val = get_metrica_val(list_of_results_from_db[last_idx])
             last_commit = get_commit_id(list_of_results_from_db[last_idx])
+            last_commit_date = get_commit_date(list_of_results_from_db[last_idx])
 
             best_result = get_best_result_for_metrica()
             best_result_val = get_metrica_val(best_result)
             best_result_commit = get_commit_id(best_result)
+            best_commit_date = get_commit_date(best_result)
 
             diff_last, diff_best = get_diffs()
 
             stats = {
                 "Current": cur_val,
-                "Last (commit id)": (last_val, last_commit),
-                "Best (commit id)": (best_result_val, best_result_commit),
+                "Last, commit, date": (last_val, last_commit, last_commit_date),
+                "Best, commit, date": (best_result_val, best_result_commit, best_commit_date),
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
                 "has_regression": False,
             }
 
-            if (diff_last > 5 or diff_best > 5):
+            if (diff_last < -5 or diff_best < -5):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
 
             report_results[test_type][metrica] = stats
+
+        def set_results_for_sub(metrica):
+            report_results[test_type][metrica].update({'Stats': {}})
+            for submetrica in submetrics.get(metrica):
+                submetrica_cur_val = float(current_result["results"]["stats"][submetrica])
+                report_results[test_type][metrica]['Stats'].update({submetrica: submetrica_cur_val})
 
         for test_type, current_result in current_results.iteritems():
             list_of_results_from_db = sorted_by_type[test_type]
@@ -148,6 +172,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             for metrica in metrics:
                 self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
                 set_results_for(metrica)
+                if metrica in submetrics.keys():
+                    set_results_for_sub(metrica)
 
         subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
         for_render = {
