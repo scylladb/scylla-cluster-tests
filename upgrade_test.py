@@ -256,6 +256,9 @@ class UpgradeTest(FillDatabaseData):
         self.fill_db_data()
         self.log.info('Run some Queries to verify data BEFORE UPGRADE')
         self.verify_db_data()
+        self.clean_db_data()
+        self.log.info('Re-Populate DB with many types of tables and data')
+        self.fill_db_data()
 
         ### sst3 workload (20m): prepare write
         self.log.info('Starting c-s sst3 workload for 20m to prepare data')
