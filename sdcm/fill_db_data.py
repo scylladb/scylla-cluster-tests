@@ -2908,7 +2908,7 @@ class FillDatabaseData(ClusterTester):
 
         session.execute("""
             CREATE KEYSPACE IF NOT EXISTS keyspace1
-            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '2'} AND durable_writes = true;
+            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
             """)
         session.execute("USE keyspace1;")
 
