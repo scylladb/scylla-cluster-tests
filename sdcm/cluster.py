@@ -1108,7 +1108,7 @@ client_encryption_options:
         Setup scylla
         :param disks: list of disk names
         """
-        result = self.remoter.run('`which ip` -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
         self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
         result = self.remoter.run('cat /proc/mounts')
