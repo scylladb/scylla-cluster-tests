@@ -2929,6 +2929,14 @@ class FillDatabaseData(ClusterTester):
 
         self.run_db_queries(session, session.default_fetch_size)
 
+    def clean_db_data(self):
+        # Prepare connection
+        node = self.db_cluster.nodes[0]
+        session = self.cql_connection_patient(node)
+
+        session.execute("DROP KEYSPACE keyspace1;")
+        session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
+
 
 if __name__ == '__main__':
     main()
