@@ -256,6 +256,9 @@ class UpgradeTest(FillDatabaseData):
         self.fill_db_data()
         self.log.info('Run some Queries to verify data BEFORE UPGRADE')
         self.verify_db_data()
+        self.clean_db_data()
+        self.log.info('Re-Populate DB with many types of tables and data')
+        self.fill_db_data()
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
