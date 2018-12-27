@@ -483,12 +483,13 @@ class Nemesis(object):
         self._run_nodetool(rebuild_cmd, self.target_node)
 
     def disrupt_nodetool_cleanup(self):
-        self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
         test_keyspaces = self.cluster.get_test_keyspaces()
-        for keyspace in test_keyspaces:
-            cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
-            self._run_nodetool(cmd, self.target_node)
+        for node in self.cluster.nodes:
+            self._set_current_disruption('NodetoolCleanupMonkey %s' % node)
+            for keyspace in test_keyspaces:
+                cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
+                self._run_nodetool(cmd, node)
 
     def _run_in_cqlsh(self, cmd, node=None):
         if not node:
