@@ -1133,7 +1133,8 @@ client_encryption_options:
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
-
+        if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
+            raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
         if self.is_debian8():
             install_transport_https = dedent("""
                 if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
@@ -1148,18 +1149,18 @@ client_encryption_options:
 
         if self.is_debian9():
             install_debian_9_prereqs = dedent("""
-                            if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
-                            apt-get install apt-transport-https
-                            apt-get update
-                            apt-get install dirmngr
-                            apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                                    """)
+                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then echo 'deb http://http.debian.net/debian jessie-backports main' | tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                apt-get install apt-transport-https
+                apt-get update
+                apt-get install dirmngr
+                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+            """)
             self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
 
         install_open_jdk = dedent("""
-                                    apt-get install -y openjdk-8-jre-headless
-                                    update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
-                                            """)
+            apt-get install -y openjdk-8-jre-headless
+            update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
+        """)
         self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
 
         if self.is_rhel_like():
@@ -2503,7 +2504,7 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
-        else:
+        elif node.is_debian():
             prereqs_script = dedent("""
                 apt-get update
                 apt-get install -y curl
@@ -2518,6 +2519,8 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
+        else:
+            raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
