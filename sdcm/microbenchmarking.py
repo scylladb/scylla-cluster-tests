@@ -176,12 +176,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     set_results_for_sub(metrica)
 
         subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
+        dashboard_path = "app/kibana#/dashboard/aee9b370-09db-11e9-a976-2fe0f5890cd0?_g=(filters%3A!())"
+        kibana_url = "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
         for_render = {
             "subject": subject,
             "results": report_results,
             "stats_names": allowed_stats,
             "metrics": metrics,
-            "kibana_url": self._conf.get('kibana_url'),
+            "kibana_url": kibana_url,
             "full_report": True,
             "hostname": self.hostname,
         }
