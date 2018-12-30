@@ -35,8 +35,8 @@ instance_provision: 'on_demand'
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: true
 mgmt_port: 10090
-scylla_repo_m: SCYLLA_ENTERPRISE_REPO
-scylla_mgmt_repo: SCYLLA_MGR_REPO
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'
+scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.3.repo'
 
 backends: !mux
     gce: !mux
