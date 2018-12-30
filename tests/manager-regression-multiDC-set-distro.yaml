@@ -35,8 +35,8 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-1c5cc366' # Clean Ubuntu16.4 ami
-            ami_monitor_user: 'ubuntu'
+            ami_id_monitor: AMI_ID_MONITOR # Debian-8: ami-cb4b94dd # Ubuntu16.4: 'ami-1c5cc366' # CentOs-7: ami-9887c6e7
+            ami_monitor_user: AMI_MONITOR_USER # admin / ubuntu / centos
     gce: !mux
         cluster_backend: 'gce'
         user_credentials_path: '~/.ssh/scylla-test'
