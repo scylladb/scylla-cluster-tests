@@ -327,6 +327,9 @@ class AWSNode(cluster.BaseNode):
         # Restart in AWS will be a Stop and Start of an instance.
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
         # need to setup the instance and treat it as a new instance.
+        if self._instance.spot_instance_request_id:
+            logger.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
+            return
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
