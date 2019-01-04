@@ -371,6 +371,9 @@ class UpgradeTest(FillDatabaseData):
         # wait for the sst3 workload to finish
         self.verify_stress_thread(sst3_stress_queue)
 
+        for node in self.db_cluster.nodes:
+            node.remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f`; do sudo sstabledump $i || exit 1; done')
+
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
 
