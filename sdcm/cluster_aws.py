@@ -12,6 +12,7 @@ from textwrap import dedent
 
 import cluster
 import ec2_client
+from sdcm.utils import retrying
 
 from . import wait
 
@@ -31,15 +32,6 @@ def _prepend_user_prefix(user_prefix, base_name):
     return '%s-%s' % (user_prefix, base_name)
 
 
-def clean_aws_instances(region_name, instance_ids):
-    try:
-        session = boto3.session.Session(region_name=region_name)
-        service = session.resource('ec2')
-        service.instances.filter(InstanceIds=instance_ids).terminate()
-    except Exception as details:
-        logger.exception(str(details))
-
-
 def clean_aws_credential(region_name, credential_key_name, credential_key_file):
     try:
         session = boto3.session.Session(region_name=region_name)
@@ -49,6 +41,10 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
         cluster.remove_if_exists(credential_key_file)
     except Exception as details:
         logger.exception(str(details))
+
+
+class PublicIpNotReady(Exception):
+    pass
 
 
 class AWSCluster(cluster.BaseCluster):
@@ -119,7 +115,9 @@ class AWSCluster(cluster.BaseCluster):
             private_ip_file.write("\n")
 
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):
-        instances = self._ec2_services[dc_idx].create_instances(ImageId=self._ec2_ami_id[dc_idx],
+        ami_id = self._ec2_ami_id[dc_idx]
+        self.log.debug("Creating {count} on-demand instances using AMI id '{ami_id}'... ".format(**locals()))
+        instances = self._ec2_services[dc_idx].create_instances(ImageId=ami_id,
                                                                 UserData=ec2_user_data,
                                                                 MinCount=count,
                                                                 MaxCount=count,
@@ -127,6 +125,7 @@ class AWSCluster(cluster.BaseCluster):
                                                                 BlockDeviceMappings=self._ec2_block_device_mappings,
                                                                 NetworkInterfaces=interfaces,
                                                                 InstanceType=self._ec2_instance_type)
+        self.log.debug("Created instances: %s." % instances)
         return instances
 
     def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0):
@@ -219,14 +218,6 @@ class AWSCluster(cluster.BaseCluster):
         else:
             instances = self._create_instances(count, ec2_user_data, dc_idx)
 
-        instance_ids = [i.id for i in instances]
-        region_name = self.params.get('region_name')
-        if self.params.get('failure_post_behavior') == 'destroy':
-            avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_instances,
-                                                           'args': (region_name,
-                                                                    instance_ids),
-                                                           'once': True})
-        cluster.EC2_INSTANCES += instances
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
                                          self.logdir, dc_idx=dc_idx)
@@ -260,6 +251,7 @@ class AWSNode(cluster.BaseNode):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2_service = ec2_service
+        logger.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
         self._wait_public_ip()
         ssh_login_info = {'hostname': None,
@@ -275,13 +267,16 @@ class AWSNode(cluster.BaseNode):
             tags_list = [{'Key': 'Name', 'Value': name},
                          {'Key': 'workspace', 'Value': cluster.WORKSPACE},
                          {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
-            if cluster.TEST_DURATION >= 24 * 60:
+            if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
                 self.log.info('Test duration set to %s. '
+                              'Keep cluster on failure %s. '
                               'Tagging node with {"keep": "alive"}',
-                              cluster.TEST_DURATION)
+                              cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
                 tags_list.append({'Key': 'keep', 'Value': 'alive'})
+
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
+
 
     @property
     def public_ip_address(self):
@@ -319,16 +314,22 @@ class AWSNode(cluster.BaseNode):
             raise cluster.NodeError('AWS instance %s waiter error after '
                                     'exponencial backoff wait' % self._instance.id)
 
+    @retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
+              message="Waiting for instance to get public ip")
     def _wait_public_ip(self):
-        while self._instance.public_ip_address is None:
-            time.sleep(1)
-            self._instance.reload()
+        self._instance.reload()
+        if self._instance.public_ip_address is None:
+            raise PublicIpNotReady(self._instance)
+        logger.debug("[{0._instance}] Got public ip: {0._instance.public_ip_address}".format(self))
 
     def restart(self):
         # We differenciate between "Restart" and "Reboot".
         # Restart in AWS will be a Stop and Start of an instance.
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
         # need to setup the instance and treat it as a new instance.
+        if self._instance.spot_instance_request_id:
+            logger.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
+            return
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
@@ -336,8 +337,8 @@ class AWSNode(cluster.BaseNode):
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
             output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
-            if 'replace_address:' not in output.stdout:
-                self.remoter.run('sudo echo replace_address: %s >> /etc/scylla/scylla.yaml' %
+            if 'replace_address_first_boot:' not in output.stdout:
+                self.remoter.run('sudo echo replace_address_first_boot: %s >> /etc/scylla/scylla.yaml' %
                                  self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
@@ -347,6 +348,7 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
+        self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
@@ -366,7 +368,6 @@ class AWSNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()
         self._instance.terminate()
-        cluster.EC2_INSTANCES.remove(self._instance)
         self.log.info('Destroyed')
 
 

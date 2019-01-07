@@ -29,6 +29,7 @@ from sdcm.cluster import SCYLLA_YAML_PATH
 from sdcm.mgmt import TaskStatus
 from .utils import get_data_dir_path
 from .log import SDCMAdapter
+from .keystore import KeyStore
 from . import prometheus
 from . import mgmt
 from avocado.utils import wait
@@ -129,7 +130,7 @@ class Nemesis(object):
             return result
         except process.CmdError, details:
             err = ("nodetool command '%s' failed on node %s: %s" %
-                   (cmd, self.target_node, details.result))
+                   (cmd, node, details.result))
             self.error_list.append(err)
             self.log.error(err)
             return None
@@ -167,7 +168,7 @@ class Nemesis(object):
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
         self.log.info('Waiting scylla services to start after node restart')
-        self.target_node.wait_db_up()
+        self.target_node.wait_db_up(timeout=14400)
         self.log.info('Waiting JMX services to start after node restart')
         self.target_node.wait_jmx_up()
         self.repair_nodetool_repair()
@@ -179,6 +180,24 @@ class Nemesis(object):
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
+
+    def disrupt_multiple_hard_reboot_node(self):
+
+        num_of_reboots = random.randint(2, 10)
+        for i in range(num_of_reboots):
+            self._set_current_disruption('MultipleHardRebootNode %s' % self.target_node)
+            self.log.debug("Rebooting {} out of {} times".format(i+1,num_of_reboots))
+            self.target_node.reboot(hard=True)
+            if random.choice([True,False]):
+                self.log.info('Waiting scylla services to start after node reboot')
+                self.target_node.wait_db_up()
+            else:
+                self.log.info('Waiting JMX services to start after node reboot')
+                self.target_node.wait_jmx_up()
+            sleep_time = random.randint(0,100)
+            self.log.info('Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
+            time.sleep(sleep_time)
+
 
     def disrupt_soft_reboot_node(self):
         self._set_current_disruption('SoftRebootNode %s' % self.target_node)
@@ -326,9 +345,11 @@ class Nemesis(object):
             sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
             sstable_md5 = 'f641f561067dd612ff95f2b89bd12530'
         if not skip_download:
+            ks = KeyStore()
+            creds = ks.get_scylladb_upload_credentials()
             remote_get_file(node.remoter, sstable_url, sstable_file,
                             hash_expected=sstable_md5, retries=2,
-                            user_agent=self.cluster.params.get('user_agent'))
+                            user_agent=creds['user_agent'])
 
         self.log.debug('Make sure keyspace1.standard1 exists')
         result = self._run_nodetool('nodetool --host localhost cfstats keyspace1.standard1',
@@ -462,12 +483,13 @@ class Nemesis(object):
         self._run_nodetool(rebuild_cmd, self.target_node)
 
     def disrupt_nodetool_cleanup(self):
-        self._set_current_disruption('NodetoolCleanupMonkey %s' % self.target_node)
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
         test_keyspaces = self.cluster.get_test_keyspaces()
-        for keyspace in test_keyspaces:
-            cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
-            self._run_nodetool(cmd, self.target_node)
+        for node in self.cluster.nodes:
+            self._set_current_disruption('NodetoolCleanupMonkey %s' % node)
+            for keyspace in test_keyspaces:
+                cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
+                self._run_nodetool(cmd, node)
 
     def _run_in_cqlsh(self, cmd, node=None):
         if not node:
@@ -810,6 +832,12 @@ class RestartThenRepairNodeMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_then_repair_node()
+
+class MultipleHardRebootNodeMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_multiple_hard_reboot_node()
 
 class HardRebootNodeMonkey(Nemesis):
 

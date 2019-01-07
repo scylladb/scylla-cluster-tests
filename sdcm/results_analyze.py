@@ -38,7 +38,7 @@ class QueryFilter(object):
         return setup_details
 
     def filter_test_details(self):
-        test_details = 'test_details.job_name:{} '.format(
+        test_details = 'test_details.job_name:\"{}\" '.format(
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
         test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
@@ -168,6 +168,9 @@ class BaseResultsAnalyzer(object):
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self._send_email, self._email_recipients)
 
+    def gen_kibana_dashboard_url(self, dashboard_path=""):
+        return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
+
     def check_regression(self):
         return NotImplementedError("check_regression should be implemented!")
 
@@ -222,7 +225,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return None
 
     def _get_grafana_snapshot(self, test_doc):
-        return test_doc['_source']['test_details'].get('grafana_snapshot')
+        grafana_snapshot = test_doc['_source']['test_details'].get('grafana_snapshot')
+        return grafana_snapshot if isinstance(grafana_snapshot, list) else [grafana_snapshot]
 
     def _get_setup_details(self, test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
@@ -382,6 +386,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
         cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
+        dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
                        test_version=test_version_info,
@@ -391,13 +396,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        prometheus_stats_units=TestStatsMixin.PROMETHEUS_STATS_UNITS,
                        grafana_snapshot=self._get_grafana_snapshot(doc),
                        cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
-                       job_url=doc['_source']['test_details'].get('job_url', "")
+                       job_url=doc['_source']['test_details'].get('job_url', ""),
+                       dashboard_master=self.gen_kibana_dashboard_url(dashboard_path),
                        )
         self.log.debug('Regression analysis:')
         self.log.debug(pp.pformat(results))
-
-        kibana_url = self._conf.get('kibana_url')
-        results.update({'dashboard_master': kibana_url})
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
         html = self.render_to_html(results)

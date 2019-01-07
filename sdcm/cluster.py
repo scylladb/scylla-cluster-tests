@@ -50,7 +50,6 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                            "Encrypted": False}}]
 
 CREDENTIALS = []
-EC2_INSTANCES = []
 OPENSTACK_INSTANCES = []
 OPENSTACK_SERVICE = None
 LIBVIRT_DOMAINS = []
@@ -105,18 +104,11 @@ def remove_if_exists(file_path):
 
 
 def cleanup_instances(behavior='destroy'):
-    global EC2_INSTANCES
     global OPENSTACK_INSTANCES
     global OPENSTACK_SERVICE
     global CREDENTIALS
     global LIBVIRT_DOMAINS
     global LIBVIRT_IMAGES
-
-    for ec2_instance in EC2_INSTANCES:
-        if behavior == 'destroy':
-            ec2_instance.terminate()
-        elif behavior == 'stop':
-            ec2_instance.stop()
 
     for openstack_instance in OPENSTACK_INSTANCES:
         if behavior == 'destroy':
@@ -159,11 +151,21 @@ def register_cleanup(cleanup='destroy'):
 
 
 class Setup(object):
+
+    KEEP_ALIVE = False
+
     REUSE_CLUSTER = False
 
     @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
+
+    @classmethod
+    def keep_cluster(cls, val='destroy'):
+        if val in 'keep':
+            cls.KEEP_ALIVE = True
+        else:
+            cls.KEEP_ALIVE = False
 
 
 class NodeError(Exception):
@@ -1100,7 +1102,9 @@ client_encryption_options:
         Setup scylla
         :param disks: list of disk names
         """
-        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(','.join(disks)))
+        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        devname = result.stdout.strip()
+        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
@@ -2706,21 +2710,35 @@ class BaseMonitorSet(object):
             return
         start_time = str(test_start_time).split('.')[0] + '000'
 
+        screenshot_names = [
+            'per-server-metrics-nemesis',
+            'overview-metrics'
+        ]
+
+        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/dashboard/db/{scylla_pkg}-{scr_name}-{version}?from={st}&to=now"
         try:
             self.install_phantom_js()
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
-                version = self.monitoring_version.replace('.', '-')
-                grafana_url = "http://%s:%s/dashboard/db/%s-per-server-metrics-nemesis-%s?from=%s&to=now" % (
-                    node.public_ip_address, self.grafana_port, scylla_pkg, version, start_time)
-                datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
-                snapshot_path = os.path.join(node.logdir,
-                                             "grafana-screenshot-%s-%s.png" % (datetime_now, n))
-                process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                            "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
-                                grafana_url, snapshot_path), shell=True)
+                screenshots = []
+                for i, name in enumerate(screenshot_names):
+                    version = self.monitoring_version.replace('.', '-')
+                    grafana_url = screenshot_url_tmpl.format(
+                        node_ip=node.public_ip_address,
+                        grafana_port=self.grafana_port,
+                        scylla_pkg=scylla_pkg,
+                        scr_name=name,
+                        version=version,
+                        st=start_time)
+                    datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    snapshot_path = os.path.join(node.logdir,
+                                                 "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
+                    process.run("cd phantomjs-2.1.1-linux-x86_64 && "
+                                "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
+                                    grafana_url, snapshot_path), shell=True)
                 # since there is only one monitoring node returning here
-                return self.upload_file_to_s3(snapshot_path)
+                    screenshots.append(self.upload_file_to_s3(snapshot_path))
+                return screenshots
 
         except Exception, details:
             self.log.error('Error taking monitor snapshot: %s',

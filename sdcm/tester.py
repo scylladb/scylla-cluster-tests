@@ -156,12 +156,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.set_duration(self._duration)
 
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
+        cluster.Setup.keep_cluster(self._failure_post_behavior)
 
         # for saving test details in DB
-        self.create_stats = self.params.get(key='store_results_in_elasticsearch',default=True)
+        self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
-
 
     @clean_resources_on_exception
     def setUp(self):
@@ -409,15 +409,18 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if monitor_info['type'] is None:
             monitor_info['type'] = self.params.get('instance_type_monitor')
         if monitor_info['disk_size'] is None:
-            monitor_info['disk_size'] = self.params.get('aws_root_disk_size_monitor', default=10)
+            monitor_info['disk_size'] = self.params.get('aws_root_disk_size_monitor', default=None)
         if monitor_info['device_mappings'] is None:
-            monitor_info['device_mappings'] = [{
-                "DeviceName": "/dev/sda1",  # Root device
-                "Ebs": {
-                    "VolumeSize": monitor_info['disk_size'],
-                    "VolumeType": "gp2"
-                }
-            }]
+            if monitor_info['disk_size']:
+                monitor_info['device_mappings'] = [{
+                    "DeviceName": self.params.get("aws_root_disk_name_monitor", "/dev/sda1"),
+                    "Ebs": {
+                        "VolumeSize": monitor_info['disk_size'],
+                        "VolumeType": "gp2"
+                    }
+                }]
+            else:
+                monitor_info['device_mappings'] = []
         user_prefix = self.params.get('user_prefix', None)
 
         user_credentials = self.params.get('user_credentials_path', None)

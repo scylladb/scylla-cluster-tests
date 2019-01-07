@@ -553,10 +553,10 @@ class PerformanceRegressionTest(ClusterTester):
     def test_mv_read_not_populated(self):
         self._read_with_mv(on_populated=False)
 
-    def test_mixed_with_mv_populated(self):
+    def test_mv_mixed_populated(self):
         self._mixed_with_mv(on_populated=True)
 
-    def test_mixed_with_mv_not_populated(self):
+    def test_mv_mixed_not_populated(self):
         self._mixed_with_mv(on_populated=False)
 
     # Counter Tests

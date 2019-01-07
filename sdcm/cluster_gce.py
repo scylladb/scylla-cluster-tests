@@ -37,10 +37,12 @@ class GCENode(cluster.BaseNode):
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
-        if cluster.TEST_DURATION >= 24 * 60:
+
+        if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
             self.log.info('Test duration set to %s. '
+                          'Keep cluster on failure %s. '
                           'Tagging node with "keep-alive"',
-                          cluster.TEST_DURATION)
+                          cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
             self._instance_wait_safe(self._gce_service.ex_set_node_tags,
                                      self._instance, ['keep-alive'])
         self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
