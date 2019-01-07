@@ -50,7 +50,6 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                            "Encrypted": False}}]
 
 CREDENTIALS = []
-EC2_INSTANCES = []
 OPENSTACK_INSTANCES = []
 OPENSTACK_SERVICE = None
 LIBVIRT_DOMAINS = []
@@ -105,18 +104,11 @@ def remove_if_exists(file_path):
 
 
 def cleanup_instances(behavior='destroy'):
-    global EC2_INSTANCES
     global OPENSTACK_INSTANCES
     global OPENSTACK_SERVICE
     global CREDENTIALS
     global LIBVIRT_DOMAINS
     global LIBVIRT_IMAGES
-
-    for ec2_instance in EC2_INSTANCES:
-        if behavior == 'destroy':
-            ec2_instance.terminate()
-        elif behavior == 'stop':
-            ec2_instance.stop()
 
     for openstack_instance in OPENSTACK_INSTANCES:
         if behavior == 'destroy':
@@ -159,11 +151,21 @@ def register_cleanup(cleanup='destroy'):
 
 
 class Setup(object):
+
+    KEEP_ALIVE = False
+
     REUSE_CLUSTER = False
 
     @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
+
+    @classmethod
+    def keep_cluster(cls, val='destroy'):
+        if val in 'keep':
+            cls.KEEP_ALIVE = True
+        else:
+            cls.KEEP_ALIVE = False
 
 
 class NodeError(Exception):
@@ -1098,7 +1100,9 @@ client_encryption_options:
         Setup scylla
         :param disks: list of disk names
         """
-        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --disks {}'.format(','.join(disks)))
+        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        devname = result.stdout.strip()
+        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
@@ -2446,7 +2450,7 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
-        else:
+        elif node.is_debian8():
             prereqs_script = dedent("""
                 curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
@@ -2457,6 +2461,8 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
+        else:
+            raise ValueError('Unsupported Distro found: {}'.format(node.distro))
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):

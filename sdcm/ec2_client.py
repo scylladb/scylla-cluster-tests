@@ -163,6 +163,7 @@ class EC2Client(object):
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_request_fulfilled(request_ids)
+            logger.debug("{request_ids}: [{status}] - {resp}".format(**locals()))
             if not status and resp == STATUS_PRICE_TOO_LOW:
                 break
             timeout += self._wait_interval
