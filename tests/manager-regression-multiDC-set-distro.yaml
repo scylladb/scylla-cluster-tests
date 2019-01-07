@@ -3,7 +3,7 @@ n_db_nodes: '2 1'
 n_loaders: 1
 n_monitor_nodes: 1
 monitor_branch: 'master'
-user_prefix: manager-regression-VERSION
+user_prefix: manager-regression-DISTRO-VERSION
 failure_post_behavior: keep
 space_node_threshold: 6442
 ip_ssh_connections: 'public'
@@ -37,30 +37,9 @@ backends: !mux
             ami_db_cassandra_user: 'ubuntu'
             ami_id_monitor: AMI_ID_MONITOR # Debian-8: ami-cb4b94dd # Ubuntu16.4: 'ami-1c5cc366' # CentOs-7: ami-9887c6e7
             ami_monitor_user: AMI_MONITOR_USER # admin / ubuntu / centos
-    gce: !mux
-        cluster_backend: 'gce'
-        user_credentials_path: '~/.ssh/scylla-test'
-        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
-        gce_image_username: 'scylla-test'
-        gce_instance_type_db: 'n1-highmem-8'
-        gce_root_disk_type_db: 'pd-ssd'
-        gce_root_disk_size_db: 50
-        gce_n_local_ssd_disk_db: 1
-        gce_instance_type_loader: 'n1-highcpu-4'
-        gce_root_disk_type_loader: 'pd-standard'
-        gce_root_disk_size_loader: 50
-        gce_n_local_ssd_disk_loader: 0
-        gce_instance_type_monitor: 'n1-standard-2'
-        gce_root_disk_type_monitor: 'pd-standard'
-        gce_root_disk_size_monitor: 50
-        gce_n_local_ssd_disk_monitor: 0
-        scylla_repo: https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-1.7/37/scylla.repo
-        #us_east_1:
-        #  gce_datacenter: 'us-east1-b'
-        multi_dcs:
-          gce_datacenter: 'us-east1-b us-west1-b us-east4-b'
+
 
 databases: !mux
     scylla:
         db_type: scylla
-        instance_type_db: 'i3.xlarge'
+        instance_type_db: 'i3.large'
