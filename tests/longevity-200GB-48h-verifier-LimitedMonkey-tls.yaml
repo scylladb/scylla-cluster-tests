@@ -23,10 +23,10 @@ instance_provision: 'on_demand'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
-use_mgmt: false
+use_mgmt: true
 mgmt_port: 10090
-scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/f4a2920f80c4bf178217c2553ad65ad7/centos/scylladb-2017.1.repo'
-scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-1.0/latest/scylla-manager.repo'
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'
+scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.3.repo'
 
 backends: !mux
     gce: !mux
@@ -60,7 +60,7 @@ backends: !mux
             security_group_ids: 'sg-5e79983a'
             subnet_id: 'subnet-c327759a'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_monitor: 'AMI_ID'
+            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
             ami_id_loader: 'AMI_ID'
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'

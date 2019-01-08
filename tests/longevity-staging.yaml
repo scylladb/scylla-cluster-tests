@@ -28,6 +28,11 @@ loaders_private_ip: []
 monitor_nodes_public_ip: []
 monitor_nodes_private_ip: []
 
+use_mgmt: true
+mgmt_port: 10090
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'
+scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.3.repo'
+
 backends: !mux
     gce: !mux
         cluster_backend: 'gce'
@@ -63,7 +68,7 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3eff0028'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-29035f52'
+            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
             ami_monitor_user: 'centos'
             aws_root_disk_size_monitor: 20  # GB
 
