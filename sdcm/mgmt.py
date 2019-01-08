@@ -1,4 +1,6 @@
 # coding: utf-8
+from textwrap import dedent
+
 from avocado.utils import process
 import requests
 import logging
@@ -305,8 +307,12 @@ class ManagerCluster(ScyllaManagerBase):
         # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
         return self.get_property(parsed_table=self._cluster_list, column_name='ssh user')
 
+    def _get_task_list(self):
+        cmd = "task list -c {}".format(self.id)
+        return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+
     @property
-    def task_list(self):
+    def repair_task_list(self):
         """
         Gets the Cluster's  Task list
         """
@@ -316,11 +322,16 @@ class ManagerCluster(ScyllaManagerBase):
         # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 26 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
         # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
-        cmd = "task list -c {}".format(self.id)
-        return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+        repair_task_list = []
+        table_res = self._get_task_list()
+        if len(table_res) > 1: # if there are any tasks in list - add them as RepairTask generated objects.
+            repair_task_rows_list = [row for row in table_res[1:] if row[0].startswith("repair/")]
+            for row in repair_task_rows_list:
+                repair_task_list.append(RepairTask(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
+        return repair_task_list
 
     def get_healthcheck_task(self):
-        healthcheck_id = self.sctool.get_table_value(parsed_table=self.task_list, column_name="task",
+        healthcheck_id = self.sctool.get_table_value(parsed_table=self._get_task_list(), column_name="task",
                                                      identifier="healthcheck/", is_search_substring=True)
         return HealthcheckTask(task_id=healthcheck_id, cluster_id=self.id,
                                manager_node=self.manager_node)  # return the manager's health-check-task object with the found id
@@ -374,6 +385,13 @@ class MgrUtils(object):
         if not res or res.stderr:
             logger.error("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
             raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
+
+
+def get_scylla_manager_tool(manager_node):
+    if manager_node.is_rhel_like():
+        return ScyllaManagerToolRedhatLike(manager_node=manager_node)
+    else:
+        return ScyllaManagerToolNonRedhat(manager_node=manager_node)
 
 
 class ScyllaManagerTool(ScyllaManagerBase):
@@ -469,6 +487,91 @@ class ScyllaManagerTool(ScyllaManagerBase):
             raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
         cluster_id = res.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
+
+    def upgrade(self, scylla_mgmt_upgrade_to_repo):
+        manager_from_version = self.version
+        logger.debug('Running Manager upgrade from: {} to version in repo: {}'.format(manager_from_version, scylla_mgmt_upgrade_to_repo))
+        self.manager_node.upgrade_mgmt(scylla_mgmt_repo=scylla_mgmt_upgrade_to_repo)
+        new_manager_version = self.version
+        logger.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
+        return new_manager_version
+
+    def rollback_upgrade(self, manager_node):
+        raise NotImplementedError
+
+class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
+
+    def __init__(self, manager_node):
+        ScyllaManagerTool.__init__(self, manager_node=manager_node)
+        self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+
+    def rollback_upgrade(self, scylla_mgmt_repo):
+
+        manager_from_version = self.version
+        remove_post_upgrade_repo = dedent("""
+                        sudo systemctl stop scylla-manager
+                        cqlsh -e 'DROP KEYSPACE scylla_manager'
+                        sudo rm -rf {}
+                        sudo yum clean all
+                        sudo rm -rf /var/cache/yum
+                    """.format(self.manager_repo_path))
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
+
+        # Downgrade to pre-upgrade scylla-manager repository
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+
+        downgrade_to_pre_upgrade_repo = dedent("""
+                                sudo yum downgrade scylla-manager* -y
+                                sleep 2
+                                sudo systemctl daemon-reload
+                                sudo systemctl restart scylla-manager
+                                sleep 3
+                            """)
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % downgrade_to_pre_upgrade_repo)
+
+        # Rollback the Scylla Manager database???
+
+
+
+class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
+    def __init__(self, manager_node):
+        ScyllaManagerTool.__init__(self, manager_node=manager_node)
+        self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+
+    def rollback_upgrade(self, scylla_mgmt_repo):
+        manager_from_version = self.version[0]
+        remove_post_upgrade_repo = dedent("""
+                        cqlsh -e 'DROP KEYSPACE scylla_manager'
+                        sudo systemctl stop scylla-manager
+                        sudo systemctl stop scylla-server.service
+                        sudo apt-get remove scylla-manager -y
+                        sudo apt-get remove scylla-manager-server -y
+                        sudo apt-get remove scylla-manager-client -y
+                        sudo rm -rf {}
+                        sudo apt-get clean
+                        sudo apt-get update
+                    """.format(self.manager_repo_path)) # +" /var/lib/scylla-manager/*"))
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
+
+        # Downgrade to pre-upgrade scylla-manager repository
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        res = self.manager_node.remoter.run('sudo apt-get update')
+        res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
+        rollback_to_version = res.stdout.split()[1]
+        logger.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
+        # self.manager_node.install_mgmt(scylla_mgmt_repo=scylla_mgmt_repo)
+        downgrade_to_pre_upgrade_repo = dedent("""
+                                    
+                                sudo apt-get install scylla-manager -y
+                                sudo systemctl unmask scylla-manager.service
+                                sudo systemctl enable scylla-manager
+                                echo yes| sudo scyllamgr_setup
+                                sudo systemctl restart scylla-manager.service
+                                sleep 25
+                            """)
+        self.manager_node.remoter.run('sudo bash -cxe "%s"' % downgrade_to_pre_upgrade_repo)
+
+        # Rollback the Scylla Manager database???
 
 
 class SCTool(object):

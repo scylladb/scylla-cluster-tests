@@ -661,7 +661,7 @@ class Nemesis(object):
             return
 
         manager_node = self.monitoring_set.nodes[0]
-        manager_tool = mgmt.ScyllaManagerTool(manager_node=manager_node)
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
 
         cluster_name = self.cluster.name
         mgr_cluster = manager_tool.get_cluster(cluster_name)

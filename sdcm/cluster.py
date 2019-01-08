@@ -1025,6 +1025,8 @@ client_encryption_options:
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+        if not self.is_rhel_like():
+            self.remoter.run('sudo apt-get update')
 
     def clean_scylla(self):
         """
@@ -1112,20 +1114,77 @@ client_encryption_options:
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
+    def upgrade_mgmt(self, scylla_mgmt_repo):
+        self.download_scylla_manager_repo(scylla_mgmt_repo)
+        self.log.debug('Upgrade scylla-manager via repo: {}'.format(scylla_mgmt_repo))
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum update scylla-manager -y')
+        else:
+            self.remoter.run('sudo apt-get update')
+            # Upgrade should update packages of:
+            # 1) scylla-manager
+            # 2) scylla-manager-client
+            # 3) scylla-manager-server
+            self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager*')
+        time.sleep(3)
+        if self.is_docker():
+            self.remoter.run('sudo supervisorctl start scylla-manager')
+        else:
+            self.remoter.run('sudo systemctl restart scylla-manager.service')
+
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
-        # only support for centos
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
+        if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
+            raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
+        if self.is_debian8():
+            install_transport_https = dedent("""
+                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                apt-get install apt-transport-https
+                apt-get install gnupg-curl
+                apt-get update
+                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+                apt-get install -t jessie-backports ca-certificates-java -y
+                        """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
 
-        self.remoter.run('sudo yum install -y epel-release', retry=3)
+
+        if self.is_debian9():
+            install_debian_9_prereqs = dedent("""
+                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then echo 'deb http://http.debian.net/debian jessie-backports main' | tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                apt-get install apt-transport-https
+                apt-get update
+                apt-get install dirmngr
+                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+            """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
+
+        install_open_jdk = dedent("""
+            apt-get install -y openjdk-8-jre-headless
+            update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
+        """)
+        self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
+
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum install -y epel-release', retry=3)
+        else:
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
+
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
-        self.remoter.run('sudo yum install -y scylla-manager')
+
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum install -y scylla-manager')
+        else:
+            self.remoter.run('sudo apt-get update')
+            self.remoter.run('sudo apt-get install -y scylla-manager --force-yes')
+
         if self.is_docker():
             try:
                 self.remoter.run('echo no| sudo scyllamgr_setup')
@@ -1138,14 +1197,13 @@ client_encryption_options:
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
-        """.format(**locals())) # generate ssh public key from private key.
+        """.format(**locals()))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
-
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -2450,19 +2508,23 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
-        elif node.is_debian8():
+        elif node.is_debian():
             prereqs_script = dedent("""
+                apt-get update
+                apt-get install -y curl
                 curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
-                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-                sudo apt-get update
-                sudo apt-get install -y docker docker.io
+                apt-get install software-properties-common -y
+                add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+                apt-get update
+                apt-get install -y docker
+                curl -sSL https://get.docker.com/ | sh
                 apt-get install -y python-setuptools unzip wget
                 easy_install pip
                 pip install --upgrade pip
                 pip install pyyaml
             """)
         else:
-            raise ValueError('Unsupported Distro found: {}'.format(node.distro))
+            raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
         node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
 
     def download_scylla_monitoring(self, node):
