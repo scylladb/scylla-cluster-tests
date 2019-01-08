@@ -224,6 +224,14 @@ class GCECluster(cluster.BaseCluster):
                 "autoDelete": True}
 
     def _create_instance(self, node_index, dc_idx):
+        # if size of disk is larget than 80G, then
+        # change the timeout of job completion to default * 3.
+        gce_job_default_timeout = None
+        if self._gce_image_size and int(self._gce_image_size) > 80:
+            gce_job_default_timeout = self._gce_services[dc_idx].connection.timeout
+            self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout * 3
+            self.log.info("Job complete timeout is set to %ss" %
+                          self._gce_services[dc_idx].connection.timeout)
         name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
         gce_disk_struct = list()
         gce_disk_struct.append(self._get_root_disk_struct(name=name,
@@ -247,6 +255,9 @@ class GCECluster(cluster.BaseCluster):
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct)
         self.log.info('Created instance %s', instance)
+        if gce_job_default_timeout:
+            self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
+            self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout
         return instance
 
     def _create_instances(self, count, dc_idx=0):
