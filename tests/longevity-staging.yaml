@@ -70,6 +70,8 @@ backends: !mux
             ami_db_cassandra_user: 'ubuntu'
             ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
             ami_monitor_user: 'centos'
+            aws_root_disk_size_monitor: 20  # GB
+
     docker: !mux
         cluster_backend: 'docker'
         docker_image: 'scylladb/scylla'
