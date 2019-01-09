@@ -1161,11 +1161,12 @@ client_encryption_options:
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
 
-        install_open_jdk = dedent("""
-            apt-get install -y openjdk-8-jre-headless
-            update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
-        """)
-        self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
+        if self.is_debian():
+            install_open_jdk = dedent("""
+                apt-get install -y openjdk-8-jre-headless
+                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
+            """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
 
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y epel-release', retry=3)
