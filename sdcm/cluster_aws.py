@@ -382,6 +382,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
+        if cluster.Setup.REUSE_CLUSTER:
+            cluster_uuid = self.params.get("cluster_id")
         cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
         shortid = str(cluster_uuid)[:8]
