@@ -34,6 +34,9 @@ scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/un
 send_email: true
 email_recipients: ['bentsi@scylladb.com']
 
+# Reuse cluster
+# cluster_id: "" ID of the cluster (currently db nodes only)
+
 backends: !mux
     aws: !mux
         instance_provision: 'spot_low_price' # Allowed values: on_demand|spot_fleet|spot_low_price|spot_duration
