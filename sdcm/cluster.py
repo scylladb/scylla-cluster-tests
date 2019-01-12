@@ -23,7 +23,6 @@ import threading
 import time
 import uuid
 
-import requests
 import yaml
 import shutil
 
@@ -38,7 +37,7 @@ from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -710,6 +709,57 @@ class BaseNode(object):
             self._journal_thread.join(timeout)
         del self.remoter
 
+    def get_cpumodel(self):
+        """Get cpu model from /proc/cpuinfo
+
+        Get cpu model from /proc/cpuinfo of node
+        """
+        cpuinfo_cmd = 'cat /proc/cpuinfo'
+
+        try:
+            result = self.remoter.run(cmd=cpuinfo_cmd, verbose=False)
+            model = re.findall('^model\sname\s:(.+)$', result.stdout.strip(), re.MULTILINE)
+            return model[0].strip()
+
+        except Exception as details:
+            self.log.error('Error retrieving CPU model info : %s',
+                           details)
+            return None
+
+    def get_installed_packages(self):
+        """Get installed packages on node
+
+        Execute package manager command and get
+        list of all installed packages
+        """
+        if self.is_ubuntu() or self.is_debian():
+            cmd = 'dpkg-query --show'
+        else:
+            cmd = 'rpm -qa'
+
+        try:
+            result = self.remoter.run(cmd, verbose=False)
+            return result.stdout.strip()
+        except Exception as details:
+            self.log.error('Error retrieving installed packages: %s',
+                           details)
+            return None
+
+    def get_system_info(self):
+        """Get system info by uname -a
+
+        Get system info as a result of uname -a
+        """
+
+        cmd = 'uname -a'
+        try:
+            result = self.remoter.run(cmd, verbose=False)
+            return result.stdout.strip()
+        except Exception as details:
+            self.log.error('Error retrieving command \'%s\' result : %s',
+                           (cmd, details))
+            return None
+
     def destroy(self):
         raise NotImplementedError('Derived classes must implement destroy')
 
@@ -1276,8 +1326,6 @@ server_encryption_options:
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-
-
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
@@ -1340,6 +1388,51 @@ server_encryption_options:
         self.config_setup(client_encrypt=False)
         self.stop_scylla()
         self.start_scylla()
+
+    def prepare_files_for_archive(self, fileslist):
+        """Prepare files for creating archives on node
+
+        Create directories structure and copy files
+        from absolute path of files in fileslist
+        in node /tmp/node_name and return path to created
+        structure
+        Ex.:
+            filelists = ['/proc/cpuinfo', /var/log/system.log]
+
+            result directory:
+            /tmp/<node_name>/proc/cpuinfo
+                            /var/log/system.log
+
+        Arguments:
+            fileslist {list} -- list of file with fullpaths on node
+
+        Returns:
+            [type] -- path to created directory structure
+        """
+        root_dir = '/tmp/%s' % self.name
+        self.remoter.run('mkdir %s' % root_dir)
+        for f in fileslist:
+            if self.file_exists(f):
+                old_full_path = os.path.dirname(f)[1:]
+                new_full_path = os.path.join(root_dir, old_full_path)
+                self.remoter.run('mkdir -p %s' % new_full_path)
+                self.remoter.run('cp -r %s %s' % (f, new_full_path))
+        return root_dir
+
+    def get_console_output(self):
+        # TODO add to each type of node
+        # comment raising exception. replace with log warning
+        # raise NotImplementedError('Derived classes must implement get_console_output')
+        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+        return ''
+
+    def get_console_screenshot(self):
+        # TODO add to each type of node
+        # comment raising exception. replace with log warning
+        # raise NotImplementedError('Derived classes must implement get_console_output')
+        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+        return ''
+
 
 class BaseCluster(object):
 
@@ -2744,25 +2837,6 @@ class BaseMonitorSet(object):
         else:
             self.log.debug("PhantomJS is already installed!")
 
-    @staticmethod
-    def generate_s3_url(file_path):
-        job_name = get_job_name()
-        file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://cloudius-jenkins-test.s3.amazonaws.com/{job_name}/{file_name}".format(**locals())
-
-    def upload_file_to_s3(self, file_path):
-        try:
-            s3_url = self.generate_s3_url(file_path)
-            with open(file_path) as fh:
-                mydata = fh.read()
-                self.log.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
-                response = requests.put(s3_url, data=mydata)
-                self.log.debug(response)
-                return s3_url if response.ok else ""
-        except Exception as e:
-            self.log.debug("Unable to upload to S3: %s" % e)
-            return ""
-
     def get_grafana_screenshot(self, test_start_time=None):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
@@ -2799,7 +2873,7 @@ class BaseMonitorSet(object):
                                 "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                     grafana_url, snapshot_path), shell=True)
                 # since there is only one monitoring node returning here
-                    screenshots.append(self.upload_file_to_s3(snapshot_path))
+                    screenshots.append(S3Storage.upload_file(snapshot_path))
                 return screenshots
 
         except Exception, details:
@@ -2816,7 +2890,7 @@ class BaseMonitorSet(object):
                 # self.start_scylla_monitoring(node)
                 shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
                 zipped_data_path = '%s.zip' % node.logdir
-                return self.upload_file_to_s3(zipped_data_path)
+                return S3Storage.upload_file(zipped_data_path)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
