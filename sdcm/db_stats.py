@@ -8,13 +8,15 @@ import logging
 import requests
 import json
 import yaml
+import shutil
 from textwrap import dedent
 from math import sqrt
+from base64 import decodestring
 
 from requests import ConnectionError
 
 from es import ES
-from utils import get_job_name, retrying
+from utils import get_job_name, retrying, remove_comments, S3Storage
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +246,7 @@ class TestStatsMixin(Stats):
     """
     This mixin is responsible for saving test details and statistics in database.
     """
-    KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
+    KEYS = ['test_details', 'setup_details', 'system_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
 
@@ -317,6 +319,17 @@ class TestStatsMixin(Stats):
         test_details['prometheus_report'] = ""
         return test_details
 
+    def get_system_details(self):
+        system_details = {}
+        for node in self.db_cluster.nodes:
+            node_system_info = {}
+            node_system_info[node.name] = {
+                'cpu_model': node.get_cpumodel(),
+                'sys_info': node.get_system_info(),
+            }
+            system_details.update(node_system_info)
+        return system_details
+
     def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id()
@@ -330,6 +343,7 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = self.params.id.name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
+        self._stats['system_details'] = self.get_system_details()
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
@@ -402,7 +416,8 @@ class TestStatsMixin(Stats):
                     continue
                 try:
                     summary += float(stat[key])
-                except:
+                except Exception as details:
+                    self.log.debug('Catch upon calculating stat everage Exception: %s', details)
                     average_stats[key] = stat[key]
             if key not in average_stats:
                 average_stats[key] = round(summary / len(self._stats['results']['stats']), 1)
@@ -412,6 +427,40 @@ class TestStatsMixin(Stats):
             self._stats['results']['stats_average'] = average_stats
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
+
+    def archive_system_details_information(self, files_to_archive):
+        """Create an archive of system details data
+
+        For each node prepare relevant files on node, copy them to local directory
+        <cluster_log_dir>/system_data , write to files the installed
+        packages on node, instace console output and screenshot on
+        aws deployment, arhcive contents of appropriate directory and upload to
+        S3 storage.
+
+        Arguments:
+            files_to_archive {list} -- list of files as fullpath which should be stored as
+            system details data
+
+        Returns:
+            [str] -- fullpath to archive file
+        """
+        storing_dir = os.path.join(self.db_cluster.logdir, 'system_data')
+        os.mkdir(storing_dir)
+        for node in self.db_cluster.nodes:
+            src_dir = node.prepare_files_for_archive(files_to_archive)
+            node.receive_files(src=src_dir, dst=storing_dir)
+            with open(os.path.join(storing_dir, node.name, 'installed_pkgs'), 'w') as pkg_list_file:
+                pkg_list_file.write(node.get_installed_packages())
+            with open(os.path.join(storing_dir, node.name, 'console_output'), 'w') as co:
+                co.write(node.get_console_output())
+            with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
+                imagedata = node.get_console_screenshot()
+                cscrn.write(decodestring(imagedata))
+
+        self.log.info('Creating archive....')
+        archive = shutil.make_archive(self.db_cluster.logdir, 'zip', root_dir=storing_dir)
+        self.log.info('Path to archive file: %s' % archive)
+        return archive
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         if self.create_stats:
@@ -423,20 +472,30 @@ class TestStatsMixin(Stats):
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
                 self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
 
-            if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
+            if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
                 res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
-                self._stats['test_details']['scylla_args'] = res.stdout.strip()
+                self._stats['setup_details']['scylla_args'] = res.stdout.strip()
                 res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
-                self._stats['test_details']['io_conf'] = res.stdout.strip()
+                self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
                 res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
-                self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
-
+                self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
             self._stats['status'] = self.status
-            update_data.update({'status': self._stats['status'], 'test_details': self._stats['test_details']})
+
+            if 'system_details' in self._stats.keys():
+                files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat']
+                archive = self.archive_system_details_information(files_to_archive)
+                s3_link_to_archive = S3Storage.upload_file(file_path=archive)
+                self._stats['system_details'].update({'sys_info_data_url': s3_link_to_archive})
+
+            update_data.update(
+                {'status': self._stats['status'],
+                 'setup_details': self._stats['setup_details'],
+                 'test_details': self._stats['test_details'],
+                 'system_details': self._stats['system_details']
+                 })
             if errors:
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
             self.update(update_data)
-

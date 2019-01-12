@@ -137,6 +137,16 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._safe_destroy)
         self.log.info('Destroyed')
 
+    def get_console_output(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning('Method is not implemented for GCENode')
+        return ''
+
+    def get_console_screenshot(self):
+        # TODO adding console output from instance on GCE
+        self.log.warning('Method is not implemented for GCENode')
+        return ''
+
 
 class GCECluster(cluster.BaseCluster):
 
