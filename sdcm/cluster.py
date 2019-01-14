@@ -890,7 +890,7 @@ class BaseNode(object):
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
                      server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
-                     debug_install=False, hinted_handoff_enabled=False):
+                     debug_install=False, hinted_handoff_disabled=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -926,9 +926,9 @@ class BaseNode(object):
             p = re.compile('[# ]*cluster_name:.*')
             scylla_yaml_contents = p.sub('cluster_name: {0}'.format(cluster_name),
                                          scylla_yaml_contents)
-
-        p = re.compile('[# ]*hinted_handoff_enabled:.*')
-        scylla_yaml_contents = p.sub('hinted_handoff_enabled: {}'.format(str(hinted_handoff_enabled).lower()), scylla_yaml_contents)
+        if hinted_handoff_disabled:  # disable hinted handoff (it is enabled by default in Scylla)
+            p = re.compile('[# ]*hinted_handoff_enabled:.*')
+            scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents)
 
         if enable_exp:
             scylla_yaml_contents += "\nexperimental: true\n"
@@ -1887,7 +1887,7 @@ class BaseScyllaCluster(object):
                           client_encrypt=self._param_enabled('client_encrypt'),
                           append_conf=self.params.get('append_conf'),
                           append_scylla_args=self.params.get('append_scylla_args'),
-                          hinted_handoff_enabled=self._param_enabled('hinted_handoff_enabled'))
+                          hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """

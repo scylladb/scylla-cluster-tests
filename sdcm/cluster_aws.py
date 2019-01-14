@@ -447,7 +447,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                               server_encrypt=self._param_enabled('server_encrypt'),
                               client_encrypt=self._param_enabled('client_encrypt'),
                               append_scylla_args=self.params.get('append_scylla_args'),
-                              hinted_handoff_enabled=self._param_enabled('hinted_handoff_enabled'))
+                              hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
         else:
             node.config_setup(seed_address=seed_address,
                               enable_exp=self._param_enabled('experimental'),
@@ -456,7 +456,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                               server_encrypt=self._param_enabled('server_encrypt'),
                               client_encrypt=self._param_enabled('client_encrypt'),
                               append_scylla_args=self.params.get('append_scylla_args'),
-                              hinted_handoff_enabled=self._param_enabled('hinted_handoff_enabled'))
+                              hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
