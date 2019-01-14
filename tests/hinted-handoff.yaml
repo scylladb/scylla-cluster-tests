@@ -26,7 +26,7 @@ backends: !mux
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
         instance_type_db: 'i3.2xlarge'
         instance_type_loader: 'c4.large'
-        instance_type_monitor: 't2.medium'
+        instance_type_monitor: 't3.medium'
         instance_provision: 'spot_low_price' # allowed: on_demand|spot_fleet|spot_low_price|spot_duration
         us_east_1:
             region_name: 'us-east-1'
