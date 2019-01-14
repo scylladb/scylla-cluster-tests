@@ -21,7 +21,7 @@ test_sst3: False
 # user_agent that is used for downloading files from s3
 #user_agent:
 
-hinted_handoff_enabled: true
+hinted_handoff_disabled: false
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
