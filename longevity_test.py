@@ -44,8 +44,11 @@ class LongevityTest(ClusterTester):
 
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
-            stress_queue.append(self.run_stress_thread(**params))
-            time.sleep(2)
+            if stress_cmd.startswith('cassandra-stress'):
+                stress_queue.append(self.run_stress_thread(**params))
+            else:
+                stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False))
+            time.sleep(10)
 
             # Remove "user profile" param for the next command
             if 'profile' in params:
@@ -153,6 +156,18 @@ class LongevityTest(ClusterTester):
                 for stress in verify_queue:
                     self.verify_stress_thread(queue=stress)
 
+
+        # Collect data about partitions and their rows amount
+        validate_partitions = self.params.get('validate_partitions', default=None)
+        table_name, primary_key_column, partitions_dict_before = '', '', {}
+        if validate_partitions:
+            table_name = self.params.get('table_name', default=None)
+            primary_key_column = self.params.get('primary_key_column', default=None)
+            self.log.debug('Save partitons info before reads')
+            partitions_dict_before = self.collect_partitions_info(table_name=table_name,
+                                                                  primary_key_column=primary_key_column,
+                                                                  save_into_file_name='partitions_rows_before.log')
+
         stress_cmd = self.params.get('stress_cmd', default=None)
         if stress_cmd:
             # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
@@ -187,6 +202,15 @@ class LongevityTest(ClusterTester):
 
         for stress in stress_queue:
             self.verify_stress_thread(queue=stress)
+
+        if (stress_read_cmd or stress_cmd) and validate_partitions:
+            self.log.debug('Save partitons info after reads')
+            partitions_dict_after = self.collect_partitions_info(table_name=table_name,
+                                                                 primary_key_column=primary_key_column,
+                                                                 save_into_file_name='partitions_rows_after.log')
+            self.assertEqual(partitions_dict_before, partitions_dict_after,
+                             msg='Row amount in partitions is not same before and after running of nemesis')
+
 
     def test_batch_custom_time(self):
         """
