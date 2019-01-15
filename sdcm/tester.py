@@ -1069,6 +1069,37 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
+    def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):
+        # Get and save how many rows in each partition.
+        # It may be used for validation data in the end of test
+        if not (table_name or primary_key_column):
+            self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
+            return {}
+
+        # Get distinct partition keys
+        out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
+                           cql_cmd='select distinct {pk} from {table}'.format(pk=primary_key_column,
+                                                                table=table_name),
+                                        timeout=600, split=True)
+        pk_list = sorted([int(pk) for pk in out[3:-3]])
+
+        # Collect data about partitions' rows amount.
+        partitions = {}
+        self.partitions_stats_file = os.path.join(self.logdir, save_into_file_name)
+        with open(self.partitions_stats_file, 'a') as f:
+            for i in pk_list:
+                self.log.debug("Next PK: {}".format(i))
+                out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
+                           cql_cmd='select count(*) from {table} where {pk} = {i}'.format(table=table_name,
+                                                                   pk=primary_key_column, i=i),
+                           timeout=600, split=True)
+                self.log.debug('Count result: {}'.format(out))
+                partitions[i] = out[3] if len(out) > 3 else None
+                f.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
+        self.log.info('File with partitions row data: {}'.format(self.partitions_stats_file))
+
+        return partitions
+
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
         self.kill_stress_thread()
