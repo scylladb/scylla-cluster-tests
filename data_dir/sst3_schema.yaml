@@ -17,7 +17,7 @@ table_definition: |
   CREATE TABLE IF NOT EXISTS user_with_ck (
     key blob,
     // Case sensitive column names
-    "Md5" text,
+    //"Md5" text,
     md5 text,
     email text,
     static_int int static,
