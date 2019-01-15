@@ -707,6 +707,7 @@ class BaseNode(object):
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
+        assert self.remoter.is_up(), "Network still isn't up after waiting"
         if not self._sct_log_formatter_installed:
             self.install_sct_log_formatter()
         if not self.distro:
