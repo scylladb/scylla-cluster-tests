@@ -719,7 +719,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # use the last 5 lines for the final error message.
         if results and self.create_stats:
             self.update_stress_results(results)
-        else:
+        if not results:
             self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
         if errors:
