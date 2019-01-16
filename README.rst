@@ -36,6 +36,7 @@ What's inside?
    * SCT dashboards definition files for Grafana
 
 3. Python files with tests. The convention is that test files have the ``_test.py`` suffix.
+4. Utilities directory named ``utils``. Contains help utilities for log analizing
 
 Maintained branches
 -------------------
@@ -323,9 +324,11 @@ dumping a lot of information in the test main log. That includes:
     15:43:23 DEBUG| Node lmr-scylla-db-node-88c994d5-1 [54.183.240.195 | 172.31.18.109] (seed: None): SSH access -> 'ssh -i /var/tmp/lmr-longevity-test-8b95682d.pem centos@54.183.240.195'
     ...
     15:47:52 INFO | Cluster lmr-scylla-db-cluster-88c994d5 (AMI: ami-1da7d17d Type: c4.xlarge): (6/6) DB nodes ready. Time elapsed: 79 s
+
 2) Scylla logs for all the DB nodes, logged as they happen. Example line::
 
     15:44:35 DEBUG| [54.183.193.208] [stdout] Feb 10 17:44:17 ip-172-30-0-123.ec2.internal systemd[1]: Starting Scylla Server...
+    
 3) Coredump watching thread, that runs every 30 seconds and will tell you if
    scylla dumped core
 
@@ -400,6 +403,30 @@ you now have an outline of what is going on. We store the scylla logs
 on per node files, you can find them all in the test log directory (the
 avocado HTML report will help you locate and visualize all those files, just
 click on the test name link and you'll see the dir structure.
+
+SCT utilities
+--------------------------
+
+1) utils/fetch_and_decode_stalls_from_job_database_logs.sh
+
+    This script searches in the log all reactor stalles, find unique stalles and decode them.
+    The script analyzes the database.logs that are located under avocado/job-results/<job-folder>/<test-folder>/<cluster-folder>. The script is going through nodes folders and analyze database.log for every node.
+
+2) utils/fetch_and_decode_stalls_from_journalctl_logs_all_nodes.sh
+
+    This script searches in the journalctl all reactor stalles, find unique stalles and decode them.
+    Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like:
+            logs
+        |            |
+    node1          node2
+    database.log   database.log
+
+3) utils/fetch_and_decode_stalls_from_one_journalctl_log.sh
+
+    This script searches in the one journalctl all reactor stalles, find unique stalles and decode them.
+    Save the journalctl of one node to the database.log and move to the folder
+
+For examples see utilities documentation
 
 TODO
 ----
