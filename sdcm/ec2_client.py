@@ -48,7 +48,7 @@ class EC2Client(object):
 
     def _get_ec2_client(self, region_name=None):
             try:
-                return boto3.client('ec2')
+                return boto3.client(service_name='ec2', region_name=region_name)
             except NoRegionError:
                 if not region_name:
                     raise CreateEC2ClientNoRegionError()
