@@ -13,12 +13,15 @@ logger = logging.getLogger(__name__)
 nm_obj = None
 
 
-def start_metrics_server(port=9389):
+def start_metrics_server(port=None):
     """
     https://github.com/prometheus/prometheus/wiki/Default-port-allocations
     Occupied port 9389 for SCT
     """
     hostname = socket.gethostname()
+    if not port:
+        port = random.randint(8001, 10000)
+
     if not network.is_port_free(port, hostname):
         port = network.find_free_port(8001, 10000)
 
