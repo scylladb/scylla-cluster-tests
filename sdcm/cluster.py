@@ -27,6 +27,7 @@ import requests
 import yaml
 import shutil
 
+from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from avocado.utils import path
@@ -329,6 +330,15 @@ class BaseNode(object):
             self.log.debug("Failed to detect the distro name, %s" % result.stdout)
 
         return distro
+
+    @property
+    def is_client_encrypt(self):
+        result = self.remoter.run("grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
+        return 'true' in result.stdout.lower()
+
+    def is_server_encrypt(self):
+        result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
+        return 'server_encryption_options' in result.stdout.lower()
 
     def is_centos7(self):
         return self.distro == Distro.CENTOS7
@@ -1132,7 +1142,7 @@ client_encryption_options:
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, client_encrypt = False):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -1174,6 +1184,10 @@ client_encryption_options:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
 
+        if client_encrypt:
+            self.remoter.send_files(src='./data_dir/ssl_conf',
+                                    dst='/tmp/')
+
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
@@ -1202,9 +1216,14 @@ client_encryption_options:
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
-            self.remoter.run('sudo supervisorctl start scylla-manager')
+            self.remoter.run('sudo supervisorctl restart scylla-manager')
+            res = self.remoter.run('sudo supervisorctl status scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+            res = self.remoter.run('sudo systemctl status scylla-manager.service')
+
+        if not res or "Active: failed" in res.stdout:
+            raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -2476,8 +2495,10 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
+            scylla_repo_m = self.params.get('scylla_repo_m')
+            scylla_mgmt_repo = self.params.get('scylla_mgmt_repo')
+            client_encrypt = self.params.get('client_encrypt')
+            node.install_mgmt(scylla_repo=scylla_repo_m, scylla_mgmt_repo=scylla_mgmt_repo, client_encrypt=client_encrypt)
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')

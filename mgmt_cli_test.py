@@ -106,7 +106,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, host=selected_host_ip)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, db_cluster=self.db_cluster)
         other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
 
         sleep = 40
