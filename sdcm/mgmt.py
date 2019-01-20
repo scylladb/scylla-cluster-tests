@@ -16,6 +16,8 @@ STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
 SSL_CONF_DIR = '/tmp/ssl_conf'
+SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
+SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
 from enum import Enum
 
 
@@ -251,7 +253,7 @@ class ManagerCluster(ScyllaManagerBase):
         cmd = "cluster delete -c {}".format(self.id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def update(self, name=None, host=None, ssh_identity_file=None, ssh_user=None):
+    def update(self, name=None, host=None, ssh_identity_file=None, ssh_user=None, client_encrypt=None):
         """
         $ sctool cluster update --help
         Modify a cluster
@@ -275,6 +277,8 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --ssh-identity-file={}".format(ssh_identity_file)
         if ssh_user:
             cmd += " --ssh-user={}".format(ssh_user)
+        if client_encrypt:
+            cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE, SSL_USER_KEY_FILE)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     @property
@@ -477,10 +481,11 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def add_cluster(self, name, host = None, db_cluster = None, client_encrypt = None):
         """
-        Add cluster to management
-        :param name: cluster name
-        :param host: cluster node IP-s
-        :return: cluster id
+        :param name:
+        :param host:
+        :param db_cluster:
+        :param client_encrypt:
+        :return:
 
         --host string              hostname or IP of one of the cluster nodes
         -n, --name alias               alias you can give to your cluster
@@ -505,9 +510,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
             else:
                 db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
-                    ssl_user_cert_file = SSL_CONF_DIR+'/db.crt'
-                    ssl_user_key_file = SSL_CONF_DIR+'/db.key'
-                    cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(ssl_user_cert_file, ssl_user_key_file)
+                    cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
+                                                                                    SSL_USER_KEY_FILE)
         res = self.sctool.run(cmd, parse_table_res=False)
         if not res or 'Cluster added' not in res.stderr:
             raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
