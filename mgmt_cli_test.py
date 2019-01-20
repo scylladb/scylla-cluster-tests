@@ -19,7 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus
+from sdcm.mgmt import HostStatus, HostSsl
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
@@ -32,6 +32,7 @@ class MgmtCliTest(ClusterTester):
     :avocado: enable
     """
     MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
+    CLUSTER_NAME = "mgr_cluster1"
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -100,6 +101,26 @@ class MgmtCliTest(ClusterTester):
         self.test_mgmt_repair_nemesis()
         self.test_mgmt_cluster_crud()
         self.test_mgmt_cluster_healthcheck()
+
+    def test_client_encryption(self):
+        db_client_encrypt = self.db_cluster.nodes[0].is_client_encrypt
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        cluster_name_suffix = "_encrypted" if db_client_encrypt else "non_encrypted"
+        cluster_name = self.CLUSTER_NAME+cluster_name_suffix
+        mgr_cluster = manager_tool.add_cluster(name=cluster_name, db_cluster=self.db_cluster)
+        sleep = 40
+        self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
+        time.sleep(sleep)
+
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
+        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            if db_client_encrypt:
+                assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
+            else:
+                assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
+
 
     def test_mgmt_cluster_healthcheck(self):
 
