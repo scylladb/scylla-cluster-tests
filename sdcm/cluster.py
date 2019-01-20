@@ -947,6 +947,9 @@ class BaseNode(object):
             p = re.compile('endpoint_snitch:.*')
             scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
                                          scylla_yaml_contents)
+        if not client_encrypt:
+            p = re.compile('.*enabled: true.*# <client_encrypt>.*')
+            scylla_yaml_contents = p.sub('   enabled: false                    # <client_encrypt>', scylla_yaml_contents)
 
         if self.enable_auto_bootstrap:
             if 'auto_bootstrap' in scylla_yaml_contents:
@@ -990,10 +993,10 @@ server_encryption_options:
 
         if client_encrypt:
             scylla_yaml_contents += """
-client_encryption_options:
-   enabled: true
-   certificate: /etc/scylla/db.crt
-   keyfile: /etc/scylla/db.key
+client_encryption_options:          # <client_encrypt>
+   enabled: true                    # <client_encrypt>
+   certificate: /etc/scylla/db.crt  # <client_encrypt>
+   keyfile: /etc/scylla/db.key      # <client_encrypt>
 """
 
         if self.replacement_node_ip:
@@ -1319,6 +1322,18 @@ client_encryption_options:
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
+    def enable_client_encrypt(self):
+        SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
+        self.remoter.run("sudo cat {} | grep -v '<client_encrypt>' > {}".format(SCYLLA_YAML_PATH, SCYLLA_YAML_PATH_TMP))
+        self.remoter.run("sudo mv -f {} {}".format(SCYLLA_YAML_PATH_TMP, SCYLLA_YAML_PATH))
+        self.config_setup(client_encrypt=True)
+        self.stop_scylla()
+        self.start_scylla()
+
+    def disable_client_encrypt(self):
+        self.config_setup(client_encrypt=False)
+        self.stop_scylla()
+        self.start_scylla()
 
 class BaseCluster(object):
 
@@ -1566,6 +1581,16 @@ class BaseScyllaCluster(object):
                     raise ValueError('Exception determining seed node ips: %s' %
                                      details)
         return self.seed_nodes_private_ips
+
+    def enable_client_encrypt(self):
+        for node in self.nodes:
+            logger.debug("Enabling client encryption on node")
+            node.enable_client_encrypt()
+
+    def disable_client_encrypt(self):
+        for node in self.nodes:
+            logger.debug("Disabling client encryption on node")
+            node.disable_client_encrypt()
 
     def get_seed_nodes(self):
         seed_nodes_private_ips = self.get_seed_nodes_private_ips()
