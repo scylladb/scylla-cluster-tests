@@ -1144,6 +1144,7 @@ client_encryption_options:
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo, client_encrypt = False):
         self.log.debug('Install scylla-manager')
+        logger.debug('Using parameters of - client_encrypt:[{}] '.format(client_encrypt))
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
@@ -1185,8 +1186,8 @@ client_encryption_options:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
 
         if client_encrypt:
-            self.remoter.send_files(src='./data_dir/ssl_conf',
-                                    dst='/tmp/')
+            self.log.debug("Copying TLS files from data_dir to node")
+            self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
 
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)

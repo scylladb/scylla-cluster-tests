@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
-
+SSL_CONF_DIR = '/tmp/ssl_conf'
 from enum import Enum
 
 
@@ -25,6 +25,9 @@ class ScyllaManagerError(Exception):
     """
     pass
 
+class HostSsl(Enum):
+    ON = "ON"
+    OFF = "OFF"
 
 class HostStatus(Enum):
     UP = "UP"
@@ -342,18 +345,18 @@ class ManagerCluster(ScyllaManagerBase):
         Gets the Manager's Cluster Nodes status
         """
         # Datacenter: us-eastscylla_node_east
-        # $ sctool status  -c mgr_cluster1
-        # ╭──────────┬────────────────╮
-        # │ CQL      │ Host           │
-        # ├──────────┼────────────────┤
-        # │ UP (1ms) │ 18.233.164.181 │
-        # ╰──────────┴────────────────╯
+        # ╭──────────┬─────┬──────────────╮
+        # │ CQL      │ SSL │ Host         │
+        # ├──────────┼─────┼──────────────┤
+        # │ DOWN     │ OFF │ 3.83.201.124 │
+        # │ UP (1ms) │ OFF │ 3.91.49.252  │
+        # ╰──────────┴─────┴──────────────╯
         # Datacenter: us-west-2scylla_node_west
-        # ╭────────────┬───────────────╮
-        # │ CQL        │ Host          │
-        # ├────────────┼───────────────┤
-        # │ UP (180ms) │ 54.245.183.30 │
-        # ╰────────────┴───────────────╯
+        # ╭────────────┬─────┬────────────────╮
+        # │ CQL        │ SSL │ Host           │
+        # ├────────────┼─────┼────────────────┤
+        # │ UP (154ms) │ OFF │ 35.166.186.129 │
+        # ╰────────────┴─────┴────────────────╯
         cmd = "status -c {}".format(self.id)
         dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
@@ -363,21 +366,22 @@ class ManagerCluster(ScyllaManagerBase):
                 logger.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
             else:
                 for line in hosts_table[1:]:
-                    host = line[1]
+                    host = line[2]
                     list_cql = line[0].split()
                     status = list_cql[0]
                     rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt)
+                    ssl = line[1]
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=ssl)
             logger.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
-                logger.debug("{}: {},{}".format(ip, health.status, health.rtt))
+                logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.ssl))
         return dict_hosts_health
 
     class _HostHealth():
-        def __init__(self, status, rtt):
+        def __init__(self, status, rtt, ssl):
             self.status = status
             self.rtt = rtt
-
+            self.ssl = ssl
 
 class MgrUtils(object):
 
@@ -501,8 +505,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
             else:
                 db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
-                    ssl_user_cert_file = '/tmp/db.crt'
-                    ssl_user_key_file = '/tmp/db.key'
+                    ssl_user_cert_file = SSL_CONF_DIR+'/db.crt'
+                    ssl_user_key_file = SSL_CONF_DIR+'/db.key'
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(ssl_user_cert_file, ssl_user_key_file)
         res = self.sctool.run(cmd, parse_table_res=False)
         if not res or 'Cluster added' not in res.stderr:
