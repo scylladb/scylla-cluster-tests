@@ -91,6 +91,8 @@ class MgmtCliTest(ClusterTester):
         Test steps:
         1) Run the repair test.
         2) Run test_mgmt_cluster test.
+        3) test_mgmt_cluster_healthcheck
+        4) test_client_encryption
         :return:
         """
 
