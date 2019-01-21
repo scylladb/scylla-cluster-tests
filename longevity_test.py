@@ -206,9 +206,8 @@ class LongevityTest(ClusterTester):
         self._pre_create_schema(keyspace_num=total_stress)
 
         num_of_batches = int(total_stress / batch_size)
-        while num_of_batches > 0:
-            num_of_batches = num_of_batches - 1
-            for i in xrange(1, total_stress + 1):
+        for batch in xrange(0, num_of_batches):
+            for i in xrange(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
                 self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
