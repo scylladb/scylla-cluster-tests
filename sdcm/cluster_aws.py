@@ -9,6 +9,7 @@ from botocore.exceptions import WaiterError, ClientError
 import boto3.session
 from avocado.utils import runtime as avocado_runtime
 from textwrap import dedent
+from threading import Thread
 
 import cluster
 import ec2_client
@@ -277,7 +278,6 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
 
-
     @property
     def public_ip_address(self):
         return self._instance.public_ip_address
@@ -369,6 +369,41 @@ class AWSNode(cluster.BaseNode):
         self.stop_task_threads()
         self._instance.terminate()
         self.log.info('Destroyed')
+
+    def start_task_threads(self):
+        if self._instance.spot_instance_request_id and 'spot' in self._instance.instance_lifecycle.lower():
+            self.start_aws_termination_monitoring()
+        super(AWSNode, self).start_task_threads()
+
+    def stop_task_threads(self, timeout=10):
+        if self._spot_aws_termination_task and not self.termination_event.isSet():
+            self.termination_event.set()
+            self._spot_aws_termination_task.join(timeout)
+        super(AWSNode, self).stop_task_threads(timeout)
+
+    def get_aws_termination_notification(self):
+        try:
+            result = self.remoter.run('curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
+            status = result.stdout.strip()
+            if '404 - Not Found' not in status:
+                return status
+        except Exception as details:
+            self.log.error('Error during getting aws termination notification %s' % details)
+        return None
+
+    def monitor_aws_termination_thread(self):
+        while True:
+            if self.termination_event.isSet():
+                break
+            self.wait_ssh_up(verbose=False)
+            result = self.get_aws_termination_notification()
+            if result:
+                self.log.warning('Got spot termination notification from AWS %s' % result)
+            time.sleep(5)
+
+    def start_aws_termination_monitoring(self):
+        self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
+        self._spot_aws_termination_task.start()
 
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
