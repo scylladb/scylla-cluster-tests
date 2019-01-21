@@ -97,6 +97,7 @@ class MgmtCliTest(ClusterTester):
         self.test_mgmt_repair_nemesis()
         self.test_mgmt_cluster_crud()
         self.test_mgmt_cluster_healthcheck()
+        self.test_client_encryption()
 
     def test_client_encryption(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
@@ -105,8 +106,7 @@ class MgmtCliTest(ClusterTester):
         repair_task = mgr_cluster.create_repair_task()
         self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
-        repair_task.stop()
-        repair_task.start()
+        repair_task.start(use_continue=True)
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
