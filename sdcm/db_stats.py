@@ -270,30 +270,31 @@ class TestStatsMixin(Stats):
             self._stats['results']['stats_total'] = total_stats
 
     def update_test_details(self, errors=None, coredumps=None, snapshot_uploaded=False, scylla_conf=False):
-        self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self.monitors:
-            url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
-            self._stats['test_details']['prometheus_report'] = url_s3 + ".zip"
-            # setup grafana_snapshot value only when snapshot is successfully uploaded
-            if snapshot_uploaded:
-                self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
+        if self.create_stats:
+            self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            if self.monitors:
+                url_s3 = self.get_s3_url(os.path.normpath(self.job.logdir))
+                self._stats['test_details']['prometheus_report'] = url_s3 + ".zip"
+                # setup grafana_snapshot value only when snapshot is successfully uploaded
+                if snapshot_uploaded:
+                    self._stats['test_details']['grafana_snapshot'] = url_s3 + ".png"
 
-        if scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
-            node = self.db_cluster.nodes[0]
-            res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
-            self._stats['test_details']['scylla_args'] = res.stdout.strip()
-            res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
-            self._stats['test_details']['io_conf'] = res.stdout.strip()
-            res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
-            self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
+            if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['test_details'].keys():
+                node = self.db_cluster.nodes[0]
+                res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
+                self._stats['test_details']['scylla_args'] = res.stdout.strip()
+                res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
+                self._stats['test_details']['io_conf'] = res.stdout.strip()
+                res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
+                self._stats['test_details']['cpuset_conf'] = res.stdout.strip()
 
-        self._stats['status'] = self.status
-        update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
-        if errors:
-            update_data.update({'errors': errors})
-        if coredumps:
-            update_data.update({'coredumps': coredumps})
-        self.update(update_data)
+            self._stats['status'] = self.status
+            update_data = {'status': self._stats['status'], 'test_details': self._stats['test_details']}
+            if errors:
+                update_data.update({'errors': errors})
+            if coredumps:
+                update_data.update({'coredumps': coredumps})
+            self.update(update_data)
 
     def check_regression(self):
         ra = ResultsAnalyzer(index=self._test_index,

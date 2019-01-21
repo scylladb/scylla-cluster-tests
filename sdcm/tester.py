@@ -197,7 +197,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         Allow access db stats object to external objects like Nemesis - for updates
         :return: db_stats.Stats object or None if param store_results_in_elasticsearch set to False in yaml.
         """
-        if self.params.get(key='store_results_in_elasticsearch', default=True):
+        if self.create_stats:
             return db_stats.Stats(test_index=self._test_index,
                                   test_type=self._test_type,
                                   test_id=self._test_id)
@@ -664,7 +664,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_stress_cmd_details(stress_cmd, prefix)
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
                                               self.outputdir,
                                               stress_num=stress_num,
@@ -679,7 +680,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if duration is None:
             duration = self.params.get('test_duration')
         timeout = duration * 60 + 600
-        self.update_bench_stress_cmd_details(stress_cmd)
+        if self.create_stats:
+            self.update_bench_stress_cmd_details(stress_cmd)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
@@ -695,9 +697,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # to run out of memory when writing the XML report. Since
         # the error message is merely informational, let's simply
         # use the last 5 lines for the final error message.
-        if results:
+        if results and self.create_stats:
             self.update_stress_results(results)
-        else:
+        if not results:
             self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
         if errors:
@@ -707,14 +709,15 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     @clean_resources_on_exception
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
-        if store_results:
+        if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
 
     @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
-        self.update_stress_results(results)
+        if self.create_stats:
+            self.update_stress_results(results)
         return results
 
     def get_auth_provider(self, user, password):
