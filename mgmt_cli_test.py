@@ -116,6 +116,8 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
+            assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+
 
     def test_mgmt_cluster_healthcheck(self):
 

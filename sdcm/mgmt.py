@@ -507,7 +507,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if client_encrypt != False:
             if not db_cluster:
                 logger.warning("db_cluster is not given. Scylla-Manager connection to cluster may fail since not using client-encryption parameters.")
-            else:
+            else: # check if scylla-node has client-encrypt
                 db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,

@@ -1145,9 +1145,8 @@ client_encryption_options:          # <client_encrypt>
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, client_encrypt = False):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, manager_backend_client_encrypt=None):
         self.log.debug('Install scylla-manager')
-        logger.debug('Using parameters of - client_encrypt:[{}] '.format(client_encrypt))
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
         mgmt_user = 'scylla-manager'
@@ -1188,9 +1187,8 @@ client_encryption_options:          # <client_encrypt>
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
 
-        if client_encrypt:
-            self.log.debug("Copying TLS files from data_dir to node")
-            self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
+        self.log.debug("Copying TLS files from data_dir to node")
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
 
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
@@ -2523,8 +2521,8 @@ class BaseMonitorSet(object):
         if self.params.get('use_mgmt', default=None):
             scylla_repo_m = self.params.get('scylla_repo_m')
             scylla_mgmt_repo = self.params.get('scylla_mgmt_repo')
-            client_encrypt = self.params.get('client_encrypt')
-            node.install_mgmt(scylla_repo=scylla_repo_m, scylla_mgmt_repo=scylla_mgmt_repo, client_encrypt=client_encrypt)
+            manager_backend_client_encrypt = self.params.get('manager_backend_client_encrypt')
+            node.install_mgmt(scylla_repo=scylla_repo_m, scylla_mgmt_repo=scylla_mgmt_repo, manager_backend_client_encrypt=manager_backend_client_encrypt)
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
