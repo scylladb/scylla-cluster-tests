@@ -19,7 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus
+from sdcm.mgmt import HostStatus, HostSsl
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
@@ -32,6 +32,7 @@ class MgmtCliTest(ClusterTester):
     :avocado: enable
     """
     MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
+    CLUSTER_NAME = "mgr_cluster1"
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -40,11 +41,7 @@ class MgmtCliTest(ClusterTester):
             1) Run cassandra stress on cluster.
             2) Add cluster to Manager and run full repair via Nemesis
         """
-        self.log.info('Starting c-s write workload for 1m')
-        stress_cmd = self.params.get('stress_cmd')
-        stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
-        self.log.info('Sleeping for 15s to let cassandra-stress run...')
-        time.sleep(15)
+        self._generate_load()
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
         mgmt_nemesis = MgmtRepair(tester_obj=self, termination_event=self.db_cluster.termination_event)
         mgmt_nemesis.disrupt()
@@ -101,12 +98,33 @@ class MgmtCliTest(ClusterTester):
         self.test_mgmt_cluster_crud()
         self.test_mgmt_cluster_healthcheck()
 
+    def test_client_encryption(self):
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster)
+        self._generate_load()
+        repair_task = mgr_cluster.create_repair_task()
+        self.db_cluster.enable_client_encrypt()
+        mgr_cluster.update(client_encrypt=True)
+        repair_task.stop()
+        repair_task.start()
+        sleep = 40
+        self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
+        time.sleep(sleep)
+
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
+        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
+            assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+
+
     def test_mgmt_cluster_healthcheck(self):
 
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, host=selected_host_ip)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, db_cluster=self.db_cluster)
         other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
 
         sleep = 40
@@ -169,6 +187,12 @@ class MgmtCliTest(ClusterTester):
         manager_tool.rollback_upgrade(scylla_mgmt_repo=scylla_mgmt_repo)
         assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
 
+    def _generate_load(self):
+        self.log.info('Starting c-s write workload for 1m')
+        stress_cmd = self.params.get('stress_cmd')
+        stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        self.log.info('Sleeping for 15s to let cassandra-stress run...')
+        time.sleep(15)
 
 if __name__ == '__main__':
     main()

@@ -27,6 +27,7 @@ import requests
 import yaml
 import shutil
 
+from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from avocado.utils import path
@@ -329,6 +330,16 @@ class BaseNode(object):
             self.log.debug("Failed to detect the distro name, %s" % result.stdout)
 
         return distro
+
+    @property
+    def is_client_encrypt(self):
+        result = self.remoter.run("grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
+        return 'true' in result.stdout.lower()
+
+    @property
+    def is_server_encrypt(self):
+        result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
+        return 'server_encryption_options' in result.stdout.lower()
 
     def is_centos7(self):
         return self.distro == Distro.CENTOS7
@@ -937,6 +948,9 @@ class BaseNode(object):
             p = re.compile('endpoint_snitch:.*')
             scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
                                          scylla_yaml_contents)
+        if not client_encrypt:
+            p = re.compile('.*enabled: true.*# <client_encrypt>.*')
+            scylla_yaml_contents = p.sub('   enabled: false                    # <client_encrypt>', scylla_yaml_contents)
 
         if self.enable_auto_bootstrap:
             if 'auto_bootstrap' in scylla_yaml_contents:
@@ -979,12 +993,13 @@ server_encryption_options:
 """
 
         if client_encrypt:
-            scylla_yaml_contents += """
-client_encryption_options:
-   enabled: true
-   certificate: /etc/scylla/db.crt
-   keyfile: /etc/scylla/db.key
-"""
+            client_encrypt_conf = dedent("""
+                            client_encryption_options:          # <client_encrypt>
+                               enabled: true                    # <client_encrypt>
+                               certificate: /etc/scylla/db.crt  # <client_encrypt>
+                               keyfile: /etc/scylla/db.key      # <client_encrypt>
+            """)
+            scylla_yaml_contents += client_encrypt_conf
 
         if self.replacement_node_ip:
             logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
@@ -1132,7 +1147,7 @@ client_encryption_options:
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, manager_backend_client_encrypt=None):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -1174,6 +1189,9 @@ client_encryption_options:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
 
+        self.log.debug("Copying TLS files from data_dir to node")
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
+
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
@@ -1202,9 +1220,14 @@ client_encryption_options:
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
-            self.remoter.run('sudo supervisorctl start scylla-manager')
+            self.remoter.run('sudo supervisorctl restart scylla-manager')
+            res = self.remoter.run('sudo supervisorctl status scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+            res = self.remoter.run('sudo systemctl status scylla-manager.service')
+
+        if not res or "Active: failed" in res.stdout:
+            raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -1299,6 +1322,18 @@ client_encryption_options:
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
+    def enable_client_encrypt(self):
+        SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
+        self.remoter.run("sudo cat {} | grep -v '<client_encrypt>' > {}".format(SCYLLA_YAML_PATH, SCYLLA_YAML_PATH_TMP))
+        self.remoter.run("sudo mv -f {} {}".format(SCYLLA_YAML_PATH_TMP, SCYLLA_YAML_PATH))
+        self.config_setup(client_encrypt=True)
+        self.stop_scylla()
+        self.start_scylla()
+
+    def disable_client_encrypt(self):
+        self.config_setup(client_encrypt=False)
+        self.stop_scylla()
+        self.start_scylla()
 
 class BaseCluster(object):
 
@@ -1546,6 +1581,16 @@ class BaseScyllaCluster(object):
                     raise ValueError('Exception determining seed node ips: %s' %
                                      details)
         return self.seed_nodes_private_ips
+
+    def enable_client_encrypt(self):
+        for node in self.nodes:
+            logger.debug("Enabling client encryption on node")
+            node.enable_client_encrypt()
+
+    def disable_client_encrypt(self):
+        for node in self.nodes:
+            logger.debug("Disabling client encryption on node")
+            node.disable_client_encrypt()
 
     def get_seed_nodes(self):
         seed_nodes_private_ips = self.get_seed_nodes_private_ips()
@@ -2476,8 +2521,9 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m')
+                              , scylla_mgmt_repo=self.params.get('scylla_mgmt_repo')
+                              , manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
