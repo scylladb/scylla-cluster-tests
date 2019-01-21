@@ -1484,6 +1484,14 @@ class BaseCluster(object):
         node.destroy()
 
 
+class NodeSetupFailed(Exception):
+    pass
+
+
+class NodeSetupTimeout(Exception):
+    pass
+
+
 def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
@@ -1525,7 +1533,8 @@ def wait_for_init_wrap(method):
             time_elapsed = time.time() - start_time
             try:
                 node, node_status = queue.get(block=True, timeout=5)
-                assert node_status is True, 'Setup has failed!'
+                if not node_status:
+                    raise NodeSetupFailed("{node}:{node_status}".format(**locals()))
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
@@ -1535,7 +1544,7 @@ def wait_for_init_wrap(method):
                 msg = 'TIMEOUT [%d min]: Waiting for node(-s) setup(%d/%d) expired!' % (
                     timeout, len(results), len(node_list))
                 cl_inst.log.error(msg)
-                raise Exception(msg)
+                raise NodeSetupTimeout(msg)
 
         time_elapsed = time.time() - start_time
         cl_inst.log.debug('Setup duration -> %s s', int(time_elapsed))
