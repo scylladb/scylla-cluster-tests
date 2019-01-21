@@ -322,6 +322,20 @@ class AWSNode(cluster.BaseNode):
             self._instance.reload()
 
     def restart(self):
+        # We differenciate between "Restart" and "Reboot".
+        # Restart in AWS will be a Stop and Start of an instance.
+        # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
+        # need to setup the instance and treat it as a new instance.
+        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            clean_script = dedent("""
+                sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
+                sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
+            """)
+            self.remoter.run("sudo bash -cxe '%s'" % clean_script)
+            output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
+            if 'replace_address_first_boot:' not in output.stdout:
+                self.remoter.run('sudo echo replace_address_first_boot: %s >> /etc/scylla/scylla.yaml' %
+                                 self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
@@ -330,7 +344,12 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
         self.remoter.hostname = self._instance.public_ip_address
-        self.wait_db_up()
+        self.wait_ssh_up()
+
+        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+            self.stop_scylla_server(verify_down=False)
+            self.start_scylla_server(verify_up=False)
 
     def destroy(self):
         self.stop_task_threads()
