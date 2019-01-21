@@ -25,9 +25,9 @@ import threading
 
 from avocado.utils import process
 
-from sdcm.cluster import SCYLLA_YAML_PATH
+from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
 from sdcm.mgmt import TaskStatus
-from .utils import get_data_dir_path
+from .utils import get_data_dir_path, retrying
 from .log import SDCMAdapter
 from .keystore import KeyStore
 from . import prometheus
@@ -259,12 +259,19 @@ class Nemesis(object):
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_private_ip=None, timeout=10800):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         new_node.replacement_node_ip = old_node_private_ip
-        self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
+        try:
+            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
+        except (NodeSetupFailed, NodeSetupTimeout):
+            self.log.warning("Setup of the '%s' failed, removing it from list of nodes" % new_node)
+            self.cluster.nodes.remove(new_node)
+            self.log.warning("Node will not be terminated. Please terminate manually!!!")
+            raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
