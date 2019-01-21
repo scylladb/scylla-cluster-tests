@@ -45,7 +45,7 @@ class LongevityTest(ClusterTester):
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
-            time.sleep(10)
+            time.sleep(2)
 
             # Remove "user profile" param for the next command
             if 'profile' in params:
