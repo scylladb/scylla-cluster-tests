@@ -481,11 +481,11 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def add_cluster(self, name, host = None, db_cluster = None, client_encrypt = None):
         """
-        :param name:
-        :param host:
-        :param db_cluster:
-        :param client_encrypt:
-        :return:
+        :param name: cluster name
+        :param host: cluster node IP
+        :param db_cluster: scylla cluster
+        :param client_encrypt: is TSL client encryption enable/disable
+        :return: ManagerCluster
 
         --host string              hostname or IP of one of the cluster nodes
         -n, --name alias               alias you can give to your cluster

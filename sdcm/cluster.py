@@ -336,6 +336,7 @@ class BaseNode(object):
         result = self.remoter.run("grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
         return 'true' in result.stdout.lower()
 
+    @property
     def is_server_encrypt(self):
         result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
         return 'server_encryption_options' in result.stdout.lower()
@@ -992,12 +993,13 @@ server_encryption_options:
 """
 
         if client_encrypt:
-            scylla_yaml_contents += """
-client_encryption_options:          # <client_encrypt>
-   enabled: true                    # <client_encrypt>
-   certificate: /etc/scylla/db.crt  # <client_encrypt>
-   keyfile: /etc/scylla/db.key      # <client_encrypt>
-"""
+            client_encrypt_conf = dedent("""
+                            client_encryption_options:          # <client_encrypt>
+                               enabled: true                    # <client_encrypt>
+                               certificate: /etc/scylla/db.crt  # <client_encrypt>
+                               keyfile: /etc/scylla/db.key      # <client_encrypt>
+            """)
+            scylla_yaml_contents += client_encrypt_conf
 
         if self.replacement_node_ip:
             logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
@@ -2519,10 +2521,9 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            scylla_repo_m = self.params.get('scylla_repo_m')
-            scylla_mgmt_repo = self.params.get('scylla_mgmt_repo')
-            manager_backend_client_encrypt = self.params.get('manager_backend_client_encrypt')
-            node.install_mgmt(scylla_repo=scylla_repo_m, scylla_mgmt_repo=scylla_mgmt_repo, manager_backend_client_encrypt=manager_backend_client_encrypt)
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m')
+                              , scylla_mgmt_repo=self.params.get('scylla_mgmt_repo')
+                              , manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
