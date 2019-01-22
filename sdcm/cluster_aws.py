@@ -8,6 +8,7 @@ import yaml
 from botocore.exceptions import WaiterError, ClientError
 import boto3.session
 from avocado.utils import runtime as avocado_runtime
+from textwrap import dedent
 
 import cluster
 import ec2_client
