@@ -150,12 +150,13 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
                 "has_regression": False,
+
             }
 
             if (diff_last < -5 or diff_best < -5):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
-
+            report_results[test_type]["dataset_name"] = current_result['dataset_name']
             report_results[test_type][metrica] = stats
 
         def set_results_for_sub(metrica):
@@ -200,23 +201,30 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         bad_chars = " "
         os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
         results = {}
-        for dirname in os.listdir(os.getcwd()):
-            logger.info(dirname)
-            for filename in os.listdir(dirname):
-                new_filename = "".join(c for c in filename if c not in bad_chars)
-                test_args = os.path.splitext(new_filename)[0]
-                test_type = dirname + "_" + test_args
-                json_path = os.path.join(dirname, filename)
-                with open(json_path, 'r') as f:
-                    logger.info("Reading: %s", json_path)
-                    datastore = json.load(f)
-                datastore.update({'hostname': self.hostname,
-                                  'test_args': test_args,
-                                  'test_run_date': self.test_run_date})
-                if update_db:
-                    self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
-                                        doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
-                results[test_type] = datastore
+        for (fullpath, subdirs, files) in os.walk(os.getcwd()):
+            logger.info(fullpath)
+            if not subdirs:
+                dataset_name = os.path.basename(fullpath)
+                logger.info(dataset_name)
+                for filename in files:
+                    dirname = os.path.basename(os.path.dirname(fullpath))
+                    logger.info(dirname)
+                    new_filename = "".join(c for c in filename if c not in bad_chars)
+                    test_args = os.path.splitext(new_filename)[0]
+                    test_type = dirname + "_" + test_args
+                    json_path = os.path.join(dirname, dataset_name, filename)
+                    with open(json_path, 'r') as f:
+                        logger.info("Reading: %s", json_path)
+                        datastore = json.load(f)
+                    datastore.update({'hostname': self.hostname,
+                                      'test_args': test_args,
+                                      'test_run_date': self.test_run_date,
+                                      'dataset_name': dataset_name
+                                      })
+                    if update_db:
+                        self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
+                                            doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
+                    results[test_type] = datastore
         return results
 
 
