@@ -258,6 +258,7 @@ class AWSNode(cluster.BaseNode):
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
+        self._spot_aws_termination_task = None
         super(AWSNode, self).__init__(name=name,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
