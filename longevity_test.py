@@ -198,7 +198,7 @@ class LongevityTest(ClusterTester):
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
         stress_cmd = self.params.get('stress_cmd', default=None)
-        self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size,
+        self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
                                     stress_cmd=stress_cmd)
 
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
