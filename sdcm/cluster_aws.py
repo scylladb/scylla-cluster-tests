@@ -91,6 +91,7 @@ class AWSCluster(cluster.BaseCluster):
         self._ec2_ami_id = ec2_ami_id
         self.region_names = region_names
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
+
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -185,12 +186,50 @@ class AWSCluster(cluster.BaseCluster):
                        'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
-
-        if self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
+        if self.instance_provision == 'mixed':
+            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx)
+        elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
             instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
         else:
             instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
 
+        return instances
+
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx):
+        instances = []
+        MAX_NUM_ON_DEMAND = 2
+        if isinstance(self, ScyllaAWSCluster) or isinstance(self, CassandraAWSCluster):
+            if count > 2:
+                count_on_demand = MAX_NUM_ON_DEMAND
+            elif count == 2:
+                count_on_demand = 1
+            else:
+                count_on_demand = 0
+
+            if self.nodes:
+                num_of_on_demand = len([node for node in self.nodes if not node.is_spot])
+                if num_of_on_demand < MAX_NUM_ON_DEMAND:
+                    count_on_demand = MAX_NUM_ON_DEMAND - num_of_on_demand
+                else:
+                    count_on_demand = 0
+
+            count_spot = count - count_on_demand
+
+            if count_spot > 0:
+                self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
+                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx))
+            if count_on_demand > 0:
+                self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
+                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx))
+            self.instance_provision = 'mixed'
+        elif isinstance(self, LoaderSetAWS):
+            self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+        elif isinstance(self, MonitorSetAWS):
+            self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
+            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx))
+        else:
+            raise Exception('Unsuported type of cluster type %s' % self)
         return instances
 
     def _get_instances(self, dc_idx):
@@ -277,6 +316,14 @@ class AWSNode(cluster.BaseNode):
 
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
+
+    @property
+    def is_spot(self):
+        if (self._instance.instance_lifecycle and
+                'spot' in self._instance.instance_lifecycle.lower()):
+            return True
+        else:
+            return False
 
     @property
     def public_ip_address(self):
@@ -661,6 +708,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                      (cluster_prefix, n_nodes))
         cluster.BaseLoaderSet.__init__(self,
                                        params=params)
+
         AWSCluster.__init__(self,
                             ec2_ami_id=ec2_ami_id,
                             ec2_subnet_id=ec2_subnet_id,
@@ -677,7 +725,6 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                             params=params)
 
 
-
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
@@ -692,6 +739,7 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
         cluster.BaseMonitorSet.__init__(self,
                                         targets=targets,
                                         params=params)
+
         AWSCluster.__init__(self,
                             ec2_ami_id=ec2_ami_id,
                             ec2_subnet_id=ec2_subnet_id,
