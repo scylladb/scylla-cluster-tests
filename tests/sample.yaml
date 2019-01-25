@@ -42,7 +42,10 @@ ip_ssh_connections: 'private'
 
 backends: !mux
     aws: !mux
-        instance_provision: 'spot_low_price' # Allowed values: on_demand|spot_fleet|spot_low_price|spot_duration
+        # instace_provision: mixed - create maximum 2 on_demand instances and other as spot_low_price instaces for db_nodes
+        #                            loader nodes as spot_low_price instaces
+        #                            monitor nodes as on_demand instance
+        instance_provision: 'spot_low_price' # Allowed values: on_demand|spot_fleet|spot_low_price|spot_duration|mixed
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
         instance_type_loader: 'c4.xlarge'

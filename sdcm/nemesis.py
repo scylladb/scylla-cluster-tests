@@ -26,6 +26,7 @@ import re
 
 from avocado.utils import process
 
+from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
 from sdcm.mgmt import TaskStatus
 from .utils import get_data_dir_path, retrying
@@ -184,22 +185,20 @@ class Nemesis(object):
         self.target_node.wait_jmx_up()
 
     def disrupt_multiple_hard_reboot_node(self):
-
         num_of_reboots = random.randint(2, 10)
         for i in range(num_of_reboots):
             self._set_current_disruption('MultipleHardRebootNode %s' % self.target_node)
-            self.log.debug("Rebooting {} out of {} times".format(i+1,num_of_reboots))
+            self.log.debug("Rebooting {} out of {} times".format(i + 1, num_of_reboots))
             self.target_node.reboot(hard=True)
-            if random.choice([True,False]):
+            if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
                 self.target_node.wait_db_up()
             else:
                 self.log.info('Waiting JMX services to start after node reboot')
                 self.target_node.wait_jmx_up()
-            sleep_time = random.randint(0,100)
+            sleep_time = random.randint(0, 100)
             self.log.info('Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
             time.sleep(sleep_time)
-
 
     def disrupt_soft_reboot_node(self):
         self._set_current_disruption('SoftRebootNode %s' % self.target_node)
@@ -547,7 +546,7 @@ class Nemesis(object):
                 1.0: Disables the Bloom filter.
             default: bloom_filter_fp_chance = 0.01
         """
-        self._modify_table_property(name="bloom_filter_fp_chance", val=random.random()/2)
+        self._modify_table_property(name="bloom_filter_fp_chance", val=random.random() / 2)
 
     def modify_table_compaction(self):
         """
@@ -589,7 +588,7 @@ class Nemesis(object):
             replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: dclocal_read_repair_chance = 0.1
         """
-        self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
+        self._modify_table_property(name="dclocal_read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
     def modify_table_default_time_to_live(self):
         """
@@ -633,7 +632,7 @@ class Nemesis(object):
             not limited to replicas in the same DC as the coordinator. The value must be between 0 and 1
             default: read_repair_chance = 0.0
         """
-        self._modify_table_property(name="read_repair_chance", val=random.choice([0,0.2,0.5,0.9]))
+        self._modify_table_property(name="read_repair_chance", val=random.choice([0, 0.2, 0.5, 0.9]))
 
     def modify_table_speculative_retry(self):
         """
@@ -768,6 +767,18 @@ class Nemesis(object):
             self.tester.fail(result.stderr)
 
 
+class NotSpotNemesis(Nemesis):
+    def set_target_node(self):
+        if isinstance(self.cluster, ScyllaAWSCluster):
+            non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed and not node.is_spot]
+        else:
+            non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
+        if non_seed_nodes:
+            self.target_node = random.choice(non_seed_nodes)
+
+        self.log.info('Current Target: %s', self.target_node)
+
+
 def log_time_elapsed_and_status(method):
     """
     Log time elapsed for method to run
@@ -855,11 +866,13 @@ class StopStartMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_stop_start_scylla_server()
 
-class RestartThenRepairNodeMonkey(Nemesis):
+
+class RestartThenRepairNodeMonkey(NotSpotNemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_then_repair_node()
+
 
 class MultipleHardRebootNodeMonkey(Nemesis):
 
@@ -867,17 +880,20 @@ class MultipleHardRebootNodeMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_multiple_hard_reboot_node()
 
+
 class HardRebootNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_hard_reboot_node()
 
+
 class SoftRebootNodeMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_soft_reboot_node()
+
 
 class DrainerMonkey(Nemesis):
 
@@ -954,6 +970,7 @@ class NodeToolCleanupMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
 
 class ChaosMonkey(Nemesis):
 
