@@ -842,7 +842,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                   bypassed_exception=NoHostAvailable)
 
     def create_ks(self, session, name, rf):
-        query = 'CREATE KEYSPACE %s WITH replication={%s}'
+        query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
         if isinstance(rf, types.IntType):
             # we assume simpleStrategy
             session.execute(query % (name,
@@ -869,11 +869,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 additional_columns = "%s, %s %s" % (additional_columns, k, v)
 
         if additional_columns == "":
-            query = ('CREATE COLUMNFAMILY %s (key %s, c varchar, v varchar, '
+            query = ('CREATE COLUMNFAMILY IF NOT EXISTS %s (key %s, c varchar, v varchar, '
                      'PRIMARY KEY(key, c)) WITH comment=\'test cf\'' %
                      (name, key_type))
         else:
-            query = ('CREATE COLUMNFAMILY %s (key %s PRIMARY KEY%s) '
+            query = ('CREATE COLUMNFAMILY IF NOT EXISTS %s (key %s PRIMARY KEY%s) '
                      'WITH comment=\'test cf\'' %
                      (name, key_type, additional_columns))
 
