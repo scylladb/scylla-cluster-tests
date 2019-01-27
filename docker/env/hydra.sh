@@ -7,10 +7,12 @@ VERSION=$(cat ${DOCKER_ENV_DIR}/version)
 PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
+HOST_NAME=SCT-CONTAINER
 
 # if running on Build server
 if [[ ${USER} == "jenkins" ]]; then
     echo "Running on Build Server..."
+    HOST_NAME=`hostname`
 else
     TTY_STDIN="-it"
     TERM_SET_SIZE="export COLUMNS=`tput cols`; export LINES=`tput lines`;"
@@ -37,7 +39,7 @@ fi
 ${SCT_DIR}/get-qa-ssh-keys.sh
 
 docker run --rm ${TTY_STDIN} --privileged \
-    -h SCT-CONTAINER \
+    -h ${HOST_NAME} \
     -v /var/run:/run \
     -v ${SCT_DIR}:${WORK_DIR} \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
