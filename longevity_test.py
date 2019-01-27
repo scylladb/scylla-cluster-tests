@@ -45,7 +45,7 @@ class LongevityTest(ClusterTester):
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
-            time.sleep(10)
+            time.sleep(2)
 
             # Remove "user profile" param for the next command
             if 'profile' in params:
@@ -102,19 +102,19 @@ class LongevityTest(ClusterTester):
             # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
             # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
             if pre_create_schema:
-                self._pre_create_schema()
+                self._pre_create_schema(keyspace_num)
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
             if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
-                    self._run_all_stress_cmds(write_queue, params={'stress_cmd':prepare_write_cmd,
+                    self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
                                                                    'keyspace_name': keyspace_name,
                                                                    'round_robin': True})
             # Not using round_robin and all keyspaces will run on all loaders
             else:
-                self._run_all_stress_cmds(write_queue, params={'stress_cmd':prepare_write_cmd,
+                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
                                                                'keyspace_num': keyspace_num})
 
             # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
@@ -144,7 +144,7 @@ class LongevityTest(ClusterTester):
 
         stress_cmd = self.params.get('stress_cmd', default=None)
         if stress_cmd:
-            # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using MULTI-KEYSPACES
+            # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
             if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
@@ -170,6 +170,49 @@ class LongevityTest(ClusterTester):
 
         for stress in stress_queue:
             self.verify_stress_thread(queue=stress)
+
+    def test_batch_custom_time(self):
+        """
+        The test runs like test_custom_time but desgined for running multiple stress commands in batches.
+        It take the keyspace_num and calculates the number of batches to run based on batch_size.
+        For every batch, it runs the stress and verify them and only then moves to the next batch.
+
+        Test assumes:
+        - pre_create_schema (The test pre-creating the schema for all batches)
+        - round_robin
+        - No nemesis during prepare
+
+        :param keyspace_num: Number of keyspaces to be batched (in future it can be enahnced with number of tables).
+        :param batch_size: Number of stress commands to run together in a batch.
+        """
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+
+        total_stress = self.params.get('keyspace_num')  # In future it may be 1 keyspace but multiple tables in it.
+        batch_size = self.params.get('batch_size', default=1)
+
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+        if prepare_write_cmd:
+            self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size,
+                                        stress_cmd=prepare_write_cmd)
+
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+
+        stress_cmd = self.params.get('stress_cmd', default=None)
+        self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
+                                    stress_cmd=stress_cmd)
+
+    def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
+        stress_queue = list()
+        self._pre_create_schema(keyspace_num=total_stress)
+
+        num_of_batches = int(total_stress / batch_size)
+        for batch in xrange(0, num_of_batches):
+            for i in xrange(1 + batch * batch_size, (batch + 1) * batch_size + 1):
+                keyspace_name = self._get_keyspace_name(i)
+                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
+                                                                'keyspace_name': keyspace_name, 'round_robin': True})
+            for stress in stress_queue:
+                self.verify_stress_thread(queue=stress)
 
     def _create_counter_table(self):
         """
@@ -206,7 +249,7 @@ class LongevityTest(ClusterTester):
                 AND speculative_retry = '99.0PERCENTILE';
         """)
 
-    def _pre_create_schema(self, in_memory=False):
+    def _pre_create_schema(self, keyspace_num=1, in_memory=False):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -214,7 +257,6 @@ class LongevityTest(ClusterTester):
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
 
-        keyspace_num = self.params.get('keyspace_num', default=1)
         self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
 
         for i in xrange(1, keyspace_num+1):
@@ -232,6 +274,7 @@ class LongevityTest(ClusterTester):
         """
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo nodetool flush')
+
 
 if __name__ == '__main__':
     main()
