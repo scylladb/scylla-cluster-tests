@@ -745,8 +745,8 @@ class BaseNode(object):
             cassandra_stress_bin = '/usr/bin/cassandra-stress'
         return self.file_exists(cassandra_stress_bin)
 
-    @staticmethod
-    def _parse_cfstats(cfstats_output):
+    # @staticmethod
+    def _parse_cfstats(self, cfstats_output):
         stat_dict = {}
         for line in cfstats_output.splitlines()[1:]:
             stat_line = [element for element in line.strip().split(':') if
@@ -757,7 +757,10 @@ class BaseNode(object):
                         if '.' in stat_line[1].split()[0]:
                             stat_dict[stat_line[0]] = float(stat_line[1].split()[0])
                         else:
-                            stat_dict[stat_line[0]] = int(stat_line[1].split()[0])
+                            stat_dict[stat_line[0]] = stat_dict[stat_line[0]]+int(stat_line[1].split()[0]) \
+                                                    if 'Space used (total)' in stat_line[0] and \
+                                                        stat_line[0] in stat_dict else \
+                                                        int(stat_line[1].split()[0])
                     except IndexError:
                         continue
                 except ValueError:
