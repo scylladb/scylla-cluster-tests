@@ -415,20 +415,22 @@ class FillDatabaseData(ClusterTester):
         # select_key_in_test: Query for KEY IN (...)
         {
             'create_tables': ["""CREATE TABLE select_key_in_test (
-                                  userid uuid PRIMARY KEY,
+                                  userid uuid,
                                   firstname text,
                                   lastname text,
-                                  age int);"""],
+                                  age int,
+                                  PRIMARY KEY(userid, age));"""],
             'truncates': ['TRUNCATE select_key_in_test'],
             'inserts': [
                 "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
                 "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, 'Samwise', 'Gamgee', 33)",
             ],
             'queries': [
-                "SELECT firstname, lastname FROM select_key_in_test WHERE userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479)"],
+                "SELECT firstname, lastname FROM select_key_in_test WHERE userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479) order by age"],
             'results': [
                 [['Frodo', 'Baggins'], ['Samwise', 'Gamgee']]
             ],
+            'disable_paging': True,
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -2908,7 +2910,7 @@ class FillDatabaseData(ClusterTester):
 
         session.execute("""
             CREATE KEYSPACE IF NOT EXISTS keyspace1
-            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '2'} AND durable_writes = true;
+            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
             """)
         session.execute("USE keyspace1;")
 
@@ -2926,6 +2928,14 @@ class FillDatabaseData(ClusterTester):
         session.execute("USE keyspace1;")
 
         self.run_db_queries(session, session.default_fetch_size)
+
+    def clean_db_data(self):
+        # Prepare connection
+        node = self.db_cluster.nodes[0]
+        session = self.cql_connection_patient(node)
+
+        session.execute("DROP KEYSPACE keyspace1;")
+        session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
 
 
 if __name__ == '__main__':
