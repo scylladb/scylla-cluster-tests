@@ -22,6 +22,7 @@ import time
 import datetime
 import string
 import threading
+import re
 
 from avocado.utils import process
 
@@ -33,6 +34,7 @@ from .keystore import KeyStore
 from . import prometheus
 from . import mgmt
 from avocado.utils import wait
+
 
 from sdcm.utils import remote_get_file
 
@@ -746,6 +748,25 @@ class Nemesis(object):
         assert self.tester.hints_sending_in_progress() is False, "Hints are sent too slow"
         self.tester.verify_no_drops_and_errors(starting_from=start_time)
 
+    def disrupt_snapshot_operations(self):
+        self._set_current_disruption('SnapshotOperations')
+        result = self._run_nodetool('nodetool snapshot', self.target_node)
+        self.log.debug(result)
+        if result.stderr:
+            self.tester.fail(result.stderr)
+        snapshot_name = re.findall('(\d+)', result.stdout, re.MULTILINE)[0]
+        result = self._run_nodetool('nodetool listsnapshots', self.target_node)
+        self.log.debug(result)
+        if snapshot_name in result.stdout and not result.stderr:
+            self.log.info('Snapshot %s created' % snapshot_name)
+        else:
+            self.tester.fail('Snapshot %s creating failed %s' % (snapshot_name, result.stderr))
+
+        result = self._run_nodetool('nodetool clearsnapshot', self.target_node)
+        self.log.debug(result)
+        if result.stderr:
+            self.tester.fail(result.stderr)
+
 
 def log_time_elapsed_and_status(method):
     """
@@ -1129,3 +1150,8 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_validate_hh_short_downtime()
+
+class SnapshotOperations(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_snapshot_operations()
