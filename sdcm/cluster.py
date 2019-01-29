@@ -624,7 +624,7 @@ class BaseNode(object):
                     if len(coredump_files) > 1:
                         self.log.info("To join coredump pieces, you may use: "
                                       "'cat {}.gz.* > {}.gz'".format(base_name, base_name))
-                    self.log.info("To decompress you may use: 'pigz --fast {}.gz'".format(base_name))
+                    self.log.info("To decompress you may use: 'unpigz --fast {}.gz'".format(base_name))
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
