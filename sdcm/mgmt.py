@@ -173,7 +173,8 @@ class ManagerTask(ScyllaManagerBase):
         :return:
         """
         status = self.status
-        if check_task_progress and status != TaskStatus.NEW:  # check progress for all statuses except 'NEW'
+        if check_task_progress and status not in [TaskStatus.NEW,
+                                                  TaskStatus.STARTING]:  # check progress for all statuses except 'NEW' / 'STARTING'
             progress = self.progress
         return self.status in list_status
 
