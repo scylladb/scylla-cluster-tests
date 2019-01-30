@@ -1,0 +1,76 @@
+test_duration: 6480
+prepare_write_cmd: "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=1)' cl=QUORUM n=250000000 -port jmx=6868 -mode cql3 native -rate threads=200"
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -pop seq=250000000..500000000 -rate threads=200",
+            "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(mv_p_read1=1,mv_p_read2=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -pop seq=1..250000000 -rate threads=10"]
+n_db_nodes: 4
+n_loaders: 4
+n_monitor_nodes: 1
+user_prefix: 'longevity-2mv-backpressure-4d-VERSION'
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+nemesis_during_prepare: 'false'
+failure_post_behavior: keep
+space_node_threshold: 644245094
+ip_ssh_connections: 'private'
+#When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across the loaders (round_robin)
+round_robin: 'false'
+experimental: 'true'
+append_scylla_args: '--blocked-reactor-notify-ms 500'
+
+# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
+instance_provision: 'spot_low_price'
+
+# scylla-manager configuration
+# if running on aws and use_mgmt is true, the monitor image should not contain scylla
+use_mgmt: true
+mgmt_port: 10090
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'
+scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.3.repo'
+
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_network: 'qa-vpc'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 8
+        gce_instance_type_loader: 'n1-standard-4'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-2'
+        gce_root_disk_type_monitor: 'pd-standard'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'REPO_FILE_PATH'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+    aws: !mux
+        cluster_backend: 'aws'
+        user_credentials_path: '~/.ssh/scylla-qa-ec2'
+        instance_type_loader: 'c5.2xlarge'
+        instance_type_monitor: 't3.small'
+        instance_type_db: 'i3.2xlarge'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-c5e1f7a0'
+            subnet_id: 'subnet-ec4a72c4'
+            ami_id_db_scylla: 'AMI-ID'
+            ami_id_loader: 'AMI-ID'
+            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
+
+databases: !mux
+    cassandra:
+        db_type: cassandra
+    scylla:
+        db_type: scylla
+
