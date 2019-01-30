@@ -38,6 +38,9 @@ email_recipients: ['bentsi@scylladb.com']
 # Reuse cluster
 # cluster_id: "" ID of the cluster (currently db nodes only)
 
+# IP type for ssh connections, public or private
+ip_ssh_connections: 'private'
+
 backends: !mux
     aws: !mux
         instance_provision: 'spot_low_price' # Allowed values: on_demand|spot_fleet|spot_low_price|spot_duration
