@@ -15,6 +15,7 @@ user_prefix: 'rolling-upgrade-VERSION'
 failure_post_behavior: destroy
 
 experimental: 'true'
+ip_ssh_connections: 'private'
 
 backends: !mux
     gce: !mux
@@ -23,6 +24,7 @@ backends: !mux
         gce_user_credentials: '~/Scylla-c41b78923a54.json'
         gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
         gce_project: 'skilled-adapter-452'
+        gce_network: 'qa-vpc'
         gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
         gce_image_username: 'scylla-test'
         gce_instance_type_db: 'n1-highmem-8'
