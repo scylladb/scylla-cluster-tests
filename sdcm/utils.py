@@ -140,3 +140,20 @@ def get_data_dir_path(*args):
 
 def get_job_name():
     return os.environ.get('JOB_NAME', 'local_run')
+
+
+def verify_scylla_repo_file(content, is_rhel_like=True):
+    logger.info('Verifying Scylla repo file')
+    if is_rhel_like:
+        body_prefix = ['[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
+                       'skip_if_unavailable=', 'gpgkey=', 'repo_gpgcheck=', 'enabled_metadata=']
+    else:
+        body_prefix = ['deb']
+    for line in content.split('\n'):
+        valid_prefix = False
+        for prefix in body_prefix:
+            if line.startswith(prefix) or len(line.strip()) == 0:
+                valid_prefix = True
+                break
+        logger.debug(line)
+        assert valid_prefix, 'Repository content has invalid line: {}'.format(line)
