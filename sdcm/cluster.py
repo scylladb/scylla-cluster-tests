@@ -2388,6 +2388,7 @@ class BaseMonitorSet(object):
     def install_scylla_monitoring_prereqs(self, node):
         if node.is_rhel_like():
             prereqs_script = dedent("""
+                yum install -y epel-release
                 yum install -y python-pip unzip wget docker
                 pip install --upgrade pip
                 pip install pyyaml
