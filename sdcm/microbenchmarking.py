@@ -231,7 +231,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 def main(args):
     mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
     results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
-    mbra.check_regression(results, html_report_path=args.report_path)
+    if results:
+        mbra.check_regression(results, html_report_path=args.report_path)
+    else:
+        logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
 
 
 def parse_args():
