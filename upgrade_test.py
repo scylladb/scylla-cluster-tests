@@ -76,14 +76,7 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run('sudo cp /etc/apt/sources.list.d/scylla.list ~/scylla.list-backup')
                 node.remoter.run('for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf $conf.backup; done')
             assert new_scylla_repo.startswith('http')
-            if node.is_rhel_like():
-                node.remoter.run('sudo curl -L {} -o /etc/yum.repos.d/scylla.repo'.format(new_scylla_repo))
-                node.remoter.run('sudo chown root:root /etc/yum.repos.d/scylla.repo')
-                node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-                node.remoter.run('sudo yum clean all')
-            else:
-                node.remoter.run('sudo curl -L {} -o /etc/apt/sources.list.d/scylla.list'.format(new_scylla_repo))
-                node.remoter.run('sudo apt-get update')
+            node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
             node.remoter.run('sudo nodetool drain')
             node.remoter.run('sudo nodetool snapshot')
