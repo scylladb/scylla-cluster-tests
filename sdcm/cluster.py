@@ -1001,6 +1001,8 @@ client_encryption_options:
         if self.is_rhel_like():
             repo_path = '/etc/yum.repos.d/scylla.repo'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.run('sudo chown root:root %s' % repo_path)
+            self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
             self.remoter.run('sudo yum clean all')
