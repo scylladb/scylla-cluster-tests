@@ -68,7 +68,7 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3eff0028'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
             ami_monitor_user: 'centos'
             aws_root_disk_size_monitor: 20  # GB
         eu_west_1:

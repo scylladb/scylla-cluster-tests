@@ -60,7 +60,7 @@ backends: !mux
             security_group_ids: 'sg-5e79983a'
             subnet_id: 'subnet-c327759a'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
             ami_id_loader: 'AMI_ID'
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
