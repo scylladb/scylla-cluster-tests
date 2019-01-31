@@ -2245,6 +2245,11 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
+        result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
+        if result.exit_status == 0:
+            self.log.debug('Skip loader setup for using a prepared AMI')
+            return
+
         if node.is_ubuntu14():
             install_java_script = dedent("""
                 apt-get install software-properties-common -y
