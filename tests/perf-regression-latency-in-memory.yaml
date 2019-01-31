@@ -65,6 +65,17 @@ backends: !mux
             ami_id_db_scylla: 'AMI_ID'
             ami_id_loader: 'AMI_ID'
             ami_id_monitor: 'AMI_ID'
+        eu_west_1:
+            region_name: 'eu-west-1'
+            security_group_ids: 'sg-059a7f66a947d4b5c'
+            subnet_id: 'subnet-088fddaf520e4c7a8'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_monitor: 'ami-3548444c' # Clean CentOs 7 ami
+            ami_id_loader: 'AMI_ID'
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
+            aws_root_disk_size_monitor: 20  # GB
 
 databases: !mux
     scylla:

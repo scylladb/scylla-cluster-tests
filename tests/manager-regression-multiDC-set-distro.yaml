@@ -24,8 +24,8 @@ backends: !mux
         instance_type_loader: 'c4.large'
         # Size of AWS monitor instance
         instance_type_monitor: 't2.small'
+        user_credentials_path: '~/.ssh/scylla-qa-ec2'
         us_east_1_and_us_west_2:
-            user_credentials_path: '~/.ssh/scylla-qa-ec2'
             region_name: 'us-east-1 us-west-2'
             security_group_ids: 'sg-c5e1f7a0 sg-81703ae4'
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
@@ -37,6 +37,16 @@ backends: !mux
             ami_db_cassandra_user: 'ubuntu'
             ami_id_monitor: AMI_ID_MONITOR # Debian-8: ami-cb4b94dd # Ubuntu16.4: 'ami-1c5cc366' # CentOs-7: ami-9887c6e7
             ami_monitor_user: AMI_MONITOR_USER # admin / ubuntu / centos
+        eu_west_1_and_us_west_2:
+            region_name: 'eu-west-1 us-west-2'
+            security_group_ids: 'sg-059a7f66a947d4b5c sg-81703ae4'
+            subnet_id: 'subnet-088fddaf520e4c7a8 subnet-5207ee37'
+            ami_id_db_scylla: 'AMI_ID_EU_WEST AMI_ID_US_WEST'
+            ami_id_monitor: 'ami-3548444c' # Clean CentOs 7 ami
+            ami_id_loader: 'AMI_ID_EU_WEST'
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
 
 
 databases: !mux
