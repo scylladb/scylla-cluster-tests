@@ -37,7 +37,7 @@ from .log import SDCMAdapter
 from .remote import Remote
 from .remote import disable_master_ssh
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file
 from .loader import CassandraStressExporterSetup
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -1001,10 +1001,14 @@ client_encryption_options:
         if self.is_rhel_like():
             repo_path = '/etc/yum.repos.d/scylla.repo'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            result = self.remoter.run('cat %s' % repo_path, verbose=True)
+            verify_scylla_repo_file(result.stdout, is_rhel_like=True)
             self.remoter.run('sudo yum clean all')
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            result = self.remoter.run('cat %s' % repo_path, verbose=True)
+            verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.remoter.run('sudo apt-get update')
 
     def download_scylla_manager_repo(self, scylla_repo):
