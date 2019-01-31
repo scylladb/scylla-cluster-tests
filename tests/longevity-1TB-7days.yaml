@@ -70,7 +70,7 @@ backends: !mux
             subnet_id: 'subnet-d934e980'
             ami_id_db_scylla: 'AMI-ID'
             ami_id_loader: 'AMI-ID'
-            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
             aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
