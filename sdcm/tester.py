@@ -164,6 +164,21 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
 
+    def get_duration(self, duration):
+        """Calculate duration based on test_duration
+
+        Calculate duration for stress threads
+
+        Arguments:
+            duration {int} -- time duration in minutes
+
+        Returns:
+            int -- time duration in seconds
+        """
+        if not duration:
+            duration = self._duration
+        return duration * 60 + 600
+
     @clean_resources_on_exception
     def setUp(self):
         self.credentials = []
@@ -740,6 +755,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.loaders.kill_stress_thread_bench()
             else:
                 self.loaders.kill_stress_thread()
+            if self.params.get('fullscan', default=False):
+                self.loaders.kill_fullscan_thread()
 
     def verify_stress_thread(self, queue):
         results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
@@ -775,6 +792,26 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def get_gemini_results(self, queue):
         results = self.loaders.get_gemini_results(queue)
         return results
+
+    def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
+        """Run thread of cql command select count(*)
+
+        Calculaute test duration and timeout interval between
+        requests and execute the thread with cqlsh command to
+        db node 'select count(*) ks.cf, where ks and cf are
+        random choosen from current configuration'
+
+        Keyword Arguments:
+            timeout {number} -- interval between request in min (default: {1})
+            duration {int} -- duration of running thread in min (default: {None})
+        """
+        duration = self.get_duration(duration)
+        interval = interval * 60
+        self.loaders.run_fullscan_thread(ks_cf,
+                                         db_nodes=self.db_cluster.nodes,
+                                         datacenter=self.db_cluster.datacenter,
+                                         interval=interval,
+                                         duration=duration)
 
     def get_auth_provider(self, user, password):
         return PlainTextAuthProvider(username=user, password=password)

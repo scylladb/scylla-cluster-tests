@@ -83,6 +83,17 @@ class LongevityTest(ClusterTester):
     def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
         return '{}{}'.format(keyspace_pref, ks_number)
 
+    def _get_fullscan_params(self):
+        params = {}
+        fullscan = self.params.get('run_fullscan', default=None)
+        if fullscan:
+            fullscan = fullscan.split(',')
+            params['ks.cf'] = fullscan[0].strip()
+            params['interval'] = int(fullscan[1].strip())
+            self.log.info('Fullscan target: {} Fullscan interval: {}'.format(params['ks.cf'],
+                                                                             params['interval']))
+        return params
+
     def test_custom_time(self):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
@@ -157,6 +168,12 @@ class LongevityTest(ClusterTester):
             else:
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
                 self._run_all_stress_cmds(stress_queue, params)
+
+        fullscan = self._get_fullscan_params()
+        if fullscan:
+            self.log.info('Fullscan target: {} Fullscan interval: {}'.format(fullscan['ks.cf'],
+                                                                             fullscan['interval']))
+            self.run_fullscan_thread(ks_cf=fullscan['ks.cf'], interval=fullscan['interval'])
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
