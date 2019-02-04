@@ -235,7 +235,7 @@ def main(args):
         mbra.check_regression(results, html_report_path=args.report_path)
     else:
         logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
-
+        sys.exit(1)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Microbencmarking stats uploader and analyzer")
