@@ -2662,6 +2662,88 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
+    def get_non_system_ks_cf_list(self, loader_node, db_node_ip):
+        """Get all not system keyspace.tables pairs
+
+        Arguments:
+            loader_node {BaseNode} -- LoaderNoder to send request
+            db_node_ip {str} -- ip of db_node
+        """
+        cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
+        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+
+        avaialable_ks_cf = []
+        for row in result.stdout.split('\n'):
+            if '|' not in row:
+                continue
+            avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
+        return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
+
+    def run_fullscan(self, ks_cf, loader_node, db_node_ip):
+        """Run cql select count(*) request
+
+        if ks_cf is not random, use value from config
+        if ks_cf is random, choose random from not system
+
+        Arguments:
+            loader_node {BaseNode} -- loader cluster node
+            db_node {BaseNode} -- db cluster node
+
+        Returns:
+            object -- object with result of remoter.run command
+        """
+
+        ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node_ip)
+        if ks_cf not in ks_cf_list:
+            self.log.warning('Keyspace of column family {} does not exists. Using random.'.format(ks_cf))
+            ks_cf = 'random'
+
+        if 'random' in ks_cf.lower():
+            ks_cf = random.choice(ks_cf_list)
+
+        self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
+        cmd = 'select count(*) from {}'.format(ks_cf)
+        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+
+        return result
+
+    def run_fullscan_thread(self, ks_cf, db_nodes, datacenter, interval=60, duration=60):
+        """Run in thread request from loader node
+
+        Run on randomly choosen loader node the cql request to
+        randomly choosen db node during time duration in seconds and with
+        interval timeout in seconds
+
+        Arguments:
+            db_nodes {list} -- list of db nodes db_cluster.nodes
+
+        Keyword Arguments:
+            timeout {int} -- time interval (default: {60})
+            duration {int} -- duration of running (default: {60})
+        """
+
+        @log_run_info('Fullscan thread')
+        def run_in_thread():
+            start = current = time.time()
+            while current - start < duration:
+                loader_node = random.choice(self.nodes)
+                db_node = random.choice(db_nodes)
+                self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
+                if loader_node.termination_event.isSet():
+                    break
+                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address(datacenter))
+                self.log.debug(result)
+                self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
+                time.sleep(interval)
+                current = time.time()
+
+        th = threading.Thread(target=run_in_thread)
+        th.start()
+
+    def kill_fullscan_thread(self):
+        for node in self.nodes:
+            node.termination_event.set()
+
 
 class BaseMonitorSet(object):
     # This is a Mixin for monitoring cluster and should not be inherited
