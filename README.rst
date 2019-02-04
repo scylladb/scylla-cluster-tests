@@ -37,6 +37,11 @@ What's inside?
 
 3. Python files with tests. The convention is that test files have the ``_test.py`` suffix.
 
+Maintained branches
+-------------------
+
+https://github.com/scylladb/scylla-cluster-tests/wiki
+
 Setting up SCT environment
 --------------------------
 
