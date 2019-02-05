@@ -320,6 +320,7 @@ class TestStatsMixin(Stats):
         return test_details
 
     def get_system_details(self):
+        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat']
         system_details = {}
         for node in self.db_cluster.nodes:
             node_system_info = {}
@@ -328,6 +329,9 @@ class TestStatsMixin(Stats):
                 'sys_info': node.get_system_info(),
             }
             system_details.update(node_system_info)
+        archive = self.archive_system_details_information(files_to_archive)
+        s3_link_to_archive = S3Storage.upload_file(file_path=archive)
+        system_details.update({'sys_info_data_url': s3_link_to_archive})
         return system_details
 
     def create_test_stats(self, sub_type=None):
@@ -343,7 +347,6 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = self.params.id.name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
-        self._stats['system_details'] = self.get_system_details()
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
@@ -462,7 +465,7 @@ class TestStatsMixin(Stats):
         self.log.info('Path to archive file: %s' % archive)
         return archive
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None):
         if self.create_stats:
             update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -482,20 +485,16 @@ class TestStatsMixin(Stats):
                 self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
             self._stats['status'] = self.status
 
-            if 'system_details' in self._stats.keys():
-                files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat']
-                archive = self.archive_system_details_information(files_to_archive)
-                s3_link_to_archive = S3Storage.upload_file(file_path=archive)
-                self._stats['system_details'].update({'sys_info_data_url': s3_link_to_archive})
-
             update_data.update(
                 {'status': self._stats['status'],
                  'setup_details': self._stats['setup_details'],
-                 'test_details': self._stats['test_details'],
-                 'system_details': self._stats['system_details']
+                 'test_details': self._stats['test_details']
                  })
             if errors:
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
+            if system_details:
+                update_data.update({'system_details': system_details})
+
             self.update(update_data)
