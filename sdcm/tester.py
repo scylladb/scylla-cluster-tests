@@ -1000,7 +1000,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.kill_stress_thread()
         db_cluster_errors = None
         db_cluster_coredumps = None
+        db_cluster_system_details = None
         if self.db_cluster is not None:
+            db_cluster_system_details = self.get_system_details()
+
             db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
@@ -1049,7 +1052,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     cr.destroy()
                 self.credentials = []
 
-        self.update_test_details(db_cluster_errors, db_cluster_coredumps)
+        self.update_test_details(errors=db_cluster_errors,
+                                 coredumps=db_cluster_coredumps,
+                                 system_details=db_cluster_system_details)
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
