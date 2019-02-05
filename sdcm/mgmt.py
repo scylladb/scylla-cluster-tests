@@ -175,6 +175,11 @@ class ManagerTask(ScyllaManagerBase):
         status = self.status
         if check_task_progress and status not in [TaskStatus.NEW,
                                                   TaskStatus.STARTING]:  # check progress for all statuses except 'NEW' / 'STARTING'
+            ###
+            # The reasons for the below (un-used) assignment are:
+            # * check that progress command works on varios task statuses (that was how manager bug #856 found).
+            # * print the progress to log in cases needed for failures/performance analysis.
+            ###
             progress = self.progress
         return self.status in list_status
 
