@@ -19,6 +19,7 @@ import types
 from functools import wraps
 import boto3.session
 import libvirt
+import shutil
 from avocado import Test
 from avocado.utils.process import CmdError
 from cassandra import ConsistencyLevel
@@ -49,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path, log_run_info, retrying
+from .utils import get_data_dir_path, log_run_info, retrying, S3Storage
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -1105,7 +1106,25 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.fail('Errors found on DB node logs (see test logs)')
 
     def tearDown(self):
-        self.clean_resources()
+        try:
+            self.clean_resources()
+        except Exception as details:
+            self.log.exception('Exception in clean_resources method {}'.format(details))
+            raise
+        finally:
+            self.zip_and_upload_job_log()
+
+    def zip_and_upload_job_log(self):
+        job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
+        archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
+        try:
+            archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
+            s3_link = S3Storage.upload_file(file_path=archive)
+            if self.create_stats:
+                self.update({'test_details': {'job_log_link': s3_link}})
+            self.log.info('Link to job.log archive {}'.format(s3_link))
+        except Exception as details:
+            self.log.warning('Errors during creating archive and uploading job.log {}'.format(details))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
