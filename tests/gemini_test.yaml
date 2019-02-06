@@ -2,7 +2,7 @@ test_duration: 300
 n_db_nodes: 1
 n_loaders: 1
 n_monitor_nodes: 1
-user_prefix: 'gemini-test-3h-200gb'
+user_prefix: 'gemini-test-3h-200gb-VERSION'
 failure_post_behavior: keep
 ip_ssh_connections: 'private'
 experimental: 'true'
