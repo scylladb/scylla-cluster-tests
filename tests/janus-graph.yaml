@@ -3,6 +3,8 @@ n_db_nodes: 2
 n_loaders: 1
 user_prefix: 'janusgraph-integration-VERSION'
 failure_post_behavior: destroy
+# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
+instance_provision: 'spot_low_price'
 backends: !mux
     gce: !mux
         cluster_backend: 'gce'
