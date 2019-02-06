@@ -466,6 +466,14 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
                     ec2_ami_username=self.params.get('ami_db_cassandra_user'),
                     **cl_params)
+            elif db_type == 'mixed_scylla':
+                cluster.Setup.mixed_cluster(True)
+                cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
+                                      user_prefix=user_prefix + '-oracle'))
+                return ScyllaAWSCluster(
+                    ec2_ami_id=self.params.get('ami_id_db_oracle').split(),
+                    ec2_ami_username=self.params.get('ami_db_scylla_user'),
+                    **cl_params)
 
         db_type = self.params.get('db_type')
         if db_type in ('scylla', 'cassandra'):
@@ -473,6 +481,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         elif db_type == 'mixed':
             self.db_cluster = create_cluster('scylla')
             self.cs_db_cluster = create_cluster('cassandra')
+        elif db_type == 'mixed_scylla':
+            self.db_cluster = create_cluster('scylla')
+            self.cs_db_cluster = create_cluster('mixed_scylla')
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
@@ -711,6 +722,16 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                               self.outputdir,
                                               node_list=self.db_cluster.nodes)
 
+    @clean_resources_on_exception
+    def run_gemini(self, cmd, duration=None):
+        if duration is None:
+            duration = self.params.get('test_duration')
+        timeout = duration * 60 + 600
+        time.sleep(30)
+        return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
+                                              test_node=self.db_cluster.nodes[0].private_ip_address,
+                                              oracle_node=self.cs_db_cluster.nodes[0].private_ip_address)
+
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
             if self.params.get('bench_run', default=False):
@@ -746,6 +767,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         results = self.loaders.get_stress_results_bench(queue)
         if self.create_stats:
             self.update_stress_results(results)
+        return results
+
+    @clean_resources_on_exception
+    def get_gemini_results(self, queue):
+        results = self.loaders.get_gemini_results(queue)
         return results
 
     def get_auth_provider(self, user, password):

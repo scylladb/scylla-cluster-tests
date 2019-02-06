@@ -537,25 +537,21 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         return added_nodes
 
     def node_config_setup(self, node, seed_address, endpoint_snitch):
+        setup_params = dict(
+            enable_exp=self._param_enabled('experimental'),
+            endpoint_snitch=endpoint_snitch,
+            authenticator=self.params.get('authenticator'),
+            server_encrypt=self._param_enabled('server_encrypt'),
+            client_encrypt=self._param_enabled('client_encrypt'),
+            append_scylla_args=self.get_scylla_args(),
+        )
         if len(self.datacenter) > 1:
-            node.config_setup(seed_address=seed_address,
-                              enable_exp=self._param_enabled('experimental'),
-                              endpoint_snitch=endpoint_snitch,
-                              broadcast=node.public_ip_address,
-                              authenticator=self.params.get('authenticator'),
-                              server_encrypt=self._param_enabled('server_encrypt'),
-                              client_encrypt=self._param_enabled('client_encrypt'),
-                              append_scylla_args=self.params.get('append_scylla_args'),
-                              hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
-        else:
-            node.config_setup(seed_address=seed_address,
-                              enable_exp=self._param_enabled('experimental'),
-                              endpoint_snitch=endpoint_snitch,
-                              authenticator=self.params.get('authenticator'),
-                              server_encrypt=self._param_enabled('server_encrypt'),
-                              client_encrypt=self._param_enabled('client_encrypt'),
-                              append_scylla_args=self.params.get('append_scylla_args'),
-                              hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
+            setup_params.update(dict(
+                seed_address=seed_address,
+                broadcast=node.public_ip_address,
+            ))
+
+        node.config_setup(**setup_params)
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
