@@ -1,0 +1,56 @@
+test_duration: 300
+n_db_nodes: 1
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'gemini-test-3h-200gb'
+failure_post_behavior: keep
+ip_ssh_connections: 'private'
+experimental: 'true'
+instance_provision: 'spot_low_price'
+# instance_provision can be one of the following: on_demand|spot_fleet|spot_low_price|spot_duration
+store_results_in_elasticsearch: False
+
+# gemini
+# cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
+# the below cmd runs about 3 hours
+gemini_cmd: "gemini -d -n 1000000 -c 20 -p 100 -m mixed -f"
+gemini_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/gemini-latest'
+gemini_static_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
+
+reuse_cluster: False
+db_nodes_public_ip: []
+db_nodes_private_ip: []
+oracle_db_nodes_public_ip: []
+oracle_db_nodes_private_ip: []
+loaders_public_ip: []
+loaders_private_ip: []
+monitor_nodes_public_ip: []
+monitor_nodes_private_ip: []
+
+backends: !mux
+    aws: !mux
+        cluster_backend: 'aws'
+        instance_type_loader: 'c4.2xlarge'
+        instance_type_monitor: 't2.small'
+        user_credentials_path: '~/.ssh/scylla-test'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-c327759a'
+            ami_db_scylla_user: 'centos'
+            ami_id_db_scylla: 'AMI-ID'
+            ami_id_loader: 'AMI-ID'
+            ami_loader_user: 'centos'
+            ami_id_monitor: 'AMI-ID'
+            ami_monitor_user: 'centos'
+
+databases: !mux
+    scylla:
+        db_type: scylla
+        instance_type_db: 'i3.4xlarge'
+    mixed_scylla:
+        db_type: mixed_scylla
+        instance_type_db: 'i3.large'
+        instance_type_db_oracle: 'i3.8xlarge'
+        ami_id_db_oracle: 'AMI-ID-ORACLE'
+        append_scylla_args_oracle: '--enable-cache false'

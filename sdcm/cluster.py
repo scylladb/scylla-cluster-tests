@@ -155,6 +155,7 @@ class Setup(object):
     KEEP_ALIVE = False
 
     REUSE_CLUSTER = False
+    MIXED_CLUSTER = False
 
     @classmethod
     def reuse_cluster(cls, val=False):
@@ -166,6 +167,8 @@ class Setup(object):
             cls.KEEP_ALIVE = True
         else:
             cls.KEEP_ALIVE = False
+    def mixed_cluster(cls, val=False):
+        cls.MIXED_CLUSTER = val
 
 
 class NodeError(Exception):
@@ -1668,7 +1671,13 @@ class BaseScyllaCluster(object):
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
+        if Setup.MIXED_CLUSTER:
+            return 'oracle_db_nodes_public_ip' if public_ip else 'oracle_db_nodes_private_ip'
         return 'db_nodes_public_ip' if public_ip else 'db_nodes_private_ip'
+
+    def get_scylla_args(self):
+        return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else\
+            self.params.get('append_scylla_args')
 
     def get_seed_nodes_private_ips(self):
         if self.seed_nodes_private_ips is None:
@@ -2040,8 +2049,8 @@ class BaseScyllaCluster(object):
                           server_encrypt=self._param_enabled('server_encrypt'),
                           client_encrypt=self._param_enabled('client_encrypt'),
                           append_conf=self.params.get('append_conf'),
-                          append_scylla_args=self.params.get('append_scylla_args'),
-                          hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
+                          hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'),
+                          append_scylla_args=self.get_scylla_args())
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
@@ -2175,32 +2184,37 @@ class BaseLoaderSet(object):
         node.download_scylla_repo(self.params.get('scylla_repo'))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-        else:
-            node.remoter.run('sudo apt-get update')
-            node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
-
-        node.wait_cs_installed(verbose=verbose)
-        if node.is_rhel_like():
             node.remoter.run('sudo yum install -y screen')
         else:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef"'
+                             ' -o Dpkg::Options::="--force-confold" --force-yes'
+                             ' --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo apt-get install -y screen')
-        if db_node_address is not None:
-            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" %
-                             db_node_address)
 
+        if db_node_address is not None:
+            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
+
+        node.wait_cs_installed(verbose=verbose)
         cs_exporter_setup = CassandraStressExporterSetup()
         cs_exporter_setup.install(node)
-
-        if self.params.get('bench_run', default=False):
-            # go1.7 still not in repo
-            node.remoter.run('sudo yum install git -y')
-            node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz')
-            node.remoter.run('sudo tar -C /usr/local -xvzf go1.9.linux-amd64.tar.gz')
-            node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
-            node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
-            node.remoter.run("source $HOME/.bashrc")
-            node.remoter.run("go get github.com/scylladb/scylla-bench")
         self.get_cassandra_stress_version(node)
+
+        # scylla-bench
+        node.remoter.run('sudo yum install git -y')
+        node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz')
+        node.remoter.run('sudo tar -C /usr/local -xvzf go1.9.2.linux-amd64.tar.gz')
+        node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
+        node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
+        node.remoter.run("source $HOME/.bashrc")
+        node.remoter.run("go get github.com/scylladb/scylla-bench")
+
+        # gemini tool
+        node.remoter.run("cd $HOME")
+        gemini_url = self.params.get('gemini_url')
+        node.remoter.run("curl -LO {}".format(gemini_url))
+        node.remoter.run("curl -LO {}".format(self.params.get('gemini_static_url')))
+        node.remoter.run("mv {} gemini; chmod a+x gemini".format(os.path.basename(gemini_url)))
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -2473,6 +2487,25 @@ class BaseLoaderSet(object):
                 results['latmax'].append(latmax)
         return results
 
+    @staticmethod
+    def _parse_gemini_summary(lines):
+        results = {}
+        enable_parse = False
+
+        for line in lines:
+            line.strip()
+            if line.startswith('Results:'):
+                enable_parse = True
+                continue
+            if not enable_parse:
+                continue
+
+            split_idx = line.index(':')
+            key = line[:split_idx].strip()
+            value = line[split_idx + 1:].split()[0]
+            results[key] = int(value)
+        return results
+
     def verify_stress_thread(self, queue, db_cluster):
         results = []
         cs_summary = []
@@ -2565,6 +2598,62 @@ class BaseLoaderSet(object):
                 kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate scylla-bench on node %s:\n%s', loader, kill_result)
+
+    def run_gemini_thread(self, cmd, timeout, output_dir, test_node, oracle_node):
+        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
+
+        def _run_gemini(node, loader_idx, cmd, test_node, oracle_node):
+            queue[TASK_QUEUE].put(node)
+            try:
+                logdir = path.init_dir(output_dir, self.name)
+            except OSError:
+                logdir = os.path.join(output_dir, self.name)
+            log_file_name = os.path.join(logdir,
+                                         'gemini-l%s-%s.log' %
+                                         (loader_idx, uuid.uuid4()))
+            gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
+            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} | tee {}".format(
+                                      cmd.strip(), test_node, oracle_node, gemini_log),
+                                      timeout=timeout,
+                                      ignore_status=True,
+                                      log_file=log_file_name)
+            queue[RES_QUEUE].put((node, result))
+            queue[TASK_QUEUE].task_done()
+
+        for loader_idx, loader in enumerate(self.nodes):
+            setup_thread = threading.Thread(target=_run_gemini,
+                                            args=(loader, loader_idx,
+                                                  cmd, test_node, oracle_node))
+            setup_thread.daemon = True
+            setup_thread.start()
+            time.sleep(30)
+
+        return queue
+
+    def get_gemini_results(self, queue):
+        results = []
+        ret = []
+        self.log.debug('Wait for %s gemini threads results', queue[TASK_QUEUE].qsize())
+        queue[TASK_QUEUE].join()
+        while not queue[RES_QUEUE].empty():
+            results.append(queue[RES_QUEUE].get())
+
+        for node, result in results:
+            output = result.stdout + result.stderr
+            lines = output.splitlines()
+            res = self._parse_gemini_summary(lines)
+            if res:
+                ret.append(res)
+
+        return ret
+
+    def kill_gemini_thread(self):
+        for loader in self.nodes:
+            sb_active = loader.remoter.run(cmd='pgrep -f gemini', ignore_status=True)
+            if sb_active.exit_status == 0:
+                kill_result = loader.remoter.run('pkill -f -TERM gemini', ignore_status=True)
+                if kill_result.exit_status != 0:
+                    self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
 
 class BaseMonitorSet(object):
