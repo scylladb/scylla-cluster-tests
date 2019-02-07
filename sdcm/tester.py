@@ -190,7 +190,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         # cancel reuse cluster - for new nodes added during the test
         cluster.Setup.reuse_cluster(False)
-        self.prometheusDB = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        if self.monitors.nodes:
+            self.prometheusDB = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
 
     def get_nemesis_class(self):
         """
