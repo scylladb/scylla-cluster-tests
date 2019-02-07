@@ -52,7 +52,7 @@ During SCT environment setup, you will be asked to configure your AWS CLI tool. 
 QA private keys from secure S3 Bucket during automated setup.
 The keys will be needed to connect to the Scylla clusters under test via SSH.
 
-Ask Shlomi Livne to create a user and access key for AWS) and then configure AWS::
+Ask your AWS account admin to create a user and access key for AWS) and then configure AWS::
 
     > aws configure
     AWS Access Key ID [****************7S5A]:
