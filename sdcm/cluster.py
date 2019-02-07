@@ -2210,11 +2210,18 @@ class BaseLoaderSet(object):
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
         # gemini tool
-        node.remoter.run("cd $HOME")
         gemini_url = self.params.get('gemini_url')
-        node.remoter.run("curl -LO {}".format(gemini_url))
-        node.remoter.run("curl -LO {}".format(self.params.get('gemini_static_url')))
-        node.remoter.run("mv {} gemini; chmod a+x gemini".format(os.path.basename(gemini_url)))
+        gemini_static_url = self.params.get('gemini_static_url')
+        if not gemini_url or not gemini_static_url:
+            logger.warning('Gemini URLs should be defined to run the gemini tool')
+        else:
+            install_gemini_script = dedent("""
+                cd $HOME
+                curl -L -o gemini {gemini_url}
+                chmod a+x gemini
+                curl -LO  {gemini_static_url}                
+            """.format(**locals()))
+            self.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
