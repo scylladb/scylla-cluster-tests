@@ -11,7 +11,7 @@ do
     else
         echo "QA private key '${QA_PRIVATE_KEY_PATH}' doesn't exist. Retrieving..."
         mkdir -p ${SSH_KEYS_DIR}
-        aws s3 cp s3://scylla-qa-keystore/${pkey_name} ${QA_PRIVATE_KEY_PATH}
+        aws s3 cp s3://scylla-qa-keystore/${pkey_name} ${QA_PRIVATE_KEY_PATH} || (echo "Please refer to https://github.com/scylladb/scylla-cluster-tests#setting-up-sct-environment to configure your aws-cli" && exit 1)
         chmod 600 ${QA_PRIVATE_KEY_PATH}
         echo "Done."
     fi
