@@ -52,10 +52,16 @@ During SCT environment setup, you will be asked to configure your AWS CLI tool. 
 QA private keys from secure S3 Bucket during automated setup.
 The keys will be needed to connect to the Scylla clusters under test via SSH.
 
-Use following values when running ``aws configure``
- * ``region`` -> `us-east-1`
- * ``Default output format`` -> `None`
- * ``aws_access_key_id``, ``aws_secret_access_key``
+Ask your AWS account admin to create a user and access key for AWS) and then configure AWS::
+
+    > aws configure
+    AWS Access Key ID [****************7S5A]:
+    AWS Secret Access Key [****************5NcH]:
+    Default region name [us-east-1]:
+    Default output format [None]:
+
+
+From here you can proceed with on of the 2 options
 
 Option 1: Setup SCT in Docker
 -----------------------------
@@ -63,7 +69,6 @@ As mentioned before, instead of installing all the prerequisites on your machine
 container (aka Hydra) to run SCT avocado tests::
 
     sudo ./install-hydra.sh
-    aws configure
 
 Notes for Hydra
 
@@ -79,10 +84,7 @@ Option 2: Setup SCT locally
 To run SCT tests locally run following::
 
     sudo ./install-prereqs.sh
-    aws configure
     ./get-qa-ssh-keys.sh
-
-
 
 Run a test
 ----------
