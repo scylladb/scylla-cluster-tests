@@ -46,8 +46,8 @@ docker run --rm ${TTY_STDIN} --privileged \
     -v /tmp:/tmp \
     -v /var/tmp:/var/tmp \
     -v ${HOME}:${HOME} \
-    -v /etc/passwd:/etc/passwd \
-    -v /etc/group:/etc/group \
+    -v /etc/passwd:/etc/passwd:ro \
+    -v /etc/group:/etc/group:ro \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
