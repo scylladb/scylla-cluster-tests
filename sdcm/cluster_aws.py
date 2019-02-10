@@ -1,9 +1,11 @@
+import os
 import logging
 import time
 import uuid
 import os
 import tempfile
 import yaml
+import getpass
 
 from botocore.exceptions import WaiterError, ClientError
 import boto3.session
@@ -43,6 +45,18 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
     except Exception as details:
         logger.exception(str(details))
 
+
+def create_tags_list():
+    username = os.environ.get('BUILD_USER', getpass.getuser())
+    tags_list = [{'Key': 'TestName', 'Value': str(avocado_runtime.CURRENT_TEST.name)},
+                 {'Key': 'RunByUser', 'Value': username},
+                 {'Key': 'JobId', 'Value': avocado_runtime.CURRENT_JOB.unique_id},
+                 {'Key': 'workspace', 'Value': cluster.WORKSPACE},
+                 {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
+    if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
+        tags_list.append({'Key': 'keep', 'Value': 'alive'})
+
+    return tags_list
 
 class PublicIpNotReady(Exception):
     pass
@@ -116,7 +130,7 @@ class AWSCluster(cluster.BaseCluster):
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
-    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):
+    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=[]):
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug("Creating {count} on-demand instances using AMI id '{ami_id}'... ".format(**locals()))
         instances = self._ec2_services[dc_idx].create_instances(ImageId=ami_id,
@@ -126,11 +140,18 @@ class AWSCluster(cluster.BaseCluster):
                                                                 KeyName=self._credentials[dc_idx].key_pair_name,
                                                                 BlockDeviceMappings=self._ec2_block_device_mappings,
                                                                 NetworkInterfaces=interfaces,
-                                                                InstanceType=self._ec2_instance_type)
+                                                                InstanceType=self._ec2_instance_type,
+                                                                TagSpecifications=[
+                                                                    {
+                                                                        'ResourceType': 'instance',
+                                                                        'Tags': tags_list
+                                                                    },
+                                                                ],
+                                                                )
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0):
+    def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
@@ -140,7 +161,8 @@ class AWSCluster(cluster.BaseCluster):
                            key_pair=self._credentials[dc_idx].key_pair_name,
                            user_data=ec2_user_data,
                            count=count,
-                           block_device_mappings=self._ec2_block_device_mappings)
+                           block_device_mappings=self._ec2_block_device_mappings,
+                           tags_list=tags_list)
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
             spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
@@ -179,6 +201,9 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
+
+        tags_list = create_tags_list()
+
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
@@ -187,15 +212,15 @@ class AWSCluster(cluster.BaseCluster):
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
         if self.instance_provision == 'mixed':
-            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
         else:
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
 
         return instances
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx):
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, tags_list=[]):
         instances = []
         MAX_NUM_ON_DEMAND = 2
         if isinstance(self, ScyllaAWSCluster) or isinstance(self, CassandraAWSCluster):
@@ -217,17 +242,17 @@ class AWSCluster(cluster.BaseCluster):
 
             if count_spot > 0:
                 self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx))
+                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
             if count_on_demand > 0:
                 self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx))
+                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
             self.instance_provision = 'mixed'
         elif isinstance(self, LoaderSetAWS):
             self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
         elif isinstance(self, MonitorSetAWS):
             self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx))
+            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
         else:
             raise Exception('Unsuported type of cluster type %s' % self)
         return instances
@@ -304,15 +329,13 @@ class AWSNode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
         if not cluster.Setup.REUSE_CLUSTER:
-            tags_list = [{'Key': 'Name', 'Value': name},
-                         {'Key': 'workspace', 'Value': cluster.WORKSPACE},
-                         {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
+            tags_list = create_tags_list()
+            tags_list.append({'Key': 'Name', 'Value': name})
             if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
                 self.log.info('Test duration set to %s. '
                               'Keep cluster on failure %s. '
                               'Tagging node with {"keep": "alive"}',
                               cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
-                tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
