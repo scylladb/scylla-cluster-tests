@@ -18,9 +18,6 @@ yum install -y openssh-clients
 # Install Git - needed to get current SCT branch
 yum install -y git
 
-# Needed for sending regression emails
-yum install -y postfix
-
 # Install Docker
 yum install -y sudo  # needed for Docker container build
 curl -fsSL get.docker.com -o get-docker.sh
