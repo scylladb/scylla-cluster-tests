@@ -45,10 +45,13 @@ docker run --rm ${TTY_STDIN} --privileged \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
     -v /tmp:/tmp \
     -v /var/tmp:/var/tmp \
-    -v ~:/root \
+    -v ${HOME}:${HOME} \
+    -v /etc/passwd:/etc/passwd \
+    -v /etc/group:/etc/group \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
+    -u $(id -u ${USER}):$(id -g ${USER}) \
     --net=host \
     scylladb/hydra:v${VERSION} \
     /bin/bash -c "/usr/libexec/postfix/master -w; ${TERM_SET_SIZE} eval ${CMD}"
