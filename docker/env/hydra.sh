@@ -54,4 +54,4 @@ docker run --rm ${TTY_STDIN} --privileged \
     -u $(id -u ${USER}):$(id -g ${USER}) \
     --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "/usr/libexec/postfix/master -w; ${TERM_SET_SIZE} eval ${CMD}"
+    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
