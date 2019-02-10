@@ -92,7 +92,7 @@ class EC2Client(object):
         return request_ids
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                            block_device_mappings=None):
+                            block_device_mappings=None, tags_list=[]):
         spot_price = self._get_spot_price(instance_type)
         fleet_config = {'LaunchSpecifications':
                         [
@@ -105,6 +105,13 @@ class EC2Client(object):
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
+                        'TagSpecifications' : [
+                            {
+                                'ResourceType': 'instance',
+                                'Tags': tags_list
+                            }
+
+                        ]
                         }
         if key_pair:
             fleet_config['LaunchSpecifications'][0].update({'KeyName': key_pair})
@@ -235,7 +242,7 @@ class EC2Client(object):
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
-                              count=1, duration=0, block_device_mappings=None):
+                              count=1, duration=0, block_device_mappings=None, tags_list=[]):
         """
         Create spot instances
 
@@ -246,7 +253,9 @@ class EC2Client(object):
         :param key_pair: user credentials
         :param user_data: user data to be passed to instances
         :param count: number of instances to launch
-        :param duration(optional): instance life time in minutes(multiple of 60)
+        :param duration: (optional) instance life time in minutes(multiple of 60)
+        :param tags_list: list of tags to assign to fleet instances
+
         :return: list of instance id-s
         """
         instance_ids = []
@@ -275,7 +284,7 @@ class EC2Client(object):
         return instances
 
     def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                          block_device_mappings=None):
+                          block_device_mappings=None, tags_list=[]):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -285,10 +294,12 @@ class EC2Client(object):
         :param key_pair: user credentials
         :param user_data: user data to be passed to instances
         :param count: number of instances to launch
+        :param block_device_mappings:
+        :param tags_list: list of tags to assign to fleet instances
         :return: list of instance id-s
         """
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
-                                              user_data, count, block_device_mappings=block_device_mappings)
+                                              user_data, count, block_device_mappings=block_device_mappings, tags_list=tags_list)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR
