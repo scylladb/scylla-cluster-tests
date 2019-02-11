@@ -38,6 +38,12 @@ fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
 
+# TODO: remove once avocado will be gone
+# change ownership of avocado directories
+echo "Making sure the ownerships of avocado directories are of the user"
+sudo chown -R `whoami`:`whoami` ~/avocado || echo "~/avocado doesn't exist, ignore error above"
+sudo chown -R `whoami`:`whoami` ${SCT_DIR}/test-results || echo "test-results doesn't exist, ignore error above"
+
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \
