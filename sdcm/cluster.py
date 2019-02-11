@@ -2221,7 +2221,7 @@ class BaseLoaderSet(object):
                 chmod a+x gemini
                 curl -LO  {gemini_static_url}                
             """.format(**locals()))
-            self.remoter.run("bash -cxe '%s'" % install_gemini_script)
+            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
