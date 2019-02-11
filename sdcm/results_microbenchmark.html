@@ -25,7 +25,7 @@
     </div>
     {% endif %}
     {% for test_type, params in results.iteritems() %}
-    {% if full_report or params.get("has_diff") %}
+    {% if full_report or params.get("has_diff") or params.get("has_improve") %}
     <h2> {{ test_type }} </h2>
     <h3> Dataset: {{ params.get("dataset_name") }} </h3>
     <table id="results_table">
@@ -45,7 +45,7 @@
         </tr>
         {% for metrica in metrics %}
             {% set stats = params.get(metrica) %}
-            {%  if full_report or stats.has_regression %}
+            {%  if full_report or stats.has_regression or stats.has_improvement%}
             <tr>
                 <td>{{ metrica }}</td>
                 {% for stat in stats_names %}
