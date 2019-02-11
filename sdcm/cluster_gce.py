@@ -1,11 +1,9 @@
 import os
 import time
-import getpass
 
 import cluster
 
 from libcloud.common.google import ResourceNotFoundError
-from avocado.utils import runtime as avocado_runtime
 
 
 def _prepend_user_prefix(user_prefix, base_name):
@@ -17,13 +15,6 @@ def _prepend_user_prefix(user_prefix, base_name):
 class CreateGCENodeError(Exception):
     pass
 
-def create_metadata():
-    username = os.environ.get('BUILD_USER', getpass.getuser())
-    return dict(RunByUser=username,
-                TestName=str(avocado_runtime.CURRENT_TEST.name),
-                JobId=avocado_runtime.CURRENT_JOB.unique_id,
-                workspace=cluster.WORKSPACE,
-                uname=' | '.join(os.uname()))
 
 class GCENode(cluster.BaseNode):
 
@@ -58,7 +49,7 @@ class GCENode(cluster.BaseNode):
 
         # fruch: test if needed
         # self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
-        #                         self._instance, create_metadata())
+        #                         self._instance, cluster.create_common_tags())
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
@@ -276,7 +267,7 @@ class GCECluster(cluster.BaseCluster):
                                                           image=self._gce_image,
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=create_metadata())
+                                                          ex_metadata=cluster.create_common_tags())
         self.log.info('Created instance %s', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
