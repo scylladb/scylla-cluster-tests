@@ -150,12 +150,18 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 "Diff last [%]": diff_last,  # diff in percents
                 "Diff best [%]": diff_best,
                 "has_regression": False,
+                "has_improvement": False,
 
             }
 
             if (diff_last < -5 or diff_best < -5):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
+
+            if (diff_last > 50 or diff_best > 50):
+                report_results[test_type]['has_improve'] = True
+                stats['has_improvement'] = True
+
             report_results[test_type]["dataset_name"] = current_result['dataset_name']
             report_results[test_type][metrica] = stats
 
