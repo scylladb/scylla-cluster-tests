@@ -24,7 +24,7 @@ logger.addHandler(ch)
 
 
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
-    def __init__(self, email_recipients):
+    def __init__(self, email_recipients, db_version=None):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index="microbenchmarking",
             es_doc_type="microbenchmark",
@@ -37,6 +37,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
         self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)
+        self.db_version = db_version
 
     def check_regression(self, current_results, html_report_path):
         filter_path = (
@@ -51,13 +52,16 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.results.stats.time (s)",
             "hits.hits._source.results.stats.frag/s",
             "hits.hits._source.versions",
+            "hits.hits._source.excluded"
         )
 
         cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
-        cur_version = cur_version_info["version"]
+        self.db_version = cur_version_info["version"]
         tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
-                                         q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
-                                                                                                     cur_version[:3]))
+                                         q="hostname:'%s' \
+                                            AND versions.scylla-server.version:%s* \
+                                            AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,
+                                                                                               self.db_version[:3]))
         assert tests_filtered, "No results from DB"
         results = tests_filtered["hits"]["hits"]
         sorted_by_type = defaultdict(list)
@@ -186,6 +190,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         dashboard_path = "app/kibana#/dashboard/aee9b370-09db-11e9-a976-2fe0f5890cd0?_g=(filters%3A!())"
         for_render = {
             "subject": subject,
+            "testrun_id": self.test_run_date,
             "results": report_results,
             "stats_names": allowed_stats,
             "metrics": metrics,
@@ -231,7 +236,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     datastore.update({'hostname': self.hostname,
                                       'test_args': test_args,
                                       'test_run_date': self.test_run_date,
-                                      'dataset_name': dataset_name
+                                      'dataset_name': dataset_name,
+                                      'excluded': False
                                       })
                     if update_db:
                         self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
@@ -239,26 +245,164 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     results[test_type] = datastore
         return results
 
+    def exclude_test_run(self, testrun_id=''):
+        """Exclude test results by testrun id
+
+        Filter test result by hostname, scylla version and test_run_date filed
+        and mark the all found result with flag exluded: True
+
+        Keyword Arguments:
+            testrun_id {str} -- testrun id as value of field test_run_date (default: {''})
+        """
+        if not testrun_id or not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+
+        self.log.info('Exclude testrun {} from results'.format(testrun_id))
+        filter_path = (
+            "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
+            "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
+            "hits.hits._source.test_run_date",
+        )
+        testrun_results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                          q="hostname:'%s' AND versions.scylla-server.version:%s* AND test_run_date:\"%s\"" % (self.hostname,
+                                                                                                                               self.db_version[:3],
+                                                                                                                               testrun_id))
+        if not testrun_results:
+            self.log.info("Nothing to exclude")
+            return
+
+        for res in testrun_results['hits']['hits']:
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=res['_id'],
+                                body={'excluded': True})
+
+    def exclude_by_test_id(self, test_id=''):
+        """Exclude test result by id
+
+        Filter test result by id (ex. 2018-10-29_18:58:51_large-partition-single-key-slice_begin_incl_0-500000_end_incl.1)
+        and mark the test result with flag excluded: True
+        Keyword Arguments:
+            test_id {str} -- test id from field _id (default: {''})
+        """
+        if not test_id or not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+
+        self.log.info('Exclude test id {} from results'.format(test_id))
+        doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
+        if doc:
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=doc['_id'],
+                                body={'excluded': True})
+        else:
+            self.log.info("Nothing to exclude")
+            return
+
+    def exclude_before_date(self, date=''):
+        """Exclude all test results before date
+
+        Query test result by hostname and scylla version,
+        convert string to date object,
+        filter all test result with versions.scylla-server.run_date_time before
+        date, and mark them with flag excluded: True
+
+        Keyword Arguments:
+            date {str} -- date in format YYYY-MM-DD or YYYY-MM-DD hh:mm:ss (default: {''})
+        """
+        if not date and not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+        format_pattern = "%Y-%m-%d %H:%M:%S"
+
+        try:
+            date = datetime.datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            try:
+                date = datetime.datetime.strptime(date, format_pattern)
+            except ValueError:
+                self.log.error("Wrong format of parameter --before-date. Should be \"YYYY-MM-DD\" or \"YYYY-MM-DD hh:mm:ss\"")
+                return
+
+        filter_path = (
+            "hits.hits._id",
+            "hits.hits._source.hostname",
+            "hits.hits._source.versions.scylla-server.run_date_time"
+        )
+        self.log.info('Exclude tests before date {}'.format(date))
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q="hostname:'%s' AND versions.scylla-server.version:%s*" %
+                                  (self.hostname, self.db_version[:3]))
+        if not results:
+            self.log.info('Nothing to exclude')
+            return
+
+        before_date_results = []
+        for doc in results['hits']['hits']:
+            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], format_pattern)
+            if doc_date < date:
+                before_date_results.append(doc)
+
+        for res in before_date_results:
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=res['_id'],
+                                body={'excluded': True})
+
 
 def main(args):
-    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
-    results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
-    if results:
-        mbra.check_regression(results, html_report_path=args.report_path)
-    else:
-        logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
-        sys.exit(1)
+    if args.mode == 'exclude':
+        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=None, db_version=args.db_version)
+        if args.testrun_id:
+            mbra.exclude_test_run(args.testrun_id)
+        if args.test_id:
+            mbra.exclude_by_test_id(args.test_id)
+        if args.before_date:
+            mbra.exclude_before_date(args.before_date)
+    if args.mode == 'check':
+        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
+        results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
+        if results:
+            mbra.check_regression(results, html_report_path=args.report_path)
+        else:
+            logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
+            sys.exit(1)
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Microbencmarking stats uploader and analyzer")
-    parser.add_argument("--update-db", action="store_true", default=False,
-                        help="Upload current microbenchmarking stats to ElasticSearch")
-    parser.add_argument("--results-path", action="store", default=".",
-                        help="Path where to search for test results")
-    parser.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
-                        help="Comma separated email addresses list that will get the report")
-    parser.add_argument("--report-path", action="store", default="",
-                        help="Save HTML generated results report to the file path before sending by email")
+    parser = argparse.ArgumentParser(description="Microbencmarking stats utility \
+        for upload and analyze or exclude test result from future analyze")
+
+    subparser = parser.add_subparsers(dest='mode',
+                                      title='Microbencmarking utility modes',
+                                      description='Microbencmarking could be run in two modes definded by subcommand',
+                                      metavar='Modes',
+                                      help='To see subcommand help use  microbenchmarking.py subcommand -h')
+    exclude = subparser.add_parser('exclude', help='Exclude results by testrun, testid or date')
+    exclude_group = exclude.add_mutually_exclusive_group(required=True)
+    exclude_group.add_argument('--testrun-id', action='store', default='',
+                               help='Exclude test results for testrun id')
+    exclude_group.add_argument('--test-id', action='store', default='',
+                               help='Exclude test result by id')
+    exclude_group.add_argument('--before-date', action='store', default='',
+                               help='Exclude all test results before date of run stored in field versions.scylla-server.run_date_time.\
+                               Value in format YYYY-MM-DD or YYYY-MM-DD hh:mm:ss')
+    exclude.add_argument('--db-version', action='store', default='',
+                         help='Exclude test results for scylla version',
+                         required=True)
+
+    check = subparser.add_parser('check', help='Upload and analyze test result')
+    check.add_argument("--update-db", action="store_true", default=False,
+                       help="Upload current microbenchmarking stats to ElasticSearch")
+    check.add_argument("--results-path", action="store", default=".",
+                       help="Path where to search for test results")
+    check.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
+                       help="Comma separated email addresses list that will get the report")
+    check.add_argument("--report-path", action="store", default="",
+                       help="Save HTML generated results report to the file path before sending by email")
+
     return parser.parse_args()
 
 
