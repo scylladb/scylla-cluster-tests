@@ -2,6 +2,10 @@
 {% block body %}
     <h3>Test: {{ subject }}</h3>
     <h3>
+        <span>Testrun id:</span>
+        <span class="blue">{{ testrun_id }}</span>
+    </h3>
+    <h3>
         <span>Test start time: </span>
         <span class="blue">{{ test_version.run_date_time }}</span>
     </h3>
