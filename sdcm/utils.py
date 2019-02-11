@@ -19,6 +19,11 @@ import requests
 from functools import wraps
 from enum import Enum
 
+import boto3
+from libcloud.compute.providers import get_driver
+from libcloud.compute.types import Provider
+
+from .keystore import KeyStore
 
 logger = logging.getLogger('avocado.test')
 
@@ -190,3 +195,57 @@ class S3Storage(object):
         except Exception as e:
             logger.debug("Unable to upload to S3: %s" % e)
             return ""
+
+
+aws_regions = ['us-east-1', 'eu-west-1']
+gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
+
+
+def clear_cloud_instances(tags_dict):
+    """
+    Remove all instances with specific tags from both AWS/GCE
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return:
+    """
+    clear_instances_aws(tags_dict)
+    clear_instances_gce(tags_dict)
+
+
+def clear_instances_aws(tags_dict):
+    for region in aws_regions:
+        client = boto3.client('ec2', region_name=region)
+
+
+        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+
+        response = client.describe_instances(Filters=custom_filter)
+
+        instance_ids = [instance['InstanceId'] for reservation in response['Reservations'] for instance in reservation['Instances']]
+
+        if instance_ids:
+            logger.info("going to delete instance_ids={}".format(instance_ids))
+            response = client.terminate_instances(InstanceIds=instance_ids)
+            for instance in response['TerminatingInstances']:
+                assert instance['CurrentState']['Name'] in ['terminated', 'shutting-down']
+
+
+def clear_instances_gce(tags_dict):
+    ks = KeyStore()
+    gcp_credentials = ks.get_gcp_credentials()
+    ComputeEngine = get_driver(Provider.GCE)
+    for region in gce_regions:
+        driver = ComputeEngine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                               gcp_credentials["private_key"],
+                               datacenter=region,
+                               project=gcp_credentials["project_id"])
+
+        for node in driver.list_nodes():
+            tags = node.extra['metadata'].get('items', [])
+
+            if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
+                print node
+                if not node.state == 'STOPPED':
+                    logger.info("going to delete: {}".format(node.name))
+                    res = driver.destroy_node(node)
+                    logger.info("{} deleted. res={}".format(node.name, res))

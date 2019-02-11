@@ -107,6 +107,15 @@ You can also enter the containerized SCT environment using::
 Depending on which backend hardware/cloud provider/virtualization you will use, relevant configuration of those backend
 services should be done.
 
+List resources being used::
+
+    # google cloud engine
+    gcloud compute instances list --filter="metadata.items.key['RunByUser']['value']='`whoami`'"
+
+    # amazon
+    aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --filter "Name=tag:RunByUser,Values=`whoami`"
+
+
 Configuring test run configuration YAML
 ---------------------------------------
 

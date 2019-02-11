@@ -1,4 +1,3 @@
-import os
 import logging
 import time
 import uuid
@@ -47,16 +46,12 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
 
 
 def create_tags_list():
-    username = os.environ.get('BUILD_USER', getpass.getuser())
-    tags_list = [{'Key': 'TestName', 'Value': str(avocado_runtime.CURRENT_TEST.name)},
-                 {'Key': 'RunByUser', 'Value': username},
-                 {'Key': 'JobId', 'Value': avocado_runtime.CURRENT_JOB.unique_id},
-                 {'Key': 'workspace', 'Value': cluster.WORKSPACE},
-                 {'Key': 'uname', 'Value': ' | '.join(os.uname())}]
+    tags_list = [{'Key': k, 'Value': v} for k,v in cluster.create_common_tags().items()]
     if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
         tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
     return tags_list
+
 
 class PublicIpNotReady(Exception):
     pass
@@ -503,9 +498,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  n_nodes=[10],
                  params=None):
         # We have to pass the cluster name in advance in user_data
-        cluster_uuid = uuid.uuid4()
-        if cluster.Setup.REUSE_CLUSTER:
-            cluster_uuid = params.get("cluster_id")
+        cluster_uuid = cluster.Setup.test_id()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
         shortid = str(cluster_uuid)[:8]

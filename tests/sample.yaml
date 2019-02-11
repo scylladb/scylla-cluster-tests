@@ -38,10 +38,10 @@ send_email: true
 email_recipients: ['bentsi@scylladb.com']
 
 # Reuse cluster
-# cluster_id: "" ID of the cluster (currently db nodes only)
+# test_id: "" ID of the cluster for reuse
 
 # IP type for ssh connections, public or private
-ip_ssh_connections: 'private'
+ip_ssh_connections: 'public'
 
 backends: !mux
     aws: !mux

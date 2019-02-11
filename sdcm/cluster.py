@@ -22,6 +22,7 @@ import tempfile
 import threading
 import time
 import uuid
+import getpass
 
 import yaml
 import shutil
@@ -39,6 +40,8 @@ from .remote import disable_master_ssh
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
+
+from avocado.utils import runtime as avocado_runtime
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -157,6 +160,19 @@ class Setup(object):
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
 
+    _test_id = None
+
+    @classmethod
+    def test_id(cls):
+        if not cls._test_id:
+            cls._test_id = uuid.uuid4()
+        return cls._test_id
+
+    @classmethod
+    def set_test_id(cls, new_test_id):
+        if new_test_id:
+            cls._test_id = new_test_id
+
     @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
@@ -167,8 +183,22 @@ class Setup(object):
             cls.KEEP_ALIVE = True
         else:
             cls.KEEP_ALIVE = False
+
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
+
+
+def create_common_tags():
+    username = os.environ.get('BUILD_USER', getpass.getuser())
+    build_tag = os.environ.get('BUILD_TAG', None)
+    tags = dict(RunByUser=username,
+                TestName=str(avocado_runtime.CURRENT_TEST.name),
+                TestId=str(Setup.test_id()))
+
+    if build_tag:
+        tags["JenkinsJobTag"] = build_tag
+
+    return tags
 
 
 class NodeError(Exception):
@@ -1446,7 +1476,7 @@ class BaseCluster(object):
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
                  node_prefix='node', n_nodes=[10], params=None, region_names=None):
         if cluster_uuid is None:
-            self.uuid = uuid.uuid4()
+            self.uuid = Setup.test_id()
         else:
             self.uuid = cluster_uuid
         self.shortid = str(self.uuid)[:8]
