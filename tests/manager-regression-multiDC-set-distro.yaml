@@ -31,7 +31,7 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-0e40245be9878b0b8' # Loader dedicated AMI
+            ami_id_loader: 'ami-07797ae1c88489b80' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
@@ -42,7 +42,7 @@ backends: !mux
             security_group_ids: 'sg-059a7f66a947d4b5c sg-81703ae4'
             subnet_id: 'subnet-088fddaf520e4c7a8 subnet-5207ee37'
             ami_id_db_scylla: 'AMI_ID_EU_WEST AMI_ID_US_WEST'
-            ami_id_loader: 'ami-0dfdd5cbd9df7f135' # Loader dedicated AMI
+            ami_id_loader: 'ami-05a77f776bd5f9f4d' # Loader dedicated AMI
             ami_id_monitor: 'ami-0f478f18d613e3662' # Monitor dedicated AMI
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
