@@ -202,19 +202,25 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
         results = {}
         for (fullpath, subdirs, files) in os.walk(os.getcwd()):
-            logger.info(fullpath)
+            self.log.info(fullpath)
+            if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
+                    len(subdirs) > 1):
+                raise Exception('Test set {} has more than one datasets: {}'.format(
+                    os.path.basename(fullpath),
+                    subdirs))
+
             if not subdirs:
                 dataset_name = os.path.basename(fullpath)
-                logger.info(dataset_name)
+                self.log.info('Dataset name: {}'.format(dataset_name))
+                dirname = os.path.basename(os.path.dirname(fullpath))
+                self.log.info("Test set: {}".format(dirname))
                 for filename in files:
-                    dirname = os.path.basename(os.path.dirname(fullpath))
-                    logger.info(dirname)
                     new_filename = "".join(c for c in filename if c not in bad_chars)
                     test_args = os.path.splitext(new_filename)[0]
                     test_type = dirname + "_" + test_args
                     json_path = os.path.join(dirname, dataset_name, filename)
                     with open(json_path, 'r') as f:
-                        logger.info("Reading: %s", json_path)
+                        self.log.info("Reading: %s", json_path)
                         datastore = json.load(f)
                     datastore.update({'hostname': self.hostname,
                                       'test_args': test_args,
