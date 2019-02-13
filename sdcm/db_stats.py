@@ -320,7 +320,7 @@ class TestStatsMixin(Stats):
         return test_details
 
     def get_system_details(self):
-        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat']
+        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
         system_details = {}
         for node in self.db_cluster.nodes:
             node_system_info = {}
