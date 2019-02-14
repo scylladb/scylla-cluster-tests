@@ -37,8 +37,8 @@ scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/un
 send_email: true
 email_recipients: ['bentsi@scylladb.com']
 
-# Reuse cluster
-# test_id: "" ID of the cluster for reuse
+# Reuse cluster ID of the clusters when using "reuse_cluster: true"
+# test_id:  ""
 
 # IP type for ssh connections, public or private
 ip_ssh_connections: 'public'

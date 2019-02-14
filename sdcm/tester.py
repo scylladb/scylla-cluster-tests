@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clear_cloud_instances
+from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -1147,7 +1147,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         try:
             self.clean_resources()
             if self._failure_post_behavior == 'destroy':
-                clear_cloud_instances({"TestId": str(cluster.Setup.test_id())})
+                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
         except Exception as details:
             self.log.exception('Exception in clean_resources method {}'.format(details))
             raise

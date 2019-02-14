@@ -201,26 +201,30 @@ aws_regions = ['us-east-1', 'eu-west-1']
 gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
 
 
-def clear_cloud_instances(tags_dict):
+def clean_cloud_instances(tags_dict):
     """
     Remove all instances with specific tags from both AWS/GCE
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :return:
+    :return: None
     """
-    clear_instances_aws(tags_dict)
-    clear_instances_gce(tags_dict)
+    clean_instances_aws(tags_dict)
+    clean_instances_gce(tags_dict)
 
 
-def clear_instances_aws(tags_dict):
+def clean_instances_aws(tags_dict):
+    """
+    Remove all instances with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
     for region in aws_regions:
+        logger.info('going to cleanup aws region=%s', region)
         client = boto3.client('ec2', region_name=region)
-
-
         custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
 
         response = client.describe_instances(Filters=custom_filter)
-
         instance_ids = [instance['InstanceId'] for reservation in response['Reservations'] for instance in reservation['Instances']]
 
         if instance_ids:
@@ -230,21 +234,30 @@ def clear_instances_aws(tags_dict):
                 assert instance['CurrentState']['Name'] in ['terminated', 'shutting-down']
 
 
-def clear_instances_gce(tags_dict):
+def clean_instances_gce(tags_dict):
+    """
+    Remove all instances with specific tags GCE
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+
     ks = KeyStore()
     gcp_credentials = ks.get_gcp_credentials()
-    ComputeEngine = get_driver(Provider.GCE)
+    compute_engine = get_driver(Provider.GCE)
     for region in gce_regions:
-        driver = ComputeEngine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+        logger.info('going to cleanup gce region=%s', region)
+        driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
                                gcp_credentials["private_key"],
                                datacenter=region,
                                project=gcp_credentials["project_id"])
 
         for node in driver.list_nodes():
             tags = node.extra['metadata'].get('items', [])
-
+            # since libcloud list_nodes() doesn't offer any filtering
+            # we go over all the expected tags, and check if they exist in on the node/instance
+            # if all of them exists we delete that node
             if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
-                print node
                 if not node.state == 'STOPPED':
                     logger.info("going to delete: {}".format(node.name))
                     res = driver.destroy_node(node)
