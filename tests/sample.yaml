@@ -17,6 +17,8 @@ user_prefix: 'sample-configuration-tst'
 nemesis_class_name: 'NoOpMonkey' # no nemesis will be applied
 nemesis_interval: 5
 nemesis_during_prepare: 'true'
+
+
 failure_post_behavior: destroy
 space_node_threshold: 167000
 store_results_in_elasticsearch: False

@@ -263,3 +263,115 @@ def clean_instances_gce(tags_dict):
                     logger.info("going to delete: {}".format(node.name))
                     res = driver.destroy_node(node)
                     logger.info("{} deleted. res={}".format(node.name, res))
+
+
+def list_instances_aws(tags_dict):
+    """
+    list all instances with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+    instances = []
+    for region in aws_regions:
+        logger.info('going to cleanup aws region=%s', region)
+        client = boto3.client('ec2', region_name=region)
+        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+
+        response = client.describe_instances(Filters=custom_filter)
+        instances += [instance for reservation in response['Reservations'] for instance in reservation['Instances']]
+
+    return instances
+
+
+def list_instances_gce(tags_dict):
+    """
+    list all instances with specific tags GCE
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+
+    # avoid cyclic dependency issues, since too many things import utils.py
+    from .keystore import KeyStore
+
+    instances = []
+    gcp_credentials = KeyStore().get_gcp_credentials()
+    compute_engine = get_driver(Provider.GCE)
+    for region in gce_regions:
+        logger.info('going to cleanup gce region=%s', region)
+        driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                               gcp_credentials["private_key"],
+                               datacenter=region,
+                               project=gcp_credentials["project_id"])
+
+        for node in driver.list_nodes():
+            tags = node.extra['metadata'].get('items', [])
+            # since libcloud list_nodes() doesn't offer any filtering
+            # we go over all the expected tags, and check if they exist in on the node/instance
+            # if all of them exists we delete that node
+            if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
+                if not node.state == 'STOPPED':
+                    instances += [node]
+    return instances
+
+
+_scylla_ami_cache = None
+
+
+def get_scylla_ami_versions(region):
+    """
+    get the list of all the formal scylla ami from specific region
+
+    :param region: the aws region to look in
+    :return: list of ami data
+    :rtype: list
+    """
+    global _scylla_ami_cache
+
+    if _scylla_ami_cache:
+        return _scylla_ami_cache
+
+    EC2 = boto3.client('ec2', region_name=region)
+    response = EC2.describe_images(
+        Owners=['797456418907'],  # ScyllaDB
+        Filters=[
+          {'Name': 'name', 'Values': ['ScyllaDB *']},
+        ],
+    )
+
+    _scylla_ami_cache = sorted(response['Images'],
+                               key=lambda x: x['CreationDate'],
+                               reverse=True)
+
+    return _scylla_ami_cache
+
+
+_s3_scylla_repos_cache = {}
+
+
+def get_s3_scylla_repos_mapping(type='centos'):
+    """
+    get the mapping from version prefixes to .repo files locations
+
+    :param type: which distro to look up centos/debian
+    :return: a mapping of versions prefixes to repos
+    :rtype: dict
+    """
+    if _s3_scylla_repos_cache:
+        return _s3_scylla_repos_cache
+
+    s3_client = boto3.client('s3')
+    bucket = 'downloads.scylladb.com'
+
+    if type == 'centos':
+        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos')
+
+        for f in response['Contents']:
+            filename = os.path.basename(f['Key'])
+            if filename.startswith('scylla-') and filename.endswith('.repo'):
+                version_prefix = filename.replace('.repo', '').split('-')[-1]
+                _s3_scylla_repos_cache[version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+    else:
+        raise NotImplementedError()
+    return _s3_scylla_repos_cache

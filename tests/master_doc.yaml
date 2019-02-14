@@ -1,45 +1,96 @@
-# Test duration (min). Parameter used to keep instances produced by tests that
-# are supposed to run longer than 24 hours from being killed
+# Test duration (min). Parameter used to keep instances produced by tests that are supposed to run longer than 24 hours from being killed
 test_duration: 60
-# cassandra-stress command. You can specify everything but the -node parameter,
-# which is going to be provided by the test suite infrastructure
-stress_cmd: cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000
-# tcpdump to try to capture nodetool API
-tcpdump: false
-# Number list of database nodes in multiple date centers. Legacy type (int): Number of database nodes
-n_db_nodes: '6'
-# If you want to use more than 1 loader node, I recommend
-# increasing the size of the DB instance (instance_type_db parameter),
-# since 't2.micro' nodes tend to struggle with a lot of load.
+
+# cassandra-stress commands. You can specify everything but the -node parameter, which is going to be provided by the test suite infrastructure
+# multiple commands can passed as a list
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=3000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..3000"
+stress_read_cmd: ["cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop 'dist=gauss(1..3000,1500,150)'"]
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=10m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=2 -pop seq=1..3000 -log interval=5"]
+
+# run cql command 'select count(*) ks.cf from rand loader node to rand db_node in parallel thread
+run_fullscan: 'keyspace1.standard1, 5' # 'ks.cf|random, interval(min)''
+
+# Number list of database nodes in multiple date centers.
+n_db_nodes: 1
+
+# Number list of loader nodes in multiple date centers
 n_loaders: 1
+# If you want to use more than 1 loader node, I recommend increasing the size of the DB instance (n_db_nodes parameter),
+# since 't2.micro' nodes tend to struggle with a lot of load.
+
+# Number list of monitor nodes in multiple date centers.
+n_monitor_nodes: 1
+
+# Across how many keyspaces to spread the load
+keyspace_num: 1
+
 # Nemesis class to use (possible types in sdcm.nemesis). Example: StopStartMonkey
-nemesis_class_name: 'ChaosMonkey'
-# Nemesis sleep interval to use if None provided specifically
+# NoOpMonkey - Doesn't activate any Nemesis (default)
+# NotSpotNemesis
+# StopWaitStartMonkey
+# StopStartMonkey
+# RestartThenRepairNodeMonkey
+# MultipleHardRebootNodeMonkey
+# HardRebootNodeMonkey
+# SoftRebootNodeMonkey
+# DrainerMonkey
+# CorruptThenRepairMonkey
+# CorruptThenRebuildMonkey
+# DecommissionMonkey
+# NoCorruptRepairMonkey
+# MajorCompactionMonkey
+# RefreshMonkey
+# RefreshBigMonkey
+# EnospcMonkey
+# EnospcAllNodesMonkey
+# NodeToolCleanupMonkey
+
+# ChaosMonkey
+# LimitedChaosMonkey
+# AllMonkey
+# MdcChaosMonkey
+
+# UpgradeNemesis
+# UpgradeNemesisOneNode
+# RollbackNemesis
+# TODO: finish the docs for each one
+nemesis_class_name: 'NoOpMonkey'
+
+# Nemesis sleep interval to use if None provided specifically in the test
 nemesis_interval: 15
-# Prefix for your AWS VMs (handy for telling instances from different
+
+# TODO:
+nemesis_during_prepare: 'true'
+
+# Prefix for your AWS/GCE VMs (handy for telling instances from different
 # users apart). If you leave this empty, the prefix will be your unix username.
 user_prefix: ''
+
 # Failure/post test behavior
 # Default: Destroy AWS instances and credentials (destroy)
 # Keep AWS instances running and leave credentials alone (keep)
 # Stop AWS instances and leave credentials alone (stop)
 failure_post_behavior: destroy
+
 # Space node threshold before starting nemesis (bytes)
 # The default value is 6GB (6x1024^3 bytes)
 # This value is supposed to reproduce
 # https://github.com/scylladb/scylla/issues/1140
 space_node_threshold: 6442450944
+
 # Type of IP used to connect to machine instances.
 # This depends on whether you are running your tests from a machine inside
 # your cloud provider, where it makes sense to use 'private', or outside (use 'public')
 # Default: Use public IPs to connect to instances (public)
 # Use private IPs to connect to instances (private)
 ip_ssh_connections: 'public'
+
 # The new db binary will be uploaded to db instance to replace the one
 # provided by the ami. This is useful to test out a new scylla version
 # without making a new ami.
 # update_db_binary: $path_of_the_new_scylla_binary
 update_db_binary: ''
+
 # The new db packages will be uploaded to db instance to update the one
 # provided by the ami. This is useful to test out a new scylla version
 # without making a new ami via rpm package updates.
@@ -63,6 +114,9 @@ new_version: ''
 # that is not yet in the repository.
 # upgrade_node_packages: $path_of_folder_with_packages
 upgrade_node_packages: ''
+
+# capturing nodetool API via tcpdump
+tcpdump: false
 
 backends: !mux
     libvirt: !mux
@@ -204,6 +258,11 @@ backends: !mux
         # multiple datacenters
         # us_east_1_and_asias_northeast_1:
         #   gce_datacenter: 'us-east1-b asia-northeast1-a'
+
+    docker: !mux
+        cluster_backend: 'docker'
+        docker_image: 'scylladb/scylla'
+        user_credentials_path: '~/.ssh/scylla-test'
 
 databases: !mux
     cassandra:
