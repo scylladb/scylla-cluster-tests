@@ -23,7 +23,6 @@ import boto3
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from .keystore import KeyStore
 
 logger = logging.getLogger('avocado.test')
 
@@ -242,8 +241,10 @@ def clean_instances_gce(tags_dict):
     :return: None
     """
 
-    ks = KeyStore()
-    gcp_credentials = ks.get_gcp_credentials()
+    # avoid cyclic dependency issues, since too many things import utils.py
+    from .keystore import KeyStore
+
+    gcp_credentials = KeyStore().get_gcp_credentials()
     compute_engine = get_driver(Provider.GCE)
     for region in gce_regions:
         logger.info('going to cleanup gce region=%s', region)
