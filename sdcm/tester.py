@@ -1146,12 +1146,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def tearDown(self):
         try:
             self.clean_resources()
-            if self._failure_post_behavior == 'destroy':
-                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
         except Exception as details:
             self.log.exception('Exception in clean_resources method {}'.format(details))
             raise
         finally:
+            if self._failure_post_behavior == 'destroy':
+                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
             self.zip_and_upload_job_log()
 
     def zip_and_upload_job_log(self):
