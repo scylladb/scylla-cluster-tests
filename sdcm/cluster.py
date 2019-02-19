@@ -184,6 +184,7 @@ class Setup(object):
         else:
             cls.KEEP_ALIVE = False
 
+    @classmethod
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
 
