@@ -40,6 +40,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.db_version = db_version
 
     def check_regression(self, current_results, html_report_path):
+        START_DATE = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.test_args",  # [64-32.1)
@@ -63,7 +64,13 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                             AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,
                                                                                                self.db_version[:3]))
         assert tests_filtered, "No results from DB"
-        results = tests_filtered["hits"]["hits"]
+
+        results = []
+        for doc in tests_filtered['hits']['hits']:
+            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], "%Y-%m-%d %H:%M:%S")
+            if doc_date > START_DATE:
+                results.append(doc)
+
         sorted_by_type = defaultdict(list)
         for res in results:
             test_type = "%s_%s" % (res["_source"]["test_group_properties"]["name"],
