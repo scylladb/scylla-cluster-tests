@@ -744,7 +744,7 @@ class Nemesis(object):
                       text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
+        self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
         thread1.join(timeout=120)
 
         self.log.debug("Execute a complete repair for target node")
