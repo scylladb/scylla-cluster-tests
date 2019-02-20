@@ -735,7 +735,7 @@ class Nemesis(object):
         thread1.start()
 
         def repair_streaming_exists():
-            result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/stream_manager/"')
+            result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/"')
             return 'repair-' in result.stdout
 
         wait.wait_for(func=repair_streaming_exists,
