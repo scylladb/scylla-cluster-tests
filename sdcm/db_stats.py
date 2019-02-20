@@ -447,8 +447,15 @@ class TestStatsMixin(Stats):
         Returns:
             [str] -- fullpath to archive file
         """
-        storing_dir = os.path.join(self.db_cluster.logdir, 'system_data')
-        os.mkdir(storing_dir)
+        storing_dir = os.path.join(self.db_cluster.logdir, 'system_details_information')
+        if not os.path.exists(storing_dir):
+            try:
+                os.mkdir(storing_dir)
+            except OSError as details:
+                self.log.info('Archive could not be created')
+                self.log.warning(details)
+                return ''
+
         for node in self.db_cluster.nodes:
             src_dir = node.prepare_files_for_archive(files_to_archive)
             node.receive_files(src=src_dir, dst=storing_dir)

@@ -476,16 +476,24 @@ class AWSNode(cluster.BaseNode):
         Get console output of instance which is printed during initiating and loading
         Get only last 64KB of output data.
         """
-        output = self._ec2_service.meta.client.get_console_output(
+        result = self._ec2_service.meta.client.get_console_output(
             InstanceId=self._instance.id,
         )
-        return output['Output']
+        console_output = result.get('Output', '')
+
+        if not console_output:
+            self.log.warning('Some error during getting console output')
+        return console_output
 
     def get_console_screenshot(self):
-        imagedata = self._ec2_service.meta.client.get_console_screenshot(
+        result = self._ec2_service.meta.client.get_console_screenshot(
             InstanceId=self._instance.id
         )
-        return imagedata['ImageData']
+        imagedata = result.get('ImageData', '')
+
+        if not imagedata:
+            self.log.warning('Some error during getting console screenshot')
+        return imagedata
 
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
