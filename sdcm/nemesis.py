@@ -741,7 +741,7 @@ class Nemesis(object):
 
         wait_wrap.wait_for(func=repair_streaming_exists,
                            timeout=300,
-                           step=0.01,
+                           step=1,
                            throw_exc=True,
                            text='Wait for repair starts')
 
