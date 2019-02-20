@@ -1484,13 +1484,13 @@ server_encryption_options:
             [type] -- path to created directory structure
         """
         root_dir = '/tmp/%s' % self.name
-        self.remoter.run('mkdir %s' % root_dir)
+        self.remoter.run('mkdir -p %s' % root_dir, ignore_status=True)
         for f in fileslist:
             if self.file_exists(f):
                 old_full_path = os.path.dirname(f)[1:]
                 new_full_path = os.path.join(root_dir, old_full_path)
-                self.remoter.run('mkdir -p %s' % new_full_path)
-                self.remoter.run('cp -r %s %s' % (f, new_full_path))
+                self.remoter.run('mkdir -p %s' % new_full_path, ignore_status=True)
+                self.remoter.run('cp -r %s %s' % (f, new_full_path), ignore_status=True)
         return root_dir
 
     def get_console_output(self):

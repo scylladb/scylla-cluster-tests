@@ -1107,11 +1107,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         db_cluster_coredumps = None
         db_cluster_system_details = None
         if self.db_cluster is not None:
-            db_cluster_system_details = self.get_system_details()
-
             db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
+            db_cluster_system_details = self.get_system_details()
             for current_nemesis in self.db_cluster.nemesis:
                 current_nemesis.report()
             # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
@@ -1195,7 +1194,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.update({'test_details': {'job_log_link': s3_link}})
             self.log.info('Link to job.log archive {}'.format(s3_link))
         except Exception as details:
-            self.log.warning('Errors during creating archive and uploading job.log {}'.format(details))
+            self.log.warning('Errors during creating and uploading archive of job.log {}'.format(details))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
