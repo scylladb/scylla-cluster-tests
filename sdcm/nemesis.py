@@ -35,6 +35,7 @@ from .keystore import KeyStore
 from . import prometheus
 from . import mgmt
 from avocado.utils import wait
+from . import wait as wait_wrap
 
 
 from sdcm.utils import remote_get_file
@@ -738,10 +739,11 @@ class Nemesis(object):
             result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/"')
             return 'repair-' in result.stdout
 
-        wait.wait_for(func=repair_streaming_exists,
-                      timeout=300,
-                      step=0.01,
-                      text='Wait for repair starts')
+        wait_wrap.wait_for(func=repair_streaming_exists,
+                           timeout=300,
+                           step=0.01,
+                           throw_exc=True,
+                           text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
         self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
