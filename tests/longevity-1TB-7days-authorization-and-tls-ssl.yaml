@@ -1,4 +1,4 @@
-test_duration: 10080
+test_duration: 10900
 prepare_write_cmd:  "cassandra-stress write cl=ALL n=1100200300 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300"
 prepare_verify_cmd: "cassandra-stress read cl=ALL  n=1100200300 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1100200300"
 
