@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 
-# This script searches in the journalctl all stalles, find unique stalles and decode them. 
+# This script searches in the journalctl all stalles, find unique stalles and decode them.
 # Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like:
 #         logs
 #     |            |
 # node1          node2
-# database.log   database.log    
+# database.log   database.log
 # The script expects to receive 3 parameters:
 #   $1 - folder path where journalctl logs is located
 #   $2 - node IP: it's needed for decoding. Will use credential file (see below)
@@ -71,7 +71,7 @@ for dir in $(find $prev -type d); do
 
 			done < $grepped_file
 			sudo rm -r $analize_dir
-		fi 
+		fi
 		prev="$dir"
 	fi
 done
@@ -106,7 +106,7 @@ while true; do
 				echo $file_name >> $unique_stalls_dir/$base_file_name
 				sudo rm $file
 				echo "Files $base_file_name and $file_name are same"
-			fi	
+			fi
 		fi
 	done
 	echo "Save into unique file $unique_stalls_dir/$base_file_name"
@@ -114,7 +114,7 @@ while true; do
 	echo "" >> "$unique_stalls_dir/$base_file_name"
 	echo "Backtrace:" >> "$unique_stalls_dir/$base_file_name"
 	cat $base_file >> "$unique_stalls_dir/$base_file_name"
-	sudo rm $base_file	
+	sudo rm $base_file
 done
 sudo rm -r $stalls_dir
 
@@ -140,4 +140,3 @@ echo "******** Found $(ls unique_stalls_dir file | wc -l) unique backtraces ****
 
 yes '' | sed 2q
 echo "******** Decoded backtraces are saved into $decoded_file_name file ********"
-

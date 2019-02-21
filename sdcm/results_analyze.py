@@ -363,7 +363,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             for k in self.PARAMS:
                 if k in curr_test_stats and k in old_best and\
                         group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
-                            group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
+                    group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
 
         res_list = list()
         # compare with the best in the test version and all the previous versions

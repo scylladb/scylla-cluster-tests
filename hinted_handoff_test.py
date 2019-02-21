@@ -7,6 +7,7 @@ class HintedHandoffTest(ClusterTester):
     """
        :avocado: enable
     """
+
     def __init__(self, *args, **kwargs):
         super(HintedHandoffTest, self).__init__(*args, **kwargs)
         self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 -schema 'replication(factor=3)' " \

@@ -86,4 +86,3 @@ backends: !mux
 databases: !mux
     scylla:
         db_type: scylla
-

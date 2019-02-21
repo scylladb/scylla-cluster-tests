@@ -347,4 +347,3 @@ class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
-

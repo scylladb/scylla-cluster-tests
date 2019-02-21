@@ -46,7 +46,7 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
 
 
 def create_tags_list():
-    tags_list = [{'Key': k, 'Value': v} for k,v in cluster.create_common_tags().items()]
+    tags_list = [{'Key': k, 'Value': v} for k, v in cluster.create_common_tags().items()]
     if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
         tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
@@ -625,7 +625,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.remoter.run('nodetool status', verbose=True, retry=5)
-
 
     def destroy(self):
         self.stop_nemesis()

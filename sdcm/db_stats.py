@@ -219,6 +219,7 @@ class Stats(object):
     1. without arguments - as a based class of TestStatsMixin - for saving test statistics
     2. with arguments - as a separate object to update an existing document
     """
+
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)

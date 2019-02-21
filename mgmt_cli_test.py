@@ -24,7 +24,6 @@ from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 
 
-
 class MgmtCliTest(ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
@@ -66,9 +65,9 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
-        origin_ssh_user=mgr_cluster.ssh_user
+        origin_ssh_user = mgr_cluster.ssh_user
         origin_rsa_id = self.MANAGER_IDENTITY_FILE
-        new_ssh_user="centos"
+        new_ssh_user = "centos"
         new_rsa_id = '/tmp/scylla-test'
 
         mgr_cluster.update(ssh_user=new_ssh_user, ssh_identity_file=new_rsa_id)
@@ -83,7 +82,7 @@ class MgmtCliTest(ClusterTester):
 
     def _get_cluster_hosts_with_ips(self):
         ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
-                                              len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+            len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in self.db_cluster.nodes]
 
     def test_manager_sanity(self):
@@ -120,7 +119,6 @@ class MgmtCliTest(ClusterTester):
             assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
 
-
     def test_mgmt_cluster_healthcheck(self):
 
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
@@ -137,7 +135,7 @@ class MgmtCliTest(ClusterTester):
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
-            assert host_health.status == HostStatus.UP , "Not all hosts status is 'UP'"
+            assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
 
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
@@ -146,7 +144,7 @@ class MgmtCliTest(ClusterTester):
         time.sleep(sleep)
 
         dict_host_health = mgr_cluster.get_hosts_health()
-        assert dict_host_health[other_host_ip].status == HostStatus.DOWN , "Host: {} status is not 'DOWN'".format(other_host_ip)
+        assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(other_host_ip)
         other_host.start_scylla_server()
 
     def test_manager_upgrade(self):
@@ -195,6 +193,7 @@ class MgmtCliTest(ClusterTester):
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
+
 
 if __name__ == '__main__':
     main()
