@@ -1,0 +1,67 @@
+test_duration: 60
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+user_prefix: 'system-sla'
+failure_post_behavior: keep
+space_node_threshold: 644
+ip_ssh_connections: 'public'
+round_robin: 'true'
+experimental: 'true'
+authenticator: 'PasswordAuthenticator'
+# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
+instance_provision: 'on_demand'
+
+
+backends: !mux
+    gce: !mux
+        cluster_backend: 'gce'
+        user_credentials_path: '~/.ssh/scylla-test'
+        gce_user_credentials: '~/Scylla-c41b78923a54.json'
+        gce_service_account_email: 'skilled-adapter-452@appspot.gserviceaccount.com'
+        gce_project: 'skilled-adapter-452'
+        gce_network: 'qa-vpc'
+        gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        gce_image_username: 'scylla-test'
+        gce_instance_type_db: 'n1-highmem-16'
+        gce_root_disk_type_db: 'pd-ssd'
+        gce_root_disk_size_db: 50
+        gce_n_local_ssd_disk_db: 8
+        gce_instance_type_loader: 'n1-highmem-8'
+        gce_root_disk_type_loader: 'pd-standard'
+        gce_n_local_ssd_disk_loader: 0
+        gce_instance_type_monitor: 'n1-standard-4'
+        gce_root_disk_type_monitor: 'pd-ssd'
+        gce_root_disk_size_monitor: 50
+        gce_n_local_ssd_disk_monitor: 0
+        scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/c4af043ef720901248a4c327d923699f5bb8103c-1910a0080048fa342c7d65b2556d8a367bcf24d3-9215bf9e716e3ac9910458ce7e92a6e1a7d91079/21/scylla.repo'
+#        scylla_repo: 'REPO_FILE_PATH'
+        us_east_1:
+          gce_datacenter: 'us-east1-b'
+    aws: !mux
+        cluster_backend: 'aws'
+        user_credentials_path: '~/.ssh/scylla-qa-ec2'
+        instance_type_loader: 'c5.large'
+        instance_type_monitor: 't3.small'
+        instance_type_db: 'i3.large'
+        us_east_1:
+            region_name: 'us-east-1'
+            security_group_ids: 'sg-5e79983a'
+            subnet_id: 'subnet-c327759a'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
+            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
+
+    docker: !mux
+        cluster_backend: 'docker'
+        docker_image: 'scylladb/scylla'
+        user_credentials_path: '~/.ssh/scylla-test'
+
+databases: !mux
+#    cassandra:
+#        db_type: cassandra
+    scylla:
+        db_type: scylla

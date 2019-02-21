@@ -1126,6 +1126,151 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         return partitions
 
+    def create_service_level(self, session, sla_name, shares=None, if_not_exists=True):
+        query = 'CREATE SERVICE_LEVEL{if_not_exists} {service_level_name}{shares}'\
+                .format(if_not_exists=' IF NOT EXISTS' if if_not_exists else '',
+                       service_level_name=sla_name,
+                       shares=' WITH SHARES = %d' % shares if shares else '')
+        self.log.debug('Create service level query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Service level "{}" has been created'.format(sla_name))
+
+    def alter_service_level(self, session, sla_name, shares):
+        query = 'ALTER SERVICE_LEVEL {service_level_name} WITH SHARES = {shares}' \
+            .format(service_level_name=sla_name,
+                    shares=shares)
+        self.log.debug('Change service level query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Service level "{}" has been altered'.format(sla_name))
+
+    def drop_service_level(self, session, sla_name, if_exists=True):
+        query = 'DROP SERVICE_LEVEL{if_exists} {service_level_name}'\
+                .format(service_level_name=sla_name,
+                        if_exists=' IF EXISTS' if if_exists else '')
+        self.log.debug('Drop service level query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Service level "{}" has been dropped'.format(sla_name))
+
+    def attach_service_level(self, session, sla_name, role_name):
+        query = 'ATTACH SERVICE_LEVEL {service_level_name} TO {role_name}'\
+                .format(service_level_name=sla_name,
+                        role_name=role_name)
+        self.log.debug('Attach service level query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Service level "{}" has been attached to {} role'.format(sla_name, role_name))
+
+    def detach_service_level(self, session, role_name):
+        query = 'DETACH SERVICE_LEVEL FROM {role_name}'\
+                .format(role_name=role_name)
+        self.log.debug('Detach service level query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Service level has been detached from {} role'.format(role_name))
+
+    def list_service_levels(self, session, sla_name=None):
+        if sla_name:
+            query = 'LIST SERVICE_LEVEL {}'.format(sla_name)
+        else:
+            query = 'LIST ALL SERVICE_LEVELS'
+        self.log.debug('List service level(s) query: {}'.format(query))
+        return list(session.execute(query))
+
+    def list_attached_service_levels(self, session, role_name=None):
+        if role_name:
+            query = 'LIST ATTACHED SERVICE_LEVEL OF {}'.format(role_name)
+        else:
+            query = 'LIST ATTACHED ALL SERVICE_LEVELS'
+        self.log.debug('List attached service level(s) query: {}'.format(query))
+        return list(session.execute(query))
+
+    def list_effective_service_levels(self, session, role_name):
+        query = 'LIST SERVICE_LEVELS {}'.format(role_name)
+        self.log.debug('List effective service levels query: {}'.format(query))
+        return list(session.execute(query))
+
+    def create_role(self, session, role_name, password=None, login=False, superuser=False, options_dict=None,
+                    service_level_name=None, service_level_shares=None):
+        # Example: CREATE ROLE bob WITH PASSWORD = 'password_b'AND LOGIN = true AND SUPERUSER = true;
+        # Example: CREATE ROLE carlos WITH OPTIONS = {'custom_option1': 'option1_value', 'custom_option2': 99};
+        role_options = {}
+        for opt in ['password', 'login', 'superuser', 'options_dict']:
+            if locals()[opt]:
+                role_options[opt.replace('_dict', '')] = locals()[opt]
+        role_options_str = ' AND '.join(['{} = {}'.format(opt, val) for opt, val in role_options.iteritems()])
+        if role_options_str:
+            role_options_str = ' WITH {}'.format(role_options_str)
+
+        query = 'CREATE ROLE IF NOT EXISTS {role_name}{role_options_str}'.format(**locals())
+        self.log.debug('Create role query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Role "{}" has been created'.format(role_name))
+
+        if service_level_name and service_level_shares:
+            self.create_service_level(session=session, sla_name=service_level_name, shares=service_level_shares)
+            self.attach_service_level(session=session, sla_name=service_level_name, role_name=role_name)
+
+    def grant_roles_to(self, session, role_be_granted, grant_to):
+        query = 'GRANT {role_be_granted} to {grant_to}'.format(**locals())
+        self.log.debug('Grant role query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Role "{role_be_granted}" has been granted to {grant_to}'.format(**locals()))
+
+    def drop_role(self, session, role_name, if_exists=True):
+        query = 'DROP ROLE{if_exists} {role_name}'.format(role_name=role_name, if_exists=' IF EXISTS' if if_exists else '')
+        self.log.debug('Drop role query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Role "{}" has been dropped'.format(role_name))
+
+    def revoke_role(self, session, role_be_revoked, revokes_from):
+        query = 'REVOKE ROLE {role_be_revoked} FROM {role_revokes_from}'.format(**locals())
+        self.log.debug('Drop role query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('Role "{role_be_revoked}" has been revocked from {role_revokes_from}'.format(**locals()))
+
+    def attach_another_sla_to_role(self, session, role_name, new_sla_name):
+        current_service_level = self.list_attached_service_levels(session=session, role_name=role_name)
+        self.detach_service_level(session=session, role_name=role_name)
+        self.attach_service_level(session=session, sla_name=new_sla_name, role_name=role_name)
+
+    def create_user(self, session, user_name, password=None, superuser=None, roles_list_to_grant=None,
+                    service_level_name=None, service_level_shares=None):
+        user_options_str = '{password}{superuser}'.format(password=' PASSWORD \'{}\''.format(password) if password else '',
+                                                           superuser='' if superuser is None else ' SUPERUSER'
+                                                                        if superuser else ' NOSUPERUSER')
+        if user_options_str:
+            user_options_str = ' WITH {}'.format(user_options_str)
+        query = 'CREATE USER IF NOT EXISTS {user_name}{user_options_str}'.format(**locals())
+        self.log.debug('Create user query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('User "{}" has been created'.format(user_name))
+
+        if roles_list_to_grant:
+            self.grant_roles_to_user(session=session, user_name=user_name, roles_to_grant_list=roles_list_to_grant)
+
+        if service_level_name:
+            self.create_service_level(session=session, sla_name=service_level_name, shares=service_level_shares)
+            self.attach_service_level(session=session, sla_name=service_level_name, role_name=user_name)
+
+    def drop_user(self, session, user_name):
+        query = 'DROP USER IF EXISTS {}'.format(user_name)
+        self.log.debug('Drop user query: {}'.format(query))
+        session.execute(query)
+        self.log.debug('User "{}" has been dropped'.format(user_name))
+
+    def grant_roles_to_user(self, session, user_name, roles_to_grant_list):
+        for role in roles_to_grant_list:
+            try:
+                self.grant_roles_to(session=session, role_be_granted=role, grant_to=user_name)
+            except Exception as e:
+                if '{user_name} already includes role {role}'.format(**locals()) in e.message:
+                     continue
+                else:
+                    raise
+
+    def revoke_roles_from_user(self, session, user_name, roles_to_ungrant_list=None):
+        for role in roles_to_ungrant_list:
+            self.revoke_role(session=session, role_be_revoked=role, revokes_from=user_name)
+
+
     def clean_resources(self):
         self.log.debug('Cleaning up resources used in the test')
         self.kill_stress_thread()

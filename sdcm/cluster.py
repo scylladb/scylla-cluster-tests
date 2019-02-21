@@ -2553,7 +2553,8 @@ class BaseLoaderSet(object):
                 results['loader_idx'] = ret[0][0]
                 results['cpu_idx'] = ret[0][1]
                 results['keyspace_idx'] = ret[0][2]
-
+            if line.strip().startswith('Username:'):
+                results['username'] = line.split('Username:')[1].strip()
             if line.startswith('Results:'):
                 enable_parse = True
                 continue

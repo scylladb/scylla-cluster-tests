@@ -11,6 +11,7 @@ import yaml
 import shutil
 from textwrap import dedent
 from math import sqrt
+from collections import defaultdict
 
 from requests import ConnectionError
 
@@ -198,6 +199,55 @@ class PrometheusDBStats(object):
         # the query is taken from the Grafana Dashborad definition
         q = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
         return self._get_query_values(q, start_time, end_time)
+
+    def get_scylla_reactor_utilization(self, start_time, end_time):
+        """
+        Get Scylla CPU (avg) from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if not self._check_start_end_time(start_time, end_time):
+            return []
+        q = "avg(scylla_reactor_utilization{})"
+        res = self._get_query_values(q, start_time, end_time)
+        if res:
+            res = [float(value[1]) for value in res]
+            return sum(res) / len(res)
+        else:
+            return res
+
+    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip):
+        """
+        Get Scylla throughput (ops/second) from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if not self._check_start_end_time(start_time, end_time):
+            return {}
+        # the query is taken from the Grafana Dashborad definition
+        q = 'avg(scylla_scheduler_runtime_ms{group=~"service_level_.*", instance="%s"} ) by (group, instance)' % node_ip
+        results = self.query(query=q, start=start_time, end=end_time)
+        res = defaultdict(dict)
+        for item in results:
+            res[item['metric']['instance']].update({item['metric']['group']:
+                                                   [float(runtime[1]) for runtime in item['values']]})
+        return res
+
+    def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):
+        """
+        Get scylla_scheduler_shares from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if not self._check_start_end_time(start_time, end_time):
+            return {}
+        # the query is taken from the Grafana Dashborad definition
+        q = 'min(scylla_scheduler_shares{group=~"service_level_.*", instance="%s"} ) by (group, instance)' % node_ip
+        results = self.query(query=q, start=start_time, end=end_time)
+        res = {}
+        for item in results:
+            res[item['metric']['group']] = set([int(i[1]) for i in item['values']])
+        return res
 
     def get_latency(self, start_time, end_time, latency_type):
         """latency values are returned in microseconds"""
