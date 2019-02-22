@@ -2065,7 +2065,7 @@ class BaseScyllaCluster(object):
                         self.log.error("Unknown ScyllaDB version")
 
     def run_cqlsh(self, node, cql_cmd, timeout=60, verbose=True, split=False):
-        cmd = 'cqlsh -e "{}" {} --request-timeout={}'.format(cql_cmd, node.private_ip_address, timeout)
+        cmd = 'cqlsh --no-color -e "{}" {} --request-timeout={}'.format(cql_cmd, node.private_ip_address, timeout)
         cqlsh_out = node.remoter.run(cmd, timeout=timeout, verbose=verbose)
         # stdout of cqlsh example:
         #      pk
