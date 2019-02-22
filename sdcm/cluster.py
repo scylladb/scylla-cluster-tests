@@ -35,7 +35,7 @@ from avocado.utils import process
 from avocado.utils import script
 from datetime import datetime
 from .log import SDCMAdapter
-from .remote import Remote
+from .remote import Remote, RemoteFabric
 from .remote import disable_master_ssh
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
@@ -160,6 +160,8 @@ class Setup(object):
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
 
+    REMOTE = Remote
+
     _test_id = None
 
     TAGS = dict()
@@ -193,6 +195,12 @@ class Setup(object):
     @classmethod
     def tags(cls, key, value):
         cls.TAGS[key] = value
+
+    @classmethod
+    def set_remote_runner(cls, val='Remote'):
+        if 'fabric' in val.lower():
+            cls.REMOTE = RemoteFabric
+
 
 def create_common_tags():
     username = os.environ.get('BUILD_USER', getpass.getuser())
@@ -309,7 +317,7 @@ class BaseNode(object):
                                 'private': self.private_ip_address}
         ssh_login_info['hostname'] = self._ssh_ip_mapping[IP_SSH_CONNECTIONS]
 
-        self.remoter = Remote(**ssh_login_info)
+        self.remoter = Setup.REMOTE(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
