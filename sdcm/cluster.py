@@ -1423,7 +1423,7 @@ server_encryption_options:
     @log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        self.start_scylla_jmx(verify_up=verify_up, verify_down=False, timeout=timeout)
 
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
@@ -1448,7 +1448,7 @@ server_encryption_options:
     @log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        self.stop_scylla_jmx(verify_up=False, verify_down=verify_down, timeout=timeout)
 
     def enable_client_encrypt(self):
         SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
