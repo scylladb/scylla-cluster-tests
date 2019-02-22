@@ -1846,11 +1846,22 @@ class BaseScyllaCluster(object):
         def update_scylla_bin(node, queue):
             node.log.info('Updating DB binary')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
+
+            # scylla binary is moved to different directory after relocation
+            # check if the installed binary is the relocated one or not
+            relocated_binary = '/opt/scylladb/libexec/scylla.bin'
+            if node.file_exists(relocated_binary):
+                binary_path = relocated_binary
+            else:
+                binary_path = '/usr/bin/scylla'
             # replace the binary
-            node.remoter.run('sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
-            node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
-            node.remoter.run('sudo chown root.root /usr/bin/scylla')
-            node.remoter.run('sudo chmod +x  /usr/bin/scylla')
+            prereqs_script = dedent("""
+            cp -f {binary_path} {binary_path}.origin
+            cp -f /tmp/scylla {binary_path}
+            chown root.root {binary_path}
+            chmod +x {binary_path}
+            """.format(**locals()))
+            node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
             queue.put(node)
             queue.task_done()
 
