@@ -81,6 +81,8 @@ class Nemesis(object):
 
     def set_target_node(self):
         non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
+        # if non_seed_nodes is empty, nemesis failed. 
+        # TODO need checks
         self.target_node = random.choice(non_seed_nodes)
         self.log.info('Current Target: %s', self.target_node)
 
