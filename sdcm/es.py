@@ -3,7 +3,7 @@ import yaml
 import logging
 import elasticsearch
 
-from keystore import KeyStore
+from sdcm.keystore import KeyStore
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ class ES(elasticsearch.Elasticsearch):
     """
     Provides interface for Elasticsearch DB
     """
+
     def __init__(self):
         self._conf = self.get_conf()
         super(ES, self).__init__(hosts=[self._conf["es_url"]], verify_certs=False,

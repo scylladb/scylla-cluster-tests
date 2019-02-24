@@ -132,7 +132,7 @@ class Nemesis(object):
             self.log.debug("Command '%s' duration -> %s s", result.command,
                            result.duration)
             return result
-        except process.CmdError, details:
+        except process.CmdError as details:
             err = ("nodetool command '%s' failed on node %s: %s" %
                    (cmd, node, details.result))
             self.error_list.append(err)
@@ -530,7 +530,7 @@ class Nemesis(object):
 
     def modify_table_comment(self):
         # default: comment = ''
-        prop_val = ''.join(random.choice(string.ascii_letters) for _ in xrange(24))
+        prop_val = ''.join(random.choice(string.ascii_letters) for _ in range(24))
         self._modify_table_property(name="comment", val="'%s'" % prop_val)
 
     def modify_table_gc_grace_time(self):
@@ -694,7 +694,7 @@ class Nemesis(object):
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                                                  len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                len(self.cluster.datacenter) > 1 else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
@@ -718,7 +718,7 @@ class Nemesis(object):
             cluster_id = mgmt_client.get_cluster(cluster_name)
             if not cluster_id:
                 ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                                                      len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                    len(self.cluster.datacenter) > 1 else 'private_ip_address'
                 targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
                 cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
             repair_timeout = 36 * 60 * 60  # 36 hours
@@ -831,7 +831,7 @@ def log_time_elapsed_and_status(method):
         status = True
         try:
             result = method(*args, **kwargs)
-        except Exception, details:
+        except Exception as details:
             details = str(details)
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
@@ -1160,6 +1160,7 @@ class ModifyTableMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_modify_table()
 
+
 class MgmtRepair(Nemesis):
 
     @log_time_elapsed_and_status
@@ -1168,6 +1169,7 @@ class MgmtRepair(Nemesis):
         self.disrupt_mgmt_repair_cli()
         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
         # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
 
 class AbortRepairMonkey(Nemesis):
 
@@ -1181,15 +1183,18 @@ class NodeTerminateAndReplace(Nemesis):
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
 
+
 class ValidateHintedHandoffShortDowntime(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_validate_hh_short_downtime()
 
+
 class SnapshotOperations(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_snapshot_operations()
+
 
 class NodeRestartWithResharding(Nemesis):
     @log_time_elapsed_and_status

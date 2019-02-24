@@ -1,13 +1,13 @@
 import time
 import logging
 import threading
-import Queue
+from six.moves import queue as Queue
 from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
 
 from avocado.utils import runtime as avocado_runtime
 from .loader import CassandraStressExporterSetup
-import cluster
+from sdcm import cluster
 
 
 def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):

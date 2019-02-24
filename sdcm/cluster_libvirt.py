@@ -4,7 +4,7 @@ import os
 import shutil
 import threading
 import uuid
-import Queue
+from six.moves import queue as Queue
 import xml.etree.cElementTree as etree
 
 from avocado.utils import runtime as avocado_runtime
@@ -12,7 +12,7 @@ from avocado.utils import process
 
 from . import wait
 from .loader import CassandraStressExporterSetup
-import cluster
+from sdcm import cluster
 
 
 class LibvirtNode(cluster.BaseNode):
@@ -347,4 +347,3 @@ class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
-

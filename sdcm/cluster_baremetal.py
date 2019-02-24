@@ -1,7 +1,7 @@
 import re
 import logging
 
-import cluster
+from sdcm import cluster
 
 logger = logging.getLogger(__name__)
 

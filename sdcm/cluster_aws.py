@@ -12,8 +12,8 @@ from avocado.utils import runtime as avocado_runtime
 from textwrap import dedent
 from threading import Thread
 
-import cluster
-import ec2_client
+from sdcm import cluster
+from sdcm import ec2_client
 from sdcm.utils import retrying
 
 from . import wait
@@ -46,7 +46,7 @@ def clean_aws_credential(region_name, credential_key_name, credential_key_file):
 
 
 def create_tags_list():
-    tags_list = [{'Key': k, 'Value': v} for k,v in cluster.create_common_tags().items()]
+    tags_list = [{'Key': k, 'Value': v} for k, v in cluster.create_common_tags().items()]
     if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
         tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
@@ -450,10 +450,10 @@ class AWSNode(cluster.BaseNode):
         try:
             result = self.remoter.run('curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
             status = result.stdout.strip()
-            if '404 - Not Found' not in status:
+            if b'404 - Not Found' not in status:
                 return status
         except Exception as details:
-            self.log.error('Error during getting aws termination notification %s' % details)
+            self.log.exception('Error during getting aws termination notification %s' % details)
         return None
 
     def monitor_aws_termination_thread(self):
@@ -625,7 +625,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.remoter.run('nodetool status', verbose=True, retry=5)
-
 
     def destroy(self):
         self.stop_nemesis()

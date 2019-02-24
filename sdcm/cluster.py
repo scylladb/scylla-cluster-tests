@@ -1,3 +1,35 @@
+from avocado.utils import runtime as avocado_runtime
+from .loader import CassandraStressExporterSetup
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
+from . import wait
+from .remote import disable_master_ssh
+from .remote import Remote
+from .log import SDCMAdapter
+from datetime import datetime
+from avocado.utils import script
+from avocado.utils import process
+from avocado.utils import path
+from textwrap import dedent
+from sdcm.prometheus import start_metrics_server
+from sdcm.mgmt import ScyllaManagerError
+import shutil
+import yaml
+import uuid
+import time
+import threading
+import tempfile
+import re
+import random
+import os
+import logging
+import getpass
+import atexit
+from six.moves import queue as Queue
+from builtins import object
+from past.utils import old_div
+from builtins import range
+from builtins import str
+from __future__ import division
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -11,37 +43,9 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import Queue
-import atexit
-import getpass
-import logging
-import os
-import random
-import re
-import tempfile
-import threading
-import time
-import uuid
-import getpass
+from future import standard_library
+standard_library.install_aliases()
 
-import yaml
-import shutil
-
-from sdcm.mgmt import ScyllaManagerError
-from sdcm.prometheus import start_metrics_server
-from textwrap import dedent
-from avocado.utils import path
-from avocado.utils import process
-from avocado.utils import script
-from datetime import datetime
-from .log import SDCMAdapter
-from .remote import Remote
-from .remote import disable_master_ssh
-from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
-from .loader import CassandraStressExporterSetup
-
-from avocado.utils import runtime as avocado_runtime
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -343,20 +347,20 @@ class BaseNode(object):
         distro = None
 
         result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
-        if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
+        if b'CentOS' in result.stdout and b'release 7.' in result.stdout:
             distro = Distro.CENTOS7
-        if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
+        if b'Red Hat Enterprise Linux' in result.stdout and b'release 7.' in result.stdout:
             distro = Distro.RHEL7
 
         if not distro:
             result = self.remoter.run('cat /etc/issue', ignore_status=True)
-            if 'Ubuntu 14.04' in result.stdout:
+            if b'Ubuntu 14.04' in result.stdout:
                 distro = Distro.UBUNTU14
-            elif 'Ubuntu 16.04' in result.stdout:
+            elif b'Ubuntu 16.04' in result.stdout:
                 distro = Distro.UBUNTU16
-            elif 'Debian GNU/Linux 8' in result.stdout:
+            elif b'Debian GNU/Linux 8' in result.stdout:
                 distro = Distro.DEBIAN8
-            elif 'Debian GNU/Linux 9' in result.stdout:
+            elif b'Debian GNU/Linux 9' in result.stdout:
                 distro = Distro.DEBIAN9
 
         if not distro:
@@ -625,7 +629,7 @@ class BaseNode(object):
             core_files.append(file_name)
             file_size = self._get_coredump_size(file_name)
             if file_size and file_size > COREDUMP_MAX_SIZE:
-                cnt = file_size / COREDUMP_MAX_SIZE
+                cnt = old_div(file_size, COREDUMP_MAX_SIZE)
                 cnt += 1 if file_size % COREDUMP_MAX_SIZE > 0 else cnt
                 self.log.debug('Splitting coredump to {} files'.format(cnt))
                 res = self.remoter.run('sudo split -n {} {} {}.;ls {}.*'.format(
@@ -1295,7 +1299,6 @@ server_encryption_options:
                         """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
 
-
         if self.is_debian9():
             install_debian_9_prereqs = dedent("""
                 if [ ! -f /etc/apt/sources.list.d/backports.list ]; then echo 'deb http://http.debian.net/debian jessie-backports main' | tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
@@ -1342,7 +1345,7 @@ server_encryption_options:
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        ssh_config_script = dedent("""        
+        ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
@@ -1526,7 +1529,7 @@ server_encryption_options:
         self.start_scylla()
 
         resharding_finished = wait.wait_for(func=self._resharding_finished, step=5, timeout=3600,
-                      text="Wait for re-sharding to be finished")
+                                            text="Wait for re-sharding to be finished")
         if not resharding_finished:
             logger.error('Resharding has not been started or was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
                          'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
@@ -1740,7 +1743,7 @@ def wait_for_init_wrap(method):
                                  len(results), len(node_list), str(node), int(time_elapsed))
             except Queue.Empty:
                 pass
-            if timeout and time_elapsed / 60 > timeout:
+            if timeout and old_div(time_elapsed, 60) > timeout:
                 msg = 'TIMEOUT [%d min]: Waiting for node(-s) setup(%d/%d) expired!' % (
                     timeout, len(results), len(node_list))
                 cl_inst.log.error(msg)
@@ -1788,7 +1791,7 @@ class BaseScyllaCluster(object):
                 conf_dict = yaml.safe_load(yaml_stream)
                 try:
                     self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-                except Exception, details:
+                except Exception as details:
                     self.log.debug('Loaded YAML data structure: %s', conf_dict)
                     self.log.error('Scylla YAML config contents:')
                     with open(yaml_dst_path, 'r') as yaml_stream:
@@ -1829,7 +1832,7 @@ class BaseScyllaCluster(object):
             seeds = ",".join(node_private_ips)
         else:
             node_public_ips = [node.public_ip_address for node
-                                in self.nodes if node.is_seed]
+                               in self.nodes if node.is_seed]
             seeds = ",".join(node_public_ips)
         if not seeds:
             # use first node as seed by default
@@ -2031,7 +2034,7 @@ class BaseScyllaCluster(object):
         status = self.get_nodetool_status()
         up_statuses = []
         for node in nodes:
-            for dc, dc_status in status.iteritems():
+            for dc, dc_status in status.items():
                 ip_status = dc_status.get(node.private_ip_address)
                 if ip_status and ip_status["state"] == "UN":
                     up_statuses.append(True)
@@ -2330,7 +2333,7 @@ class BaseLoaderSet(object):
                 cd $HOME
                 curl -L -o gemini {gemini_url}
                 chmod a+x gemini
-                curl -LO  {gemini_static_url}                
+                curl -LO  {gemini_static_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
@@ -2544,9 +2547,9 @@ class BaseLoaderSet(object):
             value = line[split_idx + 1:].split()[0]
             # the value may be in milliseconds(ms) or microseconds(string containing non-ascii character)
             try:
-                value = float(unicode(value).rstrip('ms'))
+                value = float(str(value).rstrip('ms'))
             except UnicodeDecodeError:
-                value = float(unicode(value, errors='ignore').rstrip('s')) / 1000  # convert to milliseconds
+                value = float(str(value, errors='ignore').rstrip('s')) / 1000  # convert to milliseconds
             except ValueError:
                 pass  # save as is
 
@@ -2918,9 +2921,7 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m')
-                              , scylla_mgmt_repo=self.params.get('scylla_mgmt_repo')
-                              , manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
@@ -2981,7 +2982,7 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
-        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
+        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3026,7 +3027,7 @@ class BaseMonitorSet(object):
           ANNOTATIONS {
             summary = "Instance {{ $labels.instance }} root disk low space",
             description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
-          }        
+          }
         # Alert for 99% cassandra stress write spikes
         ALERT CassandraStressWriteTooSlow
           IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
@@ -3103,7 +3104,7 @@ class BaseMonitorSet(object):
     def stop_scylla_monitoring(self, node):
         kill_script = dedent("""
             cd {0.monitor_install_path}
-            ./kill-all.sh 
+            ./kill-all.sh
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % kill_script)
 
@@ -3165,7 +3166,7 @@ class BaseMonitorSet(object):
                     screenshots.append(S3Storage.upload_file(snapshot_path))
                 return screenshots
 
-        except Exception, details:
+        except Exception as details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
         return ""
@@ -3180,7 +3181,7 @@ class BaseMonitorSet(object):
                 shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
                 zipped_data_path = '%s.zip' % node.logdir
                 return S3Storage.upload_file(zipped_data_path)
-            except Exception, details:
+            except Exception as details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
         return ""

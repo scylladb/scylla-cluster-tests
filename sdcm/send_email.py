@@ -3,7 +3,7 @@ import os.path
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from keystore import KeyStore
+from sdcm.keystore import KeyStore
 
 
 class Email(object):

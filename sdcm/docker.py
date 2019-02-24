@@ -4,7 +4,7 @@ import logging
 import os
 from avocado.utils import process
 
-import cluster
+from sdcm import cluster
 from sdcm.utils import retrying
 
 logger = logging.getLogger(__name__)

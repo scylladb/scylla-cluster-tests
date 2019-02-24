@@ -31,7 +31,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from keystore import KeyStore
+from .keystore import KeyStore
 from . import cluster
 from . import nemesis
 from .cluster_libvirt import LoaderSetLibvirt
@@ -54,8 +54,8 @@ from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_c
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
-from db_stats import PrometheusDBStats
-from results_analyze import PerformanceResultsAnalyzer
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.results_analyze import PerformanceResultsAnalyzer
 
 
 try:
@@ -139,10 +139,10 @@ def clean_resources_on_exception(method):
 class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def __init__(self, methodName='test', name=None, params=None,
-                 base_logdir=None, tag=None, job=None, runner_queue=None):
+                 base_logdir=None, tags=None, job=None, runner_queue=None):
         super(ClusterTester, self).__init__(methodName=methodName, name=name,
                                             params=params,
-                                            base_logdir=base_logdir, tag=tag,
+                                            base_logdir=base_logdir, tags=tags,
                                             job=job, runner_queue=runner_queue)
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
@@ -737,8 +737,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                              self.outputdir,
-                                              node_list=self.db_cluster.nodes)
+                                                    self.outputdir,
+                                                    node_list=self.db_cluster.nodes)
 
     @clean_resources_on_exception
     def run_gemini(self, cmd, duration=None):
@@ -1005,9 +1005,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cl_clause = ', '.join(cl for cl in mv_clustering_key)
 
         query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
-                    'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
-                                                    table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
-                                                    pk=pk_clause, cl=cl_clause)
+            'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
+                                                                                            table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
+                                                                                            pk=pk_clause, cl=cl_clause)
         if compression is not None:
             query = ('%s AND compression = { \'sstable_compression\': '
                      '\'%sCompressor\' }' % (query, compression))
@@ -1033,7 +1033,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE keyspace_name='{0}' "
                                                        "AND view_name='{1}'".format(ks, view)))
             self.log.debug('View build status result: {}'.format(result))
-            return len([status for status in result  if status[0] == 'SUCCESS']) >= live_nodes_amount
+            return len([status for status in result if status[0] == 'SUCCESS']) >= live_nodes_amount
 
         attempts = 20
         nodes_status = cluster.get_nodetool_status()
@@ -1051,11 +1051,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         raise Exception("View {}.{} not built".format(ks, view))
 
-    def _wait_for_view_build_start(self, session, ks, view, seconds_to_wait = 20):
+    def _wait_for_view_build_start(self, session, ks, view, seconds_to_wait=20):
 
         def _check_build_started():
             result = self.rows_to_list(session.execute("SELECT last_token FROM system.views_builds_in_progress "
-                                                  "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
+                                                       "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
             self.log.debug('View build in progress: {}'.format(result))
             return result != []
 
@@ -1078,8 +1078,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         # Get distinct partition keys
         out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                           cql_cmd='select distinct {pk} from {table}'.format(pk=primary_key_column,
-                                                                table=table_name),
+                                        cql_cmd='select distinct {pk} from {table}'.format(pk=primary_key_column,
+                                                                                           table=table_name),
                                         timeout=600, split=True)
         pk_list = sorted([int(pk) for pk in out[3:-3]])
 
@@ -1090,9 +1090,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
                 out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                           cql_cmd='select count(*) from {table} where {pk} = {i}'.format(table=table_name,
-                                                                   pk=primary_key_column, i=i),
-                           timeout=600, split=True)
+                                                cql_cmd='select count(*) from {table} where {pk} = {i}'.format(table=table_name,
+                                                                                                               pk=primary_key_column, i=i),
+                                                timeout=600, split=True)
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
                 f.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
@@ -1213,7 +1213,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                         str(keys_per_node * i) + stress_fixed_params
+                str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
@@ -1262,7 +1262,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         hints_after_send_completed = num_shards * num_dest_nodes
         # after hints were sent to all nodes, the number of files should be 1 per shard per destination
         assert self.get_num_of_hint_files(node) <= hints_after_send_completed, "Waiting until the number of hint files " \
-                                                                        "will be %s." % hints_after_send_completed
+            "will be %s." % hints_after_send_completed
         assert self.hints_sending_in_progress() is False, "Waiting until Prometheus hints counter will not change"
 
     def verify_no_drops_and_errors(self, starting_from):
@@ -1296,8 +1296,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def check_regression(self):
         ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                             send_email=self.params.get('send_email', default=True),
-                             email_recipients=self.params.get('email_recipients', default=None))
+                                        send_email=self.params.get('send_email', default=True),
+                                        email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
             ra.check_regression(self._test_id, is_gce)

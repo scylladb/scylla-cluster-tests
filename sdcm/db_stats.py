@@ -15,8 +15,8 @@ from base64 import decodestring
 
 from requests import ConnectionError
 
-from es import ES
-from utils import get_job_name, retrying, remove_comments, S3Storage
+from sdcm.es import ES
+from sdcm.utils import get_job_name, retrying, remove_comments, S3Storage
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +219,7 @@ class Stats(object):
     1. without arguments - as a based class of TestStatsMixin - for saving test statistics
     2. with arguments - as a separate object to update an existing document
     """
+
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)

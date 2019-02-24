@@ -47,14 +47,14 @@ class EC2Client(object):
         self._wait_interval = 5  # seconds
 
     def _get_ec2_client(self, region_name=None):
-            try:
-                return boto3.client(service_name='ec2', region_name=region_name)
-            except NoRegionError:
-                if not region_name:
-                    raise CreateEC2ClientNoRegionError()
-                # next class instance could be created without region_name parameter
-                boto3.setup_default_session(region_name=region_name)
-                return self._get_ec2_client()
+        try:
+            return boto3.client(service_name='ec2', region_name=region_name)
+        except NoRegionError:
+            if not region_name:
+                raise CreateEC2ClientNoRegionError()
+            # next class instance could be created without region_name parameter
+            boto3.setup_default_session(region_name=region_name)
+            return self._get_ec2_client()
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None):
@@ -105,7 +105,7 @@ class EC2Client(object):
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
-                        'TagSpecifications' : [
+                        'TagSpecifications': [
                             {
                                 'ResourceType': 'instance',
                                 'Tags': tags_list
@@ -186,7 +186,7 @@ class EC2Client(object):
         resp = self._client.describe_spot_fleet_requests(SpotFleetRequestIds=[request_id])
         for req in resp['SpotFleetRequestConfigs']:
             if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
-                            req['ActivityStatus'] != STATUS_FULFILLED:
+                    req['ActivityStatus'] != STATUS_FULFILLED:
                 if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
                     tt = datetime.datetime.now().timetuple()
                     search_start_time = datetime.datetime(tt.tm_year, tt.tm_mon, tt.tm_mday)
@@ -222,7 +222,7 @@ class EC2Client(object):
         return [inst['InstanceId'] for inst in resp['ActiveInstances']], resp
 
     def _encode_user_data(self, user_data):
-        return base64.b64encode(user_data)
+        return base64.b64encode(user_data.encode('utf-8')).decode('utf-8')
 
     def get_instance(self, instance_id):
         """
@@ -360,8 +360,8 @@ if __name__ == '__main__':
     avail_zone = ec2.get_subnet_info(network_if[0]['SubnetId'])['AvailabilityZone']
 
     inst = ec2.create_spot_instances(instance_type, image_id, avail_zone, network_if, user_data=user_data, count=2)
-    print inst
+    print(inst)
     inst = ec2.create_spot_instances(instance_type, image_id, avail_zone, network_if, count=1, duration=60)
-    print inst
+    print(inst)
     inst = ec2.create_spot_fleet(instance_type, image_id, avail_zone, network_if, user_data=user_data, count=2)
-    print inst
+    print(inst)

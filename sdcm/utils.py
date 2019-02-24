@@ -58,6 +58,7 @@ class retrying(object):
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
+
     def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message=""):
         self.n = n  # number of times to retry
         self.sleep_time = sleep_time  # number seconds to sleep between retries
@@ -67,7 +68,7 @@ class retrying(object):
     def __call__(self, func):
         @wraps(func)
         def inner(*args, **kwargs):
-            for i in xrange(self.n):
+            for i in range(self.n):
                 try:
                     if self.message:
                         logger.info("%s [try #%s]" % (self.message, i))
@@ -249,9 +250,9 @@ def clean_instances_gce(tags_dict):
     for region in gce_regions:
         logger.info('going to cleanup gce region=%s', region)
         driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                               gcp_credentials["private_key"],
-                               datacenter=region,
-                               project=gcp_credentials["project_id"])
+                                gcp_credentials["private_key"],
+                                datacenter=region,
+                                project=gcp_credentials["project_id"])
 
         for node in driver.list_nodes():
             tags = node.extra['metadata'].get('items', [])

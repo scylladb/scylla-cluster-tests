@@ -11,28 +11,33 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import aexpect
-import StringIO
-import glob
-import logging
-import os
-import re
-import shlex
-import shutil
-import signal
-import socket
-import subprocess
-import tempfile
-import threading
-import time
-import uuid
-
-from avocado.utils import astring
-from avocado.utils import path
-from avocado.utils import process
-from avocado.utils import wait
-
 from .log import SDCMAdapter
+from avocado.utils import wait
+from avocado.utils import process
+from avocado.utils import path
+from avocado.utils import astring
+import uuid
+import time
+import threading
+import tempfile
+import subprocess
+import socket
+import signal
+import shutil
+import shlex
+import re
+import os
+import logging
+import glob
+import io
+import aexpect
+from builtins import object
+from past.builtins import basestring
+from builtins import range
+from builtins import str
+from future import standard_library
+standard_library.install_aliases()
+
 
 ENABLE_MASTER_SSH = True
 LOG = process.log
@@ -84,122 +89,122 @@ class SSHSubProcess(process.SubProcess):
             self._file_handler = logging.FileHandler(filename=log_file)
             self._file_logger.addHandler(self._file_handler)
 
-    def _init_subprocess(self):
-        if self._popen is None:
-            if self.verbose:
-                cmd_msg = ''
-                if self.extra_text:
-                    cmd_msg += '[%s] ' % self.extra_text
-                cmd_msg += "Running '%s'" % self.cmd
-                LOG.info(cmd_msg)
-            if self.shell is False:
-                cmd = shlex.split(self.cmd)
-            else:
-                cmd = self.cmd
-            try:
-                self._popen = subprocess.Popen(cmd,
-                                               stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE,
-                                               shell=self.shell,
-                                               env=self.env)
-            except OSError, details:
-                if details.errno == 2:
-                    exc = OSError("File '%s' not found" % self.cmd.split()[0])
-                    exc.errno = 2
-                    raise exc
-                else:
-                    raise
+    # def _init_subprocess(self):
+    #    if self._popen is None:
+    #        if self.verbose:
+    #            cmd_msg = ''
+    #            if self.extra_text:
+    #                cmd_msg += '[%s] ' % self.extra_text
+    #            cmd_msg += "Running '%s'" % self.cmd
+    #            LOG.info(cmd_msg)
+    #        if self.shell is False:
+    #            cmd = shlex.split(self.cmd)
+    #        else:
+    #            cmd = self.cmd
+    #        try:
+    #            self._popen = subprocess.Popen(cmd,
+    #                                           stdout=subprocess.PIPE,
+    #                                           stderr=subprocess.PIPE,
+    #                                           shell=self.shell,
+    #                                           env=self.env)
+    #        except OSError as details:
+    #            if details.errno == 2:
+    #                exc = OSError("File '%s' not found" % self.cmd.split()[0])
+    #                exc.errno = 2
+    #                raise exc
+    #            else:
+    #                raise
 
-            self.start_time = time.time()
-            self.stdout_file = StringIO.StringIO()
-            self.stderr_file = StringIO.StringIO()
-            self.stdout_lock = threading.Lock()
-            self.stdout_thread = threading.Thread(target=self._fd_drainer,
-                                                  name="%s-stdout" % self.cmd,
-                                                  args=[self._popen.stdout])
-            self.stdout_thread.daemon = True
-            self.stderr_lock = threading.Lock()
-            self.stderr_thread = threading.Thread(target=self._fd_drainer,
-                                                  name="%s-stderr" % self.cmd,
-                                                  args=[self._popen.stderr])
-            self.stderr_thread.daemon = True
-            self.stdout_thread.start()
-            self.stderr_thread.start()
+    #        self.start_time = time.time()
+    #        self.stdout_file = io.StringIO()
+    #        self.stderr_file = io.StringIO()
+    #        self.stdout_lock = threading.Lock()
+    #        self.stdout_thread = threading.Thread(target=self._fd_drainer,
+    #                                              name="%s-stdout" % self.cmd,
+    #                                              args=[self._popen.stdout])
+    #        self.stdout_thread.daemon = True
+    #        self.stderr_lock = threading.Lock()
+    #        self.stderr_thread = threading.Thread(target=self._fd_drainer,
+    #                                              name="%s-stderr" % self.cmd,
+    #                                              args=[self._popen.stderr])
+    #        self.stderr_thread.daemon = True
+    #        self.stdout_thread.start()
+    #        self.stderr_thread.start()
+    #
+    #       def signal_handler(signum, frame):
+    #            self.result.interrupted = True
+    #            self.wait()
 
-            def signal_handler(signum, frame):
-                self.result.interrupted = True
-                self.wait()
+    #       try:
+    #           signal.signal(signal.SIGINT, signal_handler)
+    #        except ValueError:
+    #            pass
 
-            try:
-                signal.signal(signal.SIGINT, signal_handler)
-            except ValueError:
-                pass
-
-    def _detect_stdout_pattern(self, line):
-        if self.watch_stdout_pattern is not None:
-            if self.result.stdout_pattern_found_at is None:
-                if self.watch_stdout_pattern in line:
-                    self.result.stdout_pattern_found_at = time.time()
-
-    def _fd_drainer(self, input_pipe):
-        stream_prefix = "%s"
-        prefix = ''
-        stream_logger = None
-        output_file = None
-        lock = None
-        if self.extra_text:
-            prefix = '[%s] ' % self.extra_text
-        if input_pipe == self._popen.stdout:
-            prefix += '[stdout] %s'
-            if self.allow_output_check in ['none', 'stderr']:
-                stream_logger = None
-            else:
-                stream_logger = STDOUT_LOG
-            output_file = self.stdout_file
-            lock = self.stdout_lock
-        elif input_pipe == self._popen.stderr:
-            prefix += '[stderr] %s'
-            if self.allow_output_check in ['none', 'stdout']:
-                stream_logger = None
-            else:
-                stream_logger = STDERR_LOG
-            output_file = self.stderr_file
-            lock = self.stderr_lock
-
-        fileno = input_pipe.fileno()
-
-        bfr = ''
-        while True:
-            tmp = os.read(fileno, 1024)
-            if tmp == '':
-                if self.verbose and bfr:
-                    for line in bfr.splitlines():
-                        self._detect_stdout_pattern(line)
-                        LOG.debug(prefix, line)
-                        if stream_logger is not None:
-                            stream_logger.debug(stream_prefix, line)
-                        if self._file_logger is not None:
-                            self._file_logger.debug(prefix, line)
-                break
-            if lock is not None:
-                lock.acquire()
-            try:
-                if output_file is not None:
-                    output_file.write(tmp)
-                if self.verbose:
-                    bfr += tmp
-                    if tmp.endswith('\n'):
-                        for line in bfr.splitlines():
-                            self._detect_stdout_pattern(line)
-                            LOG.debug(prefix, line)
-                            if stream_logger is not None:
-                                stream_logger.debug(stream_prefix, line)
-                            if self._file_logger is not None:
-                                self._file_logger.debug(prefix, line)
-                        bfr = ''
-            finally:
-                if lock is not None:
-                    lock.release()
+    # def _detect_stdout_pattern(self, line):
+    #     if self.watch_stdout_pattern is not None:
+    #         if self.result.stdout_pattern_found_at is None:
+    #             if self.watch_stdout_pattern in line:
+    #                 self.result.stdout_pattern_found_at = time.time()
+    #
+    # def _fd_drainer(self, input_pipe):
+    #     stream_prefix = "%s"
+    #     prefix = ''
+    #     stream_logger = None
+    #     output_file = None
+    #     lock = None
+    #     if self.extra_text:
+    #         prefix = '[%s] ' % self.extra_text
+    #     if input_pipe == self._popen.stdout:
+    #         prefix += '[stdout] %s'
+    #         if self.allow_output_check in ['none', 'stderr']:
+    #             stream_logger = None
+    #         else:
+    #             stream_logger = STDOUT_LOG
+    #         output_file = self.stdout_file
+    #         lock = self.stdout_lock
+    #     elif input_pipe == self._popen.stderr:
+    #         prefix += '[stderr] %s'
+    #         if self.allow_output_check in ['none', 'stdout']:
+    #             stream_logger = None
+    #         else:
+    #             stream_logger = STDERR_LOG
+    #         output_file = self.stderr_file
+    #         lock = self.stderr_lock
+    #
+    #     fileno = input_pipe.fileno()
+    #
+    #     bfr = ''
+    #     while True:
+    #         tmp = os.read(fileno, 1024).decode('utf-8')
+    #         if tmp == '':
+    #             if self.verbose and bfr:
+    #                 for line in bfr.splitlines():
+    #                     self._detect_stdout_pattern(line)
+    #                     LOG.debug(prefix, line)
+    #                     if stream_logger is not None:
+    #                         stream_logger.debug(stream_prefix, line)
+    #                     if self._file_logger is not None:
+    #                         self._file_logger.debug(prefix, line)
+    #             break
+    #         if lock is not None:
+    #             lock.acquire()
+    #         try:
+    #             if output_file is not None:
+    #                 output_file.write(tmp)
+    #             if self.verbose:
+    #                 bfr += tmp
+    #                 if tmp.endswith('\n'):
+    #                     for line in bfr.splitlines():
+    #                         self._detect_stdout_pattern(line)
+    #                         LOG.debug(prefix, line)
+    #                         if stream_logger is not None:
+    #                             stream_logger.debug(stream_prefix, line)
+    #                         if self._file_logger is not None:
+    #                             self._file_logger.debug(prefix, line)
+    #                     bfr = ''
+    #         finally:
+    #             if lock is not None:
+    #                 lock.release()
 
     def close_file_handler(self):
         if self._file_handler:
@@ -233,7 +238,7 @@ def _scp_remote_escape(filename):
 
 def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
                       key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
-    assert isinstance(connect_timeout, (int, long))
+    assert isinstance(connect_timeout, int)
     base_command = path.find_command('ssh')
     base_command += " " + extra_ssh_options
     base_command += (" -a -x %s -o StrictHostKeyChecking=no "
@@ -468,7 +473,7 @@ class BaseRemote(object):
         umask = os.umask(0)
         os.umask(umask)
 
-        max_privs = 0777 & ~umask
+        max_privs = 0o777 & ~umask
 
         def set_file_privs(filename):
             file_stat = os.stat(filename)
@@ -476,8 +481,8 @@ class BaseRemote(object):
             file_privs = max_privs
             # if the original file permissions do not have at least one
             # executable bit then do not set it anywhere
-            if not file_stat.st_mode & 0111:
-                file_privs &= ~0111
+            if not file_stat.st_mode & 0o111:
+                file_privs &= ~0o111
 
             os.chmod(filename, file_privs)
 
@@ -563,9 +568,9 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 self.ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
-            except process.CmdError, e:
+            except process.CmdError as e:
                 self.log.warning("Trying scp, rsync failed: %s", e)
                 # Make sure master ssh available
                 self.start_master_ssh()
@@ -584,7 +589,7 @@ class BaseRemote(object):
                 local_dest = astring.shell_escape(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 self.ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -638,9 +643,9 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 self.ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
-            except process.CmdError, details:
+            except process.CmdError as details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
                 # Make sure master ssh available
                 self.start_master_ssh()
@@ -683,7 +688,7 @@ class BaseRemote(object):
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 self.ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
 
     def _ssh_ping(self, timeout=30):
         try:
@@ -706,8 +711,8 @@ class BaseRemote(object):
         except process.CmdError as e:
             self.log.error("Error while executing SSH command: %s" % e.result)
             return False
-        except Exception, details:
-            self.log.error('Error checking if SSH is up: %s', details)
+        except Exception as details:
+            self.log.exception('Error checking if SSH is up: %s', details)
             return False
         else:
             return True
@@ -796,6 +801,7 @@ class BaseRemote(object):
                            watch_stdout_pattern=watch_stdout_pattern)
 
         self.splist.append(sp)
+
         cmd_result = sp.run(timeout=timeout)
         sp.close_file_handler()
         self.splist.remove(sp)
@@ -804,6 +810,7 @@ class BaseRemote(object):
         if fail_condition and not ignore_status:
             raise process.CmdError(cmd, sp.result)
         return cmd_result
+
 
 class Remote(BaseRemote):
 
@@ -841,10 +848,10 @@ class Remote(BaseRemote):
         else:
             full_cmd = '%s "%s"' % (ssh_cmd, astring.shell_escape(cmd))
         result = self.ssh_run(full_cmd, verbose=verbose,
-                         ignore_status=ignore_status, timeout=timeout,
-                         extra_text=self.hostname, shell=True,
-                         log_file=log_file,
-                         watch_stdout_pattern=watch_stdout_pattern)
+                              ignore_status=ignore_status, timeout=timeout,
+                              extra_text=self.hostname, shell=True,
+                              log_file=log_file,
+                              watch_stdout_pattern=watch_stdout_pattern)
 
         # The error messages will show up in band (indistinguishable
         # from stuff sent through the SSH connection), so we have the
@@ -897,7 +904,7 @@ class Remote(BaseRemote):
                 # Start a master SSH connection if necessary.
                 self.start_master_ssh()
 
-                env = " ".join("=".join(pair) for pair in self.env.iteritems())
+                env = " ".join("=".join(pair) for pair in self.env.items())
                 return self._run(cmd=cmd, timeout=timeout, verbose=verbose,
                                  ignore_status=ignore_status,
                                  connect_timeout=connect_timeout,
