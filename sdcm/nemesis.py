@@ -25,6 +25,7 @@ import threading
 import re
 
 from avocado.utils import process
+from cassandra import InvalidRequest
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
@@ -517,10 +518,37 @@ class Nemesis(object):
                 cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
                 self._run_nodetool(cmd, node)
 
-    def _run_in_cqlsh(self, cmd, node=None):
+    def disrupt_truncate(self):
+        node = self.target_node
+        keyspace_truncate = 'ks_truncate'
+        table = 'standard1'
+        table_truncate_count = 0
+
+        # get the count of the truncate table
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        cql = "SELECT COUNT(*) FROM {}.{}".format(keyspace_truncate, table)
+        session = self.tester.cql_connection_patient(self.target_node)
+        try:
+            data = session.execute(cql)
+            table_truncate_count = data[0].count
+        except InvalidRequest:
+            self.log.warning("Keyspace ks_truncate does not exist")
+        self.log.debug("fruch: table_truncate_count=%d", table_truncate_count)
+
+        # if key space doesn't exist or the table is empty, create it using c-s
+        if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
+            # create with stress tool
+            node.remoter.run('cassandra-stress write n=1000 cl=one -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate), verbose=True, ignore_status=True)
+
+        # do the actual truncation
+        self._set_current_disruption('TruncateMonkey {}'.format(node))
+        cql = 'TRUNCATE {}.{}'.format(keyspace_truncate, table)
+        self._run_in_cqlsh(cql)
+
+    def _run_in_cqlsh(self, cmd, node=None, **kwargs):
         if not node:
             node = self.target_node
-        node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+        return node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True, **kwargs)
 
     def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
@@ -989,6 +1017,13 @@ class NodeToolCleanupMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
+
+class TruncateMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_truncate()
 
 
 class ChaosMonkey(Nemesis):
