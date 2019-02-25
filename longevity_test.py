@@ -145,7 +145,11 @@ class LongevityTest(ClusterTester):
                 self.verify_stress_thread(queue=stress)
 
             # Run nodetool flush on all nodes to make sure nothing left in memory
-            self._flush_all_nodes()
+            # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
+            # side, but I don't think we should continue with this approach.
+            # If we decided to add this back in the future, we need to wrap it with try-except because it can run
+            # in parallel to nemesis and it will fail on one of the nodes.
+            # self._flush_all_nodes()
 
             # In case we would like to verify all keys were written successfully before we start other stress / nemesis
             prepare_verify_cmd = self.params.get('prepare_verify_cmd', default=None)
