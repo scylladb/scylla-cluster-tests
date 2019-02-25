@@ -1,16 +1,22 @@
 test_duration: 6550
-prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..100000000"
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=500 -pop seq=1..100000000"
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=20 -pop seq=1..100000000 -log interval=5",
              "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000",
-             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"]
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
-                  "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000"]
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10",
+             "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=50 -pop seq=1..100000000 -log interval=5",
+             "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=SnappyCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=50 -pop seq=1..100000000 -log interval=5",
+             "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=DeflateCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=none -rate threads=50 -pop seq=1..100000000 -log interval=5"]
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=50 -pop seq=1..100000000 -log interval=5",
+                  "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000",
+                  "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=20 -pop seq=1..100000000 -log interval=5",
+                  "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=SnappyCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=20 -pop seq=1..100000000 -log interval=5",
+                  "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=DeflateCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=none -rate threads=20 -pop seq=1..100000000 -log interval=5"]
 n_db_nodes: 6
 n_loaders: 3
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
-user_prefix: 'longevity-tls-50gb-4d-not-jenkins'
+user_prefix: 'longevity-tls-50gb-4d-VERSION'
 failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
@@ -22,7 +28,7 @@ client_encrypt: 'false'
 append_scylla_args: '--blocked-reactor-notify-ms 500'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
+instance_provision: 'spot_low_price'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
@@ -55,13 +61,13 @@ backends: !mux
           gce_datacenter: 'us-east1-b'
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_loader: 'c5.large'
+        instance_type_monitor: 't3.small'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-d934e980'
-            ami_id_db_scylla: 'AMI_ID'
+            ami_id_db_scylla: 'AMI-ID'
             ami_id_loader: 'ami-07797ae1c88489b80' # Loader dedicated AMI
             ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
             ami_db_scylla_user: 'centos'
@@ -74,7 +80,7 @@ backends: !mux
             region_name: 'eu-west-1'
             security_group_ids: 'sg-059a7f66a947d4b5c'
             subnet_id: 'subnet-088fddaf520e4c7a8'
-            ami_id_db_scylla: 'AMI_ID'
+            ami_id_db_scylla: 'AMI-ID'
             ami_id_loader: 'ami-05a77f776bd5f9f4d' # Loader dedicated AMI
             ami_id_monitor: 'ami-0f478f18d613e3662' # Monitor dedicated AMI
             aws_root_disk_size_monitor: 20  # GB
@@ -88,4 +94,4 @@ databases: !mux
         instance_type_db: 'm3.large'
     scylla:
         db_type: scylla
-        instance_type_db: 'i3.4xlarge'
+        instance_type_db: 'i3.2xlarge'
