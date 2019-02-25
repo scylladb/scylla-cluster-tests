@@ -1858,10 +1858,10 @@ class BaseScyllaCluster(object):
                 binary_path = '/usr/bin/scylla'
             # replace the binary
             prereqs_script = dedent("""
-            cp -f {binary_path} {binary_path}.origin
-            cp -f /tmp/scylla {binary_path}
-            chown root.root {binary_path}
-            chmod +x {binary_path}
+                cp -f {binary_path} {binary_path}.origin
+                cp -f /tmp/scylla {binary_path}
+                chown root.root {binary_path}
+                chmod +x {binary_path}
             """.format(**locals()))
             node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
             queue.put(node)
