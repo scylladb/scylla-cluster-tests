@@ -2781,7 +2781,7 @@ class BaseLoaderSet(object):
             db_node_ip {str} -- ip of db_node
         """
         cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
-        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+        result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
@@ -2814,7 +2814,7 @@ class BaseLoaderSet(object):
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
         cmd = 'select count(*) from {}'.format(ks_cf)
-        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+        result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
 
         return result
 
