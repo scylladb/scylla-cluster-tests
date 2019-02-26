@@ -2367,7 +2367,7 @@ class BaseLoaderSet(object):
 
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
-        else:
+        elif 'keyspace=' not in stress_cmd: # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
 
         if profile:
