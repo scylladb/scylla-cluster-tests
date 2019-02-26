@@ -533,22 +533,22 @@ class Nemesis(object):
             table_truncate_count = data[0].count
         except InvalidRequest:
             self.log.warning("Keyspace ks_truncate does not exist")
-        self.log.debug("fruch: table_truncate_count=%d", table_truncate_count)
+        self.log.debug("table_truncate_count=%d", table_truncate_count)
 
         # if key space doesn't exist or the table is empty, create it using c-s
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
             # create with stress tool
-            node.remoter.run('cassandra-stress write n=1000 cl=one -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate), verbose=True, ignore_status=True)
+            node.remoter.run('cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate), verbose=True, ignore_status=True)
 
         # do the actual truncation
         self._set_current_disruption('TruncateMonkey {}'.format(node))
         cql = 'TRUNCATE {}.{}'.format(keyspace_truncate, table)
         self._run_in_cqlsh(cql)
 
-    def _run_in_cqlsh(self, cmd, node=None, **kwargs):
+    def _run_in_cqlsh(self, cmd, node=None):
         if not node:
             node = self.target_node
-        return node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True, **kwargs)
+        node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
 
     def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
@@ -1054,7 +1054,7 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
                                                          'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
-                                                         'disrupt_restart_then_repair_node'])
+                                                         'disrupt_restart_then_repair_node', 'disrupt_truncate'])
 
 
 class AllMonkey(Nemesis):
