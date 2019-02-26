@@ -676,14 +676,6 @@ class SCTConfiguration(dict):
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure. 
                 multiple commands can passed as a list"""),
-
-
-
-
-
-
-
-
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
@@ -962,9 +954,7 @@ if __name__ == "__main__":
             logging.getLogger('anyconfig').setLevel(logging.ERROR)
 
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-            os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-            os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/enospc-30mins_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
             cls.conf = SCTConfiguration()
 
@@ -972,7 +962,7 @@ if __name__ == "__main__":
             for k, _ in os.environ.items():
                 if k.startswith('SCT_'):
                     del os.environ[k]
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/enospc-30mins_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
         def test_01_dump_config(self):
             logging.debug(self.conf.dump_config())
@@ -984,7 +974,7 @@ if __name__ == "__main__":
             logging.debug(self.conf.dump_help_config_yaml())
 
         def test_03_dump_help_config_markdown(self):
-            print(self.conf.dump_help_config_markdown())
+            logging.debug(self.conf.dump_help_config_markdown())
 
         @staticmethod
         def test_04_check_env_parse():
@@ -1032,13 +1022,13 @@ if __name__ == "__main__":
 
         def test_09_unknown_configure(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_config.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
             conf = SCTConfiguration()
             self.assertRaises(ValueError, conf.verify_configuration)
 
         def test_10_longevity(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/longevity-50GB-4days_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/complex_test_case_with_version.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
@@ -1046,7 +1036,7 @@ if __name__ == "__main__":
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
             os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
 
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
@@ -1061,7 +1051,7 @@ if __name__ == "__main__":
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
             os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
@@ -1070,21 +1060,21 @@ if __name__ == "__main__":
             os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
             os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
 
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
         def test_12_scylla_version_ami_case2(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
             os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             self.assertRaisesRegexp(ValueError, r"AMI for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
         def test_12_scylla_version_repo(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
             os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
@@ -1093,16 +1083,15 @@ if __name__ == "__main__":
             os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
             os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
 
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             conf = SCTConfiguration()
             conf.verify_configuration()
 
         def test_12_scylla_version_repo_case2(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
             os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/manager-regression-multiDC-set-distro_new.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             self.assertRaisesRegexp(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
-
 
         def test_config_dupes(self):
             import itertools

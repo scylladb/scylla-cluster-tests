@@ -8,15 +8,15 @@ import click_completion
 import boto3
 from prettytable import PrettyTable
 
-from sdcm.tester import ClusterTester
 from sct_config import SCTConfiguration
-from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions
+from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping
 
 click_completion.init()
 
 
-def sct_option(name, sct_name):
+def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
+    sct_opt.update(kwargs)
     return click.option(name, type=sct_opt['type'], default=sct_opt['default'], help=sct_opt['help'])
 
 
@@ -36,13 +36,17 @@ def cli(backend):
     os.environ['SCT_CLUSTER_BACKEND'] = backend
 
 
+'''
+Work in progress
+
+from sdcm.tester import ClusterTester
+
 @cli.command()
 @click.option('--scylla-version', type=str, default='3.0.3')
 @sct_option('--db-nodes', 'n_db_nodes')
 @sct_option('--loader-nodes', 'n_loaders')
 @sct_option('--monitor-nodes', 'n_monitor_nodes')
 def provision(**kwargs):
-    print kwargs
     logging.basicConfig(level=logging.INFO)
     # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
     # TODO: find a better way for ctrl+c to kill this process
@@ -52,11 +56,12 @@ def provision(**kwargs):
     avocado_runtime.CURRENT_TEST = namedtuple('MockedAvocadoConf', ['name'])(name='sct_provision_command')
     test._setup_environment_variables()
     test.setUp()
+'''
 
 
-@cli.command('clean-resources')
-@click.option('--user', type=str)
-@click.option('--test-id', type=str)
+@cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
+@click.option('--user', type=str, help='user name to filter instances by')
+@sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.pass_context
 def clean_resources(ctx, user, test_id):
     params = dict()
@@ -73,9 +78,9 @@ def clean_resources(ctx, user, test_id):
         click.echo(clean_resources.get_help(ctx))
 
 
-@cli.command('list-resources')
-@click.option('--user', type=str, default=None)
-@click.option('--test-id', type=str)
+@cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
+@click.option('--user', type=str, help='user name to filter instances by')
+@sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.pass_context
 def list_resources(ctx, user, test_id):
     params = dict()
@@ -126,25 +131,14 @@ def list_resources(ctx, user, test_id):
         click.echo(list_resources.get_help(ctx))
 
 
-@cli.command('list-versions')
+@cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
 @click.option('-r', '--region', type=click.Choice(aws_regions), default='eu-west-1')
-def list_versions(region):
-    EC2 = boto3.client('ec2', region_name=region)
-    response = EC2.describe_images(
-        Owners=['797456418907'],  # CentOS
-        Filters=[
-          {'Name': 'name', 'Values': ['ScyllaDB *']},
-        ],
-    )
+def list_ami_versions(region):
 
-    amis = sorted(response['Images'],
-                  key=lambda x: x['CreationDate'],
-                  reverse=True)
+    amis = get_scylla_ami_versions(region)
 
     x = PrettyTable(["Name", "ImageId", "CreationDate"])
-    x.align["Name"] = "l"
-    x.align["ImageId"] = "l"
-    x.align["CreationDate"] = "l"
+    x.align = "l"
 
     for ami in amis:
         x.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
@@ -152,7 +146,21 @@ def list_versions(region):
     click.echo(x.get_string(title="Scylla AMI versions"))
 
 
-@cli.command()
+@cli.command('list-repos', help='List repos url of Scylla formal versions')
+@click.option('-d', '--dist-type', type=click.Choice(['centos']), default='centos', help='Distribution type')
+def list_repos(dist_type):
+    repo_maps = get_s3_scylla_repos_mapping(dist_type)
+
+    x = PrettyTable(["Version Family", "Repo Url"])
+    x.align = "l"
+
+    for version_prefix, repo_url in repo_maps.items():
+        x.add_row([version_prefix, repo_url])
+
+    click.echo(x.get_string(title="Scylla Repos"))
+
+
+@cli.command(help="Check test configuration file")
 @click.argument('config_file', type=click.Path(exists=True))
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 def conf(config_file, backend):
@@ -168,6 +176,15 @@ def conf(config_file, backend):
     else:
         click.secho(config.dump_config(), fg='green')
         exit(0)
+
+
+@cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
+@click.option('-o', '--output-format', type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output")
+def conf_docs(output_format):
+    if output_format == 'markdown':
+        click.secho(SCTConfiguration().dump_help_config_markdown())
+    elif output_format == 'yaml':
+        click.secho(SCTConfiguration().dump_help_config_yaml())
 
 
 if __name__ == '__main__':

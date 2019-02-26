@@ -22,12 +22,9 @@ space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
 append_scylla_args: '--blocked-reactor-notify-ms 500'
-
-# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'on_demand'
 
-# scylla-manager configuration
-# if running on aws and use_mgmt is true, the monitor image should not contain scylla
+
 use_mgmt: true
 mgmt_port: 10090
 scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'

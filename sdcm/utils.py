@@ -350,11 +350,11 @@ def get_scylla_ami_versions(region):
 _s3_scylla_repos_cache = {}
 
 
-def get_s3_scylla_repos_mapping(type='centos'):
+def get_s3_scylla_repos_mapping(dist_type='centos'):
     """
     get the mapping from version prefixes to .repo files locations
 
-    :param type: which distro to look up centos/debian
+    :param dist_type: which distro to look up centos/debian
     :return: a mapping of versions prefixes to repos
     :rtype: dict
     """
@@ -364,14 +364,15 @@ def get_s3_scylla_repos_mapping(type='centos'):
     s3_client = boto3.client('s3')
     bucket = 'downloads.scylladb.com'
 
-    if type == 'centos':
+    if dist_type == 'centos':
         response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos')
 
         for f in response['Contents']:
             filename = os.path.basename(f['Key'])
+            # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
             if filename.startswith('scylla-') and filename.endswith('.repo'):
                 version_prefix = filename.replace('.repo', '').split('-')[-1]
                 _s3_scylla_repos_cache[version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
     else:
-        raise NotImplementedError()
+        raise NotImplementedError("[{}] is not yet supported".format(dist_type))
     return _s3_scylla_repos_cache

@@ -16,10 +16,7 @@ scylla_repo_m: SCYLLA_ENTERPRISE_REPO
 scylla_mgmt_repo: SCYLLA_MGR_REPO
 scylla_mgmt_upgrade_to_repo: SCYLLA_MGR_UPGRADE_TO_REPO
 
-
-# loader instance by default.
 instance_type_loader: 'c4.large'
-# Size of AWS monitor instance
 instance_type_monitor: 't2.small'
 
 db_type: scylla

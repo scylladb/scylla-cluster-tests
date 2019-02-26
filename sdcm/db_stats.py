@@ -283,7 +283,13 @@ class TestStatsMixin(Stats):
         setup_details = {}
         is_gce = self.params.get('cluster_backend') == 'gce'
 
-        for k, v in self.params.iteritems():
+        if os.environ.get('SCT_NEW_CONFIG', False):
+            test_params = self.params.items()
+        else:
+            # take only values, don't care about paths
+            test_params = [(k, v) for _, k, v in self.avocado_params.items()]
+
+        for k, v in test_params:
             if k in exclude_details or (isinstance(k, str) and k.startswith('stress_cmd')):
                 continue
             else:
