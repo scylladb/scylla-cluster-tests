@@ -56,7 +56,7 @@ from . import cluster_baremetal
 from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
-from sct_config import SCTConfiguration
+from sdcm.sct_config import SCTConfiguration
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
-import logging
 import os
-from collections import namedtuple
 
 import click
 import click_completion
-import boto3
 from prettytable import PrettyTable
 
-from sct_config import SCTConfiguration
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping
 
 click_completion.init()
