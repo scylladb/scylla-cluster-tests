@@ -41,7 +41,7 @@ class EC2Client(object):
 
     def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None):
         self._client = self._get_ec2_client(region_name)
-        self._resource = boto3.resource('ec2')
+        self._resource = boto3.resource('ec2', region_name=region_name)
         self._timeout = timeout  # request timeout in seconds
         self._price_index = 1.5
         self._wait_interval = 5  # seconds
