@@ -43,6 +43,21 @@ Maintained branches
 
 https://github.com/scylladb/scylla-cluster-tests/wiki
 
+Contribution
+------------
+Since we are trying to keep the code neat, please install this git precommit hooks, that would fix the code style, and run more checks::
+
+    pip install pre-commit==1.14.4
+    pre-commit install
+
+If you want to remove the hook::
+
+    pre-commit uninstall
+
+Doing a commit without the hook checks::
+
+    git commit ... -n
+
 Setting up SCT environment
 --------------------------
 
