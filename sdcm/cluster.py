@@ -2864,10 +2864,14 @@ class BaseLoaderSet(object):
             start = current = time.time()
             while current - start < duration:
                 loader_node = random.choice(self.nodes)
-                db_node = random.choice(db_nodes)
-                self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
                 if loader_node.termination_event.isSet():
                     break
+                db_node = random.choice(db_nodes)
+                if db_node.remoter and not db_node.remoter.is_up():
+                    self.log.warning("Chosen node is down. Choose new one")
+                    continue
+                self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
+
                 result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address(datacenter))
                 self.log.debug(result)
                 self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
