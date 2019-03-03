@@ -7,6 +7,7 @@ from __future__ import print_function
 import os
 import ast
 import logging
+from distutils.util import strtobool
 
 import anyconfig
 
@@ -57,10 +58,13 @@ def int_or_list(value):
     raise ValueError("{} isn't int or list".format(value))
 
 
-""" TODO: document all those
-
-
-"""
+def boolean(value):
+    if isinstance(value, bool):
+        return value
+    elif isinstance(value, basestring):
+        return bool(strtobool(value))
+    else:
+        raise ValueError("{} isn't a boolean".format(type(value)))
 
 
 class SCTConfiguration(dict):
@@ -143,7 +147,7 @@ class SCTConfiguration(dict):
              default=None, type=str, required=False,
              help="Url to the repo of scylla manager version to install for management tests"),
 
-        dict(name="use_mgmt", env="SCT_USE_MGMT", default=None, type=bool, required=False,
+        dict(name="use_mgmt", env="SCT_USE_MGMT", default=None, type=boolean, required=False,
              help="When define true, will install scylla management"),
 
         dict(name="mgmt_port", env="SCT_MGMT_PORT", default=None, type=int, required=False,
@@ -169,7 +173,7 @@ class SCTConfiguration(dict):
         dict(name="version_tag", env="SCT_VERSION_TAG", default=None, type=str, required=False,
              help="version name to be tagged on cloud instances"),
 
-        dict(name="store_results_in_elasticsearch", env="SCT_STORE_RESULTS_IN_ELASTICSEARCH", default=True, type=bool,
+        dict(name="store_results_in_elasticsearch", env="SCT_STORE_RESULTS_IN_ELASTICSEARCH", default=True, type=boolean,
              required=True,
              help="save the results in elasticsearch"),
 
@@ -198,41 +202,41 @@ class SCTConfiguration(dict):
         dict(name="test_id", env="SCT_TEST_ID", default=None, type=str, required=False,
              help="""see [`reuse_cluster`](#reuse_cluster) for more info on usage."""),
 
-        dict(name="seeds_first", env="SCT_SEEDS_FIRST", default=None, type=bool, required=False,
+        dict(name="seeds_first", env="SCT_SEEDS_FIRST", default=None, type=boolean, required=False,
              help="""If true would start and wait for the seed nodes to finish booting"""),
 
         dict(name="seeds_num", env="SCT_SEEDS_NUM", default=None, type=int, required=False,
              help="""Number of seeds to select, would be the first `seeds_num` of the cluster"""),
 
-        dict(name="send_email", env="SCT_SEND_EMAIL", default=None, type=bool, required=False,
+        dict(name="send_email", env="SCT_SEND_EMAIL", default=None, type=boolean, required=False,
              help="""If true would send email out of the performance regression test"""),
 
         dict(name="email_recipients", env="SCT_EMAIL_RECIPIENTS", default=None, type=str_or_list, required=False,
              help="""list of email of send the performance regression test to"""),
 
         # should be removed once stress commands would be refactored
-        dict(name="bench_run", env="SCT_BENCH_RUN", default=None, type=bool, required=False,
+        dict(name="bench_run", env="SCT_BENCH_RUN", default=None, type=boolean, required=False,
              help="""If true would kill the scylla-bench thread in the test teardown"""),
 
         # should be removed once stress commands would be refactored
-        dict(name="fullscan", env="SCT_FULLSCAN", default=None, type=bool, required=False,
+        dict(name="fullscan", env="SCT_FULLSCAN", default=None, type=boolean, required=False,
              help="""If true would kill the fullscan thread in the test teardown"""),
 
         # Scylla command line arguments options
 
-        dict(name="experimental", env="SCT_EXPERIMENTAL", default=None, type=bool, required=False,
+        dict(name="experimental", env="SCT_EXPERIMENTAL", default=None, type=boolean, required=False,
              help="when enabled scylla will use it's experimental features"),
 
-        dict(name="enable_tc", env="SCT_ENABLE_TC", default=None, type=bool, required=False,
+        dict(name="enable_tc", env="SCT_ENABLE_TC", default=None, type=boolean, required=False,
              help="when enable scylla will use traffic control"),
 
-        dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", default=None, type=bool, required=False,
+        dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", default=None, type=boolean, required=False,
              help="when enable scylla will use encryption on the server side"),
 
-        dict(name="client_encrypt", env="SCT_CLIENT_ENCRYPT", default=None, type=bool, required=False,
+        dict(name="client_encrypt", env="SCT_CLIENT_ENCRYPT", default=None, type=boolean, required=False,
              help="when enable scylla will use encryption on the client side"),
 
-        dict(name="hinted_handoff_disabled", env="SCT_HINTED_HANDOFF_DISABLED", default=None, type=bool, required=False,
+        dict(name="hinted_handoff_disabled", env="SCT_HINTED_HANDOFF_DISABLED", default=None, type=boolean, required=False,
              help="when enable scylla will disable hinted handoffs"),
 
         dict(name="authenticator", env="SCT_AUTHENTICATOR", default=None, type=str, required=False,
@@ -249,7 +253,7 @@ class SCTConfiguration(dict):
         dict(name="nemesis_interval", env="SCT_NEMESIS_CLASS_NAME", default=None, type=int, required=False,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
 
-        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_CLASS_NAME", default=False, type=bool, required=False,
+        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_CLASS_NAME", default=False, type=boolean, required=False,
              help="""Run nemesis during prepare stage of the test"""),
 
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD", default=6442450944, type=int, required=False,
@@ -524,7 +528,7 @@ class SCTConfiguration(dict):
         # LongevityTest
         dict(name="stress_multiplier", env="SCT_STRESS_MULTIPLIER", default=None, type=int, required=False,
              help=""),
-        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", default=None, type=bool, required=False,
+        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", default=None, type=boolean, required=False,
              help=""),
         dict(name="keyspace_num", env="SCT_KEYSPACE_NUM", default=None, type=int, required=False,
              help=""),
@@ -532,7 +536,7 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="batch_size", env="SCT_BATCH_SIZE", default=None, type=int, required=False,
              help=""),
-        dict(name="pre_create_schema", env="SCT_PRE_CREATE_SCHEMA", default=None, type=bool, required=False,
+        dict(name="pre_create_schema", env="SCT_PRE_CREATE_SCHEMA", default=None, type=boolean, required=False,
              help=""),
 
         dict(name="stress_read_cmd", env="SCT_STRESS_READ_CMD", default=None, type=str_or_list, required=False,
@@ -612,11 +616,11 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", default=None, type=int, required=False,
              help=""),
-        dict(name="test_sst3", env="SCT_TEST_SST3", default=None, type=bool, required=False,
+        dict(name="test_sst3", env="SCT_TEST_SST3", default=None, type=boolean, required=False,
              help=""),
         dict(name="new_introduced_pkgs", env="SCT_NEW_INTRODUCED_PKGS", default=None, type=str, required=False,
              help=""),
-        dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES", default=None, type=bool, required=False,
+        dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES", default=None, type=boolean, required=False,
              help=""),
 
         dict(name="stress_cmd_1", env="SCT_STRESS_CMD_1", default=None, type=str_or_list, required=False,
@@ -1113,4 +1117,15 @@ if __name__ == "__main__":
             opts = [o['name'] for o in SCTConfiguration.config_options]
 
             self.assertListEqual(list(get_dupes(opts)), [])
+
+        def test_13_bool(self):
+
+            os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+            os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+            os.environ['SCT_STORE_RESULTS_IN_ELASTICSEARCH'] = 'False'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+            conf = SCTConfiguration()
+
+            self.assertEqual(conf['store_results_in_elasticsearch'], False)
+
     unittest.main()
