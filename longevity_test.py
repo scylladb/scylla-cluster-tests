@@ -17,7 +17,6 @@ import os
 import re
 import time
 import yaml
-from avocado import main
 
 from sdcm.tester import ClusterTester
 
@@ -25,8 +24,6 @@ from sdcm.tester import ClusterTester
 class LongevityTest(ClusterTester):
     """
     Test a Scylla cluster stability over a time period.
-
-    :avocado: enable
     """
 
     def _run_all_stress_cmds(self, stress_queue, params):
@@ -334,7 +331,3 @@ class LongevityTest(ClusterTester):
         """
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo nodetool flush')
-
-
-if __name__ == '__main__':
-    main()

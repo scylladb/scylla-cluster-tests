@@ -214,15 +214,16 @@ if __name__ == '__main__':
     logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
     class Node():
-        ssh_login_info = {'hostname': '34.241.239.75',
+        ssh_login_info = {'hostname': '34.253.205.91',
                           'user': 'centos',
                           'key_file': '~/.ssh/scylla-qa-ec2'}
 
         remoter = RemoteCmdRunner(**ssh_login_info)
-        ip_address = '34.241.239.75'
+        ip_address = '34.253.205.91'
+        cassandra_stress_version = '3.11'
 
     class DbNode():
-        ip_address = "34.244.185.193"
+        ip_address = "34.244.157.61"
         dc_idx = 1
 
     class LoaderSetDummy(object):
@@ -230,14 +231,14 @@ if __name__ == '__main__':
             return None
 
         name = 'LoaderSetDummy'
-        cassandra_stress_version = '3.11'
         nodes = [Node()]
 
     class TestStressThread(unittest.TestCase):
         @classmethod
         def setUpClass(cls):
-            temp_dir = tempfile.mkdtemp()
-            start_events_device(temp_dir)
+            cls.temp_dir = tempfile.mkdtemp()
+            start_events_device(cls.temp_dir)
+            time.sleep(10)
 
         @classmethod
         def tearDownClass(cls):
@@ -246,15 +247,23 @@ if __name__ == '__main__':
         def test_01(self):
             from sdcm.prometheus import start_metrics_server
             start_metrics_server()
-            cs = CassandraStressThread(LoaderSetDummy(), output_dir=tempfile.gettempdir(), timeout=30, node_list=[DbNode()], stress_num=3,
-                                       stress_cmd="cassandra-stress write cl=ONE duration=1m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
+            cs = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()], stress_num=1,
+                                       stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
+
+            cs1 = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()],
+                                        stress_num=1,
+                                        stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
+
             fs = cs.run()
+            time.sleep(5)
+            fs1 = cs1.run()
+            time.sleep(60)
+            print "killing"
+            Node().remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
 
-            # time.sleep(20)
-            #print "killing"
-            #Node().remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
+            print(cs.verify_results())
 
-            print(cs.get_results())
+            print(cs1.verify_results())
 
         def test_02(self):
 
@@ -275,4 +284,4 @@ if __name__ == '__main__':
 
             res.result()
 
-    unittest.main(verbosity=2, defaultTest="TestStressThread.test_02")
+    unittest.main(verbosity=2, defaultTest="TestStressThread.test_01")

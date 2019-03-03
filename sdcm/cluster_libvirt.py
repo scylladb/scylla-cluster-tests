@@ -6,12 +6,14 @@ import threading
 import uuid
 import Queue
 import xml.etree.cElementTree as etree
+import atexit
 
-from avocado.utils import runtime as avocado_runtime
-from avocado.utils import process
+from sdcm import wait
+from sdcm.remote import LocalCmdRunner
+from sdcm import cluster
 
-from . import wait
-import cluster
+
+localrunner = LocalCmdRunner()
 
 
 class LibvirtNode(cluster.BaseNode):
@@ -149,17 +151,13 @@ class LibvirtCluster(cluster.BaseCluster):
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': cluster.remove_if_exists,
-                                                               'args': (dst_image_path,),
-                                                               'once': True})
+                atexit.register(cluster.remove_if_exists, dst_image_path)
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
             cluster.LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': cluster.clean_domain,
-                                                               'args': (name,),
-                                                               'once': True})
+                atexit.register(cluster.clean_domain, name)
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
@@ -168,7 +166,7 @@ class LibvirtCluster(cluster.BaseCluster):
                                 '--vnc --noautoconsole --import' %
                                 (uri, name, memory, os_type, os_variant,
                                  dst_image_path, bridge))
-            process.run(virt_install_cmd)
+            localrunner.run(virt_install_cmd)
             cluster.LIBVIRT_DOMAINS.append(name)
             for domain in self._hypervisor.listAllDomains():
                 if domain.name() == name:

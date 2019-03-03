@@ -21,7 +21,8 @@ import boto3.session
 import libvirt
 import shutil
 import random
-from avocado import Test
+import unittest
+
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
@@ -39,7 +40,6 @@ from .cluster_openstack import LoaderSetOpenStack
 from .cluster_libvirt import MonitorSetLibvirt
 from .cluster_openstack import MonitorSetOpenStack
 from .cluster import NoMonitorSet, SCYLLA_DIR
-from .cluster import RemoteCredentials
 from .cluster_libvirt import ScyllaLibvirtCluster
 from .cluster_openstack import ScyllaOpenStackCluster
 from .cluster import UserRemoteCredentials
@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession
+from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, configure_logging
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -63,6 +63,7 @@ from sdcm import wait
 
 from invoke.exceptions import UnexpectedExit, Failure
 
+configure_logging()
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -74,7 +75,7 @@ try:
 except ImportError:
     pass
 
-TEST_LOG = logging.getLogger('avocado.test')
+TEST_LOG = logging.getLogger(__name__)
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -142,19 +143,20 @@ def teardown_on_exception(method):
     return wrapper
 
 
-class ClusterTester(db_stats.TestStatsMixin, Test):
+class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
-    def __init__(self, methodName='test', name=None, params=None,
-                 base_logdir=None, tag=None, job=None, runner_queue=None):
-        super(ClusterTester, self).__init__(methodName=methodName, name=name,
-                                            params=params,
-                                            base_logdir=base_logdir, tag=tag,
-                                            job=job, runner_queue=runner_queue)
+    def __init__(self, methodName='test'):
+        super(ClusterTester, self).__init__(methodName=methodName)
 
-        self.avocado_params = self.params
-        if os.environ.get('SCT_NEW_CONFIG', False):
-            self.params = SCTConfiguration()
-            self.params.verify_configuration()
+        self.status = "RUNNING"
+
+        self.log = logging.getLogger(__name__)
+        self.logdir = os.path.join(cluster.Setup.logdir(), self.id())
+        self.outputdir = os.path.join(self.logdir, 'data')
+        os.makedirs(self.outputdir)
+
+        self.params = SCTConfiguration()
+        self.params.verify_configuration()
 
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
@@ -169,6 +171,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.set_duration(self._duration)
 
         cluster.Setup.set_test_id(self.params.get('test_id'))
+        cluster.Setup.set_test_name(self.id())
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
         cluster_backend = self.params.get('cluster_backend', default='')
@@ -186,7 +189,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
 
-        start_events_device(self.job.logdir)
+        start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
 
@@ -217,9 +220,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.loaders = None
         self.monitors = None
         self.connections = []
-        logging.getLogger('botocore').setLevel(logging.CRITICAL)
-        logging.getLogger('boto3').setLevel(logging.CRITICAL)
-        logging.getLogger('invoke').setLevel(logging.CRITICAL)
+
         if self.create_stats:
             self.create_test_stats()
         self.init_resources()
@@ -275,7 +276,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('openstack_instance_type_loader')
         if db_info['n_nodes'] is None:
@@ -304,12 +305,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                               ex_force_service_region=service_region,
                               ex_tenant_name=tenant)
         user_credentials = self.params.get('user_credentials_path', None)
-        if user_credentials:
-            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-        else:
-            self.credentials.append(RemoteCredentials(service=service,
-                                                      key_prefix='sct',
-                                                      user_prefix=user_prefix))
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         self.db_cluster = ScyllaOpenStackCluster(openstack_image=self.params.get('openstack_image'),
                                                  openstack_image_username=self.params.get('openstack_image_username'),
@@ -352,7 +348,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('gce_instance_type_loader')
         if loader_info['disk_type'] is None:
@@ -462,7 +458,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if db_info['n_nodes'] is None:
@@ -514,12 +510,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             session = boto3.session.Session(region_name=i)
             service = session.resource('ec2')
             services.append(service)
-            if user_credentials:
-                self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-            else:
-                self.credentials.append(RemoteCredentials(service=service,
-                                                          key_prefix='sct',
-                                                          user_prefix=user_prefix))
+            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         ec2_security_group_ids = []
         for i in self.params.get('security_group_ids').split():
@@ -701,7 +692,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         )
         self.db_cluster = docker.ScyllaDockerCluster(**params)
 
-        params['n_nodes'] = self.params.get('n_loaders')
+        params['n_nodes'] = int(self.params.get('n_loaders'))
         self.loaders = docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
@@ -722,7 +713,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
-        params['n_nodes'] = self.params.get('n_loaders')
+        params['n_nodes'] = int(self.params.get('n_loaders'))
         params['public_ips'] = self.params.get('loaders_public_ip')
         params['private_ips'] = self.params.get('loaders_private_ip')
         self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
@@ -1343,22 +1334,22 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.zip_and_upload_job_log()
 
     def zip_and_upload_job_log(self):
-        job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
+        job_log_dir = os.path.dirname(self.logdir)
         archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
         try:
-            joblog_archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
+            joblog_archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'sct.log')
             s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
             self.log.info('Link to job.log archive {}'.format(s3_link))
         except Exception as details:
-            self.log.warning('Errors during creating and uploading archive of job.log {}'.format(details))
+            self.log.warning('Errors during creating and uploading archive of sct.log {}'.format(details))
         self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
         if self.create_stats:
             self.log.info("ES document id: {}".format(self.get_doc_id()))
 
     def collect_events_log(self):
-        event_log_base_dir = os.path.dirname(os.path.dirname(self.logdir))
+        event_log_base_dir = os.path.dirname(self.logdir)
         event_log_dir = os.path.join(event_log_base_dir, 'events_log')
         if not os.path.exists(event_log_dir):
             os.mkdir(event_log_dir)
@@ -1385,7 +1376,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         population = " -pop seq="
 
         total_keys = size_in_gb * 1024 * 1024
-        n_loaders = self.params.get('n_loaders')
+        n_loaders = int(self.params.get('n_loaders'))
         keys_per_node = total_keys / n_loaders
 
         write_queue = list()
@@ -1511,7 +1502,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                      "monitoring_stack": ""}
 
         storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
-        os.mkdir(storing_dir)
+        os.makedirs(storing_dir)
 
         self.log.info("Storing dir is {}".format(storing_dir))
         if self.db_cluster:

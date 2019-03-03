@@ -1,10 +1,15 @@
-import os
 import socket
-import random
 import logging
-import prometheus_client
+import threading
+try:
+    from BaseHTTPServer import HTTPServer
+    from SocketServer import ThreadingMixIn
+except ImportError:
+    # Python 3
+    from http.server import HTTPServer
+    from socketserver import ThreadingMixIn
 
-from avocado.utils import network
+import prometheus_client
 
 START = 'start'
 STOP = 'stop'
@@ -13,22 +18,34 @@ logger = logging.getLogger(__name__)
 nm_obj = None
 
 
-def start_metrics_server(port=None):
+class _ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
+    """Thread per request HTTP server."""
+
+
+def start_http_server(port, addr='', registry=prometheus_client.REGISTRY):
+    """Starts an HTTP server for prometheus metrics as a daemon thread"""
+    CustomMetricsHandler = prometheus_client.MetricsHandler.factory(registry)
+    httpd = _ThreadingSimpleServer((addr, port), CustomMetricsHandler)
+    t = threading.Thread(target=httpd.serve_forever)
+    t.daemon = True
+    t.start()
+    return httpd
+
+
+def start_metrics_server():
     """
     https://github.com/prometheus/prometheus/wiki/Default-port-allocations
     Occupied port 9389 for SCT
     """
     hostname = socket.gethostname()
-    if not port:
-        port = random.randint(8001, 10000)
-
-    if not network.is_port_free(port, hostname):
-        port = network.find_free_port(8001, 10000)
 
     try:
-        logger.debug('Try to start prometheus API server on port: %s', port)
-        prometheus_client.start_http_server(port)
+        logger.debug('Try to start prometheus API server')
+        httpd = start_http_server(0)
+        port = httpd.server_port
         ip = socket.gethostbyname(hostname)
+
+        logger.info('prometheus API server running on port: %s', port)
         return '{}:{}'.format(ip, port)
     except Exception as ex:
         logger.error('Cannot start local http metrics server: %s', ex)

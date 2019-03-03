@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 import os
 import sys
+import unittest
 
 import click
 import click_completion
 from prettytable import PrettyTable
+import xmlrunner
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                         aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                         list_logs_by_test_id, restore_monitoring_stack)
+from sdcm.cluster import Setup
 
 click_completion.init()
 
@@ -32,9 +35,8 @@ def install_callback(ctx, _, value):
 @click.group()
 @click.option('--install-bash-completion', is_flag=True, callback=install_callback, expose_value=False,
               help="Install completion for the current shell. Make sure to have psutil installed.")
-@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
-def cli(backend):
-    os.environ['SCT_CLUSTER_BACKEND'] = backend
+def cli():
+    pass
 
 
 '''
@@ -53,8 +55,6 @@ def provision(**kwargs):
     # TODO: find a better way for ctrl+c to kill this process
     os.environ['SCT_NEW_CONFIG'] = 'yes'
     test = ClusterTester(methodName='setUp')
-    from avocado.utils import runtime as avocado_runtime
-    avocado_runtime.CURRENT_TEST = namedtuple('MockedAvocadoConf', ['name'])(name='sct_provision_command')
     test._setup_environment_variables()
     test.setUp()
 '''
@@ -269,6 +269,40 @@ def unit_tests(test):
     test_suite = unittest.TestLoader().discover('unit_tests', pattern=test, top_level_dir='.')
     result = unittest.TextTestRunner(verbosity=2).run(test_suite)
     sys.exit(not result.wasSuccessful())
+
+
+class OutputLogger(object):
+    def __init__(self, filename, terminal):
+        self.terminal = terminal
+        self.log = open(filename, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+
+@cli.command('run-test', help="Run SCT test using unittest")
+@click.argument('argv')
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
+@click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
+@click.option('-l', '--logdir', help="Directory to use for logs")
+def run(argv, backend, config, logdir):
+
+    os.environ['SCT_CONFIG_FILES'] = str(list(config))
+    os.environ['SCT_CLUSTER_BACKEND'] = backend
+    if logdir:
+        os.environ['SCT_LOGDIR'] = logdir
+    logfile = os.path.join(Setup.logdir(), 'output.log')
+    sys.stdout = OutputLogger(logfile, sys.stdout)
+    sys.stderr = OutputLogger(logfile, sys.stderr)
+
+    unittest.main(module=None, argv=['python -m unittest', argv],
+                  testRunner=xmlrunner.XMLTestRunner(output='test-reports'),
+                  failfast=False, buffer=False, catchbreak=True)
 
 
 if __name__ == '__main__':

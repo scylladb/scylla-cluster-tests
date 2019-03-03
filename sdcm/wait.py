@@ -16,13 +16,11 @@ Wait functions appropriate for tests that have high timing variance.
 """
 import time
 import logging
-from avocado.utils import wait
+
+import tenacity
+from tenacity.retry import retry_if_result, retry_if_exception_type
 
 LOGGER = logging.getLogger('sdcm.wait')
-
-
-class WaitTimeoutExpired(Exception):
-    pass
 
 
 def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
@@ -41,17 +39,28 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
     """
     if not timeout:
         return forever_wait_for(func, step, text, **kwargs)
-    if kwargs:
-        def func_wrap():
-            return func(**kwargs)
-        res = wait.wait_for(func_wrap, timeout=timeout, step=step, text=text)
-    else:
-        res = wait.wait_for(func, timeout=timeout, step=step, text=text)
-    if res is not True:
+
+    res = None
+
+    try:
+        r = tenacity.Retrying(
+            reraise=throw_exc,
+            stop=tenacity.stop_after_delay(timeout),
+            wait=tenacity.wait_fixed(step),
+            retry=(retry_if_result(lambda value: not value) | retry_if_exception_type())
+        )
+        res = r.call(func, **kwargs)
+
+    except Exception as ex:
         err = 'Wait for: {}: timeout - {} seconds - expired'.format(text, timeout)
-        LOGGER.warning(err)
+        LOGGER.error(err)
+        if hasattr(ex, 'last_attempt'):
+            LOGGER.error("last error: %s", repr(ex.last_attempt.exception()))
+        else:
+            LOGGER.error("last error: %s", repr(ex))
         if throw_exc:
-            raise WaitTimeoutExpired(err)
+            raise
+
     return res
 
 

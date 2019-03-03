@@ -25,15 +25,10 @@ from fabric import Connection, Config
 from fabric.connection import opens
 from invoke.exceptions import UnexpectedExit, Failure, ThreadException
 from invoke.watchers import StreamWatcher, Responder
-
-from avocado.utils import astring
-from avocado.utils import path
+import six.moves
 
 from .log import SDCMAdapter
 from .utils import retrying
-
-
-LOGGER_NAME = 'avocado.test'
 
 
 class OutputCheckError(Exception):
@@ -93,13 +88,14 @@ def _scp_remote_escape(filename):
         else:
             new_name.append(char)
 
-    return astring.shell_escape("".join(new_name))
+    return six.moves.shlex_quote("".join(new_name))
 
 
 def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
                       key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
     assert isinstance(connect_timeout, (int, long))
-    base_command = path.find_command('ssh')
+    ssh_full_path = LocalCmdRunner().run('which ssh').stdout
+    base_command = ssh_full_path
     base_command += " " + extra_ssh_options
     base_command += (" -a -x %s -o StrictHostKeyChecking=no "
                      "-o UserKnownHostsFile=%s -o BatchMode=yes "
@@ -117,7 +113,7 @@ class CommandRunner(object):
         self.hostname = hostname
         self.user = user
         self.password = password
-        logger = logging.getLogger(LOGGER_NAME)
+        logger = logging.getLogger(__name__)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.connection = None
 
@@ -324,7 +320,7 @@ class RemoteCmdRunner(CommandRunner):
         if self.use_rsync():
             try:
                 remote_source = self._encode_remote_paths(src)
-                local_dest = astring.shell_escape(dst)
+                local_dest = six.moves.shlex_quote(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 result = self.connection.local(rsync, encoding='utf-8')
@@ -345,7 +341,7 @@ class RemoteCmdRunner(CommandRunner):
                 # _make_rsync_compatible_source() already did the escaping
                 remote_source = self._encode_remote_paths(remote_source,
                                                           escape=False)
-                local_dest = astring.shell_escape(dst)
+                local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 r = self.connection.local(scp)
                 self.log.info("Command {} with status {}".format(r.command, r.exited))
@@ -397,7 +393,7 @@ class RemoteCmdRunner(CommandRunner):
         try_scp = True
         if self.use_rsync():
             try:
-                local_sources = [astring.shell_escape(path) for path in src]
+                local_sources = [six.moves.shlex_quote(path) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 self.connection.local(rsync, encoding='utf-8')
@@ -515,7 +511,7 @@ class RemoteCmdRunner(CommandRunner):
                 return len(glob.glob(path + pattern)) > 0
         else:
             def glob_matches_files(path, pattern):
-                match_cmd = "ls \"%s\"%s" % (astring.shell_escape(path), pattern)
+                match_cmd = "ls \"%s\"%s" % (six.moves.shlex_quote(path), pattern)
                 result = self.run(match_cmd, ignore_status=True)
                 return result.exit_status == 0
 
@@ -525,7 +521,7 @@ class RemoteCmdRunner(CommandRunner):
 
         # convert them into a set of paths suitable for the commandline
         if is_local:
-            return ["\"%s\"%s" % (astring.shell_escape(pth), pattern)
+            return ["\"%s\"%s" % (six.moves.shlex_quote(pth), pattern)
                     for pattern in patterns]
         else:
             return [_scp_remote_escape(pth) + pattern
