@@ -1,4 +1,5 @@
 # coding: utf-8
+from enum import Enum
 from textwrap import dedent
 
 from avocado.utils import process
@@ -18,7 +19,6 @@ MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
-from enum import Enum
 
 
 class ScyllaManagerError(Exception):
@@ -27,9 +27,11 @@ class ScyllaManagerError(Exception):
     """
     pass
 
+
 class HostSsl(Enum):
     ON = "ON"
     OFF = "OFF"
+
 
 class HostStatus(Enum):
     UP = "UP"
@@ -225,7 +227,7 @@ class HealthcheckTask(ManagerTask):
 
 class ManagerCluster(ScyllaManagerBase):
 
-    def __init__(self, manager_node, cluster_id, client_encrypt = False):
+    def __init__(self, manager_node, cluster_id, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
@@ -338,7 +340,7 @@ class ManagerCluster(ScyllaManagerBase):
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
         repair_task_list = []
         table_res = self._get_task_list()
-        if len(table_res) > 1: # if there are any tasks in list - add them as RepairTask generated objects.
+        if len(table_res) > 1:  # if there are any tasks in list - add them as RepairTask generated objects.
             repair_task_rows_list = [row for row in table_res[1:] if row[0].startswith("repair/")]
             for row in repair_task_rows_list:
                 repair_task_list.append(RepairTask(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
@@ -392,6 +394,7 @@ class ManagerCluster(ScyllaManagerBase):
             self.status = status
             self.rtt = rtt
             self.ssl = ssl
+
 
 class MgrUtils(object):
 
@@ -485,7 +488,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host = None, db_cluster = None, client_encrypt = None):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -513,7 +516,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if client_encrypt != False:
             if not db_cluster:
                 logger.warning("db_cluster is not given. Scylla-Manager connection to cluster may fail since not using client-encryption parameters.")
-            else: # check if scylla-node has client-encrypt
+            else:  # check if scylla-node has client-encrypt
                 db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
@@ -534,6 +537,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def rollback_upgrade(self, manager_node):
         raise NotImplementedError
+
 
 class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 
@@ -568,7 +572,6 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
         # Rollback the Scylla Manager database???
 
 
-
 class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
@@ -586,7 +589,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
                         sudo rm -rf {}
                         sudo apt-get clean
                         sudo apt-get update
-                    """.format(self.manager_repo_path)) # +" /var/lib/scylla-manager/*"))
+                    """.format(self.manager_repo_path))  # +" /var/lib/scylla-manager/*"))
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
 
         # Downgrade to pre-upgrade scylla-manager repository
@@ -597,7 +600,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         logger.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
         # self.manager_node.install_mgmt(scylla_mgmt_repo=scylla_mgmt_repo)
         downgrade_to_pre_upgrade_repo = dedent("""
-                                    
+
                                 sudo apt-get install scylla-manager -y
                                 sudo systemctl unmask scylla-manager.service
                                 sudo systemctl enable scylla-manager

@@ -85,4 +85,3 @@ databases: !mux
         db_type: cassandra
     scylla:
         db_type: scylla
-

@@ -75,8 +75,8 @@ class LongevityTest(ClusterTester):
 
         if 'compression' in stress_cmd:
             if 'keyspace_name' not in params:
-                    keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
-                    params.update({'keyspace_name': keyspace_name})
+                keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
+                params.update({'keyspace_name': keyspace_name})
 
         return params
 
@@ -160,7 +160,6 @@ class LongevityTest(ClusterTester):
                 for stress in verify_queue:
                     self.verify_stress_thread(queue=stress)
 
-
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions', default=None)
         table_name, primary_key_column, partitions_dict_before = '', '', {}
@@ -214,7 +213,6 @@ class LongevityTest(ClusterTester):
                                                                  save_into_file_name='partitions_rows_after.log')
             self.assertEqual(partitions_dict_before, partitions_dict_after,
                              msg='Row amount in partitions is not same before and after running of nemesis')
-
 
     def test_batch_custom_time(self):
         """

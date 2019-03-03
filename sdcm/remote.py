@@ -563,7 +563,7 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 self.ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, e:
                 self.log.warning("Trying scp, rsync failed: %s", e)
@@ -584,7 +584,7 @@ class BaseRemote(object):
                 local_dest = astring.shell_escape(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 self.ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -638,7 +638,7 @@ class BaseRemote(object):
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 self.ssh_run(rsync, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
                 try_scp = False
             except process.CmdError, details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
@@ -683,7 +683,7 @@ class BaseRemote(object):
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 self.ssh_run(scp, shell=True, extra_text=self.hostname,
-                        verbose=verbose, timeout=ssh_timeout)
+                             verbose=verbose, timeout=ssh_timeout)
 
     def _ssh_ping(self, timeout=30):
         try:
@@ -805,6 +805,7 @@ class BaseRemote(object):
             raise process.CmdError(cmd, sp.result)
         return cmd_result
 
+
 class Remote(BaseRemote):
 
     def __init__(self, hostname, user="root", port=22, password="",
@@ -841,10 +842,10 @@ class Remote(BaseRemote):
         else:
             full_cmd = '%s "%s"' % (ssh_cmd, astring.shell_escape(cmd))
         result = self.ssh_run(full_cmd, verbose=verbose,
-                         ignore_status=ignore_status, timeout=timeout,
-                         extra_text=self.hostname, shell=True,
-                         log_file=log_file,
-                         watch_stdout_pattern=watch_stdout_pattern)
+                              ignore_status=ignore_status, timeout=timeout,
+                              extra_text=self.hostname, shell=True,
+                              log_file=log_file,
+                              watch_stdout_pattern=watch_stdout_pattern)
 
         # The error messages will show up in band (indistinguishable
         # from stuff sent through the SSH connection), so we have the

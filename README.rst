@@ -43,6 +43,21 @@ Maintained branches
 
 https://github.com/scylladb/scylla-cluster-tests/wiki
 
+Contribution
+------------
+Since we are trying to keep the code neat, please install this git precommit hooks, that would fix the code style, and run more checks::
+
+    pip install pre-commit==1.14.4
+    pre-commit install
+
+If you want to remove the hook::
+
+    pre-commit uninstall
+
+Doing a commit without the hook checks::
+
+    git commit ... -n
+
 Setting up SCT environment
 --------------------------
 
@@ -328,7 +343,7 @@ dumping a lot of information in the test main log. That includes:
 2) Scylla logs for all the DB nodes, logged as they happen. Example line::
 
     15:44:35 DEBUG| [54.183.193.208] [stdout] Feb 10 17:44:17 ip-172-30-0-123.ec2.internal systemd[1]: Starting Scylla Server...
-    
+
 3) Coredump watching thread, that runs every 30 seconds and will tell you if
    scylla dumped core
 

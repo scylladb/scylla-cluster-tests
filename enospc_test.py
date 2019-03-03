@@ -24,6 +24,7 @@ class EnospcTest(ClusterTester):
     and then release space to recover scylla service.
     :avocado: enable
     """
+
     def test_enospc_nodes(self):
         self.db_cluster.add_nemesis(nemesis=EnospcAllNodesMonkey,
                                     tester_obj=self)

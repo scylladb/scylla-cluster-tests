@@ -407,7 +407,6 @@ LoadPlugin processes
             else:
                 self.node.remoter.run('sudo service collectd restart')
 
-
     def collectd_exporter_setup(self):
         systemd_unit = """[Unit]
 Description=Collectd Exporter

@@ -30,6 +30,8 @@ if [ "$1" == "docker" ]; then
     ln -s /sct/sdcm /usr/lib/python2.7/site-packages/sdcm
 else
     grep -v '^#' requirements-python.txt | xargs -t -L 1 pip install
+    pre-commit install
+
     ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm
     echo "========================================================="
     echo "Please run 'aws configure' to configure AWS CLI and then"

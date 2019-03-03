@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# This script searches in the journalctl all stalles, find unique stalles and decode them. 
+# This script searches in the journalctl all stalles, find unique stalles and decode them.
 # Save the journalctl to the database.log and move to the folder
 # The script expects to receive 3 parameters:
 #   $1 - folder path where journalctl log is located
@@ -72,7 +72,7 @@ for file in $(ls -p $dir | grep -v /); do
                                 fi
 			done < $grepped_file
 #			sudo rm -r $analize_dir
-#		fi 
+#		fi
 #		prev="$dir"
 #	fi
 done
@@ -108,7 +108,7 @@ while true; do
 				echo $file_name >> $unique_stalls_dir/$base_file_name
 				sudo rm $file
 				echo "Files $base_file_name and $file_name are same"
-			fi	
+			fi
 		fi
 	done
 	echo "Save into unique file $unique_stalls_dir/$base_file_name"
@@ -116,7 +116,7 @@ while true; do
 	echo "" >> "$unique_stalls_dir/$base_file_name"
 	echo "Backtrace:" >> "$unique_stalls_dir/$base_file_name"
 	cat $base_file >> "$unique_stalls_dir/$base_file_name"
-	sudo rm $base_file	
+	sudo rm $base_file
 done
 sudo rm -r $stalls_dir
 
@@ -142,4 +142,3 @@ done
 
 yes '' | sed 2q
 echo "******** Decoded backtraces are saved into $decoded_file_name file ********"
-

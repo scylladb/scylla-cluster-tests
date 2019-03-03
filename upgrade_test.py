@@ -122,7 +122,7 @@ class UpgradeTest(FillDatabaseData):
 
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
-        #fixme: auto identify new_introduced_pkgs, remove this parameter
+        # fixme: auto identify new_introduced_pkgs, remove this parameter
         new_introduced_pkgs = self.params.get('new_introduced_pkgs', default=None)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
@@ -253,7 +253,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Re-Populate DB with many types of tables and data')
         self.fill_db_data()
 
-        ### sst3 workload (20m): prepare write
+        # sst3 workload (20m): prepare write
         self.log.info('Starting c-s sst3 workload for 20m to prepare data')
         stress_cmd_sst3_prepare = self.params.get('stress_cmd_sst3_prepare')
         sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_prepare, profile='data_dir/sst3_schema.yaml')
@@ -269,7 +269,7 @@ class UpgradeTest(FillDatabaseData):
         # random order
         random.shuffle(indexes)
 
-        ### prepare write workload
+        # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
         prepare_write_stress_queue = self.run_stress_thread(stress_cmd=prepare_write_stress)
@@ -291,7 +291,7 @@ class UpgradeTest(FillDatabaseData):
         # wait for the prepare write workload to finish
         self.verify_stress_thread(prepare_write_stress_queue)
 
-        ### read workload
+        # read workload
         self.log.info('Starting c-s read workload for 10m')
         stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
         read_10m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
@@ -309,14 +309,14 @@ class UpgradeTest(FillDatabaseData):
         # wait for the 10m read workload to finish
         self.verify_stress_thread(read_10m_stress_queue)
 
-        ### read workload (cl=ALL)
+        # read workload (cl=ALL)
         self.log.info('Starting c-s read workload (cl=ALL n=10000000)')
         stress_cmd_read_clall = self.params.get('stress_cmd_read_clall')
         read_clall_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_clall)
         # wait for the cl=ALL read workload to finish
         self.verify_stress_thread(read_clall_stress_queue)
 
-        ### read workload (20m)
+        # read workload (20m)
         self.log.info('Starting c-s read workload for 20m')
         stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
         read_20m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
@@ -340,7 +340,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
 
-        ### sst3 workload: verify data by simple read cl=ALL
+        # sst3 workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s sst3 workload to verify data by simple read')
         stress_cmd_sst3_verify_read = self.params.get('stress_cmd_sst3_verify_read')
         sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_read, profile='data_dir/sst3_schema.yaml')
@@ -348,7 +348,7 @@ class UpgradeTest(FillDatabaseData):
         # wait for the read sst3 workload to finish
         self.verify_stress_thread(sst3_stress_queue)
 
-        ### sst3 workload: verify data by multiple ops
+        # sst3 workload: verify data by multiple ops
         self.log.info('Starting c-s sst3 workload to verify data by multiple ops')
         stress_cmd_sst3_verify_more = self.params.get('stress_cmd_sst3_verify_more')
         sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_more, profile='data_dir/sst3_schema.yaml')
@@ -356,7 +356,7 @@ class UpgradeTest(FillDatabaseData):
         # wait for the sst3 workload to finish
         self.verify_stress_thread(sst3_stress_queue)
 
-        ### sst3 workload: verify data by delete 1/10 data
+        # sst3 workload: verify data by delete 1/10 data
         self.log.info('Starting c-s sst3 workload to verify data by delete')
         stress_cmd_sst3_verify_delete = self.params.get('stress_cmd_sst3_verify_delete')
         sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_delete, profile='data_dir/sst3_schema.yaml')

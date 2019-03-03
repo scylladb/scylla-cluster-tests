@@ -1295,7 +1295,6 @@ server_encryption_options:
                         """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
 
-
         if self.is_debian9():
             install_debian_9_prereqs = dedent("""
                 if [ ! -f /etc/apt/sources.list.d/backports.list ]; then echo 'deb http://http.debian.net/debian jessie-backports main' | tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
@@ -1342,7 +1341,7 @@ server_encryption_options:
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        ssh_config_script = dedent("""        
+        ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
@@ -1528,7 +1527,7 @@ server_encryption_options:
         self.start_scylla()
 
         resharding_finished = wait.wait_for(func=self._resharding_finished, step=5, timeout=3600,
-                      text="Wait for re-sharding to be finished")
+                                            text="Wait for re-sharding to be finished")
         if not resharding_finished:
             logger.error('Resharding has not been started or was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
                          'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
@@ -1831,7 +1830,7 @@ class BaseScyllaCluster(object):
             seeds = ",".join(node_private_ips)
         else:
             node_public_ips = [node.public_ip_address for node
-                                in self.nodes if node.is_seed]
+                               in self.nodes if node.is_seed]
             seeds = ",".join(node_public_ips)
         if not seeds:
             # use first node as seed by default
@@ -2343,7 +2342,7 @@ class BaseLoaderSet(object):
                 cd $HOME
                 curl -L -o gemini {gemini_url}
                 chmod a+x gemini
-                curl -LO  {gemini_static_url}                
+                curl -LO  {gemini_static_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
@@ -2367,7 +2366,7 @@ class BaseLoaderSet(object):
 
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
-        elif 'keyspace=' not in stress_cmd: # if keyspace is defined in the command respect that
+        elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
 
         if profile:
@@ -2931,9 +2930,7 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m')
-                              , scylla_mgmt_repo=self.params.get('scylla_mgmt_repo')
-                              , manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')
@@ -2994,7 +2991,7 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
-        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
+        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3039,7 +3036,7 @@ class BaseMonitorSet(object):
           ANNOTATIONS {
             summary = "Instance {{ $labels.instance }} root disk low space",
             description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
-          }        
+          }
         # Alert for 99% cassandra stress write spikes
         ALERT CassandraStressWriteTooSlow
           IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
@@ -3116,7 +3113,7 @@ class BaseMonitorSet(object):
     def stop_scylla_monitoring(self, node):
         kill_script = dedent("""
             cd {0.monitor_install_path}
-            ./kill-all.sh 
+            ./kill-all.sh
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % kill_script)
 

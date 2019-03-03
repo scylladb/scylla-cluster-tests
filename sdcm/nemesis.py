@@ -190,7 +190,7 @@ class Nemesis(object):
         num_of_reboots = random.randint(2, 10)
         for i in range(num_of_reboots):
             self._set_current_disruption('MultipleHardRebootNode %s' % self.target_node)
-            self.log.debug("Rebooting {} out of {} times".format(i + 1, num_of_reboots))
+            self.log.debug("Rebooting {} out of {} times".format(i+1, num_of_reboots))
             self.target_node.reboot(hard=True)
             if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
@@ -722,7 +722,7 @@ class Nemesis(object):
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                                                  len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                len(self.cluster.datacenter) > 1 else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
@@ -746,7 +746,7 @@ class Nemesis(object):
             cluster_id = mgmt_client.get_cluster(cluster_name)
             if not cluster_id:
                 ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                                                      len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                    len(self.cluster.datacenter) > 1 else 'private_ip_address'
                 targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
                 cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
             repair_timeout = 36 * 60 * 60  # 36 hours
@@ -1195,6 +1195,7 @@ class ModifyTableMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_modify_table()
 
+
 class MgmtRepair(Nemesis):
 
     @log_time_elapsed_and_status
@@ -1203,6 +1204,7 @@ class MgmtRepair(Nemesis):
         self.disrupt_mgmt_repair_cli()
         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
         # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
 
 class AbortRepairMonkey(Nemesis):
 
@@ -1216,15 +1218,18 @@ class NodeTerminateAndReplace(Nemesis):
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
 
+
 class ValidateHintedHandoffShortDowntime(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_validate_hh_short_downtime()
 
+
 class SnapshotOperations(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_snapshot_operations()
+
 
 class NodeRestartWithResharding(Nemesis):
     @log_time_elapsed_and_status

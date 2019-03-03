@@ -171,8 +171,8 @@ class PerformanceRegressionTest(ClusterTester):
 
             # One stress cmd command
             else:
-                    stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
-                                                               prefix='preload-', stats_aggregate_cmds=False))
+                stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
+                                                           prefix='preload-', stats_aggregate_cmds=False))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
@@ -325,7 +325,7 @@ class PerformanceRegressionTest(ClusterTester):
         ops_with_mv = self._workload(stress_cmd=base_cmd_p, stress_num=2, sub_type='mixed_with_mv',
                                      test_name=test_name, keyspace_num=1,
                                      debug_message='Second start of mixed cassandra-stress command: {}'.format(
-                                            base_cmd_p))
+                                         base_cmd_p))
 
         self.assert_mv_performance(ops_without_mv, ops_with_mv,
                                    'Throughput of stress run with materialized view is more than {} times lower then '
@@ -340,7 +340,7 @@ class PerformanceRegressionTest(ClusterTester):
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
         session.execute("""
-            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  
+            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
             AND durable_writes = true;
         """)
         session.execute("""
@@ -353,7 +353,7 @@ class PerformanceRegressionTest(ClusterTester):
                 AND bloom_filter_fp_chance = 0.01
                 AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
                 AND comment = ''
-                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60', 
+                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60',
                 'compaction_window_unit': 'MINUTES'}
                 AND compression = {}
                 AND crc_check_chance = 1.0

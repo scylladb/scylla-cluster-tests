@@ -24,6 +24,7 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
 
     :avocado: enable
     """
+
     def __init__(self, *args, **kwargs):
         super(PerformanceRegressionUserProfilesTest, self).__init__(*args, **kwargs)
         self.create_stats = False
