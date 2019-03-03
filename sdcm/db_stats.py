@@ -304,11 +304,7 @@ class TestStatsMixin(Stats):
         setup_details = {}
         is_gce = self.params.get('cluster_backend') == 'gce'
 
-        if os.environ.get('SCT_NEW_CONFIG', False):
-            test_params = self.params.items()
-        else:
-            # take only values, don't care about paths
-            test_params = [(k, v) for _, k, v in self.avocado_params.iteritems()]
+        test_params = self.params.items()
 
         for k, v in test_params:
             if k in exclude_details or (isinstance(k, str) and k.startswith('stress_cmd')):
@@ -366,9 +362,9 @@ class TestStatsMixin(Stats):
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
         if sub_type:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(self.avocado_params.id.name, sub_type)
+            self._stats['test_details']['test_name'] = '{}_{}'.format(self.id(), sub_type)
         else:
-            self._stats['test_details']['test_name'] = self.avocado_params.id.name
+            self._stats['test_details']['test_name'] = self.id()
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
         self.create()

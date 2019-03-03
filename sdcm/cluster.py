@@ -29,12 +29,13 @@ import json
 import io
 
 from base64 import decodestring
+
 import requests
+from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
-from avocado.utils import path
 from datetime import datetime
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
@@ -42,12 +43,9 @@ from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
+
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent
-
-from avocado.utils import runtime as avocado_runtime
 from sdcm.sct_events import EVENTS_PROCESSES
-
-from invoke.exceptions import UnexpectedExit, Failure
 
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -168,8 +166,9 @@ class Setup(object):
     MULTI_REGION = False
 
     _test_id = None
-
+    _test_name = None
     TAGS = dict()
+    _logdir = None
 
     @classmethod
     def test_id(cls):
@@ -181,6 +180,27 @@ class Setup(object):
     def set_test_id(cls, new_test_id):
         if new_test_id:
             cls._test_id = new_test_id
+
+    @classmethod
+    def logdir(cls):
+        if not cls._logdir:
+            sct_base = os.path.expanduser(os.environ.get('SCT_LOGDIR', '~/sct-results'))
+            cls._logdir = os.path.join(sct_base, str(cls.test_id()))
+            os.makedirs(cls._logdir)
+
+            latest_symlink = os.path.join(sct_base, 'latest')
+            remove_if_exists(latest_symlink)
+            os.symlink(cls._logdir, latest_symlink)
+            os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
+        return cls._logdir
+
+    @classmethod
+    def test_name(cls):
+        return cls._test_name
+
+    @classmethod
+    def set_test_name(cls, test_name):
+        cls._test_name = test_name
 
     @classmethod
     def set_multi_region(cls, multi_region):
@@ -210,7 +230,7 @@ def create_common_tags():
     username = os.environ.get('BUILD_USER', getpass.getuser())
     build_tag = os.environ.get('BUILD_TAG', None)
     tags = dict(RunByUser=username,
-                TestName=str(avocado_runtime.CURRENT_TEST.name),
+                TestName=str(Setup.test_name()),
                 TestId=str(Setup.test_id()))
 
     if build_tag:
@@ -234,56 +254,6 @@ def prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
     return '%s-%s' % (user_prefix, base_name)
-
-
-class RemoteCredentials(object):
-
-    """
-    Wraps EC2.KeyPair, so that we can save keypair info into .pem files.
-    """
-
-    def __init__(self, service, key_prefix='keypair', user_prefix=None):
-        self.type = 'generated'
-        self.uuid = uuid.uuid4()
-        self.shortid = str(self.uuid)[:8]
-        self.service = service
-        key_prefix = prepend_user_prefix(user_prefix, key_prefix)
-        self.name = '%s-%s' % (key_prefix, self.shortid)
-        try:
-            self.key_pair = self.service.create_key_pair(KeyName=self.name)
-        except TypeError:
-            self.key_pair = self.service.create_key_pair(name=self.name)
-        self.key_pair_name = self.key_pair.name
-        self.key_file = os.path.join(tempfile.gettempdir(),
-                                     '%s.pem' % self.name)
-        self.write_key_file()
-        logger = logging.getLogger('avocado.test')
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
-        self.log.info('Created')
-
-    def __str__(self):
-        return "Key Pair %s -> %s" % (self.name, self.key_file)
-
-    def write_key_file(self):
-        # key_material is the attribute for boto3
-        attr = 'key_material'
-        if hasattr(self.key_pair, 'private_key'):
-            # private_key is the attribute for libcloud
-            attr = 'private_key'
-        with open(self.key_file, 'w') as key_file_obj:
-            key_file_obj.write(getattr(self.key_pair, attr))
-        os.chmod(self.key_file, 0o400)
-
-    def destroy(self):
-        if hasattr(self.key_pair, 'delete'):
-            self.key_pair.delete()
-        else:
-            self.service.delete_key_pair(self.key_pair)
-        try:
-            remove_if_exists(self.key_file)
-        except OSError:
-            pass
-        self.log.info('Destroyed')
 
 
 class UserRemoteCredentials(object):
@@ -310,10 +280,9 @@ class BaseNode(object):
         self.name = name
         self.is_seed = False
         self.dc_idx = dc_idx
-        try:
-            self.logdir = path.init_dir(base_logdir, self.name)
-        except OSError:
-            self.logdir = os.path.join(base_logdir, self.name)
+
+        self.logdir = os.path.join(base_logdir, self.name)
+        os.makedirs(self.logdir)
 
         self._public_ip_address = None
         self._private_ip_address = None
@@ -321,7 +290,7 @@ class BaseNode(object):
 
         self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
-        logger = logging.getLogger('avocado.test')
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
 
@@ -1873,14 +1842,12 @@ class BaseCluster(object):
         self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
-        assert 'AVOCADO_TEST_LOGDIR' in os.environ
-        try:
-            self.logdir = path.init_dir(os.environ['AVOCADO_TEST_LOGDIR'],
-                                        self.name)
-        except OSError:
-            self.logdir = os.path.join(os.environ['AVOCADO_TEST_LOGDIR'],
-                                       self.name)
-        logger = logging.getLogger('avocado.test')
+        assert '_SCT_TEST_LOGDIR' in os.environ
+
+        self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'],
+                                   self.name)
+        os.makedirs(self.logdir)
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
@@ -3679,7 +3646,7 @@ class BaseMonitorSet(object):
 class NoMonitorSet(object):
 
     def __init__(self):
-        logger = logging.getLogger('avocado.test')
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.nodes = []
 

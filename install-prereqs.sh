@@ -29,7 +29,7 @@ usermod -aG docker $USER || true
 if [ "$1" == "docker" ]; then
     ln -s /sct/sdcm /usr/lib/python2.7/site-packages/sdcm
 else
-    grep -v '^#' requirements-python.txt | xargs -t -L 1 pip install
+    pip install -r requirements-python.txt
     pre-commit install
 
     ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm

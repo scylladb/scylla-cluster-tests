@@ -2,11 +2,14 @@ import time
 import logging
 import threading
 import Queue
+import atexit
+
 from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
 
-from avocado.utils import runtime as avocado_runtime
 import cluster
+
+loggger = logging.getLogger(__name__)
 
 
 def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):
@@ -29,8 +32,7 @@ def clean_openstack_instance(user, password, auth_version, auth_url, service_typ
         instance = [n for n in service.list_nodes() if n.name == instance_name][0]
         service.destroy_node(instance)
     except Exception as details:
-        test_logger = logging.getLogger('avocado.test')
-        test_logger.error(str(details))
+        loggger.error(str(details))
 
 
 def clean_openstack_credential(user, password, auth_version, auth_url, service_type, service_name, service_region,
@@ -42,8 +44,7 @@ def clean_openstack_credential(user, password, auth_version, auth_url, service_t
         service.delete_key_pair(key_pair)
         cluster.remove_if_exists(credential_key_file)
     except Exception as details:
-        test_logger = logging.getLogger('avocado.test')
-        test_logger.error(str(details))
+        loggger.error(str(details))
 
 
 class OpenStackNode(cluster.BaseNode):
@@ -137,18 +138,16 @@ class OpenStackCluster(cluster.BaseCluster):
             if cluster.OPENSTACK_SERVICE is None:
                 cluster.OPENSTACK_SERVICE = service
             if params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_openstack_credential,
-                                                               'args': (user,
-                                                                        password,
-                                                                        tenant,
-                                                                        auth_version,
-                                                                        auth_url,
-                                                                        service_type,
-                                                                        service_name,
-                                                                        service_region,
-                                                                        credential_key_name,
-                                                                        credential_key_file),
-                                                               'once': True})
+                atexit.register(clean_openstack_credential, user,
+                                password,
+                                tenant,
+                                auth_version,
+                                auth_url,
+                                service_type,
+                                service_name,
+                                service_region,
+                                credential_key_name,
+                                credential_key_file)
         cluster.CREDENTIALS.append(credentials)
 
         self._openstack_image = openstack_image

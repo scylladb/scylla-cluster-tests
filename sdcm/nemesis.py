@@ -38,8 +38,7 @@ from .log import SDCMAdapter
 from .keystore import KeyStore
 from . import prometheus
 from . import mgmt
-from avocado.utils import wait
-from . import wait as wait_wrap
+from . import wait
 
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 
@@ -55,7 +54,7 @@ class Nemesis(object):
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
         self.target_node = None
-        logger = logging.getLogger('avocado.test')
+        logger = logging.getLogger(__name__)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.set_target_node()
         result = self.target_node.remoter.run('rpm -qa | grep scylla | sort', verbose=False,
@@ -860,15 +859,16 @@ class Nemesis(object):
             result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/"')
             return 'repair-' in result.stdout
 
-        wait_wrap.wait_for(func=repair_streaming_exists,
-                           timeout=300,
-                           step=1,
-                           throw_exc=True,
-                           text='Wait for repair starts')
+        wait.wait_for(func=repair_streaming_exists,
+                      timeout=300,
+                      step=1,
+                      throw_exc=True,
+                      text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
         with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception"), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'):
+
             self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)
 

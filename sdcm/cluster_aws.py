@@ -4,11 +4,8 @@ import uuid
 import os
 import tempfile
 import yaml
-import getpass
 
 from botocore.exceptions import WaiterError, ClientError
-import boto3.session
-from avocado.utils import runtime as avocado_runtime
 from textwrap import dedent
 from threading import Thread
 
@@ -26,17 +23,6 @@ INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
-
-
-def clean_aws_credential(region_name, credential_key_name, credential_key_file):
-    try:
-        session = boto3.session.Session(region_name=region_name)
-        service = session.resource('ec2')
-        key_pair_info = service.KeyPair(credential_key_name)
-        key_pair_info.delete()
-        cluster.remove_if_exists(credential_key_file)
-    except Exception as details:
-        logger.exception(str(details))
 
 
 def create_tags_list():
@@ -68,15 +54,6 @@ class AWSCluster(cluster.BaseCluster):
             assert len(credentials) == len(region_names)
         for idx, region_name in enumerate(region_names):
             credential = credentials[idx]
-            if credential.type == 'generated':
-                credential_key_name = credential.key_pair_name
-                credential_key_file = credential.key_file
-                if params.get('failure_post_behavior') == 'destroy':
-                    avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                                   'args': (region_name,
-                                                                            credential_key_name,
-                                                                            credential_key_file),
-                                                                   'once': True})
             cluster.CREDENTIALS.append(credential)
 
         self._ec2_ami_id = ec2_ami_id
@@ -91,7 +68,6 @@ class AWSCluster(cluster.BaseCluster):
             ec2_block_device_mappings = []
         self._ec2_block_device_mappings = ec2_block_device_mappings
         self._ec2_user_data = ec2_user_data
-        self._ec2_ami_id = ec2_ami_id
         self.region_names = region_names
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
         self.params = params

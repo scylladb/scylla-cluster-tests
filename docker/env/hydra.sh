@@ -38,18 +38,13 @@ fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
 
-# TODO: remove once avocado will be gone
-# change ownership of avocado directories
-echo "Making sure the ownerships of avocado directories are of the user"
-sudo chown -R `whoami`:`whoami` ~/avocado &> /dev/null || true
-sudo chown -R `whoami`:`whoami` ${SCT_DIR}/test-results &> /dev/null || true
+# change ownership of results directories
+echo "Making sure the ownerships of results directories are of the user"
+sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true
+sudo chown -R `whoami`:`whoami` ${SCT_DIR}/sct-results &> /dev/null || true
 
 subcommand="$1"
-if [[ ${subcommand} == 'run' ]];  then
-    echo "run"
-    shift
-    CMD="avocado --show avocado.test:info run $@"
-elif [[ ${subcommand} == 'bash'* ]] || [[ ${subcommand} == 'avocado'* ]] || [[ ${subcommand} == 'python'* ]]; then
+if [[ ${subcommand} == 'bash'* ]] || [[ ${subcommand} == 'python'* ]]; then
     echo "running  ${subcommand}"
 else
     CMD="./sct.py $@"

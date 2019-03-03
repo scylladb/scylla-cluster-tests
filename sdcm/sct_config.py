@@ -14,6 +14,9 @@ import anyconfig
 
 from sdcm.utils import get_s3_scylla_repos_mapping, get_scylla_ami_versions
 
+logging.getLogger("anyconfig").setLevel(logging.ERROR)
+
+
 LOGGER = logging.getLogger(__name__)
 
 
