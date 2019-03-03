@@ -56,7 +56,7 @@ from . import cluster_baremetal
 from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
-
+from sdcm.sct_config import SCTConfiguration
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -144,6 +144,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                             params=params,
                                             base_logdir=base_logdir, tag=tag,
                                             job=job, runner_queue=runner_queue)
+
+        self.avocado_params = self.params
+        if os.environ.get('SCT_NEW_CONFIG', False):
+            self.params = SCTConfiguration()
+            self.params.verify_configuration()
+
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
         ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
@@ -160,6 +166,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
 
+        version_tag = self.params.get('version_tag')
+        if version_tag:
+            cluster.Setup.tags('version', version_tag)
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR

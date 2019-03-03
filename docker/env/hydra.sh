@@ -41,8 +41,22 @@ ${SCT_DIR}/get-qa-ssh-keys.sh
 # TODO: remove once avocado will be gone
 # change ownership of avocado directories
 echo "Making sure the ownerships of avocado directories are of the user"
-sudo chown -R `whoami`:`whoami` ~/avocado || echo "~/avocado doesn't exist, ignore error above"
-sudo chown -R `whoami`:`whoami` ${SCT_DIR}/test-results || echo "test-results doesn't exist, ignore error above"
+sudo chown -R `whoami`:`whoami` ~/avocado &> /dev/null || true
+sudo chown -R `whoami`:`whoami` ${SCT_DIR}/test-results &> /dev/null || true
+
+subcommand="$1"
+if [[ ${subcommand} == 'run' ]];  then
+    echo "run"
+    shift
+    CMD="avocado --show test run $@"
+elif [[ ${subcommand} == 'bash' ]] || [[ ${subcommand} == 'avocado' ]]; then
+    echo "running  ${subcommand}"
+else
+    CMD="./sct.py $@"
+fi
+
+# export all SCT_* env vars into the docker run
+SCT_OPTIONS=$(env | grep SCT_ | xargs -i echo '--env {}')
 
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
@@ -58,6 +72,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
     -u $(id -u ${USER}):$(id -g ${USER}) \
+    ${SCT_OPTIONS} \
     --net=host \
     scylladb/hydra:v${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"

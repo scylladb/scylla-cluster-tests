@@ -158,7 +158,7 @@ class LibvirtCluster(cluster.BaseCluster):
             cluster.LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
+                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': cluster.clean_domain,
                                                                'args': (name,),
                                                                'once': True})
             virt_install_cmd = ('virt-install --connect %s --name %s '

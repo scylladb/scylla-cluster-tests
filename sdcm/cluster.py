@@ -162,6 +162,8 @@ class Setup(object):
 
     _test_id = None
 
+    TAGS = dict()
+
     @classmethod
     def test_id(cls):
         if not cls._test_id:
@@ -188,6 +190,9 @@ class Setup(object):
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
 
+    @classmethod
+    def tags(cls, key, value):
+        cls.TAGS[key] = value
 
 def create_common_tags():
     username = os.environ.get('BUILD_USER', getpass.getuser())
@@ -199,6 +204,7 @@ def create_common_tags():
     if build_tag:
         tags["JenkinsJobTag"] = build_tag
 
+    tags.update(Setup.TAGS)
     return tags
 
 
@@ -1277,7 +1283,7 @@ server_encryption_options:
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, manager_backend_client_encrypt=None):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -2930,7 +2936,7 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
 
     def set_local_sct_ip(self):
         sct_public_ip = self.params.get('sct_public_ip')

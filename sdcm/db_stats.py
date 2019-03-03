@@ -281,24 +281,28 @@ class TestStatsMixin(Stats):
     def get_setup_details(self):
         exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
         setup_details = {}
-        is_gce = False
-        for p in self.params.iteritems():
-            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
-                is_gce = True
-        for p in self.params.iteritems():
-            if p[1] in exclude_details or p[1].startswith('stress_cmd'):
+        is_gce = self.params.get('cluster_backend') == 'gce'
+
+        if os.environ.get('SCT_NEW_CONFIG', False):
+            test_params = self.params.items()
+        else:
+            # take only values, don't care about paths
+            test_params = [(k, v) for _, k, v in self.avocado_params.items()]
+
+        for k, v in test_params:
+            if k in exclude_details or (isinstance(k, str) and k.startswith('stress_cmd')):
                 continue
             else:
-                if is_gce and (p[0], p[1]) in \
-                        [('/run', 'instance_type_loader'),
-                         ('/run', 'instance_type_monitor'),
-                         ('/run/databases/scylla', 'instance_type_db')]:
+                if is_gce and k in \
+                        ['instance_type_loader',
+                         'instance_type_monitor',
+                         'instance_type_db']:
                     # exclude these params from gce run
                     continue
-                elif p[1] == 'n_db_nodes' and isinstance(p[2], str) and re.search('\s', p[2]):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in p[2].split()])
+                elif k == 'n_db_nodes' and isinstance(v, str) and re.search(r'\s', v):  # multidc
+                    setup_details['n_db_nodes'] = sum([int(i) for i in v.split()])
                 else:
-                    setup_details[p[1]] = p[2]
+                    setup_details[k] = v
 
         new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
@@ -343,9 +347,9 @@ class TestStatsMixin(Stats):
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
         if sub_type:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
+            self._stats['test_details']['test_name'] = '{}_{}'.format(self.avocado_params.id.name, sub_type)
         else:
-            self._stats['test_details']['test_name'] = self.params.id.name
+            self._stats['test_details']['test_name'] = self.avocado_params.id.name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
         self.create()
