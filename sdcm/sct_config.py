@@ -166,6 +166,9 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_scylla_desc", env="SCT_AMI_ID_DB_SCYLLA_DESC", default=None, type=str, required=False,
              help="version name to report stats to Elasticsearch"),
 
+        dict(name="version_tag", env="SCT_VERSION_TAG", default=None, type=str, required=False,
+             help="version name to be tagged on cloud instances"),
+
         dict(name="store_results_in_elasticsearch", env="SCT_STORE_RESULTS_IN_ELASTICSEARCH", default=True, type=bool,
              required=True,
              help="save the results in elasticsearch"),

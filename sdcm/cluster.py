@@ -162,6 +162,8 @@ class Setup(object):
 
     _test_id = None
 
+    TAGS = dict()
+
     @classmethod
     def test_id(cls):
         if not cls._test_id:
@@ -188,6 +190,9 @@ class Setup(object):
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
 
+    @classmethod
+    def tags(cls, key, value):
+        cls.TAGS[key] = value
 
 def create_common_tags():
     username = os.environ.get('BUILD_USER', getpass.getuser())
@@ -199,6 +204,7 @@ def create_common_tags():
     if build_tag:
         tags["JenkinsJobTag"] = build_tag
 
+    tags.update(Setup.TAGS)
     return tags
 
 

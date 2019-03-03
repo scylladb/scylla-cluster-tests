@@ -1,0 +1,24 @@
+test_duration: 180
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
+             "cassandra-stress counter_write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=5 -pop seq=1..10000000"
+             ]
+cassandra_stress_threads: 1000
+cassandra_stress_population_size: 10000000
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+instance_type_loader: 'c3.xlarge'
+instance_type_monitor: 't3.small'
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 5
+user_prefix: 'longevity-10gb-3h'
+space_node_threshold: 64424
+experimental: true
+instance_provision: 'spot_low_price'
+db_type: scylla
+
+# in jenkins job
+# export SCT_REGION_NAME=eu-west-1
+# export SCT_AMI_ID_DB_SCYLLA=${scylla_ami_id}
+# export SCT_INSTANCE_TYPE_DB=${ec2_instance_types}
+# export SCT_FAILURE_POST_BEHAVIOR=${failure_post_behavior}
