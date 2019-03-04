@@ -98,10 +98,10 @@ def list_resources(ctx, user, test_id):
 
             for instance in instances:
                 x.add_row([instance['InstanceId'],
-                          [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name'][0],
-                          instance['PublicDnsName'],
-                          [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'TestId'][0],
-                          instance['LaunchTime'].ctime()])
+                           [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name'][0],
+                           instance['PublicDnsName'],
+                           [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'TestId'][0],
+                           instance['LaunchTime'].ctime()])
             click.echo(x.get_string(title="Resources used by '{}' in AWS".format(user)))
         else:
             click.secho("No resources found on AWS", fg='green')
@@ -144,9 +144,14 @@ def list_ami_versions(region):
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
-@click.option('-d', '--dist-type', type=click.Choice(['centos']), default='centos', help='Distribution type')
-def list_repos(dist_type):
-    repo_maps = get_s3_scylla_repos_mapping(dist_type)
+@click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']), default='centos', help='Distribution type')
+@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'jessie', 'stretch']), default=None, help='deb style versions')
+def list_repos(dist_type, dist_version):
+    if not dist_type == 'centos' and dist_version is None:
+        click.secho("when passing --dist-type=debian/ubutnu need to pass --dist-version as well", fg='red')
+        exit(1)
+
+    repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
     x = PrettyTable(["Version Family", "Repo Url"])
     x.align = "l"
