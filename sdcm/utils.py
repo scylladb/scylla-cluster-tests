@@ -18,6 +18,7 @@ import datetime
 import requests
 from functools import wraps
 from enum import Enum
+from collections import defaultdict
 
 import boto3
 from libcloud.compute.providers import get_driver
@@ -301,9 +302,9 @@ def list_instances_gce(tags_dict):
     for region in gce_regions:
         logger.info('going to cleanup gce region=%s', region)
         driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                               gcp_credentials["private_key"],
-                               datacenter=region,
-                               project=gcp_credentials["project_id"])
+                                gcp_credentials["private_key"],
+                                datacenter=region,
+                                project=gcp_credentials["project_id"])
 
         for node in driver.list_nodes():
             tags = node.extra['metadata'].get('items', [])
@@ -336,7 +337,7 @@ def get_scylla_ami_versions(region):
     response = EC2.describe_images(
         Owners=['797456418907'],  # ScyllaDB
         Filters=[
-          {'Name': 'name', 'Values': ['ScyllaDB *']},
+            {'Name': 'name', 'Values': ['ScyllaDB *']},
         ],
     )
 
@@ -347,32 +348,46 @@ def get_scylla_ami_versions(region):
     return _scylla_ami_cache
 
 
-_s3_scylla_repos_cache = {}
+_s3_scylla_repos_cache = defaultdict(dict)
 
 
-def get_s3_scylla_repos_mapping(dist_type='centos'):
+def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     """
-    get the mapping from version prefixes to .repo files locations
+    get the mapping from version prefixes to rpm .repo or deb .list files locations
 
-    :param dist_type: which distro to look up centos/debian
+    :param dist_type: which distro to look up centos/ubuntu/debian
+    :param dist_version: famaily name of the distro version
+
     :return: a mapping of versions prefixes to repos
     :rtype: dict
     """
-    if _s3_scylla_repos_cache:
-        return _s3_scylla_repos_cache
+    if (dist_type, dist_version) in _s3_scylla_repos_cache:
+        return _s3_scylla_repos_cache[(dist_type, dist_version)]
 
     s3_client = boto3.client('s3')
     bucket = 'downloads.scylladb.com'
 
     if dist_type == 'centos':
-        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos')
+        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/',  Delimiter='/')
 
         for f in response['Contents']:
             filename = os.path.basename(f['Key'])
             # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
             if filename.startswith('scylla-') and filename.endswith('.repo'):
                 version_prefix = filename.replace('.repo', '').split('-')[-1]
-                _s3_scylla_repos_cache[version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+                _s3_scylla_repos_cache[(dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+
+    elif dist_type == 'ubuntu' or dist_type == 'debian':
+        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type),  Delimiter='/')
+        for f in response['Contents']:
+            filename = os.path.basename(f['Key'])
+
+            # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
+            if filename.startswith('scylla-') and filename.endswith('-{}.list'.format(dist_version)):
+
+                version_prefix = filename.replace('-{}.list'.format(dist_version), '').split('-')[-1]
+                _s3_scylla_repos_cache[(dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
-    return _s3_scylla_repos_cache
+    return _s3_scylla_repos_cache[(dist_type, dist_version)]

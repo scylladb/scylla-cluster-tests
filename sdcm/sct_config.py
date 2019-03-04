@@ -99,7 +99,7 @@ class SCTConfiguration(dict):
         dict(name="failure_post_behavior", env="SCT_FAILURE_POST_BEHAVIOR", default='destroy', type=str, required=True,
              help="""
                 Failure/post test behavior. i.e. what to do with the cloud instances at the end of the test.
-                
+
                 'destroy' - Destroy instances and credentials (default)
                 'keep' - Keep instances running and leave credentials alone
                 'stop' - Stop instances and leave credentials alone
@@ -108,8 +108,8 @@ class SCTConfiguration(dict):
         dict(name="endpoint_snitch", env="SCT_ENDPOINT_SNITCH", default=None, type=str, required=False,
              help="""
                 The snitch class scylla would use
-                
-                'GossipingPropertyFileSnitch' - default 
+
+                'GossipingPropertyFileSnitch' - default
                 'Ec2MultiRegionSnitch' - default on aws backend
                 'GoogleCloudSnitch'
              """),
@@ -122,7 +122,7 @@ class SCTConfiguration(dict):
                 Type of IP used to connect to machine instances.
                 This depends on whether you are running your tests from a machine inside
                 your cloud provider, where it makes sense to use 'private', or outside (use 'public')
-                
+
                 Default: Use public IPs to connect to instances (public)
                 Use private IPs to connect to instances (private)
              """),
@@ -134,9 +134,13 @@ class SCTConfiguration(dict):
 
         dict(name="scylla_version", env="SCT_SCYLLA_VERSION",
              default=None, type=str, required=False,
-             help="""Version of scylla to install, ex. '2.3.1' 
-                     Automatically lookup AMIs and repo links for formal versions. 
+             help="""Version of scylla to install, ex. '2.3.1'
+                     Automatically lookup AMIs and repo links for formal versions.
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'"""),
+
+        dict(name="scylla_linux_distro", env="SCT_SCYLLA_LINUX_DISTRO",
+             default='centos', type=str, required=False,
+             help="""The distro name and family name to use [centos/ubuntu-xenial/debien-jessie]"""),
 
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M",
              default=None, type=str,
@@ -196,7 +200,7 @@ class SCTConfiguration(dict):
             `loaders_public_ip: []`
             `loaders_private_ip: []`
             `monitor_nodes_public_ip: []`
-            `monitor_nodes_private_ip: []` 
+            `monitor_nodes_private_ip: []`
          """),
 
         dict(name="test_id", env="SCT_TEST_ID", default=None, type=str, required=False,
@@ -267,9 +271,9 @@ class SCTConfiguration(dict):
         # Stress Commands
 
         dict(name="stress_cmd", env="SCT_STRESS_CMD", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
-                    be provided by the test suite infrastructure. 
+                    be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
         dict(name="gemini_url", env="SCT_GEMINI_URL", default=None, type=str, required=False,
@@ -540,15 +544,15 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="stress_read_cmd", env="SCT_STRESS_READ_CMD", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="prepare_verify_cmd", env="SCT_PREPARE_VERIFY_CMD", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
             You can specify everything but the -node parameter, which is going to
-            be provided by the test suite infrastructure. 
+            be provided by the test suite infrastructure.
             multiple commands can passed as a list"""),
 
         # MgmtCliTest
@@ -557,33 +561,33 @@ class SCTConfiguration(dict):
 
         # PerformanceRegressionTest
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
-                    be provided by the test suite infrastructure. 
+                    be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_r", env="SCT_STRESS_CMD_R", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
-                    be provided by the test suite infrastructure. 
+                    be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_m", env="SCT_STRESS_CMD_M", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
-                    be provided by the test suite infrastructure. 
+                    be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
         dict(name="prepare_write_cmd", env="SCT_PREPARE_WRITE_CMD", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
-                    be provided by the test suite infrastructure. 
+                    be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_no_mv", env="SCT_STRESS_CMD_NO_MV", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_no_mv_profile", env="SCT_STRESS_CMD_NO_MV_PROFILE", default=None, type=str, required=False,
@@ -624,64 +628,64 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="stress_cmd_1", env="SCT_STRESS_CMD_1", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_sst3_prepare", env="SCT_STRESS_CMD_SST3_PREPARE", default=None, type=str_or_list, required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="prepare_write_stress", env="SCT_PREPARE_WRITE_STRESS", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_read_10m", env="SCT_STRESS_CMD_READ_10M", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_read_clall", env="SCT_STRESS_CMD_READ_CLALL", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_read_20m", env="SCT_STRESS_CMD_READ_20M", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_sst3_verify_read", env="SCT_STRESS_CMD_SST3_VERIFY_READ", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_sst3_verify_more", env="SCT_STRESS_CMD_SST3_VERIFY_MORE", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
         dict(name="disable_read_repair_chance", env="SCT_DISABLE_READ_REPAIR_CHANCE", default=None, type=str_or_list,
              required=False,
-             help="""cassandra-stress commands. 
+             help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure. 
+                be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
     ]
 
@@ -779,6 +783,10 @@ class SCTConfiguration(dict):
 
         # 5) handle scylla_version if exists
         scylla_version = self.get('scylla_version', None)
+        scylla_linux_distro = self.get('scylla_linux_distro')
+        dist_type = scylla_linux_distro.split('-')[0]
+        dist_version = scylla_linux_distro.split('-')[-1]
+
         if scylla_version:
             # Look for the version, and return it's info ami + repo
             # According to backend, populate 'scylla_repo' or 'ami_id_db_scylla'
@@ -792,7 +800,7 @@ class SCTConfiguration(dict):
                     raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
 
             elif 'scylla_repo' not in self:
-                repo_map = get_s3_scylla_repos_mapping()
+                repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
                 for key in repo_map.keys():
                     if scylla_version.startswith(key):
@@ -803,6 +811,23 @@ class SCTConfiguration(dict):
 
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
+
+        # 6) support lookup of repos for upgrade test
+        new_scylla_version = self.get('new_version', None)
+        if new_scylla_version:
+            if 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
+                raise ValueError("'new_version' isn't supported for AWS AMIs")
+
+            elif 'new_scylla_repo' not in self:
+                repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
+
+                for key in repo_map.keys():
+                    if scylla_version.startswith(key):
+                        self['new_scylla_repo'] = repo_map[key]
+                        break
+                else:
+                    raise ValueError("repo for scylla version {} wasn't found".format(new_scylla_version))
+
         LOGGER.info(self.dump_config())
 
     @classmethod
@@ -812,7 +837,8 @@ class SCTConfiguration(dict):
     def _get_defaults(self):
         config_defaults = dict()
         for opt in self.config_options:
-            if 'default' not in opt: raise Exception(str(opt))
+            if 'default' not in opt:
+                raise Exception(str(opt))
             if opt['default'] is not None:
                 config_defaults[opt['name']] = opt['default']
         return config_defaults
@@ -908,8 +934,8 @@ class SCTConfiguration(dict):
         """
         header = """
             # scylla-cluster-tests configuration options
-            | Parameter | Description  | Default | Override environment<br>variable 
-            | :-------  | :----------  | :------ | :-------------------------------   
+            | Parameter | Description  | Default | Override environment<br>variable
+            | :-------  | :----------  | :------ | :-------------------------------
         """
 
         def strip_help_text(text):
@@ -1100,6 +1126,17 @@ if __name__ == "__main__":
             os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
             self.assertRaisesRegexp(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
+        def test_12_scylla_version_repo_ubuntu(self):
+            os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+            os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+            os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+            conf = SCTConfiguration()
+            conf.verify_configuration()
+
+            self.assertIn('scylla_repo', conf.dump_config())
+            self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+
         def test_config_dupes(self):
             import itertools
 
@@ -1109,7 +1146,8 @@ if __name__ == "__main__":
                 next(b, None)
                 r = None
                 for k, g in itertools.izip(a, b):
-                    if k != g: continue
+                    if k != g:
+                        continue
                     if k != r:
                         yield k
                         r = k
