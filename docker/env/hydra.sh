@@ -49,7 +49,7 @@ if [[ ${subcommand} == 'run' ]];  then
     echo "run"
     shift
     CMD="avocado --show test run $@"
-elif [[ ${subcommand} == 'bash' ]] || [[ ${subcommand} == 'avocado' ]]; then
+elif [[ ${subcommand} == 'bash' ]] || [[ ${subcommand} == 'avocado' ]] || [[ ${subcommand} == 'python' ]]; then
     echo "running  ${subcommand}"
 else
     CMD="./sct.py $@"
