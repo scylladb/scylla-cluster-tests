@@ -2,7 +2,8 @@
 from enum import Enum
 from textwrap import dedent
 
-from avocado.utils import process
+from invoke.exceptions import UnexpectedExit, Failure
+
 import requests
 import logging
 import json
@@ -625,7 +626,7 @@ class SCTool(object):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
-        except process.CmdError as e:
+        except (UnexpectedExit, Failure) as e:
             raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, e))
 
         if is_verify_errorless_result:

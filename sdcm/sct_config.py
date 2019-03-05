@@ -129,14 +129,6 @@ class SCTConfiguration(dict):
                 Default: Use public IPs to connect to instances (public)
                 Use private IPs to connect to instances (private)
              """),
-        dict(name="ssh_remote", env="SCT_SSH_REMOTE", default=None, type=str, required=False,
-             help="""
-             Define which module to use to connect and execute commands on remote unit.
-
-             In transition period to values are allowed:
-             'RemoteFabric' - define and use the fabric module to connect and execute command on remote host
-             ''(empty, not set) - use old functionality SSHSubprocess to connect and execute command on remote ost
-             """),
 
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO",
              default=None, type=str,

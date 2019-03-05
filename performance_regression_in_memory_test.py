@@ -1,4 +1,4 @@
-from avocado.utils.process import CmdError
+from invoke.exceptions import UnexpectedExit, Failure
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils import log_run_info, retrying
@@ -16,7 +16,7 @@ class InMemoryPerformanceRegressionTest(PerformanceRegressionTest):
         super(InMemoryPerformanceRegressionTest, self).__init__(*args, **kwargs)
 
     @log_run_info
-    @retrying(n=3, sleep_time=15, allowed_exceptions=(CmdError,))  # retrying since SSH can fail with 255
+    @retrying(n=3, sleep_time=15, allowed_exceptions=(UnexpectedExit, Failure))  # retrying since SSH can fail with 255
     def run_compaction_on_all_nodes(self):
         for node in self.db_cluster.nodes:
             node.run_nodetool("compact")

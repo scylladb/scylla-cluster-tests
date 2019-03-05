@@ -21,7 +21,6 @@ import boto3.session
 import libvirt
 import shutil
 from avocado import Test
-from avocado.utils.process import CmdError
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
@@ -57,6 +56,7 @@ from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
+from invoke.exceptions import UnexpectedExit, Failure
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -171,7 +171,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         elif cluster_backend == 'gce':
             cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
-        cluster.Setup.set_remote_runner(self.params.get('ssh_remote', default='Remote'))
 
         version_tag = self.params.get('version_tag')
         if version_tag:
@@ -1289,7 +1288,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # if all are zeros the result will be False, otherwise we are still sending
         return any([float(v[1]) for v in results[0]["values"]])
 
-    @retrying(n=30, sleep_time=60, allowed_exceptions=(AssertionError, CmdError))
+    @retrying(n=30, sleep_time=60, allowed_exceptions=(AssertionError, UnexpectedExit, Failure))
     def wait_for_hints_to_be_sent(self, node, num_dest_nodes):
         num_shards = self.get_num_shards(node)
         hints_after_send_completed = num_shards * num_dest_nodes

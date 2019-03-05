@@ -2,12 +2,13 @@ import json
 import time
 import logging
 import os
-from avocado.utils import process
 
 import cluster
 from sdcm.utils import retrying
+from remote import LocalCmdRunner
 
 logger = logging.getLogger(__name__)
+localrunner = LocalCmdRunner()
 
 BASE_NAME = 'db-node'
 LOADER_NAME = 'loader-node'
@@ -31,7 +32,7 @@ class CannotFindContainers(Exception):
 
 
 def _cmd(cmd, timeout=10, sudo=False):
-    res = process.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
+    res = localrunner.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
     if res.exit_status:
         if 'No such container:' in res.stderr:
             raise DockerContainerNotExists(res.stderr)

@@ -24,8 +24,9 @@ import string
 import threading
 import re
 
-from avocado.utils import process
 from cassandra import InvalidRequest
+
+from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
@@ -142,7 +143,7 @@ class Nemesis(object):
             self.log.debug("Command '%s' duration -> %s s", result.command,
                            result.duration)
             return result
-        except process.CmdError, details:
+        except (UnexpectedExit, Failure):
             err = ("nodetool command '%s' failed on node %s: %s" %
                    (cmd, node, details.result))
             self.error_list.append(err)
