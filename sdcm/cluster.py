@@ -31,18 +31,19 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from avocado.utils import path
-from avocado.utils import process
 from avocado.utils import script
 from datetime import datetime
 from .log import SDCMAdapter
-from .remote import Remote, RemoteFabric
-from .remote import disable_master_ssh
+from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
 from .db_stats import PrometheusDBStats
 
 from avocado.utils import runtime as avocado_runtime
+
+from invoke.exceptions import UnexpectedExit, Failure
+
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -74,6 +75,7 @@ SCYLLA_DIR = "/var/lib/scylla"
 
 
 logger = logging.getLogger(__name__)
+localrunner = LocalCmdRunner()
 
 
 def set_ip_ssh_connections(ip_type):
@@ -84,8 +86,6 @@ def set_ip_ssh_connections(ip_type):
 def set_duration(duration):
     global TEST_DURATION
     TEST_DURATION = duration
-    if TEST_DURATION >= 3 * 60:
-        disable_master_ssh()
 
 
 def set_libvirt_uri(libvirt_uri):
@@ -95,11 +95,11 @@ def set_libvirt_uri(libvirt_uri):
 
 def clean_domain(domain_name):
     global LIBVIRT_URI
-    process.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
-                ignore_status=True)
+    localrunner.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
+                       ignore_status=True)
 
-    process.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
-                ignore_status=True)
+    localrunner.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
+                       ignore_status=True)
 
 
 def remove_if_exists(file_path):
@@ -161,7 +161,6 @@ class Setup(object):
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
     MULTI_REGION = False
-    REMOTE = Remote
 
     _test_id = None
 
@@ -200,11 +199,6 @@ class Setup(object):
     @classmethod
     def tags(cls, key, value):
         cls.TAGS[key] = value
-
-    @classmethod
-    def set_remote_runner(cls, val='Remote'):
-        if 'fabric' in val.lower():
-            cls.REMOTE = RemoteFabric
 
 
 def create_common_tags():
@@ -320,7 +314,7 @@ class BaseNode(object):
         self._private_ip_address = None
         ssh_login_info['hostname'] = self.ssh_address
 
-        self.remoter = Setup.REMOTE(**ssh_login_info)
+        self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
         logger = logging.getLogger('avocado.test')
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
@@ -610,7 +604,7 @@ class BaseNode(object):
         Get coredump backtraces.
 
         :param last: Whether to only show the last backtrace.
-        :return: process.CmdResult output
+        :return: fabric.Result output
         """
         try:
             backtrace_cmd = 'sudo coredumpctl info'
@@ -911,7 +905,7 @@ class BaseNode(object):
         wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
             result = self.remoter.run('nodetool cfstats {}'.format(keyspace))
-        except process.CmdError:
+        except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
             raise
@@ -2917,7 +2911,7 @@ class BaseLoaderSet(object):
                 if loader_node.termination_event.isSet():
                     break
                 db_node = random.choice(db_nodes)
-                if db_node.remoter and not db_node.remoter.is_up():
+                if hasattr(db_node, 'remoter') and db_node.remoter and not db_node.remoter.is_up():
                     self.log.warning("Chosen node is down. Choose new one")
                     continue
                 self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
@@ -2984,7 +2978,7 @@ class BaseMonitorSet(object):
         self.configure_scylla_monitoring(node)
         try:
             self.start_scylla_monitoring(node)
-        except process.CmdError:
+        except (Failure, UnexpectedExit):
             self.reconfigure_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
@@ -3082,7 +3076,7 @@ class BaseMonitorSet(object):
                 yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
             node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
-            process.run("rm -rf {temp_dir}".format(**locals()))
+            localrunner.run("rm -rf {temp_dir}".format(**locals()))
         self._monitoring_targets = " ".join(db_targets_list)
         configure_script = dedent("""
             cd {0.monitor_install_path}
@@ -3121,7 +3115,7 @@ class BaseMonitorSet(object):
             node.remoter.run("chmod 777 %s" % f.name)
             node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
-    @retrying(n=5, sleep_time=10, allowed_exceptions=(process.CmdError,),
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
@@ -3156,9 +3150,9 @@ class BaseMonitorSet(object):
         def _register_grafana_json(json_filename):
             url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
             json_path = get_data_dir_path(json_filename)
-            result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
-                                 (url, json_path), ignore_status=True)
-            return result.exit_status == 0
+            result = localrunner.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+                                     (url, json_path))
+            return result.exited == 0
 
         wait.wait_for(_register_grafana_json, step=10,
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
@@ -3195,10 +3189,10 @@ class BaseMonitorSet(object):
                 curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
-            process.run("bash -ce '%s'" % install_phantom_js_script)
-            process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                        "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
-                        shell=True)
+            localrunner.run("bash -ce '%s'" % install_phantom_js_script)
+            localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && "
+                            "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
+                            shell=True)
             self.phantomjs_installed = True
         else:
             self.log.debug("PhantomJS is already installed!")
@@ -3235,9 +3229,8 @@ class BaseMonitorSet(object):
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
                                                  "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
-                    process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                                "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
-                                    grafana_url, snapshot_path), shell=True)
+                    localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && "
+                                    "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (grafana_url, snapshot_path), shell=True)
                 # since there is only one monitoring node returning here
                     screenshots.append(S3Storage.upload_file(snapshot_path, prefix=Setup.test_id()))
                 return screenshots
