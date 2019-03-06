@@ -14,22 +14,22 @@ stress_read_cmd: ["cassandra-stress read         cl=QUORUM duration=10080m      
                   "cassandra-stress read         cl=QUORUM duration=10020m -schema 'replication(factor=3) compression=SnappyCompressor compaction(strategy=SizeTieredCompactionStrategy)'  -port jmx=6868 -mode cql3 native compression=snappy -rate threads=20 -pop seq=1..50000000 -log interval=5",
                   "cassandra-stress read         cl=QUORUM duration=10030m -schema 'replication(factor=3) compression=DeflateCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=none   -rate threads=20 -pop seq=1..50000000 -log interval=5",
                   "cassandra-stress counter_read cl=QUORUM duration=10080m                                                                                                                 -port jmx=6868 -mode cql3 native                    -rate threads=10 -pop seq=1..10000000"]
+run_fullscan: 'random, 30'
 n_db_nodes: 4
 n_loaders: 2
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
-nemesis_during_prepare: 'false'
+nemesis_during_prepare: 'true'
 user_prefix: 'longevity-1tb-7d-VERSION'
 failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
-# append_conf: 'enable_sstable_data_integrity_check: true'
 append_scylla_args: '--blocked-reactor-notify-ms 500'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
+instance_provision: 'mixed'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
@@ -61,8 +61,8 @@ backends: !mux
           gce_datacenter: 'us-east1-b'
     aws: !mux
         cluster_backend: 'aws'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_loader: 'c5.large'
+        instance_type_monitor: 't3.small'
         instance_type_db: 'i3.4xlarge'
         us_east_1:
             region_name: 'us-east-1'

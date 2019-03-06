@@ -8,6 +8,7 @@ stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.y
                   "cassandra-stress user profile=/tmp/c-s_profile_2si_2queries.yaml ops'(insert=10,si_p_read1=1,si_p_read2=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"
 
                  ]
+run_fullscan: 'random, 15'
 n_db_nodes: 5
 n_loaders: 2
 n_monitor_nodes: 1
@@ -18,14 +19,12 @@ user_prefix: 'longevity-mv-si-4d-VERSION'
 failure_post_behavior: keep
 space_node_threshold: 644245
 ip_ssh_connections: 'private'
-#When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across the loaders (round_robin)
 round_robin: 'false'
 experimental: 'true'
-# append_conf: 'enable_sstable_data_integrity_check: true'
-append_scylla_args: '--blocked-reactor-notify-ms 1000 --enable-sstables-mc-format true'
+append_scylla_args: '--blocked-reactor-notify-ms 500'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
+instance_provision: 'mixed'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
@@ -59,7 +58,7 @@ backends: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
         instance_type_loader: 'c4.large'
-        instance_type_monitor: 't2.small'
+        instance_type_monitor: 't3.small'
         instance_type_db: 'i3.4xlarge'
         us_east_1:
             region_name: 'us-east-1'

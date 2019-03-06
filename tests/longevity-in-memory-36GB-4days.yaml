@@ -4,6 +4,7 @@ prepare_write_cmd: ["cassandra-stress write         cl=QUORUM n=21000000     -sc
 stress_cmd:        ["cassandra-stress mixed         cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 stress_read_cmd:   ["cassandra-stress read          cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10",
                     "cassandra-stress counter_read  cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10  -pop seq=1..12345678"]
+run_fullscan: 'random, 5' # 'ks.cf|random, interval(min)''
 n_db_nodes: 5
 n_loaders: 2
 n_monitor_nodes: 1
@@ -22,7 +23,7 @@ client_encrypt: 'false'
 append_scylla_args: '--blocked-reactor-notify-ms 500 --in-memory-storage-size-mb 80000'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
+instance_provision: 'mixed'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
@@ -57,7 +58,7 @@ backends: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
         instance_type_loader: 'c4.2xlarge'
-        instance_type_monitor: 't2.small'
+        instance_type_monitor: 't3.small'
         instance_type_db: 'i3.4xlarge'
         us_east_1:
             region_name: 'us-east-1'

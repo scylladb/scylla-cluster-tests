@@ -1,13 +1,14 @@
-test_duration: 2860
+test_duration: 3000
 prepare_write_cmd:  "cassandra-stress write cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
-prepare_verify_cmd: "cassandra-stress read  cl=ALL n=200200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
 stress_cmd: "cassandra-stress write cl=QUORUM duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
 stress_read_cmd: "cassandra-stress read cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=3,us-west-2scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..200200300"
-n_db_nodes: '3 3'
+run_fullscan: 'random, 30'
+n_db_nodes: '4 3'
 n_loaders: 1
 n_monitor_nodes: 1
 nemesis_class_name: 'LimitedChaosMonkey'
 nemesis_interval: 5
+nemesis_during_prepare: 'false'
 user_prefix: longevity-multidc-200gb-vfy-VERSION
 failure_post_behavior: keep
 space_node_threshold: 6442
@@ -25,13 +26,10 @@ scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/s
 
 backends: !mux
     aws: !mux
-        # What is the backend that the suite will use to get machines from.
         cluster_backend: 'aws'
-        # From 0.19 on, iotune will require bigger disk, so let's use a big
-        # loader instance by default.
-        instance_type_loader: 'c4.large'
-        # Size of AWS monitor instance
-        instance_type_monitor: 't2.small'
+        instance_provision: 'mixed'
+        instance_type_loader: 'c5.large'
+        instance_type_monitor: 't3.small'
         us_east_1_and_us_west_2:
             user_credentials_path: '~/.ssh/scylla-qa-ec2'
             region_name: 'us-east-1 us-west-2'
