@@ -100,18 +100,18 @@ class EC2Client(object):
                              'InstanceType': instance_type,
                              'NetworkInterfaces': network_if,
                              'Placement': {'AvailabilityZone': region_name},
+                             'TagSpecifications': [
+                                 {
+                                     'ResourceType': 'instance',
+                                     'Tags': tags_list
+                                 }
+
+                             ]
                              },
                         ],
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
-                        'TagSpecifications': [
-                            {
-                                'ResourceType': 'instance',
-                                'Tags': tags_list
-                            }
-
-                        ]
                         }
         if key_pair:
             fleet_config['LaunchSpecifications'][0].update({'KeyName': key_pair})
