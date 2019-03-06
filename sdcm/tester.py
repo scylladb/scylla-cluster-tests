@@ -175,6 +175,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
 
+    @property
+    def test_duration(self):
+        return self._duration
+
     def get_duration(self, duration):
         """Calculate duration based on test_duration
 
@@ -187,7 +191,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             int -- time duration in seconds
         """
         if not duration:
-            duration = self._duration
+            duration = self.test_duration
         return duration * 60 + 600
 
     @clean_resources_on_exception
@@ -725,9 +729,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           keyspace_name='', round_robin=False, stats_aggregate_cmds=True):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
+        timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread(stress_cmd, timeout,
@@ -741,9 +743,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     @clean_resources_on_exception
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
+
+        timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
@@ -752,9 +753,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     @clean_resources_on_exception
     def run_gemini(self, cmd, duration=None):
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
+
+        timeout = self.get_duration(duration)
         time.sleep(30)
         return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
                                               test_node=self.db_cluster.nodes[0].private_ip_address,
