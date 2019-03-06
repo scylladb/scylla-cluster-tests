@@ -2,6 +2,7 @@
 test_duration: 3600
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=48h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..4000000 -log interval=90"]
+run_fullscan: 'random, 30'
 keyspace_num: 1000
 batch_size: 100
 nemesis_class_name: 'ChaosMonkey'
@@ -18,7 +19,7 @@ store_results_in_elasticsearch: False
 
 # Scylla Args
 experimental: 'true'
-append_scylla_args: '--blocked-reactor-notify-ms 1000'
+append_scylla_args: '--blocked-reactor-notify-ms 500'
 
 # Manager
 use_mgmt: true
@@ -31,9 +32,9 @@ backends: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
         instance_type_loader: 'c5.4xlarge'
-        instance_type_monitor: 't2.large'
+        instance_type_monitor: 't3.large'
         instance_type_db: 'i3.8xlarge'
-        instance_provision: 'spot_low_price'
+        instance_provision: 'mixed'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-5e79983a'

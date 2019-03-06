@@ -49,8 +49,8 @@ backends: !mux
     aws: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
+        instance_type_loader: 'c5.2xlarge'
+        instance_type_monitor: 't3.small'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'

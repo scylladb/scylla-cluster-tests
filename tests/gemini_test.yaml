@@ -31,7 +31,7 @@ backends: !mux
     aws: !mux
         cluster_backend: 'aws'
         instance_type_loader: 'c4.2xlarge'
-        instance_type_monitor: 't2.small'
+        instance_type_monitor: 't3.small'
         user_credentials_path: '~/.ssh/scylla-test'
         us_east_1:
             region_name: 'us-east-1'
