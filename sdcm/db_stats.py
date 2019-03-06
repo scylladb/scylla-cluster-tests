@@ -334,7 +334,7 @@ class TestStatsMixin(Stats):
         system_details.update({'sys_info_data_url': s3_link_to_archive})
         return system_details
 
-    def create_test_stats(self, sub_type=None):
+    def create_test_stats(self, sub_type=None, specific_tested_stats = None):
         self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
@@ -347,6 +347,9 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = self.params.id.name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
+        if specific_tested_stats:
+            self._stats['results'].update(specific_tested_stats)
+            self.log.info("Creating specific tested stats of: {}".format(specific_tested_stats))
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
@@ -465,7 +468,9 @@ class TestStatsMixin(Stats):
         self.log.info('Path to archive file: %s' % archive)
         return archive
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None, dict_specific_tested_stats=None):
+
+
         if self.create_stats:
             update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -497,4 +502,11 @@ class TestStatsMixin(Stats):
             if system_details:
                 update_data.update({'system_details': system_details})
 
+            if dict_specific_tested_stats and len(dict_specific_tested_stats) > 0:
+                self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
+                for k, v in dict_specific_tested_stats.items():
+                    self.log.debug("k: {} v: {}".format(k, v))
+                self._stats['results'].update(dict_specific_tested_stats)
+                update_data.update(dict_specific_tested_stats)
+            self.log.debug("The total data to update is: {}".format(update_data))
             self.update(update_data)
