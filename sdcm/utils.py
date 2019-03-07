@@ -197,7 +197,8 @@ class S3Storage(object):
             return ""
 
 
-aws_regions = ['us-east-1', 'us-west-2', 'eu-west-1']
+
+aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
 gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
 
 
