@@ -188,7 +188,7 @@ class AWSCluster(cluster.BaseCluster):
                 if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
                     self.log.debug('Cannot create spot instance(-s): %s.'
                                    'Creating on demand instance(-s) instead.', cl_ex)
-                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
                     instances.extend(instances_i)
                 else:
                     raise

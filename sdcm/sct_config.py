@@ -129,7 +129,7 @@ class SCTConfiguration(dict):
         dict(name="ssh_remote", env="SSH_REMOTE", default=None, type=str, required=False,
              help="""
              Define which module to use to connect and execute commands on remote unit.
-             
+
              In transition period to values are allowed:
              'RemoteFabric' - define and use the fabric module to connect and execute command on remote host
              ''(empty, not set) - use old functionality SSHSubprocess to connect and execute command on remote ost
@@ -343,7 +343,7 @@ class SCTConfiguration(dict):
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", default=None, type=str, required=False,
              help=""),
 
-        dict(name="instance_provision", env="SCT_AMI_DB_CASSANDRA_USER", default='spot_low_price', type=str, required=False,
+        dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", default='spot_low_price', type=str, required=False,
              help=" aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
 
         # GCE config options
