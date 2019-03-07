@@ -589,7 +589,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
         )
-        if len(self.datacenter) > 1:
+        if cluster.Setup.MULTI_REGION:
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,
@@ -599,7 +599,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if len(self.datacenter) > 1:
+        if cluster.Setup.MULTI_REGION:
             seed_address = self.get_seed_nodes_by_flag(private_ip=False)
         else:
             seed_address = self.get_seed_nodes_by_flag(private_ip=True)
@@ -634,7 +634,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
             node.wait_ssh_up(verbose=verbose)
             wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
-            if len(self.datacenter) > 1:
+            if cluster.Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)

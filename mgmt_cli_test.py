@@ -22,6 +22,7 @@ from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
+from sdcm.cluster import Setup
 
 
 class MgmtCliTest(ClusterTester):
@@ -82,7 +83,7 @@ class MgmtCliTest(ClusterTester):
 
     def _get_cluster_hosts_with_ips(self):
         ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
-            len(self.db_cluster.datacenter) > 1 else 'private_ip_address'
+            Setup.MULTI_REGION else 'private_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in self.db_cluster.nodes]
 
     def test_manager_sanity(self):

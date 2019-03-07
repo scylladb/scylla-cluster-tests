@@ -72,7 +72,7 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
 
-    available_backends = ['aws', 'gce', 'docker', 'libvirt', 'baremetal', 'openstack']
+    available_backends = ['aws', 'gce', 'docker', 'libvirt', 'baremetal', 'openstack', 'aws-siren']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", default=None, type=str_or_list, required=True,
@@ -117,7 +117,10 @@ class SCTConfiguration(dict):
         dict(name="user_credentials_path", env="SCT_USER_CREDENTIALS_PATH", default='~/.ssh/scylla-test', type=str, required=True,
              help="""Path to your user credentials. qa key are downloaded automatically from S3 bucket"""),
 
-        dict(name="ip_ssh_connections", env="SCT_IP_SSH_CONNECTIONS", default='public', type=str, required=False,
+        dict(name="cloud_credentials_path", env="SCT_CLOUD_CREDENTIALS_PATH", default='~/.ssh/support', type=str, required=True,
+             help="""Path to your user credentials. qa key are downloaded automatically from S3 bucket"""),
+
+        dict(name="ip_ssh_connections", env="SCT_IP_SSH_CONNECTIONS", default='private', type=str, required=False,
              help="""
                 Type of IP used to connect to machine instances.
                 This depends on whether you are running your tests from a machine inside
@@ -254,6 +257,12 @@ class SCTConfiguration(dict):
         dict(name="authenticator", env="SCT_AUTHENTICATOR", default=None, type=str, required=False,
              help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator"),
 
+        dict(name="authenticator_user", env="SCT_AUTHENTICATOR_USER", default=None, type=str, required=False,
+             help="the username if PasswordAuthenticator is used"),
+
+        dict(name="authenticator_password", env="SCT_AUTHENTICATOR_PASSWORD", default=None, type=str, required=False,
+             help="the password if PasswordAuthenticator is used"),
+
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS", default=None, type=str, required=False,
              help="More arguments to append to scylla command line"),
 
@@ -275,6 +284,8 @@ class SCTConfiguration(dict):
                  This value is supposed to reproduce
                  https://github.com/scylladb/scylla/issues/1140
              """),
+        dict(name="nemesis_filter_seeds", env="SCT_NEMESIS_FILTER_SEEDS", default=True, type=boolean, required=False,
+             help="""If true runs the nemesis only on non seed nodes"""),
 
         # Stress Commands
 
@@ -468,10 +479,10 @@ class SCTConfiguration(dict):
         dict(name="db_nodes_public_ip", env="SCT_DB_NODES_PUBLIC_IP", default=None, type=str_or_list, required=False,
              help=""),
 
-        dict(name="loader_nodes_private_ip", env="SCT_LOADER_NODES_PRIVATE_IP", default=None, type=str_or_list, required=False,
+        dict(name="loaders_private_ip", env="SCT_LOADERS_PRIVATE_IP", default=None, type=str_or_list, required=False,
              help=""),
 
-        dict(name="loader_nodes_public_ip", env="SCT_LOADER_NODES_PUBLIC_IP", default=None, type=str_or_list, required=False,
+        dict(name="loaders_public_ip", env="SCT_LOADERS_PUBLIC_IP", default=None, type=str_or_list, required=False,
              help=""),
 
         dict(name="monitor_nodes_private_ip", env="SCT_MONITOR_NODES_PRIVATE_IP", default=None, type=str_or_list,
@@ -540,7 +551,7 @@ class SCTConfiguration(dict):
         # LongevityTest
         dict(name="stress_multiplier", env="SCT_STRESS_MULTIPLIER", default=None, type=int, required=False,
              help=""),
-        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", default=None, type=boolean, required=False,
+        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", default=None, type=str, required=False,
              help=""),
         dict(name="keyspace_num", env="SCT_KEYSPACE_NUM", default=None, type=int, required=False,
              help=""),
@@ -722,7 +733,10 @@ class SCTConfiguration(dict):
         'openstack': ['openstack_user', 'openstack_password', 'openstack_tenant', 'openstack_auth_version',
                       'openstack_auth_url', 'openstack_service_type', 'openstack_service_name', 'openstack_service_region',
                       'openstack_instance_type_loader', 'openstack_instance_type_db', 'openstack_instance_type_monitor',
-                      'openstack_image', 'openstack_image_username', 'openstack_network']
+                      'openstack_image', 'openstack_image_username', 'openstack_network'],
+        'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "security_group_ids", "subnet_id",
+                      "cloud_credentials_path", "authenticator_user",  "authenticator_password", "db_nodes_public_ip",
+                      "db_nodes_private_ip", "nemesis_filter_seeds"]
     }
 
     defaults_config_files = {
@@ -731,7 +745,8 @@ class SCTConfiguration(dict):
         "docker": ['defaults/docker_config.yaml'],
         "libvirt": ['defaults/libvirt_config.yaml'],
         "baremetal": [],
-        "openstack": ['defaults/openstack_config.yaml']
+        "openstack": ['defaults/openstack_config.yaml'],
+        "aws-siren": ['defaults/aws_config.yaml']
     }
 
     multi_region_params = [
