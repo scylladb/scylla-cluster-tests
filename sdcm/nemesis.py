@@ -28,7 +28,7 @@ from avocado.utils import process
 from cassandra import InvalidRequest
 
 from sdcm.cluster_aws import ScyllaAWSCluster
-from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
+from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
 from .utils import get_data_dir_path, retrying
 from .log import SDCMAdapter
@@ -80,10 +80,13 @@ class Nemesis(object):
             self.tester.update({'nemesis': self.stats})
 
     def set_target_node(self):
-        non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
-        # if non_seed_nodes is empty, nemesis failed. 
-        # TODO need checks
-        self.target_node = random.choice(non_seed_nodes)
+        filter_seed = self.cluster.params.get('nemesis_filter_seeds', default=True)
+        if filter_seed:
+            non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed]
+            # if non_seed_nodes is empty, nemesis would failed.
+            self.target_node = random.choice(non_seed_nodes)
+        else:
+            self.target_node = random.choice(self.cluster.nodes)
         self.log.info('Current Target: %s', self.target_node)
 
     def set_termination_event(self, termination_event):
@@ -550,7 +553,11 @@ class Nemesis(object):
     def _run_in_cqlsh(self, cmd, node=None):
         if not node:
             node = self.target_node
-        node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+
+        cql_auth = self.cluster.get_cql_auth()
+        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
+
+        node.remoter.run('cqlsh {} -e "{}" {}'.format(cql_auth, cmd, node.private_ip_address), verbose=True)
 
     def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
@@ -724,7 +731,7 @@ class Nemesis(object):
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                Setup.MULTI_REGION else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
@@ -748,7 +755,7 @@ class Nemesis(object):
             cluster_id = mgmt_client.get_cluster(cluster_name)
             if not cluster_id:
                 ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                    len(self.cluster.datacenter) > 1 else 'private_ip_address'
+                    Setup.MULTI_REGION else 'private_ip_address'
                 targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
                 cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
             repair_timeout = 36 * 60 * 60  # 36 hours
@@ -1057,6 +1064,20 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_stop_wait_start_scylla_server',
                                                          'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
                                                          'disrupt_restart_then_repair_node', 'disrupt_truncate'])
+
+
+class ScyllaCloudLimitedChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup',
+                                                         'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
+                                                         'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
+                                                         'disrupt_modify_table', 'disrupt_nodetool_enospc',
+                                                         'disrupt_stop_wait_start_scylla_server',
+                                                         'disrupt_soft_reboot_node',
+                                                         'disrupt_truncate'])
 
 
 class AllMonkey(Nemesis):

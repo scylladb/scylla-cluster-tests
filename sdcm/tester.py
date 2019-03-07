@@ -165,6 +165,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.Setup.set_test_id(self.params.get('test_id'))
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
+        cluster.Setup.set_multi_region(self.params.get('region_name').split() > 1)
         cluster.Setup.set_remote_runner(self.params.get('ssh_remote', default='Remote'))
 
         version_tag = self.params.get('version_tag')
@@ -506,6 +507,20 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     ec2_ami_id=self.params.get('ami_id_db_oracle').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
                     **cl_params)
+            elif db_type == 'cloud_scylla':
+                cloud_credentials = self.params.get('cloud_credentials_path', None)
+
+                credentials = [UserRemoteCredentials(key_file=cloud_credentials)]
+                params = dict(
+                    n_nodes=[self.params.get('n_db_nodes')],
+                    public_ips=self.params.get('db_nodes_public_ip', None),
+                    private_ips=self.params.get('db_nodes_private_ip', None),
+                    user_prefix=self.params.get('user_prefix', None),
+                    credentials=credentials,
+                    params=self.params,
+                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                )
+                return cluster_baremetal.ScyllaPhysicalCluster(**params)
 
         db_type = self.params.get('db_type')
         if db_type in ('scylla', 'cassandra'):
@@ -516,6 +531,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         elif db_type == 'mixed_scylla':
             self.db_cluster = create_cluster('scylla')
             self.cs_db_cluster = create_cluster('mixed_scylla')
+        elif db_type == 'cloud_scylla':
+            self.db_cluster = create_cluster('cloud_scylla')
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
@@ -679,7 +696,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if cluster_backend is None:
             cluster_backend = 'aws'
 
-        if cluster_backend == 'aws':
+        if cluster_backend == 'aws' or cluster_backend == 'aws-siren':
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
         elif cluster_backend == 'libvirt':
@@ -710,7 +727,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            if len(self.db_cluster.datacenter) > 1:
+            if cluster.Setup.MULTI_REGION:
                 ips = [ip for ip in self.db_cluster.get_node_public_ips()]
                 ip = ','.join(ips)
             else:
@@ -820,7 +837,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         interval = interval * 60
         self.loaders.run_fullscan_thread(ks_cf,
                                          db_nodes=self.db_cluster.nodes,
-                                         datacenter=self.db_cluster.datacenter,
                                          interval=interval,
                                          duration=duration)
 
@@ -839,8 +855,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         authenticator = self.params.get('authenticator')
         if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = 'cassandra'
-            password = 'cassandra'
+            user = self.params.get('authenticator_user', default='cassandra')
+            password = self.params.get('authenticator_password', default='cassandra')
 
         if user is not None:
             auth_provider = self.get_auth_provider(user=user,

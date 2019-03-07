@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 SSH_KEYS_DIR=~/.ssh
-QA_PRIVATE_KEY_NAMES="scylla-qa-ec2 scylla-test"
+QA_PRIVATE_KEY_NAMES="scylla-qa-ec2 scylla-test support"
 echo "Obtaining QA SSH keys..."
 for pkey_name in ${QA_PRIVATE_KEY_NAMES}
 do

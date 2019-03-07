@@ -91,10 +91,10 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def destroy(self):
         logger.info('Destroy nodes')
         for node in self.nodes:
-            node.destroy(force=True)
+            node.destroy()
 
 
-class ScyllaPhysicalCluster(PhysicalMachineCluster, cluster.BaseScyllaCluster):
+class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
         self._user_prefix = kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX)
@@ -108,7 +108,7 @@ class ScyllaPhysicalCluster(PhysicalMachineCluster, cluster.BaseScyllaCluster):
         We have to modify scylla.yaml on our own because we are not on AWS,
         where there are auto config scripts in place.
         """
-        self._node_setup(node, verbose)
+        pass  # self._node_setup(node, verbose)
 
 
 class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):

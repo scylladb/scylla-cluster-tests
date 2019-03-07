@@ -64,7 +64,7 @@ DEFAULT_USER_PREFIX = getpass.getuser()
 TEST_DURATION = 60
 # max limit of coredump file can be uploaded(5 GB)
 COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
-IP_SSH_CONNECTIONS = 'public'
+IP_SSH_CONNECTIONS = 'private'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -159,7 +159,7 @@ class Setup(object):
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
-
+    MULTI_REGION = False
     REMOTE = Remote
 
     _test_id = None
@@ -176,6 +176,10 @@ class Setup(object):
     def set_test_id(cls, new_test_id):
         if new_test_id:
             cls._test_id = new_test_id
+
+    @classmethod
+    def set_multi_region(cls, multi_region):
+        cls.MULTI_REGION = multi_region
 
     @classmethod
     def reuse_cluster(cls, val=False):
@@ -313,9 +317,7 @@ class BaseNode(object):
 
         self._public_ip_address = None
         self._private_ip_address = None
-        self._ssh_ip_mapping = {'public': self.public_ip_address,
-                                'private': self.private_ip_address}
-        ssh_login_info['hostname'] = self._ssh_ip_mapping[IP_SSH_CONNECTIONS]
+        ssh_login_info['hostname'] = self.ip_address()
 
         self.remoter = Setup.REMOTE(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
@@ -484,11 +486,15 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
-    def ip_address(self, datacenter):
-        if (self.is_docker() or self.is_gce()) and len(datacenter) > 1:
+    def ip_address(self):
+        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
             return self.public_ip_address
         else:
             return self.private_ip_address
+
+    @property
+    def is_spot(self):
+        return False
 
     @property
     def init_system(self):
@@ -1549,6 +1555,11 @@ server_encryption_options:
             logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
                          format(murmur3_partitioner_ignore_msb_bits))
 
+    def get_cql_auth(self):
+        user = self.params.get('authenticator_user', default=None)
+        password = self.params.get('authenticator_password', default=None)
+        return (user, password) if user and password else None
+
 
 class BaseCluster(object):
 
@@ -1697,6 +1708,11 @@ class BaseCluster(object):
     def terminate_node(self, node):
         self.nodes.remove(node)
         node.destroy()
+
+    def get_cql_auth(self):
+        user = self.params.get('authenticator_user', default=None)
+        password = self.params.get('authenticator_password', default=None)
+        return (user, password) if user and password else None
 
 
 class NodeSetupFailed(Exception):
@@ -2091,7 +2107,9 @@ class BaseScyllaCluster(object):
                         self.log.error("Unknown ScyllaDB version")
 
     def run_cqlsh(self, node, cql_cmd, timeout=60, verbose=True, split=False):
-        cmd = 'cqlsh --no-color -e "{}" {} --request-timeout={}'.format(cql_cmd, node.private_ip_address, timeout)
+        cql_auth = self.get_cql_auth()
+        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
+        cmd = 'cqlsh --no-color {} -e "{}" {} --request-timeout={}'.format(cql_auth, cql_cmd, node.private_ip_address, timeout)
         cqlsh_out = node.remoter.run(cmd, timeout=timeout, verbose=verbose)
         # stdout of cqlsh example:
         #      pk
@@ -2198,7 +2216,7 @@ class BaseScyllaCluster(object):
             node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
-            if len(self.datacenter) > 1:
+            if Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = 'GossipingPropertyFileSnitch'
                 node.datacenter_setup(self.datacenter)
@@ -2396,7 +2414,13 @@ class BaseLoaderSet(object):
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
-                stress_cmd += " -node {}".format(first_node.private_ip_address)
+                stress_cmd += " -node {}".format(first_node.ip_address())
+
+            cql_auth = self.get_cql_auth()
+            if cql_auth and 'user=' not in stress_cmd:
+                # put the credentials into the right place into -mode section
+                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
+
             stress_cmd_opt = stress_cmd.split()[1]
             cs_pipe_name = '/tmp/cs_{}_pipe_$1_$2'.format(stress_cmd_opt)
             stress_cmd = "mkfifo {}; cat {}|python /usr/bin/cassandra_stress_exporter {} & ".format(cs_pipe_name,
@@ -2844,7 +2868,7 @@ class BaseLoaderSet(object):
 
         return result
 
-    def run_fullscan_thread(self, ks_cf, db_nodes, datacenter, interval=60, duration=60):
+    def run_fullscan_thread(self, ks_cf, db_nodes, interval=60, duration=60):
         """Run in thread request from loader node
 
         Run on randomly choosen loader node the cql request to
@@ -2872,7 +2896,7 @@ class BaseLoaderSet(object):
                     continue
                 self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
 
-                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address(datacenter))
+                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address())
                 self.log.debug(result)
                 self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
                 time.sleep(interval)
@@ -3009,7 +3033,7 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
-        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+        db_targets_list = [n.ip_address() for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3021,7 +3045,7 @@ class BaseMonitorSet(object):
             with open(local_template_tmp) as f:
                 templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["%s:9103" % n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["loaders"].nodes]
+            loader_targets_list = ["%s:9103" % n.ip_address() for n in self.targets["loaders"].nodes]
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))

@@ -56,7 +56,7 @@ else
 fi
 
 # export all SCT_* env vars into the docker run
-SCT_OPTIONS=$(env | grep SCT_ | xargs -i echo '--env {}')
+SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
