@@ -93,7 +93,7 @@ class EC2Client(object):
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                             block_device_mappings=None, tags_list=[]):
-        spot_price = self._get_spot_price(instance_type)
+        spot_price = self._get_spot_price(instance_type, region_name=region_name)
         fleet_config = {'LaunchSpecifications':
                         [
                             {'ImageId': image_id,
@@ -136,7 +136,7 @@ class EC2Client(object):
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
         if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
             raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
-        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
+        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory'] if item['ProductDescription'] == 'Linux/UNIX']
         price_avg = round(sum(prices) / len(prices), 4)
         price_min = min(prices)
         price_desired = (price_avg + price_min) / 4
@@ -259,7 +259,7 @@ class EC2Client(object):
         :return: list of instance id-s
         """
         instance_ids = []
-        spot_price = self._get_spot_price(instance_type)
+        spot_price = self._get_spot_price(instance_type, region_name=region_name)
         price_desired = spot_price['desired']
         while not instance_ids and price_desired <= spot_price['avg']:
             request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
