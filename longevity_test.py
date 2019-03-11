@@ -187,6 +187,20 @@ class LongevityTest(ClusterTester):
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
                 self._run_all_stress_cmds(stress_queue, params)
 
+        user_profiles = self.params.get('cs_user_profiles')
+        if user_profiles:
+            cs_duration = self.params.get('cs_duration', default='50m')
+            for cs_profile in user_profiles.split():
+                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+                profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
+                with open(cs_profile) as pconf:
+                    cont = pconf.readlines()
+                    for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
+                        stress_cmd = (cmd.format(profile_dst, cs_duration))
+                        self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, profile=cs_profile)
+
         fullscan = self._get_fullscan_params()
         if fullscan:
             self.log.info('Fullscan target: {} Fullscan interval: {}'.format(fullscan['ks.cf'],
@@ -213,6 +227,7 @@ class LongevityTest(ClusterTester):
                                                                  save_into_file_name='partitions_rows_after.log')
             self.assertEqual(partitions_dict_before, partitions_dict_after,
                              msg='Row amount in partitions is not same before and after running of nemesis')
+
 
     def test_batch_custom_time(self):
         """
