@@ -41,6 +41,7 @@ from .remote import disable_master_ssh
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
+from db_stats import PrometheusDBStats
 
 from avocado.utils import runtime as avocado_runtime
 
@@ -3135,7 +3136,7 @@ class BaseMonitorSet(object):
                 sudo systemctl start docker
                 mkdir -p {0.monitoring_data_dir}
                 chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version}
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
             """.format(self))
         else:
             run_script = dedent("""
@@ -3143,7 +3144,7 @@ class BaseMonitorSet(object):
                 sudo service docker start || true
                 mkdir -p {0.monitoring_data_dir}
                 chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version}
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
             """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
@@ -3250,12 +3251,10 @@ class BaseMonitorSet(object):
     def download_monitor_data(self):
         for node in self.nodes:
             try:
-                # self.stop_scylla_monitoring(node)
-                monitoring_data_dir_path = self.download_monitoring_data_dir(node)
-                # self.start_scylla_monitoring(node)
-                shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
-                zipped_data_path = '%s.zip' % node.logdir
-                return S3Storage.upload_file(zipped_data_path)
+                snapshot_archive = self.get_prometheus_snapshot(node)
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
+
+                return S3Storage.upload_file(snapshot_archive)
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
@@ -3280,6 +3279,35 @@ class BaseMonitorSet(object):
         for node in self.nodes:
             scylla_mgmt_log = node.collect_mgmt_log()
             node.receive_files(src=scylla_mgmt_log, dst=storing_dir)
+
+    def get_prometheus_snapshot(self, node):
+        ps = PrometheusDBStats(host=node.public_ip_address)
+        result = ps.create_snapshot()
+        self.log.debug(result)
+        if "success" in result['status']:
+            snapshot_dir = os.path.join(self.monitoring_data_dir,
+                                        "snapshots",
+                                        result['data']['name'])
+        else:
+            return ""
+
+        archive_snapshot_name = '/tmp/{}.tar.gz'.format(Setup.test_id())
+        result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
+                                                                 archive_snapshot_name),
+                                  ignore_status=True)
+        if result.exit_status > 0:
+            self.log.warning('Unable to create archive {}'.format(result))
+            return ""
+
+        try:
+            local_snapshot_data_dir = os.path.join(node.logdir, "prometheus_data")
+            os.mkdir(local_snapshot_data_dir)
+            node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
+            return os.path.join(local_snapshot_data_dir,
+                                os.path.basename(archive_snapshot_name))
+        except Exception as e:
+            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+            return ""
 
 
 class NoMonitorSet(object):

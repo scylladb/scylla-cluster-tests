@@ -40,6 +40,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         # disabling for now, since doesn't working with Fabric from within docker, and not needed for syclla-cloud,
         # since not using hostname anywhere
         # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
+        pass
 
     def detect_disks(self):
         """
