@@ -16,6 +16,7 @@ from requests import ConnectionError
 
 from es import ES
 from utils import get_job_name, retrying, remove_comments, S3Storage
+import cluster
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,11 @@ class PrometheusDBStats(object):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
     @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError,))
-    def request(self, url):
-        response = requests.get(url)
+    def request(self, url, post=False):
+        if post:
+            response = requests.post(url)
+        else:
+            response = requests.get(url)
         result = json.loads(response.content)
         logger.debug("Response from Prometheus server: %s", str(result)[:200])
         if result["status"] == "success":
@@ -209,6 +213,12 @@ class PrometheusDBStats(object):
 
     def get_latency_write_99(self, start_time, end_time):
         return self.get_latency(start_time, end_time, latency_type="write")
+
+    def create_snapshot(self):
+        url = "http://{0.host}:{0.port}/api/v1/admin/tsdb/snapshot".format(self)
+        result = self.request(url, True)
+        logger.debug('Request result: {}'.format(result))
+        return result
 
 
 class Stats(object):
@@ -456,6 +466,7 @@ class TestStatsMixin(Stats):
                 update_data['results'] = self.get_prometheus_stats()
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
                 self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
+                self._stats['test_details']['test_id'] = cluster.Setup.test_id()
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
