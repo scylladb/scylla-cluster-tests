@@ -287,7 +287,7 @@ class TestStatsMixin(Stats):
             test_params = self.params.items()
         else:
             # take only values, don't care about paths
-            test_params = [(k, v) for _, k, v in self.avocado_params.items()]
+            test_params = [(k, v) for _, k, v in self.avocado_params.iteritems()]
 
         for k, v in test_params:
             if k in exclude_details or (isinstance(k, str) and k.startswith('stress_cmd')):

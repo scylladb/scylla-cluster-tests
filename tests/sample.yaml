@@ -24,7 +24,7 @@ ssh_remote: '' # Which transport to use for executing commands on remote nodes. 
 
 failure_post_behavior: destroy
 space_node_threshold: 167000
-store_results_in_elasticsearch: False
+store_results_in_elasticsearch: false
 # if enabling sst3 feature during upgrade test
 test_sst3: False
 
