@@ -1050,7 +1050,10 @@ class RemoteFabric(object):
             except Exception as details:
                 if i == retry:
                     self.log.error('Error executing command: {cmd}\ndetails: {details}'.format(**locals()))
-                    raise
+                    if isinstance(details, UnexpectedExit):
+                        raise process.CmdError(command=details.result.command, additional_text=details)
+                    else:
+                        raise
         if verbose:
             self.log.debug('Command {} finished with status {}'.format(result.command, result.exited))
         #     self.log.debug('STDOUT: {}'.format(result.stdout.encode('utf-8')))
