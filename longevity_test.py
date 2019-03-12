@@ -66,12 +66,13 @@ class LongevityTest(ClusterTester):
 
         # When using cassandra-stress with "user profile" the profile yaml should be provided
         if 'profile' in stress_cmd:
-            cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
-            cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
-            with open(cs_profile, 'r') as yaml_stream:
-                profile = yaml.safe_load(yaml_stream)
-                keyspace_name = profile['keyspace']
-            params.update({'profile': cs_profile, 'keyspace_name': keyspace_name})
+            if 'profile' not in params:
+                cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
+                cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
+                with open(cs_profile, 'r') as yaml_stream:
+                    profile = yaml.safe_load(yaml_stream)
+                    keyspace_name = profile['keyspace']
+                params.update({'profile': cs_profile, 'keyspace_name': keyspace_name})
 
         if 'compression' in stress_cmd:
             if 'keyspace_name' not in params:
@@ -187,10 +188,10 @@ class LongevityTest(ClusterTester):
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
                 self._run_all_stress_cmds(stress_queue, params)
 
-        user_profiles = self.params.get('cs_user_profiles')
-        if user_profiles:
+        customer_profiles = self.params.get('cs_user_profiles')
+        if customer_profiles:
             cs_duration = self.params.get('cs_duration', default='50m')
-            for cs_profile in user_profiles.split():
+            for cs_profile in customer_profiles.split():
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
@@ -198,8 +199,9 @@ class LongevityTest(ClusterTester):
                     cont = pconf.readlines()
                     for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
                         stress_cmd = (cmd.format(profile_dst, cs_duration))
+                        params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
                         self.log.debug('Stress cmd: {}'.format(stress_cmd))
-                        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, profile=cs_profile)
+                        self._run_all_stress_cmds(stress_queue, params)
 
         fullscan = self._get_fullscan_params()
         if fullscan:

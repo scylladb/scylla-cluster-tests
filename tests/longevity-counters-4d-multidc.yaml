@@ -1,5 +1,5 @@
 test_duration: 5760
-#stress_cmd: "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=1,read=1)' cl=QUORUM duration=5500m -port jmx=6868 -mode cql3 native -rate threads=100"
+#stress_cmd: Inside the user-profile file.
 cs_user_profiles:
     scylla-qa-internal/cust_g/data_by_tracking_id.yaml
 cs_duration: '5500m'
@@ -39,7 +39,7 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37 subnet-088fddaf520e4c7a8'
             ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST AMI_ID_EU_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-07797ae1c88489b80' # Loader dedicated AMI
+            ami_id_loader: 'ami-0006222380fb72d8d' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
             ami_monitor_user: 'centos'
