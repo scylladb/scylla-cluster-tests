@@ -136,7 +136,7 @@ class EC2Client(object):
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
         if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
             raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
-        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory'] if 'Linux/UNIX' in item['ProductDescription']]
+        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory'] if item['ProductDescription'] == 'Linux/UNIX']
         price_avg = round(sum(prices) / len(prices), 4)
         price_min = min(prices)
         price_desired = (price_avg + price_min) / 4
