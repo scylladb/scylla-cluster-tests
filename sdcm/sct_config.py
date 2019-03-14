@@ -768,6 +768,7 @@ class SCTConfiguration(dict):
 
         # 2.2) load the region data
         region_names = self.get('region_name', '').split()
+        region_names = env.get('region_name', region_names)
         for region in region_names:
             for k, v in regions_data[region].items():
                 if k not in self.keys():
@@ -1017,10 +1018,9 @@ if __name__ == "__main__":
         def test_03_dump_help_config_markdown(self):
             logging.debug(self.conf.dump_help_config_markdown())
 
-        @staticmethod
-        def test_04_check_env_parse():
+        def test_04_check_env_parse(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-            os.environ['SCT_REGION_NAME'] = '["eu-west1", "us-east2"]'
+            os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
             os.environ['SCT_N_DB_NODES'] = '2 2 2'
             os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
             os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
@@ -1028,6 +1028,8 @@ if __name__ == "__main__":
             conf = SCTConfiguration()
             conf.verify_configuration()
             conf.dump_config()
+
+            self.assertEqual(conf.get('security_group_ids'), 'sg-059a7f66a947d4b5c sg-c5e1f7a0 sg-c5e1f7a0 sg-059a7f66a947d4b5c')
 
         def test_05_docker(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -1173,5 +1175,16 @@ if __name__ == "__main__":
             conf = SCTConfiguration()
 
             self.assertEqual(conf['store_results_in_elasticsearch'], False)
+
+        def test_14_(self):
+            os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+            os.environ['SCT_REGION_NAME'] = 'us-east-1'
+            os.environ['SCT_N_DB_NODES'] = '2'
+            os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+            os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+
+            conf = SCTConfiguration()
+            conf.verify_configuration()
+            self.assertEqual(conf.get('security_group_ids'), 'sg-c5e1f7a0')
 
     unittest.main()
