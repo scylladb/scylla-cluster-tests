@@ -65,7 +65,7 @@ class EC2Client(object):
         params = dict(DryRun=False,
                       InstanceCount=count,
                       Type=request_type,
-                      SpotPrice=str(spot_price),
+                      # SpotPrice=str(spot_price),
                       LaunchSpecification={'ImageId': image_id,
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
@@ -93,7 +93,7 @@ class EC2Client(object):
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                             block_device_mappings=None, tags_list=[]):
-        spot_price = self._get_spot_price(instance_type, region_name=region_name)
+        # spot_price = self._get_spot_price(instance_type, region_name=region_name)
         fleet_config = {'LaunchSpecifications':
                         [
                             {'ImageId': image_id,
@@ -110,7 +110,7 @@ class EC2Client(object):
                              },
                         ],
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
-                        'SpotPrice': str(spot_price['desired']),
+                        # 'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
                         }
         if key_pair:
@@ -136,7 +136,7 @@ class EC2Client(object):
         history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
         if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
             raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
-        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory'] if item['ProductDescription'] == 'Linux/UNIX']
+        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory'] if 'Linux/UNIX' in item['ProductDescription']]
         price_avg = round(sum(prices) / len(prices), 4)
         price_min = min(prices)
         price_desired = (price_avg + price_min) / 4
@@ -258,19 +258,29 @@ class EC2Client(object):
 
         :return: list of instance id-s
         """
-        instance_ids = []
-        spot_price = self._get_spot_price(instance_type, region_name=region_name)
-        price_desired = spot_price['desired']
-        while not instance_ids and price_desired <= spot_price['avg']:
-            request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
-                                                      key_pair, user_data, count, duration,
-                                                      block_device_mappings=block_device_mappings)
-            instance_ids, resp = self._wait_for_request_done(request_ids)
-            if not instance_ids and resp == STATUS_PRICE_TOO_LOW:
-                price_desired = round(price_desired * self._price_index, 4)
-                if price_desired <= spot_price['avg']:
-                    logger.info('Got price-too-low, retrying with higher price %s', price_desired)
-                    continue
+
+        # put into remark until we use the pricing api to get the on-demand price
+
+        # instance_ids = []
+        #
+        # spot_price = self._get_spot_price(instance_type, region_name=region_name)
+        # price_desired = spot_price['desired']
+        # while not instance_ids and price_desired <= spot_price['avg']:
+        #     request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
+        #                                               key_pair, user_data, count, duration,
+        #                                               block_device_mappings=block_device_mappings)
+        #     instance_ids, resp = self._wait_for_request_done(request_ids)
+        #     if not instance_ids and resp == STATUS_PRICE_TOO_LOW:
+        #         price_desired = round(price_desired * self._price_index, 4)
+        #         if price_desired <= spot_price['avg']:
+        #             logger.info('Got price-too-low, retrying with higher price %s', price_desired)
+        #             continue
+
+        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, None,
+                                                  key_pair, user_data, count, duration,
+                                                  block_device_mappings=block_device_mappings)
+        instance_ids, resp = self._wait_for_request_done(request_ids)
+
         if not instance_ids:
             raise CreateSpotInstancesError("Failed to get spot instances: %s" % resp)
 
