@@ -8,7 +8,7 @@ pip install --upgrade pip
 yum install -y libvirt-devel  # needed for libvirt-python PIP package
 
 # Needed for PhantomJS
-yum install -y freetype-devel libpng-devel bzip2
+yum install -y freetype-devel libpng-devel bzip2 bitmap-fonts fontconfig
 
 # Needed for Cassandra Python driver
 yum install -y gcc
