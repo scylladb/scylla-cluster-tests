@@ -3190,8 +3190,7 @@ class BaseMonitorSet(object):
             phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
             phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
             install_phantom_js_script = dedent("""
-                sudo rm -rf {phantomjs_base}*
-                sudo yum install -y bzip2 fontconfig bitmap-fonts
+                rm -rf {phantomjs_base}*
                 curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
