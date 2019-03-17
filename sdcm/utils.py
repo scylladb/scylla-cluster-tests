@@ -197,7 +197,7 @@ class S3Storage(object):
             return ""
 
 
-aws_regions = ['us-east-1', 'eu-west-1']
+aws_regions = ['us-east-1', 'us-west-2', 'eu-west-1']
 gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
 
 
@@ -266,16 +266,19 @@ def clean_instances_gce(tags_dict):
                     logger.info("{} deleted. res={}".format(node.name, res))
 
 
-def list_instances_aws(tags_dict):
+def list_instances_aws(tags_dict, region_name=None):
     """
     list all instances with specific tags AWS
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+
     :return: None
     """
     instances = []
-    for region in aws_regions:
-        logger.info('going to cleanup aws region=%s', region)
+    _aws_regions = [region_name] if region_name else aws_regions
+    for region in _aws_regions:
+        logger.info('going to list aws region=%s', region)
         client = boto3.client('ec2', region_name=region)
         custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
 
@@ -285,11 +288,13 @@ def list_instances_aws(tags_dict):
     return instances
 
 
-def list_instances_gce(tags_dict):
+def list_instances_gce(tags_dict, region_name=None):
     """
     list all instances with specific tags GCE
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+
     :return: None
     """
 
@@ -299,8 +304,10 @@ def list_instances_gce(tags_dict):
     instances = []
     gcp_credentials = KeyStore().get_gcp_credentials()
     compute_engine = get_driver(Provider.GCE)
-    for region in gce_regions:
-        logger.info('going to cleanup gce region=%s', region)
+
+    _gce_regions = [region_name] if region_name else gce_regions
+    for region in _gce_regions:
+        logger.info('going to list gce region=%s', region)
         driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
                                 gcp_credentials["private_key"],
                                 datacenter=region,

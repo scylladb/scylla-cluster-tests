@@ -14,7 +14,7 @@ from threading import Thread
 
 import cluster
 import ec2_client
-from sdcm.utils import retrying
+from sdcm.utils import retrying, list_instances_aws
 
 from . import wait
 
@@ -68,7 +68,7 @@ class AWSCluster(cluster.BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, node_type=None):
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
@@ -100,7 +100,8 @@ class AWSCluster(cluster.BaseCluster):
         self._ec2_ami_id = ec2_ami_id
         self.region_names = region_names
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
-
+        self.params = params
+        self.node_type = node_type
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -198,6 +199,7 @@ class AWSCluster(cluster.BaseCluster):
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
 
         tags_list = create_tags_list()
+        tags_list.append({'Key': 'NodeType', 'Value': self.node_type})
 
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -253,8 +255,22 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _get_instances(self, dc_idx):
+
+        test_id = self.params.get('test_id', default=None)
+        if not test_id:
+            raise ValueError("test_id should be configured for using reuse_cluster")
+
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
-        return [ec2.get_instance_by_private_ip(ip) for ip in self._node_private_ips]
+        instances = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, region_name=self.region_names[dc_idx])
+
+        def sort_by_index(item):
+            for tag in item['Tags']:
+                if tag['Key'] == 'NodeIndex':
+                    return tag['Value']
+            else:
+                return '0'
+        instances = sorted(instances, key=sort_by_index)
+        return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
     def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
         """
@@ -296,7 +312,7 @@ class AWSCluster(cluster.BaseCluster):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
                        credentials=self._credentials[dc_idx], ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, dc_idx=dc_idx)
+                       base_logdir=base_logdir, dc_idx=dc_idx, node_type=self.node_type)
 
 
 class AWSNode(cluster.BaseNode):
@@ -307,7 +323,7 @@ class AWSNode(cluster.BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2_service = ec2_service
@@ -326,6 +342,8 @@ class AWSNode(cluster.BaseNode):
         if not cluster.Setup.REUSE_CLUSTER:
             tags_list = create_tags_list()
             tags_list.append({'Key': 'Name', 'Value': name})
+            tags_list.append({'Key': 'NodeIndex', 'Value': str(node_index)})
+            tags_list.append({'Key': 'NodeType', 'Value': node_type})
             if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
                 self.log.info('Test duration set to %s. '
                               'Keep cluster on failure %s. '
@@ -509,6 +527,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         cluster_uuid = cluster.Setup.test_id()
         cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        node_type = 'syclla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -528,7 +547,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               node_type=node_type)
         self.seed_nodes_private_ips = None
         self.version = '2.1'
 
@@ -647,6 +667,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         cluster_prefix = _prepend_user_prefix(user_prefix,
                                               'cs-db-cluster')
         node_prefix = _prepend_user_prefix(user_prefix, 'cs-db-node')
+        node_type = 'cs-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -666,7 +687,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               node_type=node_type)
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -722,6 +744,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
+        node_type = 'loader'
         cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
@@ -741,7 +764,8 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
-                            params=params)
+                            params=params,
+                            node_type=node_type)
 
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
@@ -752,6 +776,7 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
         node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
+        node_type = 'monitor'
         cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
@@ -772,4 +797,5 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
-                            params=params)
+                            params=params,
+                            node_type=node_type)
