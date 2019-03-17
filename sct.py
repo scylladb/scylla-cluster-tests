@@ -97,10 +97,12 @@ def list_resources(ctx, user, test_id):
             x.sortby = 'TestId'
 
             for instance in instances:
+                name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
+                test_id = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'TestId']
                 x.add_row([instance['InstanceId'],
-                           [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name'][0],
+                           name[0] if name else 'N/A',
                            instance['PublicDnsName'],
-                           [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'TestId'][0],
+                           test_id[0] if test_id else 'N/A',
                            instance['LaunchTime'].ctime()])
             click.echo(x.get_string(title="Resources used by '{}' in AWS".format(user)))
         else:
