@@ -23,9 +23,10 @@ import threading
 import time
 import uuid
 import getpass
-
 import yaml
 import shutil
+
+from base64 import decodestring
 
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
@@ -1378,6 +1379,13 @@ server_encryption_options:
         if not res or "Active: failed" in res.stdout:
             raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
 
+    def collect_mgmt_log(self):
+        self.log.debug("Collect scylla manager log ...")
+        mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
+        self.remoter.run('journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
+        self.log.debug("Collected log : {}".format(mgmt_log_name))
+        return mgmt_log_name
+
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
         this code was took out from  install_mgmt() method.
@@ -2279,6 +2287,22 @@ class BaseScyllaCluster(object):
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
             self.log.debug("'{0.name}' restarted.".format(node))
+
+    def collect_logs(self, storing_dir):
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        os.mkdir(storing_dir)
+
+        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
+        for node in self.nodes:
+            src_dir = node.prepare_files_for_archive(files_to_archive)
+            node.receive_files(src=src_dir, dst=storing_dir)
+            with open(os.path.join(storing_dir, node.name, 'installed_pkgs'), 'w') as pkg_list_file:
+                pkg_list_file.write(node.get_installed_packages())
+            with open(os.path.join(storing_dir, node.name, 'console_output'), 'w') as co:
+                co.write(node.get_console_output())
+            with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
+                imagedata = node.get_console_screenshot()
+                cscrn.write(decodestring(imagedata))
 
 
 class BaseLoaderSet(object):
@@ -3237,6 +3261,26 @@ class BaseMonitorSet(object):
                                str(details))
         return ""
 
+    def download_scylla_manager_log(self):
+        for node in self.nodes:
+            try:
+                sclylla_mgmt_log_path = node.collect_mgmt_log()
+                scylla_manager_local_log_path = os.path.join(node.logdir, 'scylla_manager_log')
+                shutil.make_archive(scylla_manager_local_log_path, 'zip', sclylla_mgmt_log_path)
+                link = S3Storage.upload_file("{}.zip".format(scylla_manager_local_log_path))
+                self.log.info("Scylla manager log uploaded {}".format(link))
+            except Exception, details:
+                self.log.error('Error downloading scylla manager log : %s',
+                               str(details))
+
+    def collect_logs(self, storing_dir):
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        os.mkdir(storing_dir)
+
+        for node in self.nodes:
+            scylla_mgmt_log = node.collect_mgmt_log()
+            node.receive_files(src=scylla_mgmt_log, dst=storing_dir)
+
 
 class NoMonitorSet(object):
 
@@ -3264,4 +3308,7 @@ class NoMonitorSet(object):
         pass
 
     def destroy(self):
+        pass
+
+    def collect_logs(self, storing_dir):
         pass

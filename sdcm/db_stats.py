@@ -11,7 +11,6 @@ import yaml
 import shutil
 from textwrap import dedent
 from math import sqrt
-from base64 import decodestring
 
 from requests import ConnectionError
 
@@ -325,7 +324,7 @@ class TestStatsMixin(Stats):
         return test_details
 
     def get_system_details(self):
-        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
+
         system_details = {}
         for node in self.db_cluster.nodes:
             node_system_info = {}
@@ -334,8 +333,8 @@ class TestStatsMixin(Stats):
                 'sys_info': node.get_system_info(),
             }
             system_details.update(node_system_info)
-        archive = self.archive_system_details_information(files_to_archive)
-        s3_link_to_archive = S3Storage.upload_file(file_path=archive)
+        archive_path = self.archive_logs()
+        s3_link_to_archive = S3Storage.upload_file(file_path=archive_path)
         system_details.update({'sys_info_data_url': s3_link_to_archive})
         return system_details
 
@@ -436,46 +435,17 @@ class TestStatsMixin(Stats):
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
 
-    def archive_system_details_information(self, files_to_archive):
-        """Create an archive of system details data
+    def archive_logs(self):
+        storing_dir = os.path.join(self.logdir, "additional_details")
+        os.mkdir(storing_dir)
 
-        For each node prepare relevant files on node, copy them to local directory
-        <cluster_log_dir>/system_data , write to files the installed
-        packages on node, instace console output and screenshot on
-        aws deployment, arhcive contents of appropriate directory and upload to
-        S3 storage.
-
-        Arguments:
-            files_to_archive {list} -- list of files as fullpath which should be stored as
-            system details data
-
-        Returns:
-            [str] -- fullpath to archive file
-        """
-        storing_dir = os.path.join(self.db_cluster.logdir, 'system_details_information')
-        if not os.path.exists(storing_dir):
-            try:
-                os.mkdir(storing_dir)
-            except OSError as details:
-                self.log.info('Archive could not be created')
-                self.log.warning(details)
-                return ''
-
-        for node in self.db_cluster.nodes:
-            src_dir = node.prepare_files_for_archive(files_to_archive)
-            node.receive_files(src=src_dir, dst=storing_dir)
-            with open(os.path.join(storing_dir, node.name, 'installed_pkgs'), 'w') as pkg_list_file:
-                pkg_list_file.write(node.get_installed_packages())
-            with open(os.path.join(storing_dir, node.name, 'console_output'), 'w') as co:
-                co.write(node.get_console_output())
-            with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
-                imagedata = node.get_console_screenshot()
-                cscrn.write(decodestring(imagedata))
+        self.db_cluster.collect_logs(storing_dir)
+        self.monitors.collect_logs(storing_dir)
 
         self.log.info('Creating archive....')
-        archive = shutil.make_archive(self.db_cluster.logdir, 'zip', root_dir=storing_dir)
-        self.log.info('Path to archive file: %s' % archive)
-        return archive
+        archive_path = shutil.make_archive(self.logdir, 'zip', root_dir=storing_dir)
+        self.log.info('Path to archive file: %s' % archive_path)
+        return archive_path
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None):
         if self.create_stats:
