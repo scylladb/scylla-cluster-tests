@@ -173,7 +173,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         cluster.Setup.set_remote_runner(self.params.get('ssh_remote', default='Remote'))
 
-        version_tag = self.params.get('version_tag')
+        version_tag = self.params.get('ami_id_db_scylla_desc')
         if version_tag:
             cluster.Setup.tags('version', version_tag)
         # for saving test details in DB

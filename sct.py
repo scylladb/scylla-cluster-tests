@@ -14,7 +14,7 @@ click_completion.init()
 def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
     sct_opt.update(kwargs)
-    return click.option(name, type=sct_opt['type'], default=sct_opt['default'], help=sct_opt['help'])
+    return click.option(name, type=sct_opt['type'], help=sct_opt['help'])
 
 
 def install_callback(ctx, _, value):
