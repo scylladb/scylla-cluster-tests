@@ -172,7 +172,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
 
-        version_tag = self.params.get('version_tag')
+        version_tag = self.params.get('ami_id_db_scylla_desc')
         if version_tag:
             cluster.Setup.tags('version', version_tag)
         # for saving test details in DB

@@ -1,0 +1,28 @@
+# Test
+test_duration: 3600
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=48h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..4000000 -log interval=90"]
+run_fullscan: 'random, 30'
+
+keyspace_num: 1000
+batch_size: 100
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+
+# Env
+n_db_nodes: 6
+n_loaders: 10
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.8xlarge'
+instance_type_loader: 'c5.4xlarge'
+instance_type_monitor: 't3.large'
+
+user_prefix: 'longevity-1000-keyspaces'
+
+failure_post_behavior: keep
+store_results_in_elasticsearch: False
+
+# Manager
+use_mgmt: true
