@@ -28,12 +28,6 @@ SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
 
 
-def _prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = cluster.DEFAULT_USER_PREFIX
-    return '%s-%s' % (user_prefix, base_name)
-
-
 def clean_aws_credential(region_name, credential_key_name, credential_key_file):
     try:
         session = boto3.session.Session(region_name=region_name)
@@ -527,8 +521,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = cluster.Setup.test_id()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         node_type = 'syclla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
@@ -657,9 +651,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix,
-                                              'cs-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'cs-db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix,
+                                                     'cs-db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'cs-db-node')
         node_type = 'cs-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
@@ -736,9 +730,9 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         node_type = 'loader'
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseLoaderSet.__init__(self,
@@ -768,9 +762,9 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseMonitorSet.__init__(self,

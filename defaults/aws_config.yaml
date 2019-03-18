@@ -2,8 +2,8 @@ instance_provision: 'spot_low_price'
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla-qa-ec2'
-instance_type_loader: 'c4.xlarge'
-instance_type_monitor: 't2.small'
+instance_type_loader: 'c5.xlarge'
+instance_type_monitor: 't3.small'
 regions_data:
   us-east-1:
     security_group_ids: 'sg-c5e1f7a0'

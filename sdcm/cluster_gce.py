@@ -6,12 +6,6 @@ import cluster
 from libcloud.common.google import ResourceNotFoundError
 
 
-def _prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = cluster.DEFAULT_USER_PREFIX
-    return '%s-%s' % (user_prefix, base_name)
-
-
 class CreateGCENodeError(Exception):
     pass
 
@@ -329,8 +323,8 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=[10], add_disks=None, params=None, gce_datacenter=None):
         # We have to pass the cluster name in advance in user_data
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
                                                gce_image_type=gce_image_type,
                                                gce_image_size=gce_image_size,
@@ -355,8 +349,8 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self,
                                        params=params)
         GCECluster.__init__(self,
@@ -382,8 +376,8 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=[1],
                  targets={}, add_disks=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         cluster.BaseMonitorSet.__init__(self,
                                         targets=targets,
                                         params=params)
