@@ -491,6 +491,10 @@ class BaseNode(object):
             return self.private_ip_address
 
     @property
+    def is_spot(self):
+        return False
+
+    @property
     def init_system(self):
         if self._init_system is None:
             result = self.remoter.run('journalctl --version',
