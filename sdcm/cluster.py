@@ -22,7 +22,6 @@ import tempfile
 import threading
 import time
 import uuid
-import getpass
 import yaml
 import shutil
 
@@ -39,7 +38,7 @@ from .log import SDCMAdapter
 from .remote import Remote, RemoteFabric
 from .remote import disable_master_ssh
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
 from db_stats import PrometheusDBStats
 
@@ -3271,6 +3270,37 @@ class BaseMonitorSet(object):
                 self.log.error('Error downloading scylla manager log : %s',
                                str(details))
 
+    def collect_scylla_monitoring_logs(self, node):
+        log_paths = []
+        monitoring_dockers = self._get_running_monitoring_dockers(node)
+        for m_docker in monitoring_dockers:
+            m_docker_log_path = self._collect_monitoring_docker_log(node, m_docker)
+            if m_docker_log_path:
+                log_paths.append(m_docker_log_path)
+
+        return log_paths
+
+    def _get_running_monitoring_dockers(self, node):
+        monitoring_dockers = []
+        result = node.remoter.run("sudo docker ps -a --format {{.Names}}", ignore_status=True)
+        if result.exit_status == 0:
+            monitoring_dockers = [docker.strip() for docker in result.stdout.split('\n') if docker.strip()]
+        else:
+            self.log.warning("Getting running docker containers failed: {}".format(result))
+
+        self.log.debug("Next monitoring dockers are running: {}".format(monitoring_dockers))
+        return monitoring_dockers
+
+    def _collect_monitoring_docker_log(self, node, docker):
+        log_path = "/tmp/{}.log".format(docker)
+        cmd = "sudo docker logs --details -t {} > {}".format(docker, log_path)
+        result = node.remoter.run(cmd, ignore_status=True)
+        if result.exit_status == 0:
+            return log_path
+        else:
+            self.log.warning("Collecting {} log failed {}".format(docker, result))
+            return ""
+
     def collect_logs(self, storing_dir):
         storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
         os.mkdir(storing_dir)
@@ -3278,6 +3308,8 @@ class BaseMonitorSet(object):
         for node in self.nodes:
             scylla_mgmt_log = node.collect_mgmt_log()
             node.receive_files(src=scylla_mgmt_log, dst=storing_dir)
+            monitoring_dockers_logs = self.collect_scylla_monitoring_logs(node)
+            node.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
 
     def get_prometheus_snapshot(self, node):
         ps = PrometheusDBStats(host=node.public_ip_address)
