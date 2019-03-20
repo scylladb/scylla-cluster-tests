@@ -37,7 +37,9 @@ class PhysicalMachineNode(cluster.BaseNode):
         return self._private_ip
 
     def set_hostname(self):
-        self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
+        # disabling for now, since doesn't working with Fabric from within docker, and not needed for syclla-cloud,
+        # since not using hostname anywhere
+        # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
 
     def detect_disks(self):
         """
