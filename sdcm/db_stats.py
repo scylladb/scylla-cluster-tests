@@ -331,6 +331,7 @@ class TestStatsMixin(Stats):
         test_details['start_time'] = time.time()
         test_details['grafana_snapshot'] = ""
         test_details['prometheus_report'] = ""
+        test_details['test_id'] = cluster.Setup.test_id()
         return test_details
 
     def get_system_details(self):
@@ -466,7 +467,6 @@ class TestStatsMixin(Stats):
                 update_data['results'] = self.get_prometheus_stats()
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
                 self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
-                self._stats['test_details']['test_id'] = cluster.Setup.test_id()
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
