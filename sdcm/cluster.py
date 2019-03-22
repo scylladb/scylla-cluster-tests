@@ -40,6 +40,7 @@ from .remote import disable_master_ssh
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
+from .db_stats import PrometheusDBStats
 
 from avocado.utils import runtime as avocado_runtime
 
@@ -2298,6 +2299,7 @@ class BaseScyllaCluster(object):
             with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
                 imagedata = node.get_console_screenshot()
                 cscrn.write(decodestring(imagedata))
+        return storing_dir
 
 
 class BaseLoaderSet(object):
@@ -3232,7 +3234,7 @@ class BaseMonitorSet(object):
                                 "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                     grafana_url, snapshot_path), shell=True)
                 # since there is only one monitoring node returning here
-                    screenshots.append(S3Storage.upload_file(snapshot_path))
+                    screenshots.append(S3Storage.upload_file(snapshot_path, prefix=Setup.test_id()))
                 return screenshots
 
         except Exception, details:
@@ -3247,7 +3249,7 @@ class BaseMonitorSet(object):
                 snapshot_archive = self.get_prometheus_snapshot(node)
                 self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
 
-                return S3Storage.upload_file(snapshot_archive)
+                return S3Storage.upload_file(snapshot_archive, prefix=Setup.test_id())
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
@@ -3306,9 +3308,10 @@ class BaseMonitorSet(object):
             monitoring_dockers_logs = self.collect_scylla_monitoring_logs(node)
             node.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
 
+        return storing_dir
+
     def get_prometheus_snapshot(self, node):
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.db_stats import PrometheusDBStats
 
         ps = PrometheusDBStats(host=node.public_ip_address)
         result = ps.create_snapshot()
@@ -3320,7 +3323,7 @@ class BaseMonitorSet(object):
         else:
             return ""
 
-        archive_snapshot_name = '/tmp/{}.tar.gz'.format(Setup.test_id())
+        archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)
         result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
                                                                  archive_snapshot_name),
                                   ignore_status=True)
@@ -3330,10 +3333,19 @@ class BaseMonitorSet(object):
 
         try:
             local_snapshot_data_dir = os.path.join(node.logdir, "prometheus_data")
-            os.mkdir(local_snapshot_data_dir)
+
+            if not os.path.exists(local_snapshot_data_dir):
+                os.mkdir(local_snapshot_data_dir)
+
+            local_archive_path = os.path.join(local_snapshot_data_dir,
+                                              os.path.basename(archive_snapshot_name))
+            if os.path.exists(local_archive_path):
+                self.log.info('Remove previous file {}'.format(local_archive_path))
+                os.remove(local_archive_path)
+
             node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
-            return os.path.join(local_snapshot_data_dir,
-                                os.path.basename(archive_snapshot_name))
+            return local_archive_path
+
         except Exception as e:
             self.log.error("Unable to downlaod Prometheus data: %s" % e)
             return ""
