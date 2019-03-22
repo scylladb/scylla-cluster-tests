@@ -177,15 +177,14 @@ def remove_comments(data):
 
 class S3Storage(object):
     @staticmethod
-    def generate_url(file_path):
-        job_name = get_job_name()
+    def generate_url(file_path, prefix=''):
         file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://cloudius-jenkins-test.s3.amazonaws.com/{job_name}/{file_name}".format(**locals())
+        return "https://cloudius-jenkins-test.s3.amazonaws.com/{prefix}/{file_name}".format(**locals())
 
     @classmethod
-    def upload_file(cls, file_path):
+    def upload_file(cls, file_path, prefix=''):
         try:
-            s3_url = cls.generate_url(file_path)
+            s3_url = cls.generate_url(file_path, prefix)
             with open(file_path) as fh:
                 mydata = fh.read()
                 logger.info("Uploading '{file_path}' to {s3_url}".format(**locals()))

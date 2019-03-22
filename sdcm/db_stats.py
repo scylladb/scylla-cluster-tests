@@ -256,7 +256,7 @@ class TestStatsMixin(Stats):
     """
     This mixin is responsible for saving test details and statistics in database.
     """
-    KEYS = ['test_details', 'setup_details', 'system_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
+    KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
 
@@ -319,6 +319,7 @@ class TestStatsMixin(Stats):
         if is_gce and self.db_cluster:
             setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get('cpuPlatform', 'UNKNOWN')
 
+        setup_details['db_cluster_details'] = {}
         return setup_details
 
     def get_test_details(self):
@@ -333,24 +334,23 @@ class TestStatsMixin(Stats):
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
         test_details['grafana_snapshot'] = ""
-        test_details['prometheus_report'] = ""
+        test_details['prometheus_data'] = ""
         test_details['test_id'] = Setup.test_id()
+        test_details['log_files'] = {}
         return test_details
 
-    def get_system_details(self):
+    def get_db_cluster_details(self):
 
-        system_details = {}
+        db_cluster_details = {}
         for node in self.db_cluster.nodes:
             node_system_info = {}
             node_system_info[node.name] = {
                 'cpu_model': node.get_cpumodel(),
                 'sys_info': node.get_system_info(),
             }
-            system_details.update(node_system_info)
-        archive_path = self.archive_logs()
-        s3_link_to_archive = S3Storage.upload_file(file_path=archive_path)
-        system_details.update({'sys_info_data_url': s3_link_to_archive})
-        return system_details
+            db_cluster_details.update(node_system_info)
+
+        return db_cluster_details
 
     def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
@@ -449,19 +449,7 @@ class TestStatsMixin(Stats):
         if total_stats:
             self._stats['results']['stats_total'] = total_stats
 
-    def archive_logs(self):
-        storing_dir = os.path.join(self.logdir, "additional_details")
-        os.mkdir(storing_dir)
-
-        self.db_cluster.collect_logs(storing_dir)
-        self.monitors.collect_logs(storing_dir)
-
-        self.log.info('Creating archive....')
-        archive_path = shutil.make_archive(self.logdir, 'zip', root_dir=storing_dir)
-        self.log.info('Path to archive file: %s' % archive_path)
-        return archive_path
-
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         if self.create_stats:
             update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -469,7 +457,10 @@ class TestStatsMixin(Stats):
                 test_start_time = self._stats['test_details']['start_time']
                 update_data['results'] = self.get_prometheus_stats()
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
-                self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
+                self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
+
+            if self.db_cluster:
+                self._stats['setup_details']['db_cluster_details'] = self.get_db_cluster_details()
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
@@ -479,8 +470,8 @@ class TestStatsMixin(Stats):
                 self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
                 res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
                 self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
-            self._stats['status'] = self.status
 
+            self._stats['status'] = self.status
             update_data.update(
                 {'status': self._stats['status'],
                  'setup_details': self._stats['setup_details'],
@@ -490,7 +481,5 @@ class TestStatsMixin(Stats):
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
-            if system_details:
-                update_data.update({'system_details': system_details})
 
             self.update(update_data)

@@ -175,6 +175,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
+        self._logs = {}
 
     @property
     def test_duration(self):
@@ -1131,12 +1132,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.kill_stress_thread()
         db_cluster_errors = None
         db_cluster_coredumps = None
-        db_cluster_system_details = None
         if self.db_cluster is not None:
             db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
-            db_cluster_system_details = self.get_system_details()
             for current_nemesis in self.db_cluster.nemesis:
                 current_nemesis.report()
             # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
@@ -1184,7 +1183,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         self.update_test_details(errors=db_cluster_errors,
                                  coredumps=db_cluster_coredumps,
-                                 system_details=db_cluster_system_details)
+                                 )
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
@@ -1200,6 +1199,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.fail('Errors found on DB node logs (see test logs)')
 
     def tearDown(self):
+        self.log.info('TearDown is starting...')
+        self.collect_logs()
         try:
             self.clean_resources()
         except Exception as details:
@@ -1214,11 +1215,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
         archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
         try:
-            archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
-            s3_link = S3Storage.upload_file(file_path=archive)
+            joblog_archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
+            s3_link = S3Storage.upload_file(file_path=joblog_archive, prefix=cluster.Setup.test_id())
             if self.create_stats:
-                self.update({'test_details': {'job_log_link': s3_link}})
+                self.update({'test_details': {'log_files': {'job_log': s3_link}}})
             self.log.info('Link to job.log archive {}'.format(s3_link))
+            self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
         except Exception as details:
             self.log.warning('Errors during creating and uploading archive of job.log {}'.format(details))
 
@@ -1349,3 +1351,31 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         """
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
+
+    def collect_logs(self):
+        self.log.info('Start collect logs...')
+        logs_dict = {"db_cluster_log": "",
+                     "monitoring_log": ""}
+
+        storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
+        os.mkdir(storing_dir)
+
+        self.log.info("Storing dir is {}".format(storing_dir))
+        if self.db_cluster:
+            db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
+            logs_dict["db_cluster_log"] = S3Storage.upload_file(file_path=self.archive_logs(db_cluster_log_path),
+                                                                prefix=cluster.Setup.test_id())
+        if self.monitors:
+            monitoring_log_path = self.monitors.collect_logs(storing_dir)
+            logs_dict["monitoring_log"] = S3Storage.upload_file(file_path=self.archive_logs(monitoring_log_path),
+                                                                prefix=cluster.Setup.test_id())
+            prometheus_data = self.monitors.download_monitor_data()
+
+        if self.create_stats:
+            self.update({'test_details': {'log_files': logs_dict, 'prometheus_data': prometheus_data}})
+
+    def archive_logs(self, path):
+        self.log.info('Creating archive....')
+        archive_path = shutil.make_archive(path, 'zip', root_dir=path)
+        self.log.info('Path to archive file: %s' % archive_path)
+        return archive_path
