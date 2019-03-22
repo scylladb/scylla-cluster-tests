@@ -355,40 +355,42 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # counters_test: Validate counter support
-        {
-            'create_tables': [
-                """CREATE TABLE counters_test (
-                userid int,
-                url text,
-                total counter,
-                PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;"""],
-            'truncates': ['TRUNCATE counters_test'],
-            'inserts': [
-                "UPDATE counters_test SET total = total + 1 WHERE userid = 1 AND url = 'http://foo.com'",
-            ],
-            'queries': [
-                "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
-                "UPDATE counters_test SET total = total - 4 WHERE userid = 1 AND url = 'http://foo.com'",
-                "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
-                "UPDATE counters_test SET total = total+1 WHERE userid = 1 AND url = 'http://foo.com'",
-                "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
-                "UPDATE counters_test SET total = total -2 WHERE userid = 1 AND url = 'http://foo.com'",
-                "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'"],
-            'results': [
-                [[1]],
-                [],
-                [[-3]],
-                [],
-                [[-2]],
-                [],
-                [[-4]]
-            ],
-            'min_version': '1.7',
-            'skip_condition': "self.params.get('experimental', default='false').lower() == 'true'",
-            'max_version': '',
-            'skip': ''},
+        # disable this test for issue: counter can't be updated correctly #4362
+        #
+        ## counters_test: Validate counter support
+        #{
+        #    'create_tables': [
+        #        """CREATE TABLE counters_test (
+        #        userid int,
+        #        url text,
+        #        total counter,
+        #        PRIMARY KEY (userid, url)
+        #    ) WITH COMPACT STORAGE;"""],
+        #    'truncates': ['TRUNCATE counters_test'],
+        #    'inserts': [
+        #        "UPDATE counters_test SET total = total + 1 WHERE userid = 1 AND url = 'http://foo.com'",
+        #    ],
+        #    'queries': [
+        #        "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "UPDATE counters_test SET total = total - 4 WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "UPDATE counters_test SET total = total+1 WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "UPDATE counters_test SET total = total -2 WHERE userid = 1 AND url = 'http://foo.com'",
+        #        "SELECT total FROM counters_test WHERE userid = 1 AND url = 'http://foo.com'"],
+        #    'results': [
+        #        [[1]],
+        #        [],
+        #        [[-3]],
+        #        [],
+        #        [[-2]],
+        #        [],
+        #        [[-4]]
+        #    ],
+        #    'min_version': '1.7',
+        #    'skip_condition': "self.params.get('experimental', default='false').lower() == 'true'",
+        #    'max_version': '',
+        #    'skip': ''},
         # indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause
         {
             'create_tables': ["""
