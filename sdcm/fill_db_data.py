@@ -23,6 +23,7 @@ from uuid import UUID
 from avocado import main
 from cassandra import InvalidRequest
 from cassandra.util import sortedset
+from cassandra import ConsistencyLevel
 
 from sdcm.tester import ClusterTester
 
@@ -2907,6 +2908,8 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
+        # override driver consistency level
+        session.default_consistency_level = ConsistencyLevel.QUORUM
 
         session.execute("""
             CREATE KEYSPACE IF NOT EXISTS keyspace1
@@ -2924,6 +2927,8 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         session = self.cql_connection_patient(node)
+        # override driver consistency level
+        session.default_consistency_level = ConsistencyLevel.QUORUM
 
         session.execute("USE keyspace1;")
 
