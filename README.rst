@@ -1,5 +1,5 @@
 SCT - Scylla Cluster Tests
-==========================
+##########################
 
 SCT tests are designed to test Scylla database on physical/virtual servers under high read/write load.
 Currently the tests are run using avocado[1] framework (version 36.4)
@@ -10,7 +10,7 @@ These tests automatically create:
 * Monitoring server - uses official Scylla Monitoring repo_ to monitor Scylla clusters and Loaders
 
 What's inside?
---------------
+==============
 
 1. A library, called ``sdcm`` (stands for scylla distributed cluster
    manager). The word 'distributed' was used here to differentiate
@@ -39,12 +39,12 @@ What's inside?
 4. Utilities directory named ``utils``. Contains help utilities for log analizing
 
 Maintained branches
--------------------
+===================
 
 https://github.com/scylladb/scylla-cluster-tests/wiki
 
 Contribution
-------------
+============
 Since we are trying to keep the code neat, please install this git precommit hooks, that would fix the code style, and run more checks::
 
     pip install pre-commit==1.14.4
@@ -58,8 +58,9 @@ Doing a commit without the hook checks::
 
     git commit ... -n
 
+
 Setting up SCT environment
---------------------------
+==========================
 
 Currently we support Red Hat like operating systems that use YUM package manager.
 SCT tests can run on two environments: on local RHEL like OS (tested on Fedora) or inside SCT docker container.
@@ -164,8 +165,9 @@ And then write::
       }
     });
 
+
 Run the tests
--------------
+=============
 
 AWS - Amazon Web Services
 -------------------------
@@ -207,6 +209,19 @@ A throbber, that will spin until the test ends. This will hopefully evolve to::
     RESULTS    : PASS 1 | ERROR 0 | FAIL 0 | SKIP 0 | WARN 0 | INTERRUPT 0
     JOB HTML   : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/html/results.html
     TIME       : 1083.19 s
+
+Reuse Cluster (AWS)
+^^^^^^^^^^^^^^^^^^^
+
+Running a test with already provisioned cluster, you can get the test_id in the AWS console of the one of the nodes tags tab::
+
+    # add the following to your config yaml
+    test_id: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+    reuse_cluster: true
+
+    # or with using the new configuration, before the run test command
+    export SCT_TEST_ID=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+    export SCT_REUSE_CLUSTER=true
 
 
 Libvirt
@@ -269,7 +284,7 @@ With that said and done, you can run your test using the command line::
 
 
 (Optional) Follow what the test is doing
-----------------------------------------
+========================================
 
 What you can do while the test is running to see what's happening::
 
@@ -283,7 +298,7 @@ At the end of the test, there's a path to an HTML file with the job report.
 The flag ``--open-browser`` actually opens that at the end of the test.
 
 Test operations
----------------
+===============
 
 On a high level overview, the test operations are:
 
@@ -328,7 +343,7 @@ Keep in mind that the suite libraries are flexible, and will allow you to
 set scenarios that differ from this base one.
 
 Making sense of logs
---------------------
+====================
 
 In order to try to establish a timeline of what is going on, we opted for
 dumping a lot of information in the test main log. That includes:
@@ -420,17 +435,18 @@ avocado HTML report will help you locate and visualize all those files, just
 click on the test name link and you'll see the dir structure.
 
 SCT utilities
---------------------------
+=============
 
 1) utils/fetch_and_decode_stalls_from_job_database_logs.sh
 
-    This script searches in the log all reactor stalles, find unique stalles and decode them.
-    The script analyzes the database.logs that are located under avocado/job-results/<job-folder>/<test-folder>/<cluster-folder>. The script is going through nodes folders and analyze database.log for every node.
+This script searches in the log all reactor stalles, find unique stalles and decode them.
+The script analyzes the database.logs that are located under avocado/job-results/<job-folder>/<test-folder>/<cluster-folder>. The script is going through nodes folders and analyze database.log for every node.
 
-2) utils/fetch_and_decode_stalls_from_journalctl_logs_all_nodes.sh
+2) utils/fetch_and_decode_stalls_from_journalctl_logs_all_nodes.sh -
 
-    This script searches in the journalctl all reactor stalles, find unique stalles and decode them.
-    Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like:
+This script searches in the journalctl all reactor stalles, find unique stalles and decode them.
+Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like::
+
             logs
         |            |
     node1          node2
@@ -438,27 +454,28 @@ SCT utilities
 
 3) utils/fetch_and_decode_stalls_from_one_journalctl_log.sh
 
-    This script searches in the one journalctl all reactor stalles, find unique stalles and decode them.
-    Save the journalctl of one node to the database.log and move to the folder
+This script searches in the one journalctl all reactor stalles, find unique stalles and decode them.
+Save the journalctl of one node to the database.log and move to the folder
 
 For examples see utilities documentation
 
 TODO
-----
+====
 
 * Set up buildable HTML documentation, and a hosted version of it.
 * Write more tests, improve test API (always in progress, I guess).
 
 Known issues
-------------
+=============
 
 * No test API guide. Bear with us while we set up hosted test API documentation, and take a look at the current tests and the `sdcm` library for more information.
 
 Footnotes
----------
+=========
 
 * [1] http://avocado-framework.github.io/
 * [2] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
 * [3] https://prometheus.io/
 * [4] http://grafana.org/
+
 .. _repo: https://github.com/scylladb/scylla-grafana-monitoring
