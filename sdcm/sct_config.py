@@ -357,6 +357,9 @@ class SCTConfiguration(dict):
         dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", default='spot_low_price', type=str, required=False,
              help=" aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
 
+        dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", default=0.60, type=float, required=False,
+             help="The max percentage of the on demand price we set for spot/fleet instances"),
+
         # GCE config options
 
         dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", default=None, type=str, required=False,
