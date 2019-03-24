@@ -16,7 +16,7 @@ from requests import ConnectionError
 
 from es import ES
 from utils import get_job_name, retrying, remove_comments, S3Storage
-import cluster
+
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +322,9 @@ class TestStatsMixin(Stats):
         return setup_details
 
     def get_test_details(self):
+        # avoid cyclic-decencies between cluster and db_stats
+        from sdcm.cluster import Setup
+
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
         test_details['job_name'] = get_job_name()
@@ -331,7 +334,7 @@ class TestStatsMixin(Stats):
         test_details['start_time'] = time.time()
         test_details['grafana_snapshot'] = ""
         test_details['prometheus_report'] = ""
-        test_details['test_id'] = cluster.Setup.test_id()
+        test_details['test_id'] = Setup.test_id()
         return test_details
 
     def get_system_details(self):
