@@ -40,7 +40,6 @@ from .remote import disable_master_ssh
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
-from db_stats import PrometheusDBStats
 
 from avocado.utils import runtime as avocado_runtime
 
@@ -3312,6 +3311,9 @@ class BaseMonitorSet(object):
             node.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
 
     def get_prometheus_snapshot(self, node):
+        # avoid cyclic-decencies between cluster and db_stats
+        from sdcm.db_stats import PrometheusDBStats
+
         ps = PrometheusDBStats(host=node.public_ip_address)
         result = ps.create_snapshot()
         self.log.debug(result)
