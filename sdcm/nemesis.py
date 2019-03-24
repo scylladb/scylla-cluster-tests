@@ -134,6 +134,10 @@ class Nemesis(object):
 
     def _run_nodetool(self, cmd, node):
         try:
+            cql_auth = self.cluster.get_cql_auth()
+            if cql_auth:
+                cmd = re.sub(r'(nodetool.*?)', r'\1 -u {} -pw {}'.format(*cql_auth), cmd)
+
             result = node.remoter.run(cmd)
             self.log.debug("Command '%s' duration -> %s s", result.command,
                            result.duration)
@@ -394,7 +398,7 @@ class Nemesis(object):
             refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
             self._run_nodetool(refresh_cmd, node)
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+            self._run_in_cqlsh(cmd, node)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
@@ -524,7 +528,6 @@ class Nemesis(object):
                 self._run_nodetool(cmd, node)
 
     def disrupt_truncate(self):
-        node = self.target_node
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
         table_truncate_count = 0
@@ -542,11 +545,17 @@ class Nemesis(object):
 
         # if key space doesn't exist or the table is empty, create it using c-s
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
+            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
             # create with stress tool
-            node.remoter.run('cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate), verbose=True, ignore_status=True)
+            cql_auth = self.get_cql_auth()
+            if cql_auth and 'user=' not in stress_cmd:
+                # put the credentials into the right place into -mode section
+                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
+
+            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
 
         # do the actual truncation
-        self._set_current_disruption('TruncateMonkey {}'.format(node))
+        self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
         cql = 'TRUNCATE {}.{}'.format(keyspace_truncate, table)
         self._run_in_cqlsh(cql)
 
