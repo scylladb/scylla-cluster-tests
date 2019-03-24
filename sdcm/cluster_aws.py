@@ -148,7 +148,8 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
+                                   spot_max_price_percentage=self.params.get('spot_max_price'))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -260,7 +261,8 @@ class AWSCluster(cluster.BaseCluster):
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
+                                   spot_max_price_percentage=self.params.get('spot_max_price'))
         instances = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, region_name=self.region_names[dc_idx])
 
         def sort_by_index(item):
