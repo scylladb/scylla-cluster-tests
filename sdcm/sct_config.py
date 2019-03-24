@@ -271,10 +271,10 @@ class SCTConfiguration(dict):
         dict(name="nemesis_class_name", env="SCT_NEMESIS_CLASS_NAME", default='NoOpMonkey', type=str, required=False,
              help="""Nemesis class to use (possible types in sdcm.nemesis)."""),
 
-        dict(name="nemesis_interval", env="SCT_NEMESIS_CLASS_NAME", default=None, type=int, required=False,
+        dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL", default=None, type=int, required=False,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
 
-        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_CLASS_NAME", default=False, type=boolean, required=False,
+        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", default=False, type=boolean, required=False,
              help="""Run nemesis during prepare stage of the test"""),
 
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD", default=6442450944, type=int, required=False,
