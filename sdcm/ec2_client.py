@@ -152,7 +152,7 @@ class EC2Client(object):
             'sa-east-1': 'South America (Sao Paulo)'
         }
 
-        pricing = boto3.client('pricing')
+        pricing = boto3.client('pricing', region_name='us-east-1')
         response = pricing.get_products(
             ServiceCode='AmazonEC2',
             Filters=[
