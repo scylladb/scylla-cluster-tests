@@ -458,25 +458,25 @@ class ScyllaManagerTool(ScyllaManagerBase):
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
 
     def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',
-                             manager_user='scylla-manager', manager_identity_file=MANAGER_IDENTITY_FILE):
+                             create_user=None):
         """
-        scyllamgr_ssh_setup -u <username> -i <path to private key> --m <manager username> -o <path to manager private key> [HOST...]
-          -u --user				SSH user name used to connect to hosts
-          -i --identity-file			path to identity file containing SSH private key
-          -m --manager-user			user name that will be created and configured on hosts, default scylla-manager
-          -o --manager-identity-file		path to identity file containing SSH private key for MANAGER_USERNAME, if there is no such file it will be created
-          -d --discover				use first host to discover and setup all hosts in a cluster
+        scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>] [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
+           -u --ssh-user <username>        username used to connect to Scylla nodes, must be a sudo enabled user
+           -i --ssh-identity-file <file>        path to SSH identity file (private key) for user
+           -c --ssh-config-file <file>        path to alternate SSH configuration file, see man ssh_config
+              --create-user <username>        username that will be created on Scylla nodes, default scylla-manager
+              --single-node            setup the given node only, skip discovery of all the cluster nodes
+              --debug                display debug info
 
-
-        :param node_ip:
-        :param identity_file:
-        :param manager_user:
-        :return:
-
-        sudo scyllamgr_ssh_setup --user centos --identity-file /tmp/scylla-qa-ec2 --manager-user scylla-manager --manager-identity-file /tmp/scylla_manager_pem --discover 54.158.51.22"
+        sudo scyllamgr_ssh_setup -u centos -i /tmp/scylla-qa-ec2 192.168.100.11
         """
-        cmd = 'sudo scyllamgr_ssh_setup --user {} --identity-file {} --manager-user {} --manager-identity-file {} --discover {}'.format(
-            user, identity_file, manager_user, manager_identity_file, node_ip)
+        cmd = 'sudo scyllamgr_ssh_setup'
+        if create_user:
+            cmd += " --create-user {}".format(create_user)
+        # create-user
+        cmd += ' -u {} -i {} {}'.format(
+            user, identity_file, node_ip)
+
         logger.debug("SSH setup command is: {}".format(cmd))
         res = self.manager_node.remoter.run(cmd)
         MgrUtils.verify_errorless_result(cmd=cmd, res=res)
