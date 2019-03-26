@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
-MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
+MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
+MANAGER_IDENTITY_FILE = '/'.join([MANAGER_IDENTITY_FILE_DIR,'scylla-manager.pem'])
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
@@ -488,7 +489,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user='centos', create_user=None):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -496,21 +497,38 @@ class ScyllaManagerTool(ScyllaManagerBase):
         :param client_encrypt: is TSL client encryption enable/disable
         :return: ManagerCluster
 
-        --host string              hostname or IP of one of the cluster nodes
-        -n, --name alias               alias you can give to your cluster
-        --ssh-identity-file path   path to identity file containing SSH private key
-        --ssh-user name            SSH user name used to connect to the cluster nodes
+        Add a cluster to manager
+
+        Usage:
+          sctool cluster add [flags]
+
+        Flags:
+          -h, --help                      help for add
+              --host string               hostname or IP of one of the cluster nodes
+          -n, --name alias                alias you can give to your cluster
+              --ssh-identity-file path    path to identity file containing SSH private key
+              --ssh-user name             SSH user name used to connect to the cluster nodes
+              --ssl-user-cert-file path   path to client certificate when using client/server encryption with require_client_auth enabled
+              --ssl-user-key-file path    path to key associated with ssl-user-cert-file
+
+        Global Flags:
+              --api-url URL    URL of Scylla Manager server (default "https://127.0.0.1:56443/api/v1")
+          -c, --cluster name   target cluster name or ID
+
+        Scylla Docs:
+          https://docs.scylladb.com/operating-scylla/manager/1.4/add-a-cluster/
+          https://docs.scylladb.com/operating-scylla/manager/1.4/sctool/#cluster-add
+
 
         """
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        self.scylla_mgr_ssh_setup(node_ip=host)
-        identity_file_centos = '/tmp/scylla-test'
-        ssh_user = 'scylla-manager'
+        self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user)
+        ssh_user = create_user or 'scylla-manager'
         manager_identity_file = MANAGER_IDENTITY_FILE
-        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
+        cmd = 'sudo cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
                                                                                             ssh_user, name)
         # Adding client-encryption parameters if required
         if client_encrypt != False:
