@@ -1,4 +1,6 @@
 # coding: utf-8
+import os
+
 from enum import Enum
 from textwrap import dedent
 
@@ -16,7 +18,8 @@ logger = logging.getLogger(__name__)
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
-MANAGER_IDENTITY_FILE = '/'.join([MANAGER_IDENTITY_FILE_DIR,'scylla-manager.pem'])
+MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
+MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR,MANAGER_IDENTITY_FILE_NAME)
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
@@ -154,20 +157,30 @@ class ManagerTask(ScyllaManagerBase):
         """
         Gets the repair task's progress
         """
-        if self.status == TaskStatus.NEW:
-            return "0%"
+        if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
+            return " 0%"
         cmd = "task progress {} -c {}".format(self.id, self.cluster_id)
         res = self.sctool.run(cmd=cmd)
         # expecting output of:
-        # ╭─────────────┬─────────────────────╮
-        # │ Status      │ DONE                │
-        # │ Start time  │ 28 Oct 18 15:02 UTC │
-        # │ End time    │ 28 Oct 18 16:14 UTC │
-        # │ Duration    │ 1h12m23s            │
-        # │ Progress    │ 100%                │
-        # │ Datacenters │ [datacenter1]       │
-        # ├─────────────┼─────────────────────┤
-        return self.sctool.get_table_value(parsed_table=res, identifier="Progress")
+        #  Status:           RUNNING
+        #  Start time:       26 Mar 19 19:40:21 UTC
+        #  Duration: 6s
+        #  Progress: 0.12%
+        #  Datacenters:
+        #    - us-eastscylla_node_east
+        #  ╭────────────────────┬───────╮
+        #  │ system_auth        │ 0.47% │
+        #  │ system_distributed │ 0.00% │
+        #  │ system_traces      │ 0.00% │
+        #  │ keyspace1          │ 0.00% │
+        #  ╰────────────────────┴───────╯
+        # [['Status: RUNNING'], ['Start time: 26 Mar 19 19:40:21 UTC'], ['Duration: 6s'], ['Progress: 0.12%'], ... ]
+        progress = "N/A"
+        for task_property in res:
+            if task_property[0].startswith("Progress"):
+                progress = task_property[0].split(':')[1]
+                break
+        return progress
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
@@ -357,19 +370,23 @@ class ManagerCluster(ScyllaManagerBase):
         """
         Gets the Manager's Cluster Nodes status
         """
-        # Datacenter: us-eastscylla_node_east
-        # ╭──────────┬─────┬──────────────╮
-        # │ CQL      │ SSL │ Host         │
-        # ├──────────┼─────┼──────────────┤
-        # │ DOWN     │ OFF │ 3.83.201.124 │
-        # │ UP (1ms) │ OFF │ 3.91.49.252  │
-        # ╰──────────┴─────┴──────────────╯
-        # Datacenter: us-west-2scylla_node_west
-        # ╭────────────┬─────┬────────────────╮
-        # │ CQL        │ SSL │ Host           │
-        # ├────────────┼─────┼────────────────┤
-        # │ UP (154ms) │ OFF │ 35.166.186.129 │
-        # ╰────────────┴─────┴────────────────╯
+        # $ sctool status -c bla
+        # Datacenter: dc1
+        # ╭───────────┬──────────┬─────┬────────────────╮
+        # │ CQL       │ API      │ SSL │ Host           │
+        # ├───────────┼──────────┼─────┼────────────────┤
+        # │ UP (12ms) │ UP (3ms) │ OFF │ 192.168.100.11 │
+        # │ UP (5ms)  │ UP (3ms) │ OFF │ 192.168.100.12 │
+        # │ UP (4ms)  │ UP (2ms) │ OFF │ 192.168.100.13 │
+        # ╰───────────┴──────────┴─────┴────────────────╯
+        # Datacenter: dc2
+        # ╭───────────┬───────────┬─────┬────────────────╮
+        # │ CQL       │ API       │ SSL │ Host           │
+        # ├───────────┼───────────┼─────┼────────────────┤
+        # │ UP (10ms) │ UP (6ms)  │ OFF │ 192.168.100.21 │
+        # │ UP (4ms)  │ UP (5ms)  │ OFF │ 192.168.100.22 │
+        # │ UP (13ms) │ UP (10ms) │ OFF │ 192.168.100.23 │
+        # ╰───────────┴───────────┴─────┴────────────────╯
         cmd = "status -c {}".format(self.id)
         dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
@@ -378,12 +395,18 @@ class ManagerCluster(ScyllaManagerBase):
             if len(hosts_table) < 2:
                 logger.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
             else:
+                list_titles_row = hosts_table[0]
+                host_col_idx = list_titles_row.index("Host")
+                cql_status_col_idx = list_titles_row.index("CQL")
+                ssl_col_idx = list_titles_row.index("SSL")
+                api_col_idx = list_titles_row.index("API")
+
                 for line in hosts_table[1:]:
-                    host = line[2]
-                    list_cql = line[0].split()
+                    host = line[host_col_idx]
+                    list_cql = line[cql_status_col_idx].split()
                     status = list_cql[0]
                     rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
-                    ssl = line[1]
+                    ssl = line[ssl_col_idx]
                     dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=ssl)
             logger.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
@@ -528,7 +551,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user)
         ssh_user = create_user or 'scylla-manager'
         manager_identity_file = MANAGER_IDENTITY_FILE
-        cmd = 'sudo cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
+        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
                                                                                             ssh_user, name)
         # Adding client-encryption parameters if required
         if client_encrypt != False:

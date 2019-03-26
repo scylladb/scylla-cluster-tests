@@ -31,7 +31,9 @@ class MgmtCliTest(ClusterTester):
 
     :avocado: enable
     """
-    MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
+    MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
+    MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
+    MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
     CLUSTER_NAME = "mgr_cluster1"
 
     def test_mgmt_repair_nemesis(self):
