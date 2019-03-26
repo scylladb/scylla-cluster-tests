@@ -39,7 +39,7 @@ from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
 from .loader import CassandraStressExporterSetup
 from .db_stats import PrometheusDBStats
-
+from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
 from avocado.utils import runtime as avocado_runtime
 
 from invoke.exceptions import UnexpectedExit, Failure
@@ -322,13 +322,27 @@ class BaseNode(object):
 
         self._journal_thread = None
         self.n_coredumps = 0
+        self.last_line_no = 1
+        self.last_log_position = 0
         self._backtrace_thread = None
+        self._db_log_reader_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
 
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
-        self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
+        self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='28: No space left on device'),
+                                       DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
+                                       DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
+                                       DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
+                                       DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
+                                       DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
+                                       DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
+                                       DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
+                                       DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled'),
+                                       DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out'),
+                                       DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL)]
+
         self.termination_event = threading.Event()
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
@@ -636,7 +650,9 @@ class BaseNode(object):
         self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
         self.remoter.run("sudo curl --request PUT --upload-file "
                          "'%s' '%s'" % (coredump, upload_url))
-        self.log.info("You can download it by https://storage.cloud.google.com/%s (available for ScyllaDB employee)" % upload_url)
+        download_url = 'https://storage.cloud.google.com/%s' % upload_url
+        self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
+        return download_url
 
     def _get_coredump_size(self, coredump):
         try:
@@ -683,17 +699,25 @@ class BaseNode(object):
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
-                coredump = line.split()[-1]
-                self.log.debug('Found coredump file: {}'.format(coredump))
-                coredump_files = self._try_split_coredump(coredump)
-                for f in coredump_files:
-                    self._upload_coredump(f)
-                if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
-                    base_name = os.path.basename(coredump)
-                    if len(coredump_files) > 1:
-                        self.log.info("To join coredump pieces, you may use: "
-                                      "'cat {}.gz.* > {}.gz'".format(base_name, base_name))
-                    self.log.info("To decompress you may use: 'unpigz --fast {}.gz'".format(base_name))
+                urls = []
+                download_instructions = ''
+                try:
+                    coredump = line.split()[-1]
+                    self.log.debug('Found coredump file: {}'.format(coredump))
+                    coredump_files = self._try_split_coredump(coredump)
+                    for f in coredump_files:
+                        urls.append(self._upload_coredump(f))
+                    if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
+                        for url in urls:
+                            download_instructions += 'wget {}\n'.format(url)
+                        base_name = os.path.basename(coredump)
+                        if len(coredump_files) > 1:
+                            download_instructions += "\n# To join coredump pieces, you may use:\n"
+                            download_instructions += "cat {}.gz.* > {}.gz\n".format(base_name, base_name)
+                        download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
+                        self.log.info(download_instructions)
+                finally:
+                    CoreDumpEvent(corefile_urls=urls, download_instructions=download_instructions, backtrace=output)
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
@@ -743,9 +767,28 @@ class BaseNode(object):
             self.get_backtraces()
             time.sleep(30)
 
+    def db_log_reader_thread(self):
+        """
+        Keep reporting new events from db log, every 30 seconds.
+        """
+        while True:
+            if self.termination_event.isSet():
+                break
+            try:
+                self.search_database_log(start_from_beginning=False, publish_events=True)
+            except Exception:
+                self.log.exception("failed to read db log")
+            except (SystemExit, KeyboardInterrupt) as ex:
+                self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
+            time.sleep(30)
+
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
         self._backtrace_thread.start()
+
+    def start_db_log_reader_thread(self):
+        self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread)
+        self._db_log_reader_thread.start()
 
     def __str__(self):
         return 'Node %s [%s | %s] (seed: %s)' % (self.name,
@@ -764,6 +807,7 @@ class BaseNode(object):
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
             self.start_journal_thread()
         self.start_backtrace_thread()
+        self.start_db_log_reader_thread()
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
@@ -772,6 +816,8 @@ class BaseNode(object):
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
+        if self._db_log_reader_thread:
+            self._db_log_reader_thread.join(timeout)
         if self._journal_thread:
             # current implementation of journal thread uses blocking journalctl cmd with pipe to sct_log_formatter
             # hence to stop the thread we need to kill the process first
@@ -1005,28 +1051,51 @@ class BaseNode(object):
             f.seek(0, os.SEEK_END)
             return f.tell()
 
-    def search_database_log(self, expression, start_search_from_byte=0):
+    def search_database_log(self, start_from_beginning=False, publish_events=True):
+        """
+        Search for all known patterns listed in  `_database_error_events`
+
+        :param start_from_beginning: if True will search log from first line
+        :param publish_events: if True will publish events
+        :return: list of (line, error) tuples
+        """
+
         matches = []
-        pattern = re.compile(expression, re.IGNORECASE)
+        patterns = []
+        index = 0
+        # prepare/compile all regexes
+        for expression in self._database_error_events:
+            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
 
         if not os.path.exists(self.database_log):
             return matches
+
+        if start_from_beginning:
+            start_search_from_byte = 0
+            last_line_no = 0
+        else:
+            start_search_from_byte = self.last_log_position
+            last_line_no = self.last_line_no
+
         with open(self.database_log, 'r') as f:
             if start_search_from_byte:
                 f.seek(start_search_from_byte)
-            for index, line in enumerate(f):
+            for index, line in enumerate(f, start=last_line_no):
                 if index not in self._database_log_errors_index:
-                    m = pattern.search(line)
-                    if m:
-                        self._database_log_errors_index.append(index)
-                        matches.append((index, line))
-        return matches
+                    # for each line use all regexes to match, and if found send an event
+                    for pattern, event in patterns:
+                        m = pattern.search(line)
+                        if m:
+                            self._database_log_errors_index.append(index)
+                            if publish_events:
+                                event.add_info_and_publish(node=self, line_number=index, line=line)
+                            if event.severity == Severity.CRITICAL:
+                                matches.append((index, line))
+            if not start_from_beginning:
+                self.last_line_no = index if index else last_line_no
+                self.last_log_position = f.tell() + 1
 
-    def search_database_log_errors(self):
-        errors = []
-        for expression in self._database_error_patterns:
-            errors += self.search_database_log(expression)
-        return errors
+        return matches
 
     def datacenter_setup(self, datacenters):
         cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
@@ -1701,7 +1770,7 @@ class BaseCluster(object):
     def get_node_database_errors(self):
         errors = {}
         for node in self.nodes:
-            node_errors = node.search_database_log_errors()
+            node_errors = node.search_database_log(start_from_beginning=True, publish_events=False)
             if node_errors:
                 errors.update({node.name: node_errors})
         return errors
@@ -2454,6 +2523,8 @@ class BaseLoaderSet(object):
                 # put the credentials into the right place into -mode section
                 stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
 
+            CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+
             stress_cmd_opt = stress_cmd.split()[1]
             cs_pipe_name = '/tmp/cs_{}_pipe_$1_$2'.format(stress_cmd_opt)
             stress_cmd = "mkfifo {}; cat {}|python /usr/bin/cassandra_stress_exporter {} & ".format(cs_pipe_name,
@@ -2498,6 +2569,9 @@ class BaseLoaderSet(object):
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
+
+            CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -2717,14 +2791,19 @@ class BaseLoaderSet(object):
 
         errors = []
         for node, result in results:
+            node_errors = []
             output = result.stdout + result.stderr
             lines = output.splitlines()
             node_cs_res = self._parse_cs_summary(lines)
             if node_cs_res:
                 cs_summary.append(node_cs_res)
             for line in lines:
-                if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
+                for err_string in ['java.io.IOException']:
+                    if err_string in line:
+                        errors += ['%s: %s' % (node, line.strip())]
+                        node_errors += [line.strip()]
+            if node_errors:
+                CassandraStressEvent(type='error', severity=Severity.ERROR, node=node, errors=node_errors)
 
         return cs_summary, errors
 
@@ -2765,6 +2844,9 @@ class BaseLoaderSet(object):
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
             queue[TASK_QUEUE].put(node)
+
+            CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+
             try:
                 logdir = path.init_dir(output_dir, self.name)
             except OSError:
@@ -2779,6 +2861,9 @@ class BaseLoaderSet(object):
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
+
+            CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 

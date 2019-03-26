@@ -15,7 +15,7 @@ from threading import Thread
 import cluster
 import ec2_client
 from sdcm.utils import retrying, list_instances_aws
-
+from sdcm.sct_events import SpotTerminationEvent
 from . import wait
 
 logger = logging.getLogger(__name__)
@@ -475,9 +475,10 @@ class AWSNode(cluster.BaseNode):
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
-            result = self.get_aws_termination_notification()
-            if result:
-                self.log.warning('Got spot termination notification from AWS %s' % result)
+            aws_message = self.get_aws_termination_notification()
+            if aws_message:
+                self.log.warning('Got spot termination notification from AWS %s' % aws_message)
+                SpotTerminationEvent(node=self, aws_message=aws_message)
             time.sleep(5)
 
     def start_aws_termination_monitoring(self):
