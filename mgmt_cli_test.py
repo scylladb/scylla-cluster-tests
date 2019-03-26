@@ -108,6 +108,9 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster)
         self._generate_load()
         repair_task = mgr_cluster.create_repair_task()
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
         self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
         repair_task.start(use_continue=True)

@@ -36,6 +36,13 @@ class HostSsl(Enum):
     ON = "ON"
     OFF = "OFF"
 
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError:
+            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 class HostStatus(Enum):
     UP = "UP"
@@ -407,7 +414,7 @@ class ManagerCluster(ScyllaManagerBase):
                     status = list_cql[0]
                     rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
                     ssl = line[ssl_col_idx]
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=ssl)
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=HostSsl.from_str(ssl))
             logger.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
                 logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.ssl))
