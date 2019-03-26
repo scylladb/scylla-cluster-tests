@@ -19,6 +19,7 @@ import requests
 from functools import wraps
 from enum import Enum
 from collections import defaultdict
+import errno
 
 import boto3
 from libcloud.compute.providers import get_driver
@@ -439,3 +440,30 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
     return _s3_scylla_repos_cache[(dist_type, dist_version)]
+
+
+def pid_exists(pid):
+    """
+    Return True if a given PID exists.
+
+    :param pid: Process ID number.
+    """
+    try:
+        os.kill(pid, 0)
+    except OSError as detail:
+        if detail.errno == errno.ESRCH:
+            return False
+    return True
+
+
+def safe_kill(pid, signal):
+    """
+    Attempt to send a signal to a given process that may or may not exist.
+
+    :param signal: Signal number.
+    """
+    try:
+        os.kill(pid, signal)
+        return True
+    except Exception:
+        return False

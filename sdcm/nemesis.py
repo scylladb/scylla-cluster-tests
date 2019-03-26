@@ -23,6 +23,7 @@ import datetime
 import string
 import threading
 import re
+import traceback
 
 from cassandra import InvalidRequest
 
@@ -41,6 +42,7 @@ from . import wait as wait_wrap
 
 
 from sdcm.utils import remote_get_file
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 
 
 class Nemesis(object):
@@ -79,6 +81,10 @@ class Nemesis(object):
         self.log.info('Update nemesis info: %s', self.stats)
         if self.tester.create_stats:
             self.tester.update({'nemesis': self.stats})
+
+    def publish_event(self, disrupt, status=True, data={}):
+        data['node'] = self.target_node
+        DisruptionEvent(name=disrupt, status=status, **data)
 
     def set_target_node(self):
         filter_seed = self.cluster.params.get('nemesis_filter_seeds', default=True)
@@ -431,29 +437,30 @@ class Nemesis(object):
                 self.log.error(str(details))
             return search_database_enospc(node) > orig_errors
 
-        for node in nodes:
-            result = node.remoter.run('cat /proc/mounts')
-            if '/var/lib/scylla' not in result.stdout:
-                self.log.error("Scylla doesn't use an individual storage, skip enospc test")
-                continue
+        with DbEventsFilter(type='NO_SPACE_ERROR'), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
+            for node in nodes:
+                result = node.remoter.run('cat /proc/mounts')
+                if '/var/lib/scylla' not in result.stdout:
+                    self.log.error("Scylla doesn't use an individual storage, skip enospc test")
+                    continue
 
-            # check original ENOSPC error
-            orig_errors = search_database_enospc(node)
-            wait.wait_for(func=approach_enospc,
-                          timeout=300,
-                          step=5,
-                          text='Wait for new ENOSPC error occurs in database')
+                # check original ENOSPC error
+                orig_errors = search_database_enospc(node)
+                wait.wait_for(func=approach_enospc,
+                              timeout=300,
+                              step=5,
+                              text='Wait for new ENOSPC error occurs in database')
 
-            self.log.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
-            time.sleep(sleep_time)
+                self.log.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+                time.sleep(sleep_time)
 
-            self.log.debug('Delete occupy_90percent file to release space to scylla-server')
-            node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+                self.log.debug('Delete occupy_90percent file to release space to scylla-server')
+                node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
 
-            self.log.debug('Sleep a while before restart scylla-server')
-            time.sleep(sleep_time / 2)
-            node.remoter.run('sudo systemctl restart scylla-server.service')
-            node.wait_db_up()
+                self.log.debug('Sleep a while before restart scylla-server')
+                time.sleep(sleep_time / 2)
+                node.remoter.run('sudo systemctl restart scylla-server.service')
+                node.wait_db_up()
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
@@ -878,10 +885,11 @@ def log_time_elapsed_and_status(method):
         status = True
         try:
             result = method(*args, **kwargs)
-        except Exception, details:
+        except Exception as details:
             details = str(details)
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
+            full_traceback = traceback.format_exc()
             error = details
         finally:
             end_time = time.time()
@@ -893,16 +901,19 @@ def log_time_elapsed_and_status(method):
                         'duration': time_elapsed}
             args[0].operation_log.append(log_info)
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
-            if error:
-                log_info.update({'error': error})
-                status = False
 
             if class_name.find('Chaos') < 0:
                 args[0].metrics_srv.event_stop(class_name)
             disrupt = args[0].current_disruption.split()[0]
             log_info['node'] = args[0].current_disruption.replace(disrupt, '').strip()
             del log_info['operation']
+
+            if error:
+                log_info.update({'error': error, 'full_traceback': full_traceback})
+                status = False
+
             args[0].update_stats(disrupt, status, log_info)
+            args[0].publish_event(disrupt, status, log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:

@@ -56,7 +56,10 @@ from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
+
 from invoke.exceptions import UnexpectedExit, Failure
+
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -179,6 +182,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
+
+        start_events_device(self.job.logdir)
+        time.sleep(0.5)
+        InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
 
     @property
     def test_duration(self):
@@ -1205,11 +1212,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if db_cluster_errors:
             self.log.error('Errors found on DB node logs:')
-            for node_errors in db_cluster_errors:
-                for node_name in node_errors:
-                    for (index, line) in node_errors[node_name]:
-                        self.log.error('%s: L%s -> %s',
-                                       node_name, index + 1, line.strip())
+            for node_name, node_errors in db_cluster_errors.items():
+                for (index, line) in node_errors:
+                    self.log.error('%s: L%s -> %s',
+                                   node_name, index + 1, line.strip())
+            # TODO: remove this failure once we have the event analyzer inplace, cause not every error here should fail the test
             self.fail('Errors found on DB node logs (see test logs)')
 
     def tearDown(self):
@@ -1224,6 +1231,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             if self._failure_post_behavior == 'destroy':
                 clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
             self.zip_and_upload_job_log()
+
+            InfoEvent('TEST_END')
+            stop_events_device()
 
     def zip_and_upload_job_log(self):
         job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
