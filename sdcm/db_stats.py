@@ -465,7 +465,7 @@ class TestStatsMixin(Stats):
         if self.create_stats:
             update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            if self.monitors:
+            if self.monitors and self.monitors.nodes:
                 test_start_time = self._stats['test_details']['start_time']
                 update_data['results'] = self.get_prometheus_stats()
                 self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
