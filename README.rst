@@ -447,10 +447,8 @@ The script analyzes the database.logs that are located under avocado/job-results
 This script searches in the journalctl all reactor stalles, find unique stalles and decode them.
 Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like::
 
-            logs
-        |            |
-    node1          node2
-    database.log   database.log
+    logs/node1/database.log
+    logs/node2/database.log
 
 3) utils/fetch_and_decode_stalls_from_one_journalctl_log.sh
 
