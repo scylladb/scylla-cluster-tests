@@ -39,7 +39,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)
         self.db_version = db_version
         self.build_url = os.getenv('BUILD_URL', "")
-        self.job_url = os.getenv('JOB_URL', "")
 
     def check_regression(self, current_results, html_report_path):
         START_DATE = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
@@ -206,7 +205,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "metrics": metrics,
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
             "build_url": self.build_url,
-            "job_url": self.job_url,
             "full_report": True,
             "hostname": self.hostname,
         }
