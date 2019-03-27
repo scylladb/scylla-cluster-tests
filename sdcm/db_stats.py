@@ -8,14 +8,13 @@ import logging
 import requests
 import json
 import yaml
-import shutil
 from textwrap import dedent
 from math import sqrt
 
 from requests import ConnectionError
 
 from es import ES
-from utils import get_job_name, retrying, remove_comments, S3Storage
+from utils import get_job_name, retrying, remove_comments
 
 
 logger = logging.getLogger(__name__)
@@ -333,7 +332,7 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
-        test_details['grafana_snapshot'] = ""
+        test_details['grafana_snapshot'] = []
         test_details['prometheus_data'] = ""
         test_details['test_id'] = Setup.test_id()
         test_details['log_files'] = {}

@@ -3239,7 +3239,7 @@ class BaseMonitorSet(object):
                                 "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                     grafana_url, snapshot_path), shell=True)
                 # since there is only one monitoring node returning here
-                    screenshots.append(S3Storage.upload_file(snapshot_path, prefix=Setup.test_id()))
+                    screenshots.append(S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id()))
                 return screenshots
 
         except Exception, details:
@@ -3254,19 +3254,20 @@ class BaseMonitorSet(object):
                 snapshot_archive = self.get_prometheus_snapshot(node)
                 self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
 
-                return S3Storage.upload_file(snapshot_archive, prefix=Setup.test_id())
+                return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
-        return ""
+                return ""
 
     def download_scylla_manager_log(self):
         for node in self.nodes:
             try:
-                sclylla_mgmt_log_path = node.collect_mgmt_log()
+                scylla_mgmt_log_path = node.collect_mgmt_log()
                 scylla_manager_local_log_path = os.path.join(node.logdir, 'scylla_manager_log')
-                shutil.make_archive(scylla_manager_local_log_path, 'zip', sclylla_mgmt_log_path)
-                link = S3Storage.upload_file("{}.zip".format(scylla_manager_local_log_path))
+                node.receive_files(src=scylla_mgmt_log_path, dst=scylla_manager_local_log_path)
+                shutil.make_archive(scylla_manager_local_log_path, 'zip', scylla_mgmt_log_path)
+                link = S3Storage().upload_file("{}.zip".format(scylla_manager_local_log_path), dest_dir=Setup.test_id())
                 self.log.info("Scylla manager log uploaded {}".format(link))
             except Exception, details:
                 self.log.error('Error downloading scylla manager log : %s',

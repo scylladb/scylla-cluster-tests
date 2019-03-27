@@ -176,15 +176,26 @@ def remove_comments(data):
 
 
 class S3Storage(object):
-    @staticmethod
-    def generate_url(file_path, prefix=''):
-        file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://cloudius-jenkins-test.s3.amazonaws.com/{prefix}/{file_name}".format(**locals())
 
-    @classmethod
-    def upload_file(cls, file_path, prefix=''):
+    bucket_name = 'cloudius-jenkins-test'
+
+    def __init__(self):
+        self._bucket = boto3.resource('s3').Bucket(name=self.bucket_name)
+
+    def search_by_path(self, path=''):
+        files = []
+        for obj in self._bucket.objects.filter(Prefix=path):
+            files.append(obj.key)
+        return files
+
+    def generate_url(self, file_path, dest_dir=''):
+        bucket_name = self.bucket_name
+        file_name = os.path.basename(os.path.normpath(file_path))
+        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(**locals())
+
+    def upload_file(self, file_path, dest_dir=''):
         try:
-            s3_url = cls.generate_url(file_path, prefix)
+            s3_url = self.generate_url(file_path, dest_dir)
             with open(file_path) as fh:
                 mydata = fh.read()
                 logger.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
@@ -194,6 +205,37 @@ class S3Storage(object):
         except Exception as e:
             logger.debug("Unable to upload to S3: %s" % e)
             return ""
+
+    def download_file(self, link):
+        resp = requests.get(link)
+        try:
+            if resp.status_code == 200:
+                file_path = os.path.basename(os.path.dirname(link))
+                if not os.path.exists(file_path):
+                    os.mkdir(file_path)
+                with open(os.path.join(file_path, os.path.basename(link)), 'wb') as fh:
+                    fh.write(resp.content)
+        except Exception as details:
+            logger.warning("File {} is not downloaded by reason: {}".format(file_path), details)
+
+
+def list_logs_by_test_id(test_id):
+    log_types = ['db-cluster', 'monitor-set', 'prometheus', 'grafana', 'job']
+    results = []
+
+    if not test_id:
+        return results
+
+    log_files = S3Storage().search_by_path(path=test_id)
+    for log_file in log_files:
+        for log_type in log_types:
+            if log_type in log_file:
+                results.append({"file_path": log_file,
+                                "type": log_type,
+                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file)})
+                break
+
+    return results
 
 
 
