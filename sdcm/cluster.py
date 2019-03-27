@@ -1296,6 +1296,7 @@ server_encryption_options:
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+        time.sleep(5)
 
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         self.log.debug('Install scylla-manager')
