@@ -37,6 +37,10 @@ hinted_handoff_disabled: false
 # authenticator_user: 'cassandra'
 # authenticator_password: 'cassandra'
 
+# Set RF of system_auth
+# It will be set to 3 by default.
+# system_auth_rf: '' # disable the update
+
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: false
