@@ -7,7 +7,9 @@ from prettytable import PrettyTable
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping
+from sdcm.utils import (list_instances_aws, list_instances_gce, clean_cloud_instances,
+                        aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
+                        list_logs_by_test_id)
 
 click_completion.init()
 
@@ -211,6 +213,37 @@ def perf_regression_report(es_id, emails, debug_log):
     click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
     ra.check_regression(es_id)
     click.secho(message="Done." % email_list, fg="yellow")
+
+
+@click.group(help="Group of commands for investigating testrun")
+def investigate():
+    pass
+
+
+@investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
+@click.argument('test_id')
+def show_log(test_id):
+    x = PrettyTable(["Log type", "Link"])
+    x.align = "l"
+    files = list_logs_by_test_id(test_id)
+    for log in files:
+        x.add_row([log["type"], log["link"]])
+    click.echo(x.get_string(title="Log links for testrun with test id {}".format(test_id)))
+
+
+@investigate.command('show-monitor', help="Show link to prometheus data snapshot")
+@click.argument('test_id')
+def show_monitor(test_id):
+    x = PrettyTable(["Link to prometheus snapshot"])
+    x.align = "l"
+    files = list_logs_by_test_id(test_id)
+    for log in files:
+        if log["type"] == "prometheus":
+            x.add_row([log["link"]])
+    click.echo(x.get_string())
+
+
+cli.add_command(investigate)
 
 
 if __name__ == '__main__':

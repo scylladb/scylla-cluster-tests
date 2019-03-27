@@ -1220,13 +1220,13 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
         try:
             joblog_archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
-            s3_link = S3Storage.upload_file(file_path=joblog_archive, prefix=cluster.Setup.test_id())
+            s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
             self.log.info('Link to job.log archive {}'.format(s3_link))
-            self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
         except Exception as details:
             self.log.warning('Errors during creating and uploading archive of job.log {}'.format(details))
+        self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
@@ -1359,7 +1359,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def collect_logs(self):
         self.log.info('Start collect logs...')
         logs_dict = {"db_cluster_log": "",
-                     "monitoring_log": ""}
+                     "monitoring_log": "",
+                     "prometheus_data": ""}
 
         storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
         os.mkdir(storing_dir)
@@ -1367,16 +1368,19 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.log.info("Storing dir is {}".format(storing_dir))
         if self.db_cluster:
             db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
-            logs_dict["db_cluster_log"] = S3Storage.upload_file(file_path=self.archive_logs(db_cluster_log_path),
-                                                                prefix=cluster.Setup.test_id())
+            logs_dict["db_cluster_log"] = S3Storage().upload_file(file_path=self.archive_logs(db_cluster_log_path),
+                                                                  dest_dir=cluster.Setup.test_id())
         if self.monitors:
             monitoring_log_path = self.monitors.collect_logs(storing_dir)
-            logs_dict["monitoring_log"] = S3Storage.upload_file(file_path=self.archive_logs(monitoring_log_path),
-                                                                prefix=cluster.Setup.test_id())
+            logs_dict["monitoring_log"] = S3Storage().upload_file(file_path=self.archive_logs(monitoring_log_path),
+                                                                  dest_dir=cluster.Setup.test_id())
             prometheus_data = self.monitors.download_monitor_data()
+            logs_dict["prometheus_data"] = prometheus_data
 
         if self.create_stats:
-            self.update({'test_details': {'log_files': logs_dict, 'prometheus_data': prometheus_data}})
+            self.update({'test_details': {'log_files': logs_dict}})
+
+        self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".format(cluster.Setup.test_id()))
 
     def archive_logs(self, path):
         self.log.info('Creating archive....')
