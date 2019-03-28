@@ -310,7 +310,7 @@ class BaseNode(object):
 
     def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         self.name = name
-        self.is_seed = None
+        self.is_seed = False
         self.dc_idx = dc_idx
         try:
             self.logdir = path.init_dir(base_logdir, self.name)
@@ -1804,7 +1804,7 @@ class BaseScyllaCluster(object):
         self.nemesis = []
         self.nemesis_threads = []
         self._seed_node_rebooted = False
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -1817,8 +1817,8 @@ class BaseScyllaCluster(object):
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else\
             self.params.get('append_scylla_args')
 
-    def get_seed_nodes_private_ips(self):
-        if self.seed_nodes_private_ips is None:
+    def get_seed_nodes_from_node(self):
+        if self.seed_nodes_ips is None:
             node = self.nodes[0]
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                          'scylla.yaml')
@@ -1827,15 +1827,15 @@ class BaseScyllaCluster(object):
             with open(yaml_dst_path, 'r') as yaml_stream:
                 conf_dict = yaml.safe_load(yaml_stream)
                 try:
-                    self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-                except Exception, details:
+                    self.seed_nodes_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+                except Exception as details:
                     self.log.debug('Loaded YAML data structure: %s', conf_dict)
                     self.log.error('Scylla YAML config contents:')
                     with open(yaml_dst_path, 'r') as yaml_stream:
                         self.log.error(yaml_stream.read())
                     raise ValueError('Exception determining seed node ips: %s' %
                                      details)
-        return self.seed_nodes_private_ips
+        return self.seed_nodes_ips
 
     def enable_client_encrypt(self):
         for node in self.nodes:
@@ -1848,14 +1848,13 @@ class BaseScyllaCluster(object):
             node.disable_client_encrypt()
 
     def get_seed_nodes(self):
-        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
+        seed_nodes_ips = self.get_seed_nodes_from_node()
         seed_nodes = []
         for node in self.nodes:
-            if node.private_ip_address in seed_nodes_private_ips:
-                node.is_seed = True
+            if node.ip_address() in seed_nodes_ips:
+                node.is_seed = True  # TODO: check if we need to change the is_seed, later on
                 seed_nodes.append(node)
-            else:
-                node.is_seed = False
+        assert seed_nodes, "We should have at least one selected seed by now"
         return seed_nodes
 
     def get_seed_nodes_by_flag(self, private_ip=True):
@@ -1871,10 +1870,7 @@ class BaseScyllaCluster(object):
             node_public_ips = [node.public_ip_address for node
                                in self.nodes if node.is_seed]
             seeds = ",".join(node_public_ips)
-        if not seeds:
-            # use first node as seed by default
-            seeds = self.nodes[0].private_ip_address if private_ip else self.nodes[0].public_ip_address
-            self.nodes[0].is_seed = True
+        assert seeds, "We should have at least one selected seed by now"
         return seeds
 
     def _update_db_binary(self, new_scylla_bin, node_list):
@@ -2238,14 +2234,14 @@ class BaseScyllaCluster(object):
             node.scylla_setup(disks)
 
             seed_address_list = seed_address.split(',')
-            if node.private_ip_address not in seed_address_list:
+            if node.ip_address() not in seed_address_list:
                 wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                               step=30,
                               text='Wait for seed node to be up after reboot')
             node.restart()
             node.wait_ssh_up()
 
-            if node.private_ip_address in seed_address_list:
+            if node.ip_address() in seed_address_list:
                 self.log.info('Seed node is up after reboot')
                 self._seed_node_rebooted = True
 
