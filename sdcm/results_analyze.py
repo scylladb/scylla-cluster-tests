@@ -24,7 +24,7 @@ class QueryFilter(object):
         self.test_doc = test_doc
         self.test_name = test_doc["_source"]["test_details"]["test_name"]
         self.is_gce = is_gce
-        self.date_re = '/2018-*/'
+        self.date_re = '/.*/'
 
     def setup_instance_params(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
