@@ -207,7 +207,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
                                                    node_prefix=node_prefix,
                                                    n_nodes=n_nodes,
                                                    params=params)
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
 
     def _node_setup(self, node):
         # Sometimes people might set up base images with

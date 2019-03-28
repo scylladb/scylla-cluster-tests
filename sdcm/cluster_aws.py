@@ -551,7 +551,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                n_nodes=n_nodes,
                                                params=params,
                                                node_type=node_type)
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
@@ -561,18 +561,11 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
         if self.nodes:
-            if dc_idx > 0:
-                node_public_ips = [node.public_ip_address for node
-                                   in self.nodes if node.is_seed]
-                seeds = ",".join(node_public_ips)
-                if not seeds:
-                    seeds = self.nodes[0].public_ip_address
-            else:
-                node_private_ips = [node.private_ip_address for node
-                                    in self.nodes if node.is_seed]
-                seeds = ",".join(node_private_ips)
-                if not seeds:
-                    seeds = self.nodes[0].private_ip_address
+            node_ips = [node.ip_address() for node in self.nodes if node.is_seed]
+            seeds = ",".join(node_ips)
+
+            assert seeds, "We should have at least one selected seed by now"
+
             ec2_user_data += ' --seeds %s ' % seeds
 
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)

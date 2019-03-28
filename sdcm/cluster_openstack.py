@@ -210,7 +210,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):
                                                      node_prefix=node_prefix,
                                                      n_nodes=n_nodes,
                                                      params=params)
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data=''):
