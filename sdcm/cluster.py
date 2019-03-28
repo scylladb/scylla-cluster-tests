@@ -512,7 +512,7 @@ class BaseNode(object):
         try:
             if self.init_system == 'systemd':
                 # Here we're assuming that journalctl systems are Scylla images
-                db_services_log_cmd = ('journalctl -f --no-tail --no-pager '
+                db_services_log_cmd = ('sudo journalctl -f --no-tail --no-pager '
                                        '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
@@ -1381,7 +1381,7 @@ server_encryption_options:
     def collect_mgmt_log(self):
         self.log.debug("Collect scylla manager log ...")
         mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
-        self.remoter.run('journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
+        self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
         self.log.debug("Collected log : {}".format(mgmt_log_name))
         return mgmt_log_name
 
