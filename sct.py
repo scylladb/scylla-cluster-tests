@@ -5,6 +5,7 @@ import click
 import click_completion
 from prettytable import PrettyTable
 
+from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping
 
@@ -189,6 +190,27 @@ def conf_docs(output_format):
         click.secho(SCTConfiguration().dump_help_config_markdown())
     elif output_format == 'yaml':
         click.secho(SCTConfiguration().dump_help_config_yaml())
+
+
+@cli.command("perf-regression-report", help="Generate and send performance regression report")
+@click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
+@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
+@click.option("-l", "--debug-log", required=False, default=False, is_flag=True, help="Print debug logs")
+def perf_regression_report(es_id, emails, debug_log):
+    email_list = emails.split(",")
+    click.secho(message="Will send Performance Regression report to %s" % email_list, fg="green")
+    rootLogger = None
+    if debug_log:
+        import sys
+        import logging
+        rootLogger = logging.getLogger()
+        rootLogger.setLevel(logging.DEBUG)
+        rootLogger.addHandler(logging.StreamHandler(sys.stdout))
+    ra = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
+                                    send_email=True, email_recipients=email_list, logger=rootLogger)
+    click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
+    ra.check_regression(es_id)
+    click.secho(message="Done." % email_list, fg="yellow")
 
 
 if __name__ == '__main__':
