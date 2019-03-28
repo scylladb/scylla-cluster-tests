@@ -564,7 +564,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node_ips = [node.ip_address() for node in self.nodes if node.is_seed]
             seeds = ",".join(node_ips)
 
-            assert seeds, "We should have at least one selected seed by now"
+            if not seeds:
+                seeds = self.nodes[0].ip_address()
 
             ec2_user_data += ' --seeds %s ' % seeds
 
