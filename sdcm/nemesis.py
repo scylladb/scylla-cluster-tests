@@ -412,7 +412,7 @@ class Nemesis(object):
             Search database log by executing cmd inside node, use shell tool to
             avoid return and process huge data.
             """
-            cmd = "journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
+            cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
             result = node.remoter.run(cmd, verbose=True)
             return int(result.stdout)
 
