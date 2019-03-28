@@ -1260,7 +1260,9 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
             elif self.is_debian8():
-                self.remoter.run('echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list')
+                self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
+                self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
+                self.remoter.run("echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install gnupg-curl -y')
                 self.remoter.run('sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
@@ -1347,15 +1349,20 @@ server_encryption_options:
         if self.is_debian8():
             self.remoter.run(cmd="sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
             self.remoter.run(
-                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee -a /etc/apt/sources.list.d/jessie-backports.list")
+                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee -a /etc/apt/sources.list.d/backports.list")
             self.remoter.run(cmd="sudo touch /etc/apt/apt.conf.d/99jessie-backports")
             self.remoter.run(
                 cmd="sudo echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99jessie-backports")
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
             install_transport_https = dedent("""
-                            if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                            if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                            echo 'Acquire::Check-Valid-Until false;' > /etc/apt/apt.conf.d/99jessie-backports
+                            sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
                             apt-get install apt-transport-https
                             apt-get install gnupg-curl
+                            apt-get update
+                            apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+                            apt-get install -t jessie-backports ca-certificates-java -y
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
@@ -2399,12 +2406,14 @@ class BaseLoaderSet(object):
 
         elif node.is_debian8():
             install_java_script = dedent("""
-                echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list
+                sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
+                echo 'deb http://archive.debian.org/debian jessie-backports main' |sudo tee /etc/apt/sources.list.d/backports.list
+                echo 'Acquire::Check-Valid-Until false;' |sudo tee /etc/apt/apt.conf.d/99jessie-backports
                 apt-get update
                 apt-get install gnupg-curl -y
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
                 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
+                echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /' |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
                 apt-get update
                 apt-get install -y openjdk-8-jre-headless -t jessie-backports
                 update-java-alternatives -s java-1.8.0-openjdk-amd64
