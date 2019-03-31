@@ -350,6 +350,7 @@ class BaseNode(object):
                                        DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL)]
 
         self.termination_event = threading.Event()
+        self._running_nemesis = None
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -360,6 +361,7 @@ class BaseNode(object):
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
         self._cassandra_stress_version = None
+        self.lock = threading.Lock()
 
     @property
     def cassandra_stress_version(self):
@@ -372,6 +374,27 @@ class BaseNode(object):
                 self.log.error("C-S version not found!")
                 self._cassandra_stress_version = "unknown"
         return self._cassandra_stress_version
+
+    @property
+    def running_nemesis(self):
+        return self._running_nemesis
+
+    @running_nemesis.setter
+    def running_nemesis(self, nemesis):
+        """Set name of nemesis which is started on node
+
+        Decorators:
+            running_nemesis.setter
+
+        Arguments:
+            nemesis {str} -- class name of Nemesis
+        """
+
+        # Only one Nemesis could run on node. Limitation
+        # of first version for X parallel Nemesis
+
+        with self.lock:
+            self._running_nemesis = nemesis
 
     @property
     def distro(self):
@@ -1727,7 +1750,6 @@ class BaseCluster(object):
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
-        self.nemesis = []
         self.params = params
         self.datacenter = region_names or []
         if Setup.REUSE_CLUSTER:
@@ -2295,7 +2317,9 @@ class BaseScyllaCluster(object):
                           key=key, threshold=size, keyspaces=keyspace)
 
     def add_nemesis(self, nemesis, tester_obj):
-        self.nemesis.append(nemesis(tester_obj=tester_obj,
+        for nem in nemesis:
+            for i in range(nem['num_threads']):
+                self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
                                     termination_event=self.termination_event))
 
     def clean_nemesis(self):
@@ -2305,9 +2329,9 @@ class BaseScyllaCluster(object):
     def start_nemesis(self, interval=30):
         for nemesis in self.nemesis:
             nemesis.set_termination_event(self.termination_event)
-            nemesis.set_target_node()
+            nemesis.set_target_node(is_running=True)
             nemesis_thread = threading.Thread(target=nemesis.run,
-                                              args=(interval,), verbose=True)
+                                              args=(interval, ), verbose=True)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 

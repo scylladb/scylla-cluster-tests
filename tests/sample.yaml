@@ -14,7 +14,11 @@ n_monitor_nodes: 1
 monitor_branch: 'branch-2.1' # In case you would like to run the test with newer monitoring branch e.g. master
 keyspace_num: 1
 user_prefix: 'sample-configuration-tst'
-nemesis_class_name: 'NoOpMonkey' # no nemesis will be applied
+# new format supported to run nemesis in parallel
+# if value is equal 'nemesisName' work in single thread on only run nemesis
+# if value have format 'namesisName1:Num1 nemesisName2:Num2 ...' will run in parallel threads
+# nemesisName1 in Num1 threads, nemesisName2 in Num2 threads.
+nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2' # Run on NoOpMonkey thread, and ChaosMonkey in 2 threads, total 3 nemesises will be run
 nemesis_interval: 5
 nemesis_during_prepare: 'true'
 

@@ -255,8 +255,20 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         :return: Nemesis class.
         :rtype: nemesis.Nemesis derived class
         """
-        class_name = self.params.get('nemesis_class_name')
-        return getattr(nemesis, class_name)
+        nemesis_threads = []
+        list_class_name = self.params.get('nemesis_class_name')
+        for cl in list_class_name.split(' '):
+            try:
+                nemesis_name, num = cl.strip().split(':')
+                nemesis_name = nemesis_name.strip()
+                num = num.strip()
+
+            except ValueError:
+                nemesis_name = cl.split(':')[0]
+                num = 1
+            nemesis_threads.append({'nemesis': getattr(nemesis, nemesis_name), 'num_threads': int(num)})
+
+        return nemesis_threads
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
