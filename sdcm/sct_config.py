@@ -268,7 +268,16 @@ class SCTConfiguration(dict):
         # Nemesis config options
 
         dict(name="nemesis_class_name", env="SCT_NEMESIS_CLASS_NAME", type=str,
-             help="""Nemesis class to use (possible types in sdcm.nemesis)."""),
+             help="""
+                    Nemesis class to use (possible types in sdcm.nemesis).
+                    Next syntax supporting:
+                    - nemesis_class_name: "NemesisName"  Run one nemesis in single thread
+                    - nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num>
+                      parallel threads on different nodes. Ex.: "ChaosMonkey:2"
+                    - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
+                      <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
+                      parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+            """),
 
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",  type=int,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
