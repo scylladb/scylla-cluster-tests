@@ -289,11 +289,11 @@ class Nemesis(object):
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
-    def _add_and_init_new_cluster_node(self, old_node_private_ip=None, timeout=10800):
+    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=10800):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
-        new_node.replacement_node_ip = old_node_private_ip
+        new_node.replacement_node_ip = old_node_ip
         try:
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
         except (NodeSetupFailed, NodeSetupTimeout):
@@ -317,7 +317,7 @@ class Nemesis(object):
                 self.log.error(str(details))
                 return None
         self._set_current_disruption('Decommission %s' % self.target_node)
-        target_node_ip = self.target_node.private_ip_address
+        target_node_ip = self.target_node.ip_address()
         decommission_cmd = 'nodetool --host localhost decommission'
         result = self._run_nodetool(decommission_cmd, self.target_node)
         if result is not None:
@@ -327,11 +327,11 @@ class Nemesis(object):
                 verification_node = random.choice(self.cluster.nodes)
                 node_info_list = get_node_info_list(verification_node)
 
-            private_ips = [node_info['ip'] for node_info in node_info_list]
+            nodetool_ips = [node_info['ip'] for node_info in node_info_list]
             error_msg = ('Node that was decommissioned %s still in the cluster. '
                          'Cluster status info: %s' % (self.target_node,
                                                       node_info_list))
-            if target_node_ip in private_ips:
+            if target_node_ip in nodetool_ips:
                 self.log.info('Decommission %s FAIL', self.target_node)
                 self.log.error(error_msg)
             else:
@@ -353,9 +353,9 @@ class Nemesis(object):
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
-        old_node_private_ip = self.target_node.private_ip_address
+        old_node_ip = self.target_node.ip_address()
         self._terminate_cluster_node(self.target_node)
-        new_node = self._add_and_init_new_cluster_node(old_node_private_ip)
+        new_node = self._add_and_init_new_cluster_node(old_node_ip)
         self.repair_nodetool_repair(new_node)
 
     def disrupt_no_corrupt_repair(self):
@@ -547,7 +547,7 @@ class Nemesis(object):
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
             stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
             # create with stress tool
-            cql_auth = self.get_cql_auth()
+            cql_auth = self.cluster.get_cql_auth()
             if cql_auth and 'user=' not in stress_cmd:
                 # put the credentials into the right place into -mode section
                 stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
