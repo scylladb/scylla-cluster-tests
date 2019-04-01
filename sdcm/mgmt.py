@@ -12,6 +12,7 @@ import time
 import datetime
 
 from sdcm import wait
+from sdcm.utils import Distro
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +456,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         logger.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
         time.sleep(sleep)
         logger.debug("Initiating Scylla-Manager, version: {}".format(self.version))
+        dict_distro_user = {Distro.CENTOS7: 'centos', Distro.DEBIAN8: 'admin', Distro.UBUNTU16: 'ubuntu'}
+        self.user = dict_distro_user[manager_node.distro] if manager_node.distro in dict_distro_user else 'N/A'
 
     @property
     def version(self):
@@ -519,7 +522,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user='centos', create_user=None):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -554,6 +557,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
+        user = user or self.user
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
         self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user)
         ssh_user = create_user or 'scylla-manager'
@@ -592,6 +596,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
         self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+
 
     def rollback_upgrade(self, scylla_mgmt_repo):
 
