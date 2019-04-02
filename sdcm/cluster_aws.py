@@ -585,7 +585,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
         )
-        if cluster.Setup.MULTI_REGION:
+        if cluster.Setup.MULTI_REGION or cluster.IP_SSH_CONNECTIONS == 'public':
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,
