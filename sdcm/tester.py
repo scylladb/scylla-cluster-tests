@@ -165,8 +165,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.Setup.set_test_id(self.params.get('test_id'))
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
+        cluster_backend = self.params.get('cluster_backend', '')
+        if cluster_backend == 'aws':
+            cluster.Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
+        elif cluster_backend == 'gce':
+            cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
-        cluster.Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
         cluster.Setup.set_remote_runner(self.params.get('ssh_remote', default='Remote'))
 
         version_tag = self.params.get('version_tag')
