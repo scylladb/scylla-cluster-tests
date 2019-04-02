@@ -473,7 +473,7 @@ class AWSNode(cluster.BaseNode):
             if '404 - Not Found' not in status:
                 return status
         except Exception as details:
-            self.log.error('Error during getting aws termination notification %s' % details)
+            self.log.warning('Error during getting aws termination notification %s' % details)
         return None
 
     def monitor_aws_termination_thread(self):
