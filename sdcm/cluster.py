@@ -2079,7 +2079,7 @@ class BaseScyllaCluster(object):
         up_statuses = []
         for node in nodes:
             for dc, dc_status in status.iteritems():
-                ip_status = dc_status.get(node.private_ip_address)
+                ip_status = dc_status.get(node.ip_address())
                 if ip_status and ip_status["state"] == "UN":
                     up_statuses.append(True)
                 else:
