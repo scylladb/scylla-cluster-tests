@@ -595,7 +595,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if cluster.Setup.MULTI_REGION:
+        if cluster.Setup.MULTI_REGION or cluster.IP_SSH_CONNECTIONS == 'public':
             seed_address = self.get_seed_nodes_by_flag(private_ip=False)
         else:
             seed_address = self.get_seed_nodes_by_flag(private_ip=True)
