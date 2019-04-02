@@ -318,7 +318,7 @@ class BaseNode(object):
 
         self._public_ip_address = None
         self._private_ip_address = None
-        ssh_login_info['hostname'] = self.ip_address()
+        ssh_login_info['hostname'] = self.ssh_address
 
         self.remoter = Setup.REMOTE(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
@@ -487,8 +487,16 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
+    @property
     def ip_address(self):
-        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+        if Setup.MULTI_REGION:
+            return self.public_ip_address
+        else:
+            return self.private_ip_address
+
+    @property
+    def ssh_address(self):
+        if IP_SSH_CONNECTIONS == 'public':
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -1850,25 +1858,22 @@ class BaseScyllaCluster(object):
         seed_nodes_ips = self.get_seed_nodes_from_node()
         seed_nodes = []
         for node in self.nodes:
-            if node.ip_address() in seed_nodes_ips:
+            if node.ip_address in seed_nodes_ips:
                 node.is_seed = True  # TODO: check if we need to change the is_seed, later on
                 seed_nodes.append(node)
         assert seed_nodes, "We should have at least one selected seed by now"
         return seed_nodes
 
-    def get_seed_nodes_by_flag(self, private_ip=True):
+    def get_seed_nodes_by_flag(self):
         """
         We set is_seed at two point, before and after node_setup.
         However, we can only call this function when the flag is set.
         """
-        if private_ip:
-            node_private_ips = [node.private_ip_address for node
-                                in self.nodes if node.is_seed]
-            seeds = ",".join(node_private_ips)
-        else:
-            node_public_ips = [node.public_ip_address for node
-                               in self.nodes if node.is_seed]
-            seeds = ",".join(node_public_ips)
+
+        node_ips = [node.ip_address for node
+                    in self.nodes if node.is_seed]
+        seeds = ",".join(node_ips)
+
         assert seeds, "We should have at least one selected seed by now"
         return seeds
 
@@ -2078,7 +2083,7 @@ class BaseScyllaCluster(object):
         up_statuses = []
         for node in nodes:
             for dc, dc_status in status.iteritems():
-                ip_status = dc_status.get(node.ip_address())
+                ip_status = dc_status.get(node.ip_address)
                 if ip_status and ip_status["state"] == "UN":
                     up_statuses.append(True)
                 else:
@@ -2233,14 +2238,14 @@ class BaseScyllaCluster(object):
             node.scylla_setup(disks)
 
             seed_address_list = seed_address.split(',')
-            if node.ip_address() not in seed_address_list:
+            if node.ip_address not in seed_address_list:
                 wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                               step=30,
                               text='Wait for seed node to be up after reboot')
             node.restart()
             node.wait_ssh_up()
 
-            if node.ip_address() in seed_address_list:
+            if node.ip_address in seed_address_list:
                 self.log.info('Seed node is up after reboot')
                 self._seed_node_rebooted = True
 
@@ -2435,7 +2440,7 @@ class BaseLoaderSet(object):
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
-                stress_cmd += " -node {}".format(first_node.ip_address())
+                stress_cmd += " -node {}".format(first_node.ip_address)
 
             cql_auth = self.get_cql_auth()
             if cql_auth and 'user=' not in stress_cmd:
@@ -2917,7 +2922,7 @@ class BaseLoaderSet(object):
                     continue
                 self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
 
-                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address())
+                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address)
                 self.log.debug(result)
                 self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
                 time.sleep(interval)
@@ -3054,7 +3059,7 @@ class BaseMonitorSet(object):
         node.remoter.run("sudo bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
-        db_targets_list = [n.ip_address() for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+        db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3066,7 +3071,7 @@ class BaseMonitorSet(object):
             with open(local_template_tmp) as f:
                 templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["%s:9103" % n.ip_address() for n in self.targets["loaders"].nodes]
+            loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
