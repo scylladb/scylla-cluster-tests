@@ -561,11 +561,11 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
         if self.nodes:
-            node_ips = [node.ip_address() for node in self.nodes if node.is_seed]
+            node_ips = [node.ip_address for node in self.nodes if node.is_seed]
             seeds = ",".join(node_ips)
 
             if not seeds:
-                seeds = self.nodes[0].ip_address()
+                seeds = self.nodes[0].ip_address
 
             ec2_user_data += ' --seeds %s ' % seeds
 
@@ -585,7 +585,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
         )
-        if cluster.Setup.MULTI_REGION or cluster.IP_SSH_CONNECTIONS == 'public':
+        if cluster.Setup.MULTI_REGION:
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,
@@ -595,10 +595,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if cluster.Setup.MULTI_REGION or cluster.IP_SSH_CONNECTIONS == 'public':
-            seed_address = self.get_seed_nodes_by_flag(private_ip=False)
-        else:
-            seed_address = self.get_seed_nodes_by_flag(private_ip=True)
+        seed_address = self.get_seed_nodes_by_flag()
 
         def scylla_ami_setup_done():
             """
