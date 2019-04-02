@@ -317,7 +317,7 @@ class Nemesis(object):
                 self.log.error(str(details))
                 return None
         self._set_current_disruption('Decommission %s' % self.target_node)
-        target_node_ip = self.target_node.ip_address()
+        target_node_ip = self.target_node.ip_address
         decommission_cmd = 'nodetool --host localhost decommission'
         result = self._run_nodetool(decommission_cmd, self.target_node)
         if result is not None:
@@ -353,7 +353,7 @@ class Nemesis(object):
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
-        old_node_ip = self.target_node.ip_address()
+        old_node_ip = self.target_node.ip_address
         self._terminate_cluster_node(self.target_node)
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
         self.repair_nodetool_repair(new_node)
