@@ -150,10 +150,10 @@ def get_job_name():
 def verify_scylla_repo_file(content, is_rhel_like=True):
     logger.info('Verifying Scylla repo file')
     if is_rhel_like:
-        body_prefix = ['[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
+        body_prefix = ['#', '[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
                        'skip_if_unavailable=', 'gpgkey=', 'repo_gpgcheck=', 'enabled_metadata=']
     else:
-        body_prefix = ['deb']
+        body_prefix = ['#', 'deb']
     for line in content.split('\n'):
         valid_prefix = False
         for prefix in body_prefix:
