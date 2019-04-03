@@ -1068,6 +1068,17 @@ client_encryption_options:
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_debian9():
+                install_debian_9_prereqs = dedent("""
+                    apt-get update
+                    apt-get install apt-transport-https -y
+                    apt-get install gnupg1-curl dirmngr -y
+                    apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
+
             self.remoter.run('sudo apt-get upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
