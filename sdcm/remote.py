@@ -132,7 +132,7 @@ class LocalCmdRunner(CommandRunner):
         setattr(result, 'duration', time.time() - start_time)
         setattr(result, 'exit_status', result.exited)
         if verbose:
-            self.log.debug('Command {} finished with status {}'.format(result.command, result.exited))
+            self.log.info('Command {} finished with status {}'.format(result.command, result.exited))
         #     self.log.debug('STDOUT: {}'.format(result.stdout.encode('utf-8')))
             self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
 

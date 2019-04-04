@@ -3190,14 +3190,12 @@ class BaseMonitorSet(object):
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
             localrunner.run("bash -ce '%s'" % install_phantom_js_script)
-            localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                            "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
-                            shell=True)
+            localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js")
             self.phantomjs_installed = True
         else:
             self.log.debug("PhantomJS is already installed!")
 
-    def get_grafana_screenshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
@@ -3217,6 +3215,7 @@ class BaseMonitorSet(object):
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 screenshots = []
+                snapshots = []
                 for i, name in enumerate(screenshot_names):
                     version = self.monitoring_version.replace('.', '-')
                     grafana_url = screenshot_url_tmpl.format(
@@ -3229,16 +3228,32 @@ class BaseMonitorSet(object):
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
                                                  "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
-                    localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                                    "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (grafana_url, snapshot_path), shell=True)
-                # since there is only one monitoring node returning here
-                    screenshots.append(S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id()))
-                return screenshots
 
-        except Exception, details:
+                    screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path))
+                    snapshots.append(self._get_shared_snapshot_link(grafana_url))
+
+                return {'screenshots': screenshots, 'snapshots': snapshots}
+
+        except Exception as details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
-        return ""
+        return {}
+
+    def _get_screenshot_link(self, grafana_url, snapshot_path):
+        localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
+                        grafana_url, snapshot_path))
+        return S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id())
+
+    def _get_shared_snapshot_link(self, grafana_url):
+        result = localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
+                # since there is only one monitoring node returning here
+        output = result.stdout.strip()
+        if "Error" in output:
+            self.log.info(output)
+            return ""
+        else:
+            self.log.info("Shared grafana snapshot: {}".format(output))
+            return output
 
     @log_run_info
     def download_monitor_data(self):
