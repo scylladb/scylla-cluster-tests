@@ -332,7 +332,8 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
-        test_details['grafana_snapshot'] = []
+        test_details['grafana_snapshots'] = []
+        test_details['grafana_screenshots'] = []
         test_details['prometheus_data'] = ""
         test_details['test_id'] = Setup.test_id()
         test_details['log_files'] = {}
@@ -455,7 +456,9 @@ class TestStatsMixin(Stats):
             if self.monitors and self.monitors.nodes:
                 test_start_time = self._stats['test_details']['start_time']
                 update_data['results'] = self.get_prometheus_stats()
-                self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
+                grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
+                self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
+                self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
                 self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
 
             if self.db_cluster:

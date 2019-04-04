@@ -225,8 +225,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return None
 
     def _get_grafana_snapshot(self, test_doc):
-        grafana_snapshot = test_doc['_source']['test_details'].get('grafana_snapshot')
-        return grafana_snapshot if isinstance(grafana_snapshot, list) else [grafana_snapshot]
+        grafana_snapshots = test_doc['_source']['test_details'].get('grafana_snapshots')
+        return grafana_snapshots if isinstance(grafana_snapshot, list) else [grafana_snapshot]
+
+    def _get_grafana_screenshot(self, test_doc):
+        grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshots')
+        return grafana_screenshots if isinstance(grafana_screenshot, list) else [grafana_screenshot]        
 
     def _get_setup_details(self, test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
@@ -394,7 +398,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        setup_details=self._get_setup_details(doc, is_gce),
                        prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
                        prometheus_stats_units=TestStatsMixin.PROMETHEUS_STATS_UNITS,
-                       grafana_snapshot=self._get_grafana_snapshot(doc),
+                       grafana_snapshots=self._get_grafana_snapshot(doc),
+                       grafana_screenshots=self._get_grafana_screenshot(doc),
                        cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
                        job_url=doc['_source']['test_details'].get('job_url', ""),
                        dashboard_master=self.gen_kibana_dashboard_url(dashboard_path),
