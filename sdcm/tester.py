@@ -1370,7 +1370,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
             logs_dict["db_cluster_log"] = S3Storage().upload_file(file_path=self.archive_logs(db_cluster_log_path),
                                                                   dest_dir=cluster.Setup.test_id())
-        if self.monitors:
+        if self.monitors.nodes:
             monitoring_log_path = self.monitors.collect_logs(storing_dir)
             logs_dict["monitoring_log"] = S3Storage().upload_file(file_path=self.archive_logs(monitoring_log_path),
                                                                   dest_dir=cluster.Setup.test_id())
