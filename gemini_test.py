@@ -38,4 +38,14 @@ class GeminiTest(ClusterTester):
         results = self.get_gemini_results(queue=test_queue)
         self.log.debug(results)
         assert results, "Gemini results are not found."
-        assert results[0]['read errors'] == 0, "Gemini read errors."
+        failed = False
+        for res in results:
+            for err_type in ['write_errors', 'read_errors', 'errors']:
+                if res[err_type]:
+                    self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                    failed = True
+
+        if failed:
+            self.fail('Test failed due to found errors')
+        else:
+            self.log.info('Test passed')

@@ -303,10 +303,10 @@ class SCTConfiguration(dict):
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="gemini_url", env="SCT_GEMINI_URL",  type=str,
-             help="""Url of download of the binaries of gemini tool"""),
+        dict(name="gemini_version", env="SCT_GEMINI_version",  type=str,
+             help="""Version of download of the binaries of gemini tool"""),
 
-        dict(name="gemini_static_url", env="SCT_GEMINI_STATIC_URL",  type=str,
+        dict(name="gemini_schema_url", env="SCT_GEMINI_STATIC_URL",  type=str,
              help="""Url of the schema/configuration the gemini tool would use """),
 
         dict(name="gemini_cmd", env="SCT_GEMINI_CMD",  type=str,
