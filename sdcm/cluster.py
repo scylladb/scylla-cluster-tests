@@ -25,6 +25,7 @@ import uuid
 import yaml
 import shutil
 import itertools
+import json
 
 from base64 import decodestring
 import requests
@@ -2476,16 +2477,21 @@ class BaseLoaderSet(object):
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
         # gemini tool
-        gemini_url = self.params.get('gemini_url')
-        gemini_static_url = self.params.get('gemini_static_url')
-        if not gemini_url or not gemini_static_url:
+        gemini_version = self.params.get('gemini_version', default='0.9.2')
+        gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
+        # TODO: currently schema is not used by gemini tool need to store the schema
+        #       in data_dir for each test
+        gemini_schema_url = self.params.get('gemini_schema_url')
+        if not gemini_url or not gemini_schema_url:
             logger.warning('Gemini URLs should be defined to run the gemini tool')
         else:
+            gemini_tar = os.path.basename(gemini_url)
             install_gemini_script = dedent("""
                 cd $HOME
-                curl -L -o gemini {gemini_url}
+                curl -LO {gemini_url}
+                tar -xvf {gemini_tar}
                 chmod a+x gemini
-                curl -LO  {gemini_static_url}
+                curl -LO  {gemini_schema_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
@@ -2653,14 +2659,27 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
+    def _parse_gemini_summary_json(json_str):
+        results = {'result': {}}
+        try:
+            results = json.loads(json_str)
+
+        except Exception as details:
+            logger.error("Invalid json document {}".format(details))
+
+        return results.get('result')
+
     def _parse_gemini_summary(lines):
         results = {}
         enable_parse = False
 
         for line in lines:
             line.strip()
-            if line.startswith('Results:'):
+            if 'Results:' in line:
                 enable_parse = True
+                continue
+            if "run completed" in line:
+                enable_parse = False
                 continue
             if not enable_parse:
                 continue
@@ -2744,13 +2763,14 @@ class BaseLoaderSet(object):
             log_file_name = os.path.join(logdir,
                                          'gemini-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
-            gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
-            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} | tee {}".format(
+            # gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
+            gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())
+            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} --outfile {}".format(
                                       cmd.strip(), test_node, oracle_node, gemini_log),
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
-            queue[RES_QUEUE].put((node, result))
+            queue[RES_QUEUE].put((node, result, gemini_log))
             queue[TASK_QUEUE].task_done()
 
         for loader_idx, loader in enumerate(self.nodes):
@@ -2771,12 +2791,15 @@ class BaseLoaderSet(object):
         while not queue[RES_QUEUE].empty():
             results.append(queue[RES_QUEUE].get())
 
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            res = self._parse_gemini_summary(lines)
-            if res:
-                ret.append(res)
+        for node, result, result_file in results:
+
+            local_gemini_result_file = os.path.join(self.logdir, os.path.basename(result_file))
+            node.receive_files(src=result_file, dst=local_gemini_result_file)
+            with open(local_gemini_result_file) as rf:
+                content = rf.read()
+                res = self._parse_gemini_summary_json(content)
+                if res:
+                    ret.append(res)
 
         return ret
 

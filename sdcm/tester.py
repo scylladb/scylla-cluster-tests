@@ -20,6 +20,7 @@ from functools import wraps
 import boto3.session
 import libvirt
 import shutil
+import random
 from avocado import Test
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
@@ -225,7 +226,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.db_cluster.wait_for_init(node_list=self.db_cluster.nodes[:seeds_num])
             self.db_cluster.wait_for_init(node_list=self.db_cluster.nodes[seeds_num:])
         else:
-            self.db_cluster.wait_for_init()
+            self.db_cluster.wait_for_init(verbose=True)
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
 
@@ -746,6 +747,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         else:
             for i in range(seeds_num):
                 self.db_cluster.nodes[i].is_seed = True
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.nodes[i].is_seed = True
+
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
@@ -793,9 +797,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         timeout = self.get_duration(duration)
         time.sleep(30)
+        test_node = random.choice(self.db_cluster.nodes)
+        oracle_node = random.choice(self.cs_db_cluster.nodes)
         return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
-                                              test_node=self.db_cluster.nodes[0].private_ip_address,
-                                              oracle_node=self.cs_db_cluster.nodes[0].private_ip_address)
+                                              test_node=test_node.ip_address,
+                                              oracle_node=oracle_node.ip_address)
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
