@@ -90,7 +90,6 @@ class CommandRunner(object):
         self.password = password
         logger = logging.getLogger(LOGGER_NAME)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
-        self.watchers = []
         self.connection = None
         # self.connection = Connection(self.hostname, user=user)
 
@@ -100,16 +99,13 @@ class CommandRunner(object):
     def run(self):
         raise "Should be implemented in subclasses"
 
-    def add_watcher(self, watcher):
-        self.watchers.append(watcher)
-
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
             self.connection = Connection(*args, **kwargs)
 
 
 class LocalCmdRunner(CommandRunner):
-    
+
     def __init__(self, password=''):
         hostname = gethostname()
         user = getpass.getuser()
@@ -117,19 +113,17 @@ class LocalCmdRunner(CommandRunner):
         self._create_connection(hostname, user=user)
 
     def run(self, cmd, ignore_status=False, sudo=False, verbose=True, timeout=30):
-
-        self.add_watcher(OutputWatcher(self, verbose))
-
+        watchers = []
         start_time = time.time()
         if sudo and self.password:
             cmd = "sudo " + cmd
-            self.add_watcher(Responder(pattern=r'\[sudo\] password:',
-                                       response='{}\n'.format(self.password)))
+            watchers.append(Responder(pattern=r'\[sudo\] password:',
+                                      response='{}\n'.format(self.password)))
         try:
             result = self.connection.local(cmd, warn=ignore_status,
                                            encoding='utf-8',
                                            hide=True,
-                                           watchers=self.watchers)
+                                           watchers=watchers)
 
         except (Failure, UnexpectedExit) as details:
             self.log.error('Error executing command: {cmd}\ndetails: {details}'.format(**locals()))
@@ -172,9 +166,6 @@ class RemoteCmdRunner(CommandRunner):
                                     'key_filename': os.path.expanduser(self.key_file),
                                 })
 
-    # def __str__(self):
-    #     return 'RemoteFabric [%s@%s]' % (self.user, self.hostname)
-
     def ssh_debug_cmd(self):
         if self.key_file:
             return "SSH access -> 'ssh -i %s %s@%s'" % (self.key_file,
@@ -191,23 +182,17 @@ class RemoteCmdRunner(CommandRunner):
         self.connection.connect_timeout = connect_timeout
 
         for i in range(retry + 1):
+            watchers = []
             try:
                 if verbose:
                     self.log.debug('Run command {}'.format(cmd))
-                output_watcher = OutputWatcher(self, verbose)
+                watchers.append(OutputWatcher(self, verbose))
                 start_time = time.time()
                 if log_file:
-                    with open(log_file, 'a+') as fd_logfile:
-                        result = self.connection.run(cmd, warn=ignore_status,
-                                                     encoding='utf-8', hide=True,
-                                                     out_stream=fd_logfile,
-                                                     err_stream=fd_logfile,
-                                                     watchers=[output_watcher])
-                else:
-                    result = self.connection.run(cmd, warn=ignore_status,
-                                                 encoding='utf-8',
-                                                 hide=True,
-                                                 watchers=[output_watcher])
+                    watchers.append(LogWriteWatcher(log_file))
+                result = self.connection.run(cmd, warn=ignore_status,
+                                             encoding='utf-8', hide=True,
+                                             watchers=watchers)
 
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
@@ -640,4 +625,19 @@ class OutputWatcher(StreamWatcher):
             self.remoter.log.info('{}'.format(out_buf.encode('utf-8')))
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
+        return []
+
+
+class LogWriteWatcher(StreamWatcher):
+    def __init__(self, log_file):
+        self.len = 0
+        self.log_file = log_file
+
+    def submit(self, stream):
+        stream_buffer = stream[self.len:]
+
+        with open(self.log_file, "a+") as f:
+            f.write(stream_buffer.encode('utf-8'))
+
+        self.len = len(stream)
         return []
