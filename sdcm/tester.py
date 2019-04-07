@@ -57,6 +57,7 @@ from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
+from sdcm.stress_thread import CassandraStressThread
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -758,9 +759,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def run_stress(self, stress_cmd, duration=None):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration)
-        self.verify_stress_thread(stress_queue)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
+                                                duration=duration)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           keyspace_name='', round_robin=False, stats_aggregate_cmds=True):
@@ -768,14 +769,16 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds)
-        return self.loaders.run_stress_thread(stress_cmd, timeout,
-                                              self.outputdir,
-                                              stress_num=stress_num,
-                                              keyspace_num=keyspace_num,
-                                              keyspace_name=keyspace_name,
-                                              profile=profile,
-                                              node_list=self.db_cluster.nodes,
-                                              round_robin=round_robin)
+
+        return CassandraStressThread(loader_set=self.loaders,
+                                     stress_cmd=stress_cmd,
+                                     timeout=timeout,
+                                     output_dir=self.outputdir,
+                                     stress_num=stress_num,
+                                     keyspace_num=keyspace_num,
+                                     profile=profile,
+                                     node_list=self.db_cluster.nodes,
+                                     round_robin=round_robin).run()
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
 
@@ -803,8 +806,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             if self.params.get('fullscan', default=False):
                 self.loaders.kill_fullscan_thread()
 
-    def verify_stress_thread(self, queue):
-        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
+    def verify_stress_thread(self, cs_thread_pool):
+        results, errors = cs_thread_pool.verify_results()
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
@@ -820,7 +823,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                       "nodes:\n%s" % "\n".join(errors))
 
     def get_stress_results(self, queue, store_results=True):
-        results = self.loaders.get_stress_results(queue)
+        results = queue.get_results()
         if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
@@ -1282,7 +1285,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if blocking:
             for stress in write_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
         return write_queue
 

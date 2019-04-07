@@ -32,8 +32,8 @@ class MaintainanceTest(ClusterTester):
     """
 
     def _base_procedure(self, nemesis_class):
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              duration=240)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
+                                                duration=240)
         self.db_cluster.wait_total_space_used_per_node()
         self.db_cluster.add_nemesis(nemesis=nemesis_class,
                                     tester_obj=self)
@@ -43,7 +43,7 @@ class MaintainanceTest(ClusterTester):
         time.sleep(180 * 60)
         # Kill c-s when done
         self.kill_stress_thread()
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def test_drain(self):
         """

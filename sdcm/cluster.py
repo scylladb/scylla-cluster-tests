@@ -24,6 +24,7 @@ import time
 import uuid
 import yaml
 import shutil
+import itertools
 
 from base64 import decodestring
 
@@ -33,15 +34,15 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from avocado.utils import path
-from avocado.utils import script
 from datetime import datetime
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
-from .loader import CassandraStressExporterSetup
+from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
+
 from avocado.utils import runtime as avocado_runtime
 
 from invoke.exceptions import UnexpectedExit, Failure
@@ -2400,7 +2401,7 @@ class BaseScyllaCluster(object):
 class BaseLoaderSet(object):
 
     def __init__(self, params):
-        self._loader_queue = []
+        self._loader_cycle = None
         self.params = params
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
@@ -2411,8 +2412,8 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
-        cs_exporter_setup = CassandraStressExporterSetup()
-        cs_exporter_setup.install(node)
+        collectd_setup = ScyllaCollectdSetup()
+        collectd_setup.install(node)
 
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         if result.exit_status == 0:
@@ -2492,134 +2493,14 @@ class BaseLoaderSet(object):
         return 'loaders_public_ip' if public_ip else 'loaders_private_ip'
 
     def get_loader(self):
-        if not self._loader_queue:
-            self._loader_queue = [node for node in self.nodes]
-        return self._loader_queue.pop(0)
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
-                          profile=None, node_list=[], round_robin=False):
-
-        if keyspace_name:
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
-        elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
-
-        if profile:
-            with open(profile) as fp:
-                profile_content = fp.read()
-                cs_profile = script.TemporaryScript(name=os.path.basename(profile), content=profile_content)
-                self.log.info('Profile content:\n%s' % profile_content)
-                cs_profile.save()
-        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
-
-        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
-            queue[TASK_QUEUE].put(node)
-            if node.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version arg
-                stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
-
-            if node_list and '-node' not in stress_cmd:
-                first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
-                first_node = first_node[0] if first_node else node_list[0]
-                stress_cmd += " -node {}".format(first_node.ip_address)
-
-            cql_auth = self.get_cql_auth()
-            if cql_auth and 'user=' not in stress_cmd:
-                # put the credentials into the right place into -mode section
-                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
-
-            CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
-
-            stress_cmd_opt = stress_cmd.split()[1]
-            cs_pipe_name = '/tmp/cs_{}_pipe_$1_$2'.format(stress_cmd_opt)
-            stress_cmd = "mkfifo {}; cat {}|python /usr/bin/cassandra_stress_exporter {} & ".format(cs_pipe_name,
-                                                                                                    cs_pipe_name,
-                                                                                                    stress_cmd_opt) +\
-                         stress_cmd +\
-                         "|tee {}; pkill -P $$ -f cassandra_stress_exporter; rm -f {}".format(cs_pipe_name,
-                                                                                              cs_pipe_name)
-            # We'll save a script with the last c-s command executed on loaders
-            stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
-                                                   content='%s\n' % stress_cmd)
-            self.log.info('Stress script content:\n%s' % stress_cmd)
-            stress_script.save()
-
-            try:
-                logdir = path.init_dir(output_dir, self.name)
-            except OSError:
-                logdir = os.path.join(output_dir, self.name)
-            log_file_name = os.path.join(logdir,
-                                         'cassandra-stress-l%s-c%s-%s.log' %
-                                         (loader_idx, cpu_idx, uuid.uuid4()))
-            # This tag will be output in the header of c-stress result,
-            # we parse it to know the loader & cpu info in _parse_cs_summary().
-            tag = 'TAG: loader_idx:%s-cpu_idx:%s-keyspace_idx:%s' % (loader_idx, cpu_idx, keyspace_idx)
-
-            self.log.debug('cassandra-stress log: %s', log_file_name)
-            dst_stress_script_dir = os.path.join('/home', node.remoter.user)
-            dst_stress_script = os.path.join(dst_stress_script_dir,
-                                             os.path.basename(stress_script.path))
-            node.remoter.send_files(stress_script.path, dst_stress_script_dir)
-            if profile:
-                node.remoter.send_files(cs_profile.path, os.path.join('/tmp', os.path.basename(profile)))
-            node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
-
-            if stress_num > 1:
-                node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
-            else:
-                node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx)
-
-            result = node.remoter.run(cmd=node_cmd,
-                                      timeout=timeout,
-                                      ignore_status=True,
-                                      log_file=log_file_name)
-
-            CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
-
-            queue[RES_QUEUE].put((node, result))
-            queue[TASK_QUEUE].task_done()
-
-        if round_robin:
-            # cancel stress_num
-            stress_num = 1
-            loaders = [self.get_loader()]
-            self.log.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-        else:
-            loaders = self.nodes
-
-        for loader_idx, loader in enumerate(loaders):
-            for cpu_idx in range(stress_num):
-                for ks_idx in range(1, keyspace_num + 1):
-                    setup_thread = threading.Thread(target=node_run_stress,
-                                                    args=(loader, loader_idx,
-                                                          cpu_idx, ks_idx, profile, stress_cmd))
-                    setup_thread.daemon = True
-                    setup_thread.start()
-                    if loader_idx == 0 and cpu_idx == 0:
-                        time.sleep(30)
-
-        return queue
+        if not self._loader_cycle:
+            self._loader_cycle = itertools.cycle([node for node in self.nodes])
+        return next(self._loader_cycle)
 
     def kill_stress_thread(self):
-        kill_script_contents = 'for PID in `pgrep -f cassandra-stress`; do pkill -TERM -P $PID; done'
-        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
-                                             content=kill_script_contents)
-        kill_script.save()
-        kill_script_dir = os.path.dirname(kill_script.path)
         for loader in self.nodes:
-            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
-            loader.remoter.send_files(kill_script.path, kill_script_dir)
-            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
-                                           ignore_status=True)
-            if cs_active.exit_status == 0:
-                kill_result = loader.remoter.run(kill_script.path,
-                                                 ignore_status=True)
-                if kill_result.exit_status != 0:
-                    self.log.error('Terminate c-s on node %s:\n%s',
-                                   loader, kill_result)
-            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
-        kill_script.remove()
+            loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
 
     @staticmethod
     def _parse_cs_summary(lines):
@@ -2784,49 +2665,6 @@ class BaseLoaderSet(object):
             value = line[split_idx + 1:].split()[0]
             results[key] = int(value)
         return results
-
-    def verify_stress_thread(self, queue, db_cluster):
-        results = []
-        cs_summary = []
-        self.log.debug('Wait for %s stress threads to verify', queue[TASK_QUEUE].qsize())
-        queue[TASK_QUEUE].join()
-        while not queue[RES_QUEUE].empty():
-            results.append(queue[RES_QUEUE].get())
-
-        errors = []
-        for node, result in results:
-            node_errors = []
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = self._parse_cs_summary(lines)
-            if node_cs_res:
-                cs_summary.append(node_cs_res)
-            for line in lines:
-                for err_string in ['java.io.IOException']:
-                    if err_string in line:
-                        errors += ['%s: %s' % (node, line.strip())]
-                        node_errors += [line.strip()]
-            if node_errors:
-                CassandraStressEvent(type='error', severity=Severity.ERROR, node=node, errors=node_errors)
-
-        return cs_summary, errors
-
-    def get_stress_results(self, queue):
-        results = []
-        ret = []
-        self.log.debug('Wait for %s stress threads results', queue[TASK_QUEUE].qsize())
-        queue[TASK_QUEUE].join()
-        while not queue[RES_QUEUE].empty():
-            results.append(queue[RES_QUEUE].get())
-
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = self._parse_cs_summary(lines)
-            if node_cs_res:
-                ret.append(node_cs_res)
-
-        return ret
 
     def get_stress_results_bench(self, queue):
         results = []
