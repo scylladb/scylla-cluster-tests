@@ -284,6 +284,10 @@ class DatabaseLogEvent(SctEvent):
             super(DatabaseLogEvent, self).__str__(), self.type, self.node, self.line_number, self.regex, self.line)
 
 
+class CassandraStressLogEvent(DatabaseLogEvent):
+    pass
+
+
 class SpotTerminationEvent(SctEvent):
     def __init__(self, node, aws_message):
         super(SpotTerminationEvent, self).__init__()

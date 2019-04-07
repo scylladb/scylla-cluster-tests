@@ -6,7 +6,6 @@ from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
 
 from avocado.utils import runtime as avocado_runtime
-from .loader import CassandraStressExporterSetup
 import cluster
 
 

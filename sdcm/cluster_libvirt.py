@@ -11,7 +11,6 @@ from avocado.utils import runtime as avocado_runtime
 from avocado.utils import process
 
 from . import wait
-from .loader import CassandraStressExporterSetup
 import cluster
 
 

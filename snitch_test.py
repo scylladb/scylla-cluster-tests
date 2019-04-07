@@ -43,5 +43,5 @@ class SnitchTest(ClusterTester):
         assert 'Datacenter: us-west1scylla_node_west' in result.stdout
 
         stress_cmd = self.params.get('stress_cmd')
-        stress = self.run_stress_thread(stress_cmd=stress_cmd)
-        self.verify_stress_thread(queue=stress)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)

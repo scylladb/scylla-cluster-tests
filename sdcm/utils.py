@@ -20,6 +20,9 @@ from functools import wraps
 from enum import Enum
 from collections import defaultdict
 import errno
+import threading
+import concurrent.futures
+import select
 
 import boto3
 from libcloud.compute.providers import get_driver
@@ -467,3 +470,54 @@ def safe_kill(pid, signal):
         return True
     except Exception:
         return False
+
+
+class FileFollowerIterator(object):
+    def __init__(self, filename, thread_obj):
+        self.filename = filename
+        self.thread_obj = thread_obj
+
+    def __iter__(self):
+        with open(self.filename, 'r') as input:
+            line = ''
+            while not self.thread_obj.stopped():
+                poller = select.poll()
+                poller.register(input, select.POLLIN)
+                if poller.poll(100):
+                    line += input.readline()
+                if not line or not line.endswith('\n'):
+                    time.sleep(0.1)
+                    continue
+
+                yield line
+                line = ''
+            yield line
+
+
+class FileFollowerThread(object):
+    def __init__(self):
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)
+        self._stop_event = threading.Event()
+        self.future = None
+
+    def __enter__(self):
+        self.start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+    def run(self):
+        raise NotImplementedError()
+
+    def start(self):
+        self.future = self.executor.submit(self.run)
+        return self.future
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+    def follow_file(self, filename):
+        return FileFollowerIterator(filename, self)

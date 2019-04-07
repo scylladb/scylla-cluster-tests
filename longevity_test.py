@@ -143,7 +143,7 @@ class LongevityTest(ClusterTester):
             # Wait on the queue till all threads come back.
             # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
             for stress in write_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
             # Run nodetool flush on all nodes to make sure nothing left in memory
             # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
@@ -159,7 +159,7 @@ class LongevityTest(ClusterTester):
                                                                 'keyspace_num': keyspace_num})
 
                 for stress in verify_queue:
-                    self.verify_stress_thread(queue=stress)
+                    self.verify_stress_thread(cs_thread_pool=stress)
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions', default=None)
@@ -220,7 +220,7 @@ class LongevityTest(ClusterTester):
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
-            self.verify_stress_thread(queue=stress)
+            self.verify_stress_thread(cs_thread_pool=stress)
 
         if (stress_read_cmd or stress_cmd) and validate_partitions:
             self.log.debug('Save partitons info after reads')
@@ -271,7 +271,7 @@ class LongevityTest(ClusterTester):
                 self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
             for stress in stress_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
     def _create_counter_table(self):
         """

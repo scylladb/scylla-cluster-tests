@@ -85,8 +85,8 @@ class GrowClusterTest(ClusterTester):
         # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
         duration = 60 * nodes_to_add
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
+                                                duration=duration)
 
         time.sleep(2 * 60)
         start = datetime.datetime.now()
@@ -109,7 +109,7 @@ class GrowClusterTest(ClusterTester):
         # Kill c-s when decommission is done
         self.kill_stress_thread()
 
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
 
     def test_grow_3_to_5(self):
@@ -174,7 +174,7 @@ class GrowClusterTest(ClusterTester):
         4) Decommission random chosen node
         5) Repeat 3) and 4) for number of times
         """
-        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
 
         start = datetime.datetime.now()
         duration = 0
@@ -212,7 +212,7 @@ class GrowClusterTest(ClusterTester):
         # Kill c-s when decommission is done
         self.kill_stress_thread()
 
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
 
 
