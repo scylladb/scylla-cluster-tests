@@ -1335,6 +1335,7 @@ server_encryption_options:
 
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y epel-release', retry=3)
+            self.remoter.run('sudo yum install python36-PyYAML -y', retry=3)
         else:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
