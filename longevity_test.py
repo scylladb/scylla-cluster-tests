@@ -117,7 +117,7 @@ class LongevityTest(ClusterTester):
             # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
             # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
             if pre_create_schema:
-                self._pre_create_schema(keyspace_num)
+                self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get('scylla_encryption_options', None))
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
             if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
@@ -308,7 +308,7 @@ class LongevityTest(ClusterTester):
                     AND speculative_retry = '99.0PERCENTILE';
             """)
 
-    def _pre_create_schema(self, keyspace_num=1, in_memory=False):
+    def _pre_create_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -324,7 +324,7 @@ class LongevityTest(ClusterTester):
                 self.log.debug('{} Created'.format(keyspace_name))
                 self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
                                columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
-                               in_memory=in_memory)
+                               in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
 
     def _flush_all_nodes(self):
         """
