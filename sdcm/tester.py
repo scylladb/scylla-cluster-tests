@@ -1025,7 +1025,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def create_cf(self, session, name, key_type="varchar",
                   speculative_retry=None, read_repair=None, compression=None,
                   gc_grace=None, columns=None,
-                  compact_storage=False, in_memory=False):
+                  compact_storage=False, in_memory=False, scylla_encryption_options=None):
 
         additional_columns = ""
         if columns is not None:
@@ -1058,6 +1058,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                      (query, speculative_retry))
         if in_memory:
             query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
+        if scylla_encryption_options is not None:
+            query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
 
