@@ -54,7 +54,14 @@ cs_opt = ''
 if len(sys.argv) > 1:
     cs_opt = '_' + sys.argv[1]
 
-hostname = socket.gethostname().split('.')[0]
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    ip = s.getsockname()[0]
+    s.close()
+    return ip
+
+hostname = get_local_ip()
 
 server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 server.connect('/var/run/collectd-unixsock')
