@@ -58,6 +58,19 @@ class HostStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
+class HostRestStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError:
+            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+
+
 class TaskStatus(Enum):
     NEW = "NEW"
     RUNNING = "RUNNING"
@@ -407,24 +420,31 @@ class ManagerCluster(ScyllaManagerBase):
                 host_col_idx = list_titles_row.index("Host")
                 cql_status_col_idx = list_titles_row.index("CQL")
                 ssl_col_idx = list_titles_row.index("SSL")
-                api_col_idx = list_titles_row.index("API")
+                rest_col_idx = list_titles_row.index("API")
 
                 for line in hosts_table[1:]:
                     host = line[host_col_idx]
                     list_cql = line[cql_status_col_idx].split()
                     status = list_cql[0]
                     rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
+
+                    list_rest = line[rest_col_idx].split()
+                    rest_status = list_rest[0]
+                    rest_rtt = list_rest[1].strip("()") if len(list_rest) == 2 else "N/A"
+
                     ssl = line[ssl_col_idx]
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=HostSsl.from_str(ssl))
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, rest_status=HostRestStatus.from_str(rest_status), rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl))
             logger.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
-                logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.ssl))
+                logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.rest_status, health.rest_rtt, health.ssl))
         return dict_hosts_health
 
     class _HostHealth():
-        def __init__(self, status, rtt, ssl):
+        def __init__(self, status, rtt, ssl, rest_status, rest_rtt):
             self.status = status
             self.rtt = rtt
+            self.rest_status = rest_status
+            self.rest_rtt = rest_rtt
             self.ssl = ssl
 
 

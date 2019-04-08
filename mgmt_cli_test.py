@@ -19,7 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus, HostSsl
+from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 from sdcm.cluster import Setup
@@ -142,6 +142,8 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+            assert host_health.rest_status == HostRestStatus.UP, "Not all hosts REST status is 'UP'"
+
 
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
@@ -151,6 +153,8 @@ class MgmtCliTest(ClusterTester):
 
         dict_host_health = mgr_cluster.get_hosts_health()
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(other_host_ip)
+        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(other_host_ip)
+
         other_host.start_scylla_server()
 
     def test_manager_upgrade(self):
