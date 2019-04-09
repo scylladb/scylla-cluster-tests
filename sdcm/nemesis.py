@@ -24,6 +24,7 @@ import string
 import threading
 import re
 import traceback
+import json
 
 from cassandra import InvalidRequest
 
@@ -878,6 +879,60 @@ class Nemesis(object):
         if result.stderr:
             self.tester.fail(result.stderr)
 
+    def get_new_encryption_opts(self, opts):
+        new_opts = json.loads(opts)
+        current = new_opts.get('key_provider')
+        key_providers = ['LocalFileSystemKeyProviderFactory',
+                         'ReplicatedKeyProviderFactory',
+                         'KmipKeyProviderFactory',
+                        'None',
+                        ]
+        key_providers.remove(current)
+        new_opts['key_provider'] = random.choice(key_providers)
+
+        # always use a new secret file
+        new_opts['secret_file'] = '/tmp/secret_file_%s' % time.time()
+
+        # add special sub-options for KmipKeyProviderFactory
+        if new_opts['key_provider'] == 'KmipKeyProviderFactory':
+            new_opts['kmip_hosts'] = {"kmip_test": {'hosts': 'kmip-interop1.cryptsoft.com',
+                   'certificate': '/etc/scylla/conf/SCYLLADB.pem',
+                   'keyfile': '/etc/scylla/conf/SCYLLADB.pem',
+                   'truststore': '/etc/scylla/conf/CA.pem'
+                   }}
+        return json.dumps(new_opts)
+
+    def disrupt_swtich_encryption_opts(self):
+        """
+        Randomely choice a test keyspace, and switch encryption at-rest options of all tables one by one.
+        Make sure the new options of each table is different than past.
+        """
+        scylla_encryption_options = self.cluster.params.get('scylla_encryption_options', default=None)
+        if scylla_encryption_options is None:
+            self.log.debug('scylla_encryption_options is not set, skip this nemesis')
+            return
+
+        rand_ks = random.choice(self.cluster.get_test_keyspaces())
+        tables = self.cluster.get_test_tables(keyspace=rand_ks)
+
+        # Currently `desc schema` won't return scylla_encryption_options information for scylla-enterprise/issue #872,
+        # the fix hasn't been merged. Here we use `self.cluster.encryption_info` to save encryption options of test tables
+        # - Can't find scylla_encryption_options content in DESC schema #872
+        if self.cluster.encryption_info is None:
+            self.cluster.encryption_info = {}
+
+        if rand_ks not in self.cluster.encryption_info.keys():
+            self.cluster.encryption_info[rand_ks] = {}
+        for tb in tables:
+            opts = self.cluster.encryption_info[rand_ks].get(tb)
+            if opts is None:
+                new_opts = scylla_encryption_options
+            else:
+                new_opts = self.get_new_encryption_opts(opts)
+            cmd = "ALTER TABLE {tb} WITH scylla_encryption_options = {new_opts};".format(**locals())
+            self._run_in_cqlsh(cmd)
+            self.cluster.encryption_info[rand_ks][tb] = new_opts
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -1379,6 +1434,12 @@ class NodeRestartWithResharding(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_with_resharding()
+
+
+class SwtichEncryptionOpts(Nemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_switch_encryption_opts()
 
 
 class DisruptiveMonkey(Nemesis):
