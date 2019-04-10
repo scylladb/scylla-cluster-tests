@@ -337,6 +337,7 @@ class TestStatsMixin(Stats):
         test_details['start_time'] = time.time()
         test_details['grafana_snapshots'] = []
         test_details['grafana_screenshots'] = []
+        test_details['grafana_annotations'] = []
         test_details['prometheus_data'] = ""
         test_details['test_id'] = Setup.test_id()
         test_details['log_files'] = {}
@@ -462,6 +463,7 @@ class TestStatsMixin(Stats):
                 grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
                 self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
                 self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
+                self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
                 self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
 
             if self.db_cluster:
