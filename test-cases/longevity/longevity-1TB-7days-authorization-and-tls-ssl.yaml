@@ -33,6 +33,7 @@ server_encrypt: 'true'
 # Setting client encryption to false for now, till we will find the way to make c-s work with that
 client_encrypt: 'false'
 
+authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 
