@@ -1,9 +1,9 @@
+import threading
 import os
 import re
 import logging
 import json
 import signal
-import datetime
 import time
 from multiprocessing import Process, Value, Event, Manager, current_process
 from json import JSONEncoder
@@ -12,7 +12,10 @@ import enum
 from enum import Enum
 import zmq
 
-from sdcm.utils import safe_kill, pid_exists
+from sdcm.utils import safe_kill, pid_exists, _fromtimestamp
+from sdcm.prometheus import nemesis_metrics_obj
+
+import requests
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ class EventsDevice(Process):
             backend.close()
             context.term()
 
-    def subscribe_events(self, filter_type=''):
+    def subscribe_events(self, filter_type='', stop_event=None):
         context = zmq.Context()
         LOGGER.info("subscribe to server with port %d", self.sub_port.value)
         socket = context.socket(zmq.SUB)
@@ -72,20 +75,21 @@ class EventsDevice(Process):
         filters = dict()
 
         try:
-            while True:
-                obj = socket.recv_pyobj()
+            while stop_event is None or not stop_event.isSet():
+                if socket.poll(timeout=1):
+                    obj = socket.recv_pyobj()
 
-                obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
+                    obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
 
-                if isinstance(obj, DbEventsFilter):
-                    if not obj.clear_filter:
-                        filters[obj.id] = obj
-                    else:
-                        del filters[obj.id]
+                    if isinstance(obj, DbEventsFilter):
+                        if not obj.clear_filter:
+                            filters[obj.id] = obj
+                        else:
+                            del filters[obj.id]
 
-                obj_filtered = obj_filtered or isinstance(obj, SystemEvent)
-                if not obj_filtered:
-                    yield obj.__class__.__name__, obj
+                    obj_filtered = obj_filtered or isinstance(obj, SystemEvent)
+                    if not obj_filtered:
+                        yield obj.__class__.__name__, obj
         except (KeyboardInterrupt, SystemExit) as ex:
             LOGGER.debug("%s - subscribe_events was halted by %s", current_process().name, ex.__class__.__name__)
 
@@ -125,17 +129,17 @@ class Severity(enum.Enum):
 
 class SctEvent(object):
     def __init__(self):
-        self.timestamp = self.set_timestamp()
+        self.timestamp = time.time()
         self.severity = Severity.NORMAL
 
-    def set_timestamp(self):
-        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    def formatted_timestamp(self):
+        return _fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     def publish(self):
         EVENTS_PROCESS.publish_event(self)
 
     def __str__(self):
-        return "{}: ({} {})".format(self.timestamp, self.__class__.__name__, self.severity)
+        return "({} {})".format(self.__class__.__name__, self.severity)
 
     def to_json(self):
         return json.dumps(self.__dict__)
@@ -178,7 +182,7 @@ class InfoEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{}: message={}".format(super(InfoEvent, self).__str__(), self.message)
+        return "{0}: message={1.message}".format(super(InfoEvent, self).__str__(), self)
 
 
 class CoreDumpEvent(SctEvent):
@@ -190,6 +194,10 @@ class CoreDumpEvent(SctEvent):
         self.severity = Severity.CRITICAL
         self.publish()
 
+    def __str__(self):
+        return "{0}:\ncorefile_urls=\n{2}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
+            super(CoreDumpEvent, self).__str__(), self,  "\n".join(self.corefile_urls))
+
 
 class KillTestEvent(SctEvent):
     def __init__(self, reason):
@@ -199,7 +207,7 @@ class KillTestEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{}: reason={}".format(super(KillTestEvent, self).__str__(), self.reason)
+        return "{0}: reason={1.reason}".format(super(KillTestEvent, self).__str__(), self)
 
 
 class DisruptionEvent(SctEvent):
@@ -214,26 +222,22 @@ class DisruptionEvent(SctEvent):
         self.severity = Severity.NORMAL if status else Severity.ERROR
         if error:
             self.error = error
-            self.full_traceback = full_traceback
+            self.full_traceback = str(full_traceback)
 
         self.__dict__.update(kwargs)
         self.publish()
 
     def __str__(self):
         if self.severity == Severity.NORMAL:
-            return "{}: type={} name={} node={} duration={}".format(
-                super(DisruptionEvent, self).__str__(), self.type, self.name, self.node, self.duration
-            )
+            return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration}".format(
+                super(DisruptionEvent, self).__str__(), self)
         elif self.severity == Severity.ERROR:
-            return "{}: type={} name={} node={} duration={} error={}\n{}".format(
-                super(DisruptionEvent, self).__str__(), self.type, self.name, self.node, self.duration,
-                self.error,
-                str(self.full_traceback)
-            )
+            return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
+                super(DisruptionEvent, self).__str__(), self)
 
 
 class CassandraStressEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None, ):
+    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
         super(CassandraStressEvent, self).__init__()
         self.type = type
         self.node = str(node)
@@ -245,11 +249,11 @@ class CassandraStressEvent(SctEvent):
 
     def __str__(self):
         if self.stress_cmd:
-            return "{}: type={} node={}\nstress_cmd={}".format(
-                super(CassandraStressEvent, self).__str__(), self.type, self.node, self.stress_cmd)
+            return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
+                super(CassandraStressEvent, self).__str__(), self)
         if self.errors:
-            return "{}: type={} node={}\n{}".format(
-                super(CassandraStressEvent, self).__str__(), self.type, self.node, "\n".join(self.errors))
+            return "{0}: type={1.type} node={1.node}\n{2}".format(
+                super(CassandraStressEvent, self).__str__(), self, "\n".join(self.errors))
 
 
 class DatabaseLogEvent(SctEvent):
@@ -263,7 +267,7 @@ class DatabaseLogEvent(SctEvent):
         self.severity = severity
 
     def add_info_and_publish(self, node, line, line_number):
-        self.timestamp = self.set_timestamp()
+        self.timestamp = time.time()
         self.line = line
         self.line_number = line_number
         self.node = str(node)
@@ -281,8 +285,8 @@ class DatabaseLogEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{}: type={} node={} line_number={} regex={}\n{}".format(
-            super(DatabaseLogEvent, self).__str__(), self.type, self.node, self.line_number, self.regex, self.line)
+        return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}".format(
+            super(DatabaseLogEvent, self).__str__(), self)
 
 
 class CassandraStressLogEvent(DatabaseLogEvent):
@@ -298,8 +302,8 @@ class SpotTerminationEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{}: node={}  aws_message={} ".format(
-            super(SpotTerminationEvent, self).__str__(), self.node, self.aws_message)
+        return "{0}: node={1.node} aws_message={1.aws_message}".format(
+            super(SpotTerminationEvent, self).__str__(), self)
 
 
 class TestKiller(Process):
@@ -336,30 +340,108 @@ class EventsFileLogger(Process):
         LOGGER.info("writing to %s", self.events_filename)
 
         for event_type, message_data in EVENTS_PROCESS.subscribe_events():
+            msg = "{}: {}".format(message_data.formatted_timestamp(), str(message_data).strip())
             with open(self.events_filename, 'a+') as log_file:
-                log_file.write(str(message_data).strip() + '\n')
-            LOGGER.info(message_data)
+                log_file.write(msg + '\n')
+            LOGGER.info(msg)
+
+
+# This is an example of how we'll send info into Prometheus,
+# Currently it's not in use, since the data we want to show, doesn't fit Prometheus model,
+# we are using the GrafanaAnnotator
+class PrometheusDumper(threading.Thread):
+    def __init__(self):
+        self.stop_event = threading.Event()
+        super(PrometheusDumper, self).__init__()
+
+    def run(self):
+        events_gauge = nemesis_metrics_obj().create_gauge('sct_events_gauge',
+                                                          'Gauge for sct events',
+                                                          ['event_type', 'type', 'severity', 'node'])
+
+        for event_type, message_data in EVENTS_PROCESS.subscribe_events(stop_event=self.stop_event):
+            events_gauge.labels(event_type,
+                                getattr(message_data, 'type', ''),
+                                message_data.severity,
+                                getattr(message_data, 'node', '')).set(message_data.timestamp)
+
+    def terminate(self):
+        self.stop_event.set()
+
+
+class GrafanaAnnotator(threading.Thread):
+    def __init__(self):
+        self.stop_event = threading.Event()
+        self.url_set = threading.Event()
+        self.grafana_base_url = ''
+
+        self.auth = ('admin', 'admin')
+        super(GrafanaAnnotator, self).__init__()
+
+    def set_grafana_url(self, grafana_base_url):
+        self.grafana_base_url = grafana_base_url
+        self.url_set.set()
+
+    def run(self):
+        for event_class, message_data in EVENTS_PROCESS.subscribe_events(stop_event=self.stop_event):
+            # waiting until the monitor url is set, and we can start using the api
+            self.url_set.wait()
+            if self.grafana_base_url:
+                event_type = getattr(message_data, 'type', None)
+                tags = [event_class, message_data.severity.name, 'events']
+                if event_type:
+                    tags += [event_type]
+                annotate_data = {
+                    "time": int(message_data.timestamp * 1000.0),
+                    "tags": tags,
+                    "isRegion": False,
+                    "text": str(message_data)
+                }
+                res = requests.post(self.grafana_base_url + '/api/annotations', json=annotate_data, auth=self.auth)
+                LOGGER.info(res.text)
+
+    def terminate(self):
+        self.url_set.set()
+        self.stop_event.set()
+
+    def find_dashboard(self, query='nemesis'):
+        res = requests.get(self.grafana_base_url + '/api/search', params={'query': query}, auth=self.auth).json()
+        return res[0]
+
+    def find_panel(self, dashboard, panel_title_prefix="Requests Served per"):
+        dashboard_data = requests.get(self.grafana_base_url + '/api/dashboards/uid/{}'.format(dashboard['uid']), auth=self.auth).json()
+        for row in dashboard_data['dashboard']['rows']:
+            for panel in row['panels']:
+                if panel['title'].startswith(panel_title_prefix):
+                    panel_id = panel['id']
+                    return panel_id, panel
+
+        LOGGER.error("Failed to find panel id that match [%s]", panel_title_prefix)
 
 
 EVENTS_TASK_KILLER = TestKiller()
 EVENTS_FILE_LOOGER = EventsFileLogger()
+EVENTS_GRAFANA_ANNOTATOR = GrafanaAnnotator()
 
 
 def start_events_device(log_dir):
     EVENTS_PROCESS.start(log_dir)
-    EVENTS_PROCESS.ready_event.wait(timeout=1)
+    EVENTS_PROCESS.ready_event.wait(timeout=5)
     EVENTS_FILE_LOOGER.start(log_dir)
     EVENTS_TASK_KILLER.start()
+    EVENTS_GRAFANA_ANNOTATOR.start()
 
 
 def stop_events_device():
-
     EVENTS_FILE_LOOGER.terminate()
     EVENTS_TASK_KILLER.terminate()
+    EVENTS_GRAFANA_ANNOTATOR.terminate()
     EVENTS_PROCESS.terminate()
 
     EVENTS_FILE_LOOGER.join()
     EVENTS_TASK_KILLER.join()
+    EVENTS_GRAFANA_ANNOTATOR.join()
+
     EVENTS_PROCESS.join()
 
 
@@ -368,34 +450,41 @@ if __name__ == "__main__":
     import unittest
     import tempfile
 
+    from sdcm.prometheus import start_metrics_server
+
     class SctEventsTests(unittest.TestCase):
 
         @classmethod
         def setUpClass(cls):
             cls.temp_dir = tempfile.mkdtemp()
 
+            start_metrics_server()
+
             EVENTS_PROCESS.start(cls.temp_dir)
             EVENTS_PROCESS.ready_event.wait(timeout=5)
+            time.sleep(5)
 
             cls.killed = Event()
 
             def callback(x):
                 cls.killed.set()
 
-            cls.test_killer = TestKiller(timeout_before_kill=0, test_callback=callback)
+            cls.grafana_annotator = GrafanaAnnotator()
+            cls.grafana_annotator.start()
+            cls.test_killer = TestKiller(timeout_before_kill=5, test_callback=callback)
             cls.test_killer.start()
+            cls.prometheus_dumper = PrometheusDumper()
+            cls.prometheus_dumper.start()
             cls.event_logger = EventsFileLogger()
             cls.event_logger.start(log_dir=cls.temp_dir)
+            time.sleep(5)
 
         @classmethod
         def tearDownClass(cls):
-            cls.test_killer.terminate()
-            cls.event_logger.terminate()
-            EVENTS_PROCESS.terminate()
-
-            cls.test_killer.join()
-            cls.event_logger.join()
-            EVENTS_PROCESS.join()
+            cls.grafana_annotator.set_grafana_url(grafana_base_url='')
+            for t in [cls.event_logger, cls.prometheus_dumper, cls.grafana_annotator, cls.test_killer, EVENTS_PROCESS]:
+                t.terminate()
+                t.join()
 
         def test_event_info(self):
             InfoEvent(message='jkgkjgl')
@@ -405,7 +494,7 @@ if __name__ == "__main__":
             str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf", log_file_name="/filename/"))
 
         def test_coredump_event(self):
-            str(CoreDumpEvent(corefile_urls='http://', backtrace="asfasdfsdf", download_instructions=""))
+            str(CoreDumpEvent(corefile_urls=['http://', "fsdfs", "sdsfgfg"], backtrace="asfasdfsdf", download_instructions=""))
 
         def test_scylla_log_event(self):
             str(DatabaseLogEvent(type="A", regex="B"))
@@ -422,11 +511,6 @@ if __name__ == "__main__":
             str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2, node='test'))
 
             print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
-
-        def test_kill_test_event(self):
-            str(KillTestEvent(reason="Don't like this test"))
-            LOGGER.info('sent kill')
-            self.assertTrue(self.killed.wait(4), "kill wasn't sent")
 
         def test_filter(self):
             with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
@@ -452,6 +536,13 @@ if __name__ == "__main__":
 
         def test_spot_termination(self):
             str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
+
+        def test_kill_test_event(self):
+            self.assertTrue(self.test_killer.is_alive())
+            str(KillTestEvent(reason="Don't like this test"))
+
+            LOGGER.info('sent kill')
+            self.assertTrue(self.killed.wait(20), "kill wasn't sent")
 
     logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
     unittest.main(verbosity=2)

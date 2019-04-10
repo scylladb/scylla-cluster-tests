@@ -27,6 +27,7 @@ import shutil
 import itertools
 
 from base64 import decodestring
+import requests
 
 import requests
 
@@ -44,6 +45,7 @@ from .db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
 
 from avocado.utils import runtime as avocado_runtime
+from sdcm.sct_events import EVENTS_GRAFANA_ANNOTATOR
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -2926,11 +2928,12 @@ class BaseMonitorSet(object):
         try:
             self.start_scylla_monitoring(node)
         except (Failure, UnexpectedExit):
-            self.reconfigure_scylla_monitoring()
+            self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
+        EVENTS_GRAFANA_ANNOTATOR.set_grafana_url("http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
@@ -3085,13 +3088,26 @@ class BaseMonitorSet(object):
             node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
-              message="Waiting for reconfiguring scylla monitoring")
-    def reconfigure_scylla_monitoring(self):
+              message="Waiting for restarting scylla monitoring")
+    def restart_scylla_monitoring(self):
         for node in self.nodes:
             self.stop_scylla_monitoring(node)
             # We use sct_metrics=False, alert_manager=False since they should be configured once
             self.configure_scylla_monitoring(node, sct_metrics=False, alert_manager=False)
             self.start_scylla_monitoring(node)
+
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
+              message="Waiting for reconfiguring scylla monitoring")
+    def reconfigure_scylla_monitoring(self):
+        for node in self.nodes:
+            db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+            self._monitoring_targets = " ".join(db_targets_list)
+            configure_script = dedent("""
+                        cd {0.monitor_install_path}
+                        mkdir -p {0.monitoring_conf_dir}
+                        ./genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
+                    """.format(self))
+            node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
 
     def start_scylla_monitoring(self, node):
         if node.is_rhel_like() or node.is_ubuntu16():
@@ -3141,6 +3157,21 @@ class BaseMonitorSet(object):
         self.install_scylla_monitoring_prereqs(node)
         self.download_scylla_monitoring(node)
 
+    def get_grafana_annotations(self, node):
+        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        try:
+            res = requests.get(annotations_url.format(node_ip=node.public_ip_address, grafana_port=self.grafana_port))
+            if res.ok:
+                return res.text
+        except Exception as ex:
+            logger.warning("unable to get grafana annotations [%s]", str(ex))
+
+    def set_grafana_annotations(self, node, annotations_data):
+        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        res = requests.post(annotations_url.format(node_ip=node.public_ip_address, grafana_port=self.grafana_port),
+                            data=annotations_data, headers={'Content-Type': 'application/json'})
+        logger.info("posting annotations result: %s", res)
+
     def stop_scylla_monitoring(self, node):
         kill_script = dedent("""
             cd {0.monitor_install_path}
@@ -3179,6 +3210,7 @@ class BaseMonitorSet(object):
         ]
 
         screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/dashboard/db/{scylla_pkg}-{scr_name}-{version}?from={st}&to=now"
+
         try:
             self.install_phantom_js()
             scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
@@ -3207,6 +3239,22 @@ class BaseMonitorSet(object):
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
         return {}
+
+    def upload_annotations_to_s3(self, ):
+        annotations_url = ''
+        if not self.nodes:
+            return annotations_url
+        try:
+            annotations = self.get_grafana_annotations(self.nodes[0])
+            if annotations:
+                annotations_url = S3Storage().generate_url('annotations.json', Setup.test_id())
+                logger.info("Uploading 'annotations.json' to {s3_url}".format(s3_url=annotations_url))
+                response = requests.put(annotations_url, data=annotations)
+                response.raise_for_status()
+        except Exception:
+            logger.exception("failed to upload annotations to S3")
+
+        return annotations_url
 
     def _get_screenshot_link(self, grafana_url, snapshot_path):
         localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
