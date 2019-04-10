@@ -257,6 +257,9 @@ class SCTConfiguration(dict):
         dict(name="authenticator_password", env="SCT_AUTHENTICATOR_PASSWORD",  type=str,
              help="the password if PasswordAuthenticator is used"),
 
+        dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF",  type=str,
+             help="Replication factor will be set to system_auth"),
+
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS",  type=str,
              help="More arguments to append to scylla command line"),
 

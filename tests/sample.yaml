@@ -33,7 +33,7 @@ hinted_handoff_disabled: false
 # Authenticator configuration
 # authenticator: 'PasswordAuthenticator'
 #
-# user/password parameter will be added to cassandra-stress cmdline
+# user/password parameters are used by cql client to connect cql server
 # authenticator_user: 'cassandra'
 # authenticator_password: 'cassandra'
 
