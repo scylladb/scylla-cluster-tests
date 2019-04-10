@@ -15,18 +15,23 @@ import os
 import logging
 import time
 import datetime
-from functools import wraps
-from collections import defaultdict
+import requests
+import tempfile
+import re
 import errno
 import threading
 import concurrent.futures
 import select
-from datetime import timedelta
 import sys
 import math
 
+from .remote import LocalCmdRunner
+from textwrap import dedent
+from functools import wraps
+from collections import defaultdict
+from datetime import timedelta
 from enum import Enum
-import requests
+
 import boto3
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
@@ -213,15 +218,23 @@ class S3Storage(object):
             logger.debug("Unable to upload to S3: %s" % e)
             return ""
 
-    def download_file(self, link):
+    def download_file(self, link, dst_dir=""):
         resp = requests.get(link)
         try:
             if resp.status_code == 200:
+
                 file_path = os.path.basename(os.path.dirname(link))
-                if not os.path.exists(file_path):
-                    os.mkdir(file_path)
-                with open(os.path.join(file_path, os.path.basename(link)), 'wb') as fh:
+
+                if dst_dir:
+                    dst = os.path.join(dst_dir, file_path)
+                else:
+                    dst = file_path
+
+                if not os.path.exists(dst):
+                    os.mkdir(dst)
+                with open(os.path.join(dst, os.path.basename(link)), 'wb') as fh:
                     fh.write(resp.content)
+                return os.path.join(os.path.abspath(dst), os.path.basename(link))
         except Exception as details:
             logger.warning("File {} is not downloaded by reason: {}".format(file_path), details)
 
@@ -243,6 +256,83 @@ def list_logs_by_test_id(test_id):
                 break
 
     return results
+
+
+def restore_monitoring_stack(test_id):
+    lr = LocalCmdRunner()
+    logger.info("Checking that docker is available...")
+    result = lr.run('docker ps', ignore_status=True, verbose=False)
+    if result.ok:
+        logger.info('Docker is available')
+    else:
+        logger.warning('Docker is not available on your computer. Please install docker software before continue')
+        return False
+
+    monitor_stack_base_dir = tempfile.mkdtemp()
+    stored_files_by_test_id = list_logs_by_test_id(test_id)
+    monitor_stack_archives = []
+    for f in stored_files_by_test_id:
+        if f['type'] in ['monitoring_data_stack', 'prometheus']:
+            monitor_stack_archives.append(f)
+    if not monitor_stack_archives or len(monitor_stack_archives) < 2:
+        logger.warning('There is no available archive files for monitoring data stack restoring for test id : {}'.format(test_id))
+        return False
+
+    for arch in monitor_stack_archives:
+        logger.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
+        local_path_monitor_stack = S3Storage().download_file(arch['link'], dst_dir=monitor_stack_base_dir)
+        monitor_stack_workdir = os.path.dirname(local_path_monitor_stack)
+        monitoring_stack_archive_file = os.path.basename(local_path_monitor_stack)
+        logger.info('Extracting data from archive {}'.format(arch['file_path']))
+        if arch['type'] == 'prometheus':
+            monitoring_stack_data_dir = os.path.join(monitor_stack_workdir, 'monitor_data_dir')
+            cmd = dedent("""
+                mkdir -p {data_dir}
+                cd {data_dir}
+                cp ../{archive} ./
+                tar -xvf {archive}
+                chmod -R 777 {data_dir}
+                """.format(data_dir=monitoring_stack_data_dir,
+                           archive=monitoring_stack_archive_file))
+            result = lr.run(cmd, ignore_status=True)
+        else:
+            branches = re.search('(?P<monitoring_branch>branch-[0-9]+\.[0-9]+?)_(?P<scylla_version>[\d]\.[\d]+?)',
+                                 monitoring_stack_archive_file)
+            monitoring_branch = branches.group('monitoring_branch')
+            scylla_version = branches.group('scylla_version')
+            cmd = dedent("""
+                cd {workdir}
+                tar -xvf {archive}
+                """.format(workdir=monitor_stack_workdir, archive=os.path.basename(local_path_monitor_stack)))
+            result = lr.run(cmd, ignore_status=True)
+        if not result.ok:
+                logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
+                return False
+        logger.info("Extracting data finished")
+
+    logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
+
+    monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-grafana-monitoring-{}'.format(monitoring_branch))
+
+    @retrying(n=3, sleep_time=1, message='Start docker containers')
+    def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
+        lr.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
+        cmd = dedent("""cd {monitoring_dockers_dir};
+                ./start-all.sh \
+                -s {monitoring_dockers_dir}/config/scylla_servers.yml \
+                -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
+                -d {monitoring_stack_data_dir} -v {scylla_version}""".format(**locals()))
+        res = lr.run(cmd, ignore_status=True)
+        if res.ok:
+            r = lr.run('docker ps')
+            logger.info(r.stdout.encode('utf-8'))
+            return True
+        else:
+            raise Exception('dockers start failed. {}'.format(res))
+
+    status = False
+    status = start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version)
+    return status
 
 
 aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']

@@ -3377,6 +3377,23 @@ class BaseMonitorSet(object):
             self.log.error("Unable to downlaod Prometheus data: %s" % e)
             return ""
 
+    def get_monitoring_data_stack(self, node):
+        archive_name = "monitoring_data_stack_{0.monitor_branch}_{0.monitoring_version}.tar.gz".format(self)
+        node.remoter.run("cd {}; sudo tar -czvf {} {}/".format(self.monitor_install_path_base,
+                                                               archive_name,
+                                                               os.path.basename(self.monitor_install_path)),
+                         ignore_status=True)
+        node.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
+                           dst=self.logdir)
+        return os.path.join(self.logdir, archive_name)
+
+    def download_monitoring_data_stack(self):
+        for node in self.nodes:
+            local_path_to_monitor_stack = self.get_monitoring_data_stack(node)
+            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
+
+            return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
+
 
 class NoMonitorSet(object):
 

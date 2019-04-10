@@ -65,6 +65,7 @@ BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
 docker run --rm ${TTY_STDIN} --privileged \
+    --name sct-hydra \
     -h ${HOST_NAME} \
     -v /var/run:/run \
     -v ${SCT_DIR}:${WORK_DIR} \
@@ -77,7 +78,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
-    -u $(id -u ${USER}):$(id -g ${USER}) \
+    -u $(id -u ${USER}):$(grep "docker" /etc/group|cut -d: -f3) \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
     ${AWS_OPTIONS} \
