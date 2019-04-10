@@ -15,7 +15,7 @@ ip_ssh_connections: 'private'
 #When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across the loaders (round_robin)
 round_robin: 'false'
 experimental: 'true'
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'spot_low_price'

@@ -20,7 +20,7 @@ validate_partitions: true
 table_name: "scylla_bench.test"
 primary_key_column: "pk"
 
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'mixed'
