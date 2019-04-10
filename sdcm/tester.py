@@ -1392,7 +1392,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.log.info('Start collect logs...')
         logs_dict = {"db_cluster_log": "",
                      "monitoring_log": "",
-                     "prometheus_data": ""}
+                     "prometheus_data": "",
+                     "monitoring_stack": ""}
 
         storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
         os.mkdir(storing_dir)
@@ -1408,6 +1409,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                                                   dest_dir=cluster.Setup.test_id())
             prometheus_data = self.monitors.download_monitor_data()
             logs_dict["prometheus_data"] = prometheus_data
+            logs_dict["monitoring_stack"] = self.monitors.download_monitoring_data_stack()
 
         if self.create_stats:
             self.update({'test_details': {'log_files': logs_dict}})
