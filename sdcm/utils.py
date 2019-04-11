@@ -238,7 +238,6 @@ def list_logs_by_test_id(test_id):
     return results
 
 
-
 aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
 gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
 
