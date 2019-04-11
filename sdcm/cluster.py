@@ -96,10 +96,10 @@ def set_libvirt_uri(libvirt_uri):
 def clean_domain(domain_name):
     global LIBVIRT_URI
     localrunner.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
-                       ignore_status=True)
+                    ignore_status=True)
 
     localrunner.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
-                       ignore_status=True)
+                    ignore_status=True)
 
 
 def remove_if_exists(file_path):
@@ -3257,7 +3257,7 @@ class BaseMonitorSet(object):
 
     def _get_shared_snapshot_link(self, grafana_url):
         result = localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
-                # since there is only one monitoring node returning here
+        # since there is only one monitoring node returning here
         output = result.stdout.strip()
         if "Error" in output:
             self.log.info(output)

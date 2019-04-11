@@ -13,6 +13,7 @@ repos:
                 data_dir/scylla.yaml
             )$
     -   id: check-added-large-files
+    -   id: check-json
 
 -   repo: https://github.com/pre-commit/mirrors-autopep8
     rev: 'v1.4.3'  # Use the sha / tag you want to point at

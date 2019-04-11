@@ -5,7 +5,7 @@ var system = require('system');
 page.onConsoleMessage = function(msg) {
   console.log(msg);
 }
-page.viewportSize = { width: 1920, height: 1080 };    
+page.viewportSize = { width: 1920, height: 1080 };
 
 var address = system.args[1];
 

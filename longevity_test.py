@@ -230,7 +230,6 @@ class LongevityTest(ClusterTester):
             self.assertEqual(partitions_dict_before, partitions_dict_after,
                              msg='Row amount in partitions is not same before and after running of nemesis')
 
-
     def test_batch_custom_time(self):
         """
         The test runs like test_custom_time but desgined for running multiple stress commands in batches.
