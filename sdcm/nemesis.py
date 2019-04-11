@@ -144,6 +144,7 @@ class Nemesis(object):
                            result.duration)
             return result
         except (UnexpectedExit, Failure):
+        except (UnexpectedExit, Failure) as details:
             err = ("nodetool command '%s' failed on node %s: %s" %
                    (cmd, node, details.result))
             self.error_list.append(err)
