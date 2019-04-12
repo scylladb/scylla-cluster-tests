@@ -91,7 +91,6 @@ class CommandRunner(object):
         logger = logging.getLogger(LOGGER_NAME)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.connection = None
-        # self.connection = Connection(self.hostname, user=user)
 
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
@@ -102,6 +101,26 @@ class CommandRunner(object):
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
             self.connection = Connection(*args, **kwargs)
+
+    def _print_command_results(self, result, verbose=True):
+
+        if verbose:
+            if result.stderr:
+                self.log.info('STDERR: {}'.format(result.stderr.encode('utf-8')))
+
+            self.log.info('Command "{}" finished with status {}'.format(result.command, result.exited))
+            return
+
+        if result.failed:
+            self.log.error('Error executing command: "{}"; Exit status: {}'.format(result.command, result.exited))
+            if result.stdout:
+                self.log.debug('STDOUT: {}'.format(result.stdout[-240:].encode('utf-8')))
+            if result.stderr:
+                self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
+            return
+
+        if result.ok:
+            self.log.info("Command {} finished with status {}".format(result.command, result.exited))
 
 
 class LocalCmdRunner(CommandRunner):
@@ -126,15 +145,14 @@ class LocalCmdRunner(CommandRunner):
                                            watchers=watchers)
 
         except (Failure, UnexpectedExit) as details:
-            self.log.error('Error executing command: {cmd}\ndetails: {details}'.format(**locals()))
+            if hasattr(details, "result"):
+                self._print_command_results(details.result, verbose)
             raise
 
         setattr(result, 'duration', time.time() - start_time)
         setattr(result, 'exit_status', result.exited)
-        if verbose:
-            self.log.info('Command {} finished with status {}'.format(result.command, result.exited))
-        #     self.log.debug('STDOUT: {}'.format(result.stdout.encode('utf-8')))
-            self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
+
+        self._print_command_results(result, verbose)
 
         return result
 
@@ -184,8 +202,8 @@ class RemoteCmdRunner(CommandRunner):
         for i in range(retry + 1):
             watchers = []
             try:
-                if verbose:
-                    self.log.debug('Run command {}'.format(cmd))
+
+                self.log.debug('Run command {}'.format(cmd))
                 watchers.append(OutputWatcher(self, verbose))
                 start_time = time.time()
                 if log_file:
@@ -196,16 +214,15 @@ class RemoteCmdRunner(CommandRunner):
 
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
+                break
 
             except Exception as details:
                 if i == retry:
-                    self.log.error('Error executing command: {cmd}\ndetails: {details}'.format(**locals()))
+                    if hasattr(details, "result"):
+                        self._print_command_results(details.result, verbose)
                     raise
 
-        if verbose:
-            self.log.debug('Command {} finished with status {}'.format(result.command, result.exited))
-        #     self.log.debug('STDOUT: {}'.format(result.stdout.encode('utf-8')))
-            self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
+        self._print_command_results(result, verbose)
 
         return result
 
