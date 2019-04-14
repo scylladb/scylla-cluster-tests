@@ -392,22 +392,19 @@ class ManagerCluster(ScyllaManagerBase):
         Gets the Manager's Cluster Nodes status
         """
         # $ sctool status -c bla
-        # Datacenter: dc1
-        # ╭───────────┬──────────┬─────┬────────────────╮
-        # │ CQL       │ API      │ SSL │ Host           │
-        # ├───────────┼──────────┼─────┼────────────────┤
-        # │ UP (12ms) │ UP (3ms) │ OFF │ 192.168.100.11 │
-        # │ UP (5ms)  │ UP (3ms) │ OFF │ 192.168.100.12 │
-        # │ UP (4ms)  │ UP (2ms) │ OFF │ 192.168.100.13 │
-        # ╰───────────┴──────────┴─────┴────────────────╯
-        # Datacenter: dc2
-        # ╭───────────┬───────────┬─────┬────────────────╮
-        # │ CQL       │ API       │ SSL │ Host           │
-        # ├───────────┼───────────┼─────┼────────────────┤
-        # │ UP (10ms) │ UP (6ms)  │ OFF │ 192.168.100.21 │
-        # │ UP (4ms)  │ UP (5ms)  │ OFF │ 192.168.100.22 │
-        # │ UP (13ms) │ UP (10ms) │ OFF │ 192.168.100.23 │
-        # ╰───────────┴───────────┴─────┴────────────────╯
+        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-eastscylla_node_east
+        # 19:43:56 [107.23.100.82] [stdout] ╭──────────┬─────┬──────────┬────────────────╮
+        # 19:43:56 [107.23.100.82] [stdout] │ CQL      │ SSL │ REST     │ Host           │
+        # 19:43:56 [107.23.100.82] [stdout] ├──────────┼─────┼──────────┼────────────────┤
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 34.205.64.58   │
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 54.159.184.253 │
+        # 19:43:56 [107.23.100.82] [stdout] ╰──────────┴─────┴──────────┴────────────────╯
+        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-west-2scylla_node_west
+        # 19:43:56 [107.23.100.82] [stdout] ╭────────────┬─────┬───────────┬──────────────╮
+        # 19:43:56 [107.23.100.82] [stdout] │ CQL        │ SSL │ REST      │ Host         │
+        # 19:43:56 [107.23.100.82] [stdout] ├────────────┼─────┼───────────┼──────────────┤
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (151ms) │ OFF │ UP (80ms) │ 34.219.6.187 │
+        # 19:43:56 [107.23.100.82] [stdout] ╰────────────┴─────┴───────────┴──────────────╯
         cmd = "status -c {}".format(self.id)
         dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
@@ -420,7 +417,7 @@ class ManagerCluster(ScyllaManagerBase):
                 host_col_idx = list_titles_row.index("Host")
                 cql_status_col_idx = list_titles_row.index("CQL")
                 ssl_col_idx = list_titles_row.index("SSL")
-                rest_col_idx = list_titles_row.index("API")
+                rest_col_idx = list_titles_row.index("REST")
 
                 for line in hosts_table[1:]:
                     host = line[host_col_idx]
@@ -477,7 +474,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
         time.sleep(sleep)
         logger.debug("Initiating Scylla-Manager, version: {}".format(self.version))
         dict_distro_user = {Distro.CENTOS7: 'centos', Distro.DEBIAN8: 'admin', Distro.UBUNTU16: 'ubuntu'}
-        self.user = dict_distro_user[manager_node.distro] if manager_node.distro in dict_distro_user else 'N/A'
+        try:
+            self.user = dict_distro_user[manager_node.distro]
+        except KeyError as e:
+            raise ScyllaManagerError("Non-supported Distro found on Monitoring Node: {} - {}".format(manager_node.distro, e))
 
     @property
     def version(self):
