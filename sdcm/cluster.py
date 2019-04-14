@@ -339,6 +339,19 @@ class BaseNode(object):
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
+        self._cassandra_stress_version = None
+
+    @property
+    def cassandra_stress_version(self):
+        if not self._cassandra_stress_version:
+            result = self.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
+            match = re.match("Version: (.*)", result.stdout)
+            if match:
+                self._cassandra_stress_version = match.group(1)
+            else:
+                self.log.error("C-S version not found!")
+                self._cassandra_stress_version = "unknown"
+        return self._cassandra_stress_version
 
     @property
     def distro(self):
@@ -2317,17 +2330,6 @@ class BaseLoaderSet(object):
     def __init__(self, params):
         self._loader_queue = []
         self.params = params
-        self.cassandra_stress_version = ""
-
-    def get_cassandra_stress_version(self, node):
-        if not self.cassandra_stress_version:
-            result = node.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
-            match = re.match("Version: (.*)", result.stdout)
-            if match:
-                self.cassandra_stress_version = match.group(1)
-            else:
-                self.log.error("C-S version not found!")
-                self.cassandra_stress_version = "unknown"
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -2384,7 +2386,6 @@ class BaseLoaderSet(object):
         node.wait_cs_installed(verbose=verbose)
         cs_exporter_setup = CassandraStressExporterSetup()
         cs_exporter_setup.install(node)
-        self.get_cassandra_stress_version(node)
 
         # scylla-bench
         node.remoter.run('sudo yum install git -y')
@@ -2424,8 +2425,6 @@ class BaseLoaderSet(object):
 
     def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
                           profile=None, node_list=[], round_robin=False):
-        if self.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
-            stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
 
         if keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
@@ -2442,6 +2441,9 @@ class BaseLoaderSet(object):
 
         def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
             queue[TASK_QUEUE].put(node)
+            if node.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version arg
+                stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
+
             if node_list and '-node' not in stress_cmd:
                 first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
                 first_node = first_node[0] if first_node else node_list[0]
