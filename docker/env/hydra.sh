@@ -61,6 +61,9 @@ SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 # export all BUILD_* env vars into the docker run
 BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
+# export all AWS_* env vars into the docker run
+AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \
@@ -77,6 +80,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -u $(id -u ${USER}):$(id -g ${USER}) \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
+    ${AWS_OPTIONS} \
     --net=host \
     scylladb/hydra:v${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
