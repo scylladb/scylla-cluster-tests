@@ -31,9 +31,6 @@ class MgmtCliTest(ClusterTester):
 
     :avocado: enable
     """
-    MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
-    MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
-    MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
     CLUSTER_NAME = "mgr_cluster1"
 
     def test_mgmt_repair_nemesis(self):
@@ -69,7 +66,7 @@ class MgmtCliTest(ClusterTester):
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
         origin_ssh_user = mgr_cluster.ssh_user
-        origin_rsa_id = self.MANAGER_IDENTITY_FILE
+        origin_rsa_id = mgmt.MANAGER_IDENTITY_FILE
         new_ssh_user = "centos"
         new_rsa_id = '/tmp/scylla-test'
 
