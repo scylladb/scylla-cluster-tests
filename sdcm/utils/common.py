@@ -10,10 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2017 ScyllaDB
-
+import itertools
 import os
 import logging
 import logging.config
+import random
 import socket
 import time
 import datetime
@@ -34,6 +35,7 @@ from collections import defaultdict
 from datetime import timedelta
 from enum import Enum
 
+from concurrent.futures import ThreadPoolExecutor
 import boto3
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
@@ -505,6 +507,46 @@ aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
 gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
 
 
+def all_aws_regions():
+    client = boto3.client('ec2')
+    return [region['RegionName'] for region in client.describe_regions()['Regions']]
+
+
+AWS_REGIONS = all_aws_regions()
+
+
+class ParallelObject:
+    """
+        Run function in with supplied args in parallel using thread.
+    """
+
+    def __init__(self, objects, timeout=6, num_workers=None, disable_logging=False):
+        self.objects = objects
+        self.timeout = timeout
+        self.num_workers = num_workers
+        self.disable_logging = disable_logging
+
+    def run(self, func):
+
+        def func_wrap(fun):
+            def inner(*args, **kwargs):
+                thread_name = threading.current_thread().name
+                fun_args = args
+                fun_kwargs = kwargs
+                fun_name = fun.__name__
+                logger.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(**locals()))
+                return_val = fun(*args, **kwargs)
+                logger.debug("[{thread_name}] Done.".format(**locals()))
+                return return_val
+            return inner
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
+            logger.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
+            if not self.disable_logging:
+                func = func_wrap(func)
+            return list(pool.map(func, self.objects, timeout=self.timeout))
+
+
 def clean_cloud_instances(tags_dict):
     """
     Remove all instances with specific tags from both AWS/GCE
@@ -516,6 +558,48 @@ def clean_cloud_instances(tags_dict):
     clean_instances_gce(tags_dict)
 
 
+def aws_tags_to_dict(tags_list):
+    tags_dict = {}
+    if tags_list:
+        for item in tags_list:
+            tags_dict[item["Key"]] = item["Value"]
+    return tags_dict
+
+
+def list_instances_aws(tags_dict=None, region_name=None, running=False):
+    """
+    list all instances with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+    :param running: get all running instances
+    :return: instances dict where region is a key
+    """
+    instances = {}
+    aws_regions = [region_name] if region_name else AWS_REGIONS
+
+    def get_instances(region):
+        logger.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        client = boto3.client('ec2', region_name=region)
+        custom_filter = []
+        if tags_dict:
+            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+        response = client.describe_instances(Filters=custom_filter)
+        instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
+            'Instances']]
+        logger.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100).run(get_instances)
+    instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
+    if running:
+        instances = [i for i in instances if i['State']['Name'] == 'running']
+    else:
+        instances = [i for i in instances if not i['State']['Name'] == 'terminated']
+    logger.info("Found total of %s instances.", len(instances))
+    return instances
+
+
 def clean_instances_aws(tags_dict):
     """
     Remove all instances with specific tags AWS
@@ -523,19 +607,85 @@ def clean_instances_aws(tags_dict):
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
-    for region in aws_regions:
-        logger.info('going to cleanup aws region=%s', region)
-        client = boto3.client('ec2', region_name=region)
-        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    aws_instances = list_instances_aws(tags_dict=tags_dict)
 
-        response = client.describe_instances(Filters=custom_filter)
-        instance_ids = [instance['InstanceId'] for reservation in response['Reservations'] for instance in reservation['Instances']]
+    for instance in aws_instances:
+        tags = aws_tags_to_dict(instance.get('Tags'))
+        name = tags.get("Name", "N/A")
+        instance_id = instance['InstanceId']
+        logger.info("Going to delete '{instance_id}' [name={name}] ".format(**locals()))
+        response = instance.terminate()
+        logger.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
-        if instance_ids:
-            logger.info("going to delete instance_ids={}".format(instance_ids))
-            response = client.terminate_instances(InstanceIds=instance_ids)
-            for instance in response['TerminatingInstances']:
-                assert instance['CurrentState']['Name'] in ['terminated', 'shutting-down']
+
+def get_all_gce_regions():
+    from sdcm.keystore import KeyStore
+    gcp_credentials = KeyStore().get_gcp_credentials()
+    gce_driver = get_driver(Provider.GCE)
+
+    compute_engine = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                                gcp_credentials["private_key"],
+                                project=gcp_credentials["project_id"])
+    all_gce_regions = [region_obj.name for region_obj in compute_engine.region_list]
+    return all_gce_regions
+
+
+def gce_meta_to_dict(metadata):
+    meta_dict = {}
+    data = metadata.get("items")
+    if data:
+        for item in data:
+            key = item["key"]
+            if key:  # sometimes key is empty string
+                meta_dict[key] = item["value"]
+    return meta_dict
+
+
+def filter_gce_by_tags(tags_dict, instances):
+    filtered_instances = []
+    for instance in instances:
+        tags = gce_meta_to_dict(instance.extra['metadata'])
+        found_keys = set(k for k in tags_dict if k in tags and tags_dict[k] == tags[k])
+        if found_keys == set(tags_dict.keys()):
+            filtered_instances.append(instance)
+    return filtered_instances
+
+
+def list_instances_gce(tags_dict, running=False):
+    """
+    list all instances with specific tags GCE
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+
+    :return: None
+    """
+
+    # avoid cyclic dependency issues, since too many things import utils.py
+    from sdcm.keystore import KeyStore
+
+    gcp_credentials = KeyStore().get_gcp_credentials()
+    gce_driver = get_driver(Provider.GCE)
+
+    compute_engine = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                                gcp_credentials["private_key"],
+                                project=gcp_credentials["project_id"])
+
+    logger.info("Going to get all instances from GCE")
+    all_gce_instances = compute_engine.list_nodes()
+    # filter instances by tags since libcloud list_nodes() doesn't offer any filtering
+    if tags_dict:
+        instances = filter_gce_by_tags(tags_dict=tags_dict, instances=all_gce_instances)
+    else:
+        instances = all_gce_instances
+
+    if running:
+        # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.types.NodeState
+        instances = [i for i in instances if i.state == 'running']
+    else:
+        instances = [i for i in instances if not i.state == 'terminated']
+    logger.info("Done. Found total of %s instances.", len(instances))
+    return instances
 
 
 def clean_instances_gce(tags_dict):
@@ -545,87 +695,14 @@ def clean_instances_gce(tags_dict):
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    all_gce_instances = list_instances_gce(tags_dict=tags_dict)
 
-    # avoid cyclic dependency issues, since too many things import utils.py
-    from sdcm.keystore import KeyStore
-
-    gcp_credentials = KeyStore().get_gcp_credentials()
-    compute_engine = get_driver(Provider.GCE)
-    for region in gce_regions:
-        logger.info('going to cleanup gce region=%s', region)
-        driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                gcp_credentials["private_key"],
-                                datacenter=region,
-                                project=gcp_credentials["project_id"])
-
-        for node in driver.list_nodes():
-            tags = node.extra['metadata'].get('items', [])
-            # since libcloud list_nodes() doesn't offer any filtering
-            # we go over all the expected tags, and check if they exist in on the node/instance
-            # if all of them exists we delete that node
-            if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
-                if not node.state == 'STOPPED':
-                    logger.info("going to delete: {}".format(node.name))
-                    res = driver.destroy_node(node)
-                    logger.info("{} deleted. res={}".format(node.name, res))
-
-
-def list_instances_aws(tags_dict, region_name=None):
-    """
-    list all instances with specific tags AWS
-
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :param region_name: name of the region to list
-
-    :return: None
-    """
-    instances = []
-    _aws_regions = [region_name] if region_name else aws_regions
-    for region in _aws_regions:
-        logger.info('going to list aws region=%s', region)
-        client = boto3.client('ec2', region_name=region)
-        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
-
-        response = client.describe_instances(Filters=custom_filter)
-        instances += [instance for reservation in response['Reservations'] for instance in reservation['Instances']]
-
-    return instances
-
-
-def list_instances_gce(tags_dict, region_name=None):
-    """
-    list all instances with specific tags GCE
-
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :param region_name: name of the region to list
-
-    :return: None
-    """
-
-    # avoid cyclic dependency issues, since too many things import utils.py
-    from sdcm.keystore import KeyStore
-
-    instances = []
-    gcp_credentials = KeyStore().get_gcp_credentials()
-    compute_engine = get_driver(Provider.GCE)
-
-    _gce_regions = [region_name] if region_name else gce_regions
-    for region in _gce_regions:
-        logger.info('going to list gce region=%s', region)
-        driver = compute_engine(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                gcp_credentials["private_key"],
-                                datacenter=region,
-                                project=gcp_credentials["project_id"])
-
-        for node in driver.list_nodes():
-            tags = node.extra['metadata'].get('items', [])
-            # since libcloud list_nodes() doesn't offer any filtering
-            # we go over all the expected tags, and check if they exist in on the node/instance
-            # if all of them exists we delete that node
-            if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
-                if not node.state == 'STOPPED':
-                    instances += [node]
-    return instances
+    for instance in all_gce_instances:
+        logger.info("Going to delete: {}".format(instance.name))
+        # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
+        res = instance.destroy()
+        logger.info("{} deleted. res={}".format(instance.name, res))
 
 
 _scylla_ami_cache = defaultdict(dict)

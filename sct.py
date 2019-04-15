@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import os
 import sys
 import unittest
@@ -11,9 +12,12 @@ import xmlrunner
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
-                               aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
-                               list_logs_by_test_id, restore_monitoring_stack)
+                               AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
+                               list_logs_by_test_id, restore_monitoring_stack, gce_meta_to_dict, aws_tags_to_dict)
 from sdcm.cluster import Setup
+from sdcm.utils.log import setup_stdout_logger
+
+LOGGER = setup_stdout_logger()
 
 click_completion.init()
 
@@ -81,61 +85,74 @@ def clean_resources(ctx, user, test_id):
 
 @cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
 @click.option('--user', type=str, help='user name to filter instances by')
+@click.option('--get-all', is_flag=True, default=False, help='All resources')
+@click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.pass_context
-def list_resources(ctx, user, test_id):
+def list_resources(ctx, user, test_id, get_all, get_all_running):
     params = dict()
 
-    if user:
+    if get_all or get_all_running:
+        params = None
+    elif user:
         params['RunByUser'] = user
-    if test_id:
+    elif test_id:
         params['TestId'] = test_id
-
-    if params:
-
-        instances = list_instances_aws(params)
-        instances = [i for i in instances if not i['State']['Name'] == 'terminated']
-        if instances:
-            x = PrettyTable(["InstanceId", "Name", "PublicIpAddress", "TestId", "LaunchTime"])
-            x.align = "l"
-            x.sortby = 'TestId'
-
-            for instance in instances:
-                name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
-                test_id = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'TestId']
-                x.add_row([instance['InstanceId'],
-                           name[0] if name else 'N/A',
-                           instance['PublicDnsName'],
-                           test_id[0] if test_id else 'N/A',
-                           instance['LaunchTime'].ctime()])
-            click.echo(x.get_string(title="Resources used by '{}' in AWS".format(user)))
-        else:
-            click.secho("No resources found on AWS", fg='green')
-
-        instances = list_instances_gce({'RunByUser': user})
-
-        if instances:
-
-            x = PrettyTable(["Name", "TestId", "LaunchTime", "PublicIps"])
-            x.align = "l"
-            x.sortby = 'TestId'
-            for instance in instances:
-                tags = instance.extra['metadata'].get('items', [])
-                test_id = [t['value'] for t in tags if t['key'] == 'TestId']
-                test_id = test_id[0] if test_id else 'N/A'
-                x.add_row([instance.name,
-                           test_id,
-                           instance.extra['creationTimestamp'],
-                           ", ".join(instance.public_ips)])
-            click.echo(x.get_string(title="Resources used by '{}' in GCE".format(user)))
-        else:
-            click.secho("No resources found on GCE", fg='green')
     else:
         click.echo(list_resources.get_help(ctx))
 
+    if get_all_running:
+        table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"]
+    else:
+        table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "LaunchTime"]
+
+    click.secho("Checking EC2...", fg='green')
+
+    aws_instances = list_instances_aws(tags_dict=params, running=get_all_running)
+    click.secho("Checking AWS EC2...", fg='green')
+    if aws_instances:
+        aws_table = PrettyTable(table_header)
+        aws_table.align = "l"
+        aws_table.sortby = 'LaunchTime'
+        for instance in aws_instances:
+            tags = aws_tags_to_dict(instance.get('Tags'))
+            name = tags.get("Name", "N/A")
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            aws_table.add_row([
+                name,
+                instance['Placement']['AvailabilityZone'],
+                instance.get('PublicIpAddress', 'N/A') if get_all_running else instance['State']['Name'],
+                test_id,
+                run_by_user,
+                instance['LaunchTime'].ctime()])
+        click.echo(aws_table.get_string(title="Resources used on AWS"))
+    else:
+        click.secho("Nothing found for selected filters in AWS!", fg="yellow")
+
+    click.secho("Checking GCE...", fg='green')
+    gce_instances = list_instances_gce(tags_dict=params, running=get_all_running)
+    if gce_instances:
+        gce_table = PrettyTable(table_header)
+        gce_table.align = "l"
+        gce_table.sortby = 'LaunchTime'
+        for instance in gce_instances:
+            tags = gce_meta_to_dict(instance.extra['metadata'])
+            public_ips = ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A"
+            gce_table.add_row([instance.name,
+                               instance.extra["zone"].name,
+                               public_ips if get_all_running else instance.state,
+                               tags.get('TestId', 'N/A') if tags else "N/A",
+                               tags.get('RunByUser', 'N/A') if tags else "N/A",
+                               instance.extra['creationTimestamp'],
+                               ])
+        click.echo(gce_table.get_string(title="Resources used on GCE"))
+    else:
+        click.secho("Nothing found for selected filters in GCE!", fg="yellow")
+
 
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
-@click.option('-r', '--region', type=click.Choice(aws_regions), default='eu-west-1')
+@click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
 def list_ami_versions(region):
 
     amis = get_scylla_ami_versions(region)
@@ -198,19 +215,12 @@ def conf_docs(output_format):
 @cli.command("perf-regression-report", help="Generate and send performance regression report")
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-@click.option("-l", "--debug-log", required=False, default=False, is_flag=True, help="Print debug logs")
-def perf_regression_report(es_id, emails, debug_log):
+def perf_regression_report(es_id, emails):
     email_list = emails.split(",")
     click.secho(message="Will send Performance Regression report to %s" % email_list, fg="green")
-    rootLogger = None
-    if debug_log:
-        import sys
-        import logging
-        rootLogger = logging.getLogger()
-        rootLogger.setLevel(logging.DEBUG)
-        rootLogger.addHandler(logging.StreamHandler(sys.stdout))
+    LOGGER.setLevel(logging.DEBUG)
     ra = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
-                                    send_email=True, email_recipients=email_list, logger=rootLogger)
+                                    send_email=True, email_recipients=email_list, logger=LOGGER)
     click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
     ra.check_regression(es_id)
     click.secho(message="Done." % email_list, fg="yellow")
@@ -237,13 +247,8 @@ def show_log(test_id):
 @click.option("-l", "--debug-log", required=False, default=False, is_flag=True, help="Print debug logs")
 def show_monitor(test_id, debug_log):
     click.echo('Search monitor stack archive files for test id {} and restoring...'.format(test_id))
-    rootLogger = None
     if debug_log:
-        import sys
-        import logging
-        rootLogger = logging.getLogger()
-        rootLogger.setLevel(logging.INFO)
-        rootLogger.addHandler(logging.StreamHandler(sys.stdout))
+        LOGGER.setLevel(logging.DEBUG)
     status = restore_monitoring_stack(test_id)
     x = PrettyTable(['Name', 'container', 'Link'])
     x.align = 'l'
