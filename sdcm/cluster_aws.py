@@ -236,7 +236,9 @@ class AWSCluster(cluster.BaseCluster):
 
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
                                    spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
-        instances = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, region_name=self.region_names[dc_idx])
+        results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type},
+                                     region_name=self.region_names[dc_idx])
+        instances = results[self.region_names[dc_idx]]
 
         def sort_by_index(item):
             for tag in item['Tags']:
