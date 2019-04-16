@@ -781,6 +781,218 @@
             },
             {
                 "collapse": false,
+                "height": "30",
+                "panels": [
+                    {
+                        "class": "text_panel",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">SLA per User metrics</h1>",
+                        "editable": true,
+                        "error": false,
+                        "id": 70,
+                        "links": [],
+                        "mode": "html",
+                        "span": 12,
+                        "style": {},
+                        "title": "",
+                        "transparent": true,
+                        "type": "text"
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "SLA per User metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": "250",
+                "panels": [
+                    {
+                          "aliasColors": {},
+                          "bars": false,
+                          "class": "graph_panel",
+                          "dashLength": 10,
+                          "dashes": false,
+                          "datasource": "prometheus",
+                          "description": "",
+                          "editable": true,
+                          "error": false,
+                          "fill": 0,
+                          "grid": {},
+                          "span": 6,
+                          "id": 68,
+                          "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                          },
+                          "lines": true,
+                          "linewidth": 2,
+                          "links": [],
+                          "nullPointMode": "connected",
+                          "percentage": false,
+                          "pointradius": 1,
+                          "points": false,
+                          "renderer": "flot",
+                          "seriesOverrides": [],
+                          "spaceLength": 10,
+                          "stack": false,
+                          "steppedLine": false,
+                          "targets": [
+                            {
+                              "expr": "collectd_cassandra_stress_read_gauge{type=\"ops\"}",
+                              "format": "time_series",
+                              "interval": "15s",
+                              "intervalFactor": 1,
+                              "refId": "C"
+                            },
+                            {
+                              "expr": "collectd_cassandra_stress_write_gauge{type=\"ops\"}",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "A"
+                            }
+                          ],
+                          "thresholds": [],
+                          "timeFrom": null,
+                          "timeRegions": [],
+                          "timeShift": null,
+                          "title": "cassandra-stress ops",
+                          "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "cumulative"
+                          },
+                          "type": "graph",
+                          "xaxis": {
+                            "buckets": null,
+                            "mode": "time",
+                            "name": null,
+                            "show": true,
+                            "values": []
+                          },
+                          "yaxes": [
+                            {
+                              "format": "ops",
+                              "logBase": 1,
+                              "max": null,
+                              "min": 0,
+                              "show": true
+                            },
+                            {
+                              "format": "short",
+                              "logBase": 1,
+                              "max": null,
+                              "min": null,
+                              "show": true
+                            }
+                          ],
+                          "yaxis": {
+                            "align": false,
+                            "alignLevel": null
+                          }
+                        },
+                    {
+                      "aliasColors": {},
+                      "bars": false,
+                      "class": "graph_panel",
+                      "dashLength": 10,
+                      "dashes": false,
+                      "datasource": "prometheus",
+                      "description": "",
+                      "editable": true,
+                      "error": false,
+                      "fill": 0,
+                      "grid": {},
+                      "span": 6,
+                      "id": 69,
+                      "legend": {
+                        "avg": false,
+                        "current": false,
+                        "max": false,
+                        "min": false,
+                        "show": false,
+                        "total": false,
+                        "values": false
+                      },
+                      "lines": true,
+                      "linewidth": 2,
+                      "links": [],
+                      "nullPointMode": "connected",
+                      "percentage": false,
+                      "pointradius": 1,
+                      "points": false,
+                      "renderer": "flot",
+                      "seriesOverrides": [],
+                      "spaceLength": 10,
+                      "stack": false,
+                      "steppedLine": false,
+                      "targets": [
+                        {
+                          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"service_level_.*\"} [30s] )) by (group, instance)",
+                          "format": "time_series",
+                          "interval": "15s",
+                          "intervalFactor": 1,
+                          "refId": "C"
+                        }
+                      ],
+                      "thresholds": [],
+                      "timeFrom": null,
+                      "timeRegions": [],
+                      "timeShift": null,
+                      "title": "Scheduler runtime",
+                      "tooltip": {
+                        "msResolution": false,
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "cumulative"
+                      },
+                      "type": "graph",
+                      "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                      },
+                      "yaxes": [
+                        {
+                          "format": "ms",
+                          "logBase": 1,
+                          "max": null,
+                          "min": 0,
+                          "show": true
+                        },
+                        {
+                          "format": "short",
+                          "logBase": 1,
+                          "max": null,
+                          "min": null,
+                          "show": true
+                        }
+                      ],
+                      "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                      }
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "SLA per User metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
                 "height": "25px",
                 "panels": [
                     {
