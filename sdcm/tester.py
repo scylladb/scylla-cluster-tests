@@ -222,7 +222,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.cs_db_cluster.wait_for_init()
 
         # change RF of system_auth
-        system_auth_rf = self.params.get('system_auth_rf', default=3):
+        system_auth_rf = self.params.get('system_auth_rf', default=3)
         if system_auth_rf:
             self.log.info('change RF of system_auth to %s' % system_auth_rf)
             node = self.db_cluster.nodes[0]
