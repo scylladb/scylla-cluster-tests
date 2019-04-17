@@ -19,7 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus, HostSsl
+from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 from sdcm.cluster import Setup
@@ -31,7 +31,6 @@ class MgmtCliTest(ClusterTester):
 
     :avocado: enable
     """
-    MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
     CLUSTER_NAME = "mgr_cluster1"
 
     def test_mgmt_repair_nemesis(self):
@@ -67,7 +66,7 @@ class MgmtCliTest(ClusterTester):
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
         origin_ssh_user = mgr_cluster.ssh_user
-        origin_rsa_id = self.MANAGER_IDENTITY_FILE
+        origin_rsa_id = mgmt.MANAGER_IDENTITY_FILE
         new_ssh_user = "centos"
         new_rsa_id = '/tmp/scylla-test'
 
@@ -106,6 +105,9 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster)
         self._generate_load()
         repair_task = mgr_cluster.create_repair_task()
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
         self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
         repair_task.start(use_continue=True)
@@ -137,6 +139,8 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+            assert host_health.rest_status == HostRestStatus.UP, "Not all hosts REST status is 'UP'"
+
 
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
@@ -146,6 +150,8 @@ class MgmtCliTest(ClusterTester):
 
         dict_host_health = mgr_cluster.get_hosts_health()
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(other_host_ip)
+        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(other_host_ip)
+
         other_host.start_scylla_server()
 
     def test_manager_upgrade(self):
