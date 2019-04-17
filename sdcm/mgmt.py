@@ -512,7 +512,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
 
     def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',
-                             create_user=None):
+                             create_user=None, single_node=False):
         """
         scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>] [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
            -u --ssh-user <username>        username used to connect to Scylla nodes, must be a sudo enabled user
@@ -528,12 +528,15 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if create_user:
             cmd += " --create-user {}".format(create_user)
         # create-user
-        cmd += ' -u {} -i {} {}'.format(
-            user, identity_file, node_ip)
-
+        cmd += ' -u {} -i {} '.format(
+            user, identity_file)
+        if single_node:
+            cmd += " --single-node "
+        cmd += ' {} '.format(node_ip)
         logger.debug("SSH setup command is: {}".format(cmd))
         res = self.manager_node.remoter.run(cmd)
         MgrUtils.verify_errorless_result(cmd=cmd, res=res)
+        return res
 
     def _get_cluster_hosts_ip(self, db_cluster):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips(db_cluster=db_cluster)]
@@ -542,7 +545,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None, single_node=False):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -579,7 +582,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         user = user or self.user
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user)
+        res_ssh_setup = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
         ssh_user = create_user or 'scylla-manager'
         manager_identity_file = MANAGER_IDENTITY_FILE
         cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
@@ -593,10 +596,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
                 if client_encrypt or db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
                                                                                     SSL_USER_KEY_FILE)
-        res = self.sctool.run(cmd, parse_table_res=False)
-        if not res or 'Cluster added' not in res.stderr:
-            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
-        cluster_id = res.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
+        res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
+        if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:
+            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res_cluster_add))
+        cluster_id = res_cluster_add.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt)
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):
