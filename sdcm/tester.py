@@ -121,9 +121,9 @@ def retry_till_success(fun, *args, **kwargs):
                 time.sleep(0.25)
 
 
-def clean_resources_on_exception(method):
+def teardown_on_exception(method):
     """
-    Ensure that resources used in test are cleaned upon unhandled exceptions.
+    Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
 
     :param method: ScyllaClusterTester method to wrap.
     :return: Wrapped method.
@@ -133,8 +133,8 @@ def clean_resources_on_exception(method):
         try:
             return method(*args, **kwargs)
         except Exception:
-            TEST_LOG.exception("Exception in %s. Will clean resources", method.__name__)
-            args[0].finalize_test()
+            TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
+            args[0].tearDown()
             raise
     return wrapper
 
@@ -206,7 +206,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             duration = self.test_duration
         return duration * 60 + 600
 
-    @clean_resources_on_exception
+    @teardown_on_exception
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
@@ -700,7 +700,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
-    @clean_resources_on_exception
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
         if loader_info is None:
@@ -757,14 +756,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
         return stress_cmd
 
-    @clean_resources_on_exception
     def run_stress(self, stress_cmd, duration=None):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
                                               duration=duration)
         self.verify_stress_thread(stress_queue)
 
-    @clean_resources_on_exception
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           keyspace_name='', round_robin=False, stats_aggregate_cmds=True):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
@@ -780,7 +777,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                               node_list=self.db_cluster.nodes,
                                               round_robin=round_robin)
 
-    @clean_resources_on_exception
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
 
         timeout = self.get_duration(duration)
@@ -790,7 +786,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                                     self.outputdir,
                                                     node_list=self.db_cluster.nodes)
 
-    @clean_resources_on_exception
     def run_gemini(self, cmd, duration=None):
 
         timeout = self.get_duration(duration)
@@ -824,21 +819,18 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.fail("cassandra-stress errors on "
                       "nodes:\n%s" % "\n".join(errors))
 
-    @clean_resources_on_exception
     def get_stress_results(self, queue, store_results=True):
         results = self.loaders.get_stress_results(queue)
         if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
 
-    @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
         if self.create_stats:
             self.update_stress_results(results)
         return results
 
-    @clean_resources_on_exception
     def get_gemini_results(self, queue):
         results = self.loaders.get_gemini_results(queue)
         return results
@@ -1240,7 +1232,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         try:
             self.finalize_test()
         except Exception as details:
-            self.log.exception('Exception in clean_resources method {}'.format(details))
+            self.log.exception('Exception in finalize_test method {}'.format(details))
             raise
         finally:
             if self._failure_post_behavior == 'destroy':

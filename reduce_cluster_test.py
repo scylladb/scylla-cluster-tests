@@ -19,7 +19,7 @@ import datetime
 from avocado import main
 
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_resources_on_exception
+from sdcm.tester import teardown_on_exception
 from sdcm.nemesis import Nemesis
 from sdcm.nemesis import log_time_elapsed
 import time
@@ -40,7 +40,7 @@ class ReduceClusterTest(ClusterTester):
     :avocado: enable
     """
 
-    @clean_resources_on_exception
+    @teardown_on_exception
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
