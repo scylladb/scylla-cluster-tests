@@ -237,6 +237,9 @@ class Stats(object):
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
+    def get_doc_id(self):
+        return self._test_id
+
     def create(self):
         self.es.create_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=self._stats)
 
