@@ -134,7 +134,7 @@ def clean_resources_on_exception(method):
             return method(*args, **kwargs)
         except Exception:
             TEST_LOG.exception("Exception in %s. Will clean resources", method.__name__)
-            args[0].clean_resources()
+            args[0].finalize_test()
             raise
     return wrapper
 
@@ -1148,11 +1148,18 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         return partitions
 
-    def clean_resources(self):
-        self.log.debug('Cleaning up resources used in the test')
+    def finalize_test(self):
+        self.stop_resources()
+        self.collect_logs()
+        self.clean_resources()
+
+    def stop_resources(self):
+        self.log.debug('Stopping all resources')
         self.kill_stress_thread()
+
         db_cluster_errors = None
         db_cluster_coredumps = None
+
         if self.db_cluster is not None:
             db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
@@ -1165,46 +1172,16 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             for node in self.db_cluster.nodes:
                 node.stop_task_threads(timeout=60)
 
-            if self._failure_post_behavior == 'destroy':
-                self.db_cluster.destroy()
-                self.db_cluster = None
-                if self.cs_db_cluster:
-                    self.cs_db_cluster.destroy()
-            elif self._failure_post_behavior == 'stop':
-                for node in self.db_cluster.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
-
         if self.loaders is not None:
             self.loaders.get_backtraces()
-            if self._failure_post_behavior == 'destroy':
-                self.loaders.destroy()
-                self.loaders = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.loaders.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
 
         if self.monitors is not None:
             self.monitors.get_backtraces()
 
-            if self._failure_post_behavior == 'destroy':
-                self.monitors.destroy()
-                self.monitors = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.monitors.nodes:
-                    node.instance.stop()
-                self.monitors = None
-        if self.credentials is not None:
-            cluster.remove_cred_from_cleanup(self.credentials)
-            if self._failure_post_behavior == 'destroy':
-                for cr in self.credentials:
-                    cr.destroy()
-                self.credentials = []
-
-        self.update_test_details(errors=db_cluster_errors,
-                                 coredumps=db_cluster_coredumps,
-                                 )
+        if self.create_stats:
+            self.update_test_details(errors=db_cluster_errors,
+                                     coredumps=db_cluster_coredumps,
+                                     )
 
         if db_cluster_coredumps:
             self.fail('Found coredumps on DB cluster nodes: %s' %
@@ -1219,11 +1196,49 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             # TODO: remove this failure once we have the event analyzer inplace, cause not every error here should fail the test
             self.fail('Errors found on DB node logs (see test logs)')
 
+    def clean_resources(self):
+        self.log.debug('Cleaning up resources used in the test')
+
+        if self.db_cluster is not None:
+            if self._failure_post_behavior == 'destroy':
+                self.db_cluster.destroy()
+                self.db_cluster = None
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.destroy()
+            elif self._failure_post_behavior == 'stop':
+                for node in self.db_cluster.nodes:
+                    node.instance.stop()
+                self.db_cluster = None
+
+        if self.loaders is not None:
+            if self._failure_post_behavior == 'destroy':
+                self.loaders.destroy()
+                self.loaders = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.loaders.nodes:
+                    node.instance.stop()
+                self.db_cluster = None
+
+        if self.monitors is not None:
+            if self._failure_post_behavior == 'destroy':
+                self.monitors.destroy()
+                self.monitors = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.monitors.nodes:
+                    node.instance.stop()
+                self.monitors = None
+
+        if self.credentials is not None:
+            cluster.remove_cred_from_cleanup(self.credentials)
+            if self._failure_post_behavior == 'destroy':
+                for cr in self.credentials:
+                    cr.destroy()
+                self.credentials = []
+
     def tearDown(self):
         self.log.info('TearDown is starting...')
-        self.collect_logs()
         try:
-            self.clean_resources()
+            self.finalize_test()
         except Exception as details:
             self.log.exception('Exception in clean_resources method {}'.format(details))
             raise
@@ -1247,6 +1262,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         except Exception as details:
             self.log.warning('Errors during creating and uploading archive of job.log {}'.format(details))
         self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
+        if self.create_stats:
+            self.log.info("ES document id: {}".format(self.get_doc_id()))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "

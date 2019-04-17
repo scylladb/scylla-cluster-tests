@@ -823,7 +823,6 @@ class BaseNode(object):
             # hence to stop the thread we need to kill the process first
             self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
             self._journal_thread.join(timeout)
-        del self.remoter
 
     def get_cpumodel(self):
         """Get cpu model from /proc/cpuinfo
