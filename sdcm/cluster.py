@@ -3106,7 +3106,9 @@ class BaseMonitorSet(object):
         if node.is_rhel_like():
             prereqs_script = dedent("""
                 yum install -y epel-release
-                yum install -y python-pip unzip wget docker
+                yum install -y python-pip unzip wget libtool-ltdl libseccomp
+                wget https://yum.dockerproject.org/repo/main/centos/7/Packages/docker-engine-1.12.6-1.el7.centos.x86_64.rpm https://yum.dockerproject.org/repo/main/centos/7/Packages/docker-engine-selinux-1.12.6-1.el7.centos.noarch.rpm
+                rpm -ivh docker-engine-1.12.6-1.el7.centos.x86_64.rpm docker-engine-selinux-1.12.6-1.el7.centos.noarch.rpm
                 pip install --upgrade pip
                 pip install pyyaml
             """)
