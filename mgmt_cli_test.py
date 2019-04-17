@@ -148,6 +148,31 @@ class MgmtCliTest(ClusterTester):
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(other_host_ip)
         other_host.start_scylla_server()
 
+    def test_ssh_setup_script(self):
+        new_user = "qa_user"
+        new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR,new_user)+".pem"
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        selected_host_ip = self._get_cluster_hosts_ip()[0]
+        res_ssh_setup = manager_tool.scylla_mgr_ssh_setup(node_ip=selected_host_ip, single_node=True, create_user=new_user)
+        self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
+        new_user_login_message = "This account is currently not available"
+        # sudo ssh -i /root/.ssh/qa_user.pem -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 qa_user@54.163.180.81
+        new_user_login_cmd = "sudo ssh -i {} -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 {}@{}".format(new_user_identity_file, new_user, selected_host_ip)
+        self.log.debug("new_user_login_cmd command is: {}".format(new_user_login_cmd))
+        res_new_user_login_cmd = manager_tool.manager_node.remoter.run(new_user_login_cmd, ignore_status=True)
+        self.log.debug("res_new_user_login_cmd is: {}".format(res_new_user_login_cmd))
+        assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(res_new_user_login_cmd.stdout, new_user_login_message)
+
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip, single_node=True)
+        # self.log.debug('mgr_cluster: {}'.format(mgr_cluster))
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
+        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            self.log.debug("host_health is: {}".format(host_health))
+
+
+
     def test_manager_upgrade(self):
         """
         Test steps:

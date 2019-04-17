@@ -458,28 +458,38 @@ class ScyllaManagerTool(ScyllaManagerBase):
         return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
 
     def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',
-                             manager_user='scylla-manager', manager_identity_file=MANAGER_IDENTITY_FILE):
+                             create_user=None, single_node=False):
         """
-        scyllamgr_ssh_setup -u <username> -i <path to private key> --m <manager username> -o <path to manager private key> [HOST...]
-          -u --user				SSH user name used to connect to hosts
-          -i --identity-file			path to identity file containing SSH private key
-          -m --manager-user			user name that will be created and configured on hosts, default scylla-manager
-          -o --manager-identity-file		path to identity file containing SSH private key for MANAGER_USERNAME, if there is no such file it will be created
-          -d --discover				use first host to discover and setup all hosts in a cluster
+        scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>] [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
+           -u --ssh-user <username>        username used to connect to Scylla nodes, must be a sudo enabled user
+           -i --ssh-identity-file <file>        path to SSH identity file (private key) for user
+           -c --ssh-config-file <file>        path to alternate SSH configuration file, see man ssh_config
+              --create-user <username>        username that will be created on Scylla nodes, default scylla-manager
+              --single-node            setup the given node only, skip discovery of all the cluster nodes
+              --debug                display debug info
 
-
-        :param node_ip:
-        :param identity_file:
-        :param manager_user:
-        :return:
-
-        sudo scyllamgr_ssh_setup --user centos --identity-file /tmp/scylla-qa-ec2 --manager-user scylla-manager --manager-identity-file /tmp/scylla_manager_pem --discover 54.158.51.22"
+        sudo scyllamgr_ssh_setup -u centos -i /tmp/scylla-qa-ec2 192.168.100.11
         """
-        cmd = 'sudo scyllamgr_ssh_setup --user {} --identity-file {} --manager-user {} --manager-identity-file {} --discover {}'.format(
-            user, identity_file, manager_user, manager_identity_file, node_ip)
+        cmd = 'sudo scyllamgr_ssh_setup'
+        if create_user:
+            cmd += " --create-user {}".format(create_user)
+        # create-user
+        cmd += ' -u {} -i {} '.format(
+            user, identity_file)
+        if single_node:
+            cmd += " --single-node "
+        cmd += ' {} '.format(node_ip)
         logger.debug("SSH setup command is: {}".format(cmd))
         res = self.manager_node.remoter.run(cmd)
         MgrUtils.verify_errorless_result(cmd=cmd, res=res)
+
+        try:
+            ssh_identity_file = [arg for arg in res.stdout.split('\n') if "--ssh-identity-file" in arg][0].split()[-1]
+        except Exception as e:
+            raise ScyllaManagerError("Failed to parse scyllamgr_ssh_setup output: {}".format(e))
+
+
+        return res, ssh_identity_file
 
     def _get_cluster_hosts_ip(self, db_cluster):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips(db_cluster=db_cluster)]
@@ -488,7 +498,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None, single_node=False):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -496,21 +506,38 @@ class ScyllaManagerTool(ScyllaManagerBase):
         :param client_encrypt: is TSL client encryption enable/disable
         :return: ManagerCluster
 
-        --host string              hostname or IP of one of the cluster nodes
-        -n, --name alias               alias you can give to your cluster
-        --ssh-identity-file path   path to identity file containing SSH private key
-        --ssh-user name            SSH user name used to connect to the cluster nodes
+        Add a cluster to manager
+
+        Usage:
+          sctool cluster add [flags]
+
+        Flags:
+          -h, --help                      help for add
+              --host string               hostname or IP of one of the cluster nodes
+          -n, --name alias                alias you can give to your cluster
+              --ssh-identity-file path    path to identity file containing SSH private key
+              --ssh-user name             SSH user name used to connect to the cluster nodes
+              --ssl-user-cert-file path   path to client certificate when using client/server encryption with require_client_auth enabled
+              --ssl-user-key-file path    path to key associated with ssl-user-cert-file
+
+        Global Flags:
+              --api-url URL    URL of Scylla Manager server (default "https://127.0.0.1:56443/api/v1")
+          -c, --cluster name   target cluster name or ID
+
+        Scylla Docs:
+          https://docs.scylladb.com/operating-scylla/manager/1.4/add-a-cluster/
+          https://docs.scylladb.com/operating-scylla/manager/1.4/sctool/#cluster-add
+
 
         """
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
+        user = user or self.DEFAULT_USER
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        self.scylla_mgr_ssh_setup(node_ip=host)
-        identity_file_centos = '/tmp/scylla-test'
-        ssh_user = 'scylla-manager'
-        manager_identity_file = MANAGER_IDENTITY_FILE
-        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
+        res_ssh_setup, ssh_identity_file = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
+        ssh_user = create_user or 'scylla-manager'
+        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, ssh_identity_file,
                                                                                             ssh_user, name)
         # Adding client-encryption parameters if required
         if client_encrypt != False:
@@ -521,11 +548,11 @@ class ScyllaManagerTool(ScyllaManagerBase):
                 if client_encrypt or db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
                                                                                     SSL_USER_KEY_FILE)
-        res = self.sctool.run(cmd, parse_table_res=False)
-        if not res or 'Cluster added' not in res.stderr:
-            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res))
-        cluster_id = res.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
-        return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt)
+        res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
+        if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:
+            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res_cluster_add))
+        cluster_id = res_cluster_add.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
+        return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt, ssh_identity_file=ssh_identity_file)
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):
         manager_from_version = self.version
