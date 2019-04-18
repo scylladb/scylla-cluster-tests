@@ -1,8 +1,8 @@
 import os
 from collections import defaultdict
+import tempfile
 
 import jinja2
-import tempfile
 
 
 class BaseReport(object):

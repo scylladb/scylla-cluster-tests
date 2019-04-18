@@ -1,9 +1,9 @@
 import os
 import time
 
-import cluster
-
 from libcloud.common.google import ResourceNotFoundError
+
+from sdcm import cluster
 
 
 class CreateGCENodeError(Exception):
@@ -22,7 +22,7 @@ class GCENode(cluster.BaseNode):
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, gce_instance, gce_service, credentials, parent_cluster,
+    def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
@@ -68,7 +68,7 @@ class GCENode(cluster.BaseNode):
         while not ok and retries <= max_retries:
             try:
                 return instance_method(*args, **kwargs)
-            except Exception, details:
+            except Exception as details:  # pylint: disable=broad-except
                 self.log.error('Call to method %s (retries: %s) failed: %s',
                                instance_method, retries, details)
                 time.sleep(min((2 ** retries) * 2, threshold))
@@ -125,8 +125,8 @@ class GCENode(cluster.BaseNode):
         try:
             self._gce_service.ex_get_node(self.name)
             self._instance.destroy()
-        except ResourceNotFoundError as e:
-            self.log.debug("Instance doesn't exist, skip destroy: %s" % e)
+        except ResourceNotFoundError:
+            self.log.exception("Instance doesn't exist, skip destroy")
 
     def destroy(self):
         self.stop_task_threads()
@@ -144,17 +144,18 @@ class GCENode(cluster.BaseNode):
         return ''
 
 
-class GCECluster(cluster.BaseCluster):
+class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method
 
     """
     Cluster of Node objects, started on GCE (Google Compute Engine).
     """
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
-                 cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=['us-east1-b'],
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
+                 cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], add_disks=None, params=None):
+                 node_prefix='node', n_nodes=3, add_disks=None, params=None):
 
+        # pylint: disable=too-many-locals
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
         self._gce_image_size = gce_image_size
@@ -168,6 +169,7 @@ class GCECluster(cluster.BaseCluster):
         self._add_disks = add_disks
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix
+        gce_region_names = gce_region_names if gce_region_names else ['us-east1-b']
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -295,7 +297,7 @@ class GCECluster(cluster.BaseCluster):
                            base_logdir=self.logdir,
                            dc_idx=dc_idx)
         except Exception as ex:
-            raise CreateGCENodeError('Failed to create node: %s', ex)
+            raise CreateGCENodeError('Failed to create node: %s' % ex)
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         self.log.info("Adding nodes to cluster")
@@ -322,10 +324,11 @@ class GCECluster(cluster.BaseCluster):
 
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
-                 user_prefix=None, n_nodes=[10], add_disks=None, params=None, gce_datacenter=None):
+                 user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None):
+        # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
@@ -349,10 +352,11 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
+        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self,
@@ -376,12 +380,15 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
-                 gce_image_username='centos', user_prefix=None, n_nodes=[1],
-                 targets={}, add_disks=None, params=None):
+                 gce_image_username='centos', user_prefix=None, n_nodes=1,
+                 targets=None, add_disks=None, params=None):
+        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
+
+        targets = targets if targets else {}
         cluster.BaseMonitorSet.__init__(self,
                                         targets=targets,
                                         params=params)

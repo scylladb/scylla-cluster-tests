@@ -15,16 +15,20 @@ __author__ = 'Roy Dahan'
 #
 # Copyright (c) 2016 ScyllaDB
 
-
+# pylint: disable=too-many-lines,eval-used
+import logging
 import random
 from collections import OrderedDict
 from uuid import UUID
 
 from cassandra import InvalidRequest
-from cassandra.util import sortedset
+from cassandra.util import sortedset  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 
 from sdcm.tester import ClusterTester
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class FillDatabaseData(ClusterTester):
@@ -916,7 +920,7 @@ class FillDatabaseData(ClusterTester):
                         ],
             'results': [[[k] for k in range(0, 5)],
                         [],
-                        [[k] for k in range(0, 5) if k is not 2],
+                        [[k] for k in range(0, 5) if not k == 2],
                         [],
                         [],
                         [],
@@ -2835,19 +2839,22 @@ class FillDatabaseData(ClusterTester):
 
     ]
 
-    def cql_create_simple_tables(self, session, rows):
+    @staticmethod
+    def cql_create_simple_tables(session, rows):
         """ Create tables for truncate test """
         create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int)"
         for i in xrange(rows):
             session.execute(create_query % i)
 
-    def cql_insert_data_to_simple_tables(self, session, rows):
+    @staticmethod
+    def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
         insert_query = 'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
-        for i in xrange(rows):
-            for k in xrange(100):
+        for i in xrange(rows):  # pylint: disable=unused-variable
+            for k in xrange(100):  # pylint: disable=unused-variable
                 session.execute(insert_query.format(**locals()))
 
-    def cql_truncate_simple_tables(self, session, rows):
+    @staticmethod
+    def cql_truncate_simple_tables(session, rows):
         truncate_query = 'TRUNCATE TABLE truncate_table%d'
         for i in xrange(rows):
             session.execute(truncate_query % i)
@@ -2855,6 +2862,7 @@ class FillDatabaseData(ClusterTester):
     def fill_db_data_for_truncate_test(self, insert_rows):
         # Prepare connection and keyspace
         with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2872,67 +2880,70 @@ class FillDatabaseData(ClusterTester):
 
     def cql_create_tables(self, session):
         # Run through the list of items and create all tables
-        for a in self.all_verification_items:
-            if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
-                for create_table in a['create_tables']:
+        for item in self.all_verification_items:
+            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                for create_table in item['create_tables']:
                     session.execute(create_table)
-                for truncate in a['truncates']:
+                for truncate in item['truncates']:
                     session.execute(truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
-        for a in self.all_verification_items:
+        # pylint: disable=too-many-nested-blocks
+        for item in self.all_verification_items:
             session.execute("USE keyspace1;")
-            if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
-                if 'disable_paging' in a and a['disable_paging']:
+            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                if 'disable_paging' in item and item['disable_paging']:
                     session.default_fetch_size = 0
                 else:
                     session.default_fetch_size = default_fetch_size
-                for insert in a['inserts']:
+                for insert in item['inserts']:
                     try:
                         if insert.startswith("#REMOTER_RUN"):
                             for node in self.db_cluster.nodes:
                                 node.remoter.run(insert.replace('#REMOTER_RUN', ''))
                         else:
                             session.execute(insert)
-                    except Exception as e:
-                        print insert, e
-                        raise e
+                    except Exception as ex:
+                        LOGGER.exception("failed to insert: %s", insert)
+                        raise ex
 
     def run_db_queries(self, session, default_fetch_size):
-        for a in self.all_verification_items:
+        # pylint: disable=too-many-branches,too-many-nested-blocks
+
+        for item in self.all_verification_items:
             session.execute("USE keyspace1;")
-            if not a['skip'] and ('skip_condition' not in a or eval(str(a['skip_condition']))):
-                if 'disable_paging' in a and a['disable_paging']:
+            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                if 'disable_paging' in item and item['disable_paging']:
                     session.default_fetch_size = 0
                 else:
                     session.default_fetch_size = default_fetch_size
-                for i in range(len(a['queries'])):
+                for i in range(len(item['queries'])):
                     try:
-                        if a['queries'][i].startswith("#SORTED"):
-                            res = session.execute(a['queries'][i].replace('#SORTED', ''))
-                            self.assertEqual(sorted([list(row) for row in res]), a['results'][i])
-                        elif a['queries'][i].startswith("#REMOTER_RUN"):
+                        if item['queries'][i].startswith("#SORTED"):
+                            res = session.execute(item['queries'][i].replace('#SORTED', ''))
+                            self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
+                        elif item['queries'][i].startswith("#REMOTER_RUN"):
                             for node in self.db_cluster.nodes:
-                                node.remoter.run(a['queries'][i].replace('#REMOTER_RUN', ''))
-                        elif a['queries'][i].startswith("#LENGTH"):
-                            res = session.execute(a['queries'][i].replace('#LENGTH', ''))
-                            self.assertEqual(len([list(row) for row in res]), a['results'][i])
-                        elif a['queries'][i].startswith("#STR"):
-                            res = session.execute(a['queries'][i].replace('#STR', ''))
-                            self.assertEqual(str([list(row) for row in res]), a['results'][i])
+                                node.remoter.run(item['queries'][i].replace('#REMOTER_RUN', ''))
+                        elif item['queries'][i].startswith("#LENGTH"):
+                            res = session.execute(item['queries'][i].replace('#LENGTH', ''))
+                            self.assertEqual(len([list(row) for row in res]), item['results'][i])
+                        elif item['queries'][i].startswith("#STR"):
+                            res = session.execute(item['queries'][i].replace('#STR', ''))
+                            self.assertEqual(str([list(row) for row in res]), item['results'][i])
                         else:
-                            res = session.execute(a['queries'][i])
-                            self.assertEqual([list(row) for row in res], a['results'][i])
-                    except Exception as e:
-                        print a['queries'][i], e
-                        raise e
-                if 'invalid_queries' in a:
-                    for i in range(len(a['invalid_queries'])):
+                            res = session.execute(item['queries'][i])
+                            self.assertEqual([list(row) for row in res], item['results'][i])
+                    except Exception as ex:
+                        LOGGER.exception(item['queries'][i])
+                        raise ex
+                if 'invalid_queries' in item:
+                    for i in range(len(item['invalid_queries'])):
                         try:
-                            session.execute(a['invalid_queries'][i])
-                            self.fail("query '%s' is not valid" % a['invalid_queries'][i])
-                        except InvalidRequest as e:
-                            print "Found error '%s' as expected" % e
+                            session.execute(item['invalid_queries'][i])
+                            self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                        except InvalidRequest as ex:
+                            LOGGER.debug("Found error '%s' as expected", ex)
 
     def fill_db_data(self):
         """
@@ -2942,6 +2953,7 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2961,6 +2973,7 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2972,6 +2985,6 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-
+            # pylint: disable=no-member
             session.execute("DROP KEYSPACE keyspace1;")
             session.execute("DROP KEYSPACE ks_no_range_ghost_test;")

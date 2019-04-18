@@ -8,10 +8,12 @@ import tempfile
 from sdcm.microbenchmarking import MicroBenchmarkingResultsAnalyzer, LargeNumberOfDatasetsException, EmptyResultFolder
 
 
-logger = logging.getLogger("microbenchmarking-tests")
+LOGGER = logging.getLogger("microbenchmarking-tests")
+
+# pylint: disable=invalid-name
 
 
-class TestMBM(unittest.TestCase):
+class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         self.mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=('alex.bykov@scylladb.com', ))
         self.mbra.hostname = 'godzilla.cloudius-systems.com'
@@ -31,6 +33,7 @@ class TestMBM(unittest.TestCase):
         return expected_obj
 
     def test_object_exists(self):
+        # pylint: disable=protected-access
         self.assertIsInstance(self.mbra, MicroBenchmarkingResultsAnalyzer)
         self.assertEqual(self.mbra.hostname, 'godzilla.cloudius-systems.com')
         self.assertEqual(self.mbra._email_recipients, ('alex.bykov@scylladb.com', ))
@@ -115,8 +118,10 @@ class TestMBM(unittest.TestCase):
         self.assertEqual(report_results['large-partition-forwarding_yes.1']['avg cpu']['Last, commit, date'][0], None)
         self.assertEqual(report_results['large-partition-forwarding_yes.1']['avg cpu']['Best, commit, date'][0], None)
         self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg cpu']['Current'], 97.0)
-        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg cpu']['Last, commit, date'][0], None)
-        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg cpu']['Best, commit, date'][0], None)
+        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']
+                         ['avg cpu']['Last, commit, date'][0], None)
+        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']
+                         ['avg cpu']['Best, commit, date'][0], None)
 
     def test_generate_html_report_file_and_email_body_for_results_with_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
@@ -220,7 +225,7 @@ class TestMBM(unittest.TestCase):
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
-        stdout, stderr = ps.communicate()
+        stdout, _ = ps.communicate()
 
         self.assertEqual(ps.returncode, 0)
         self.assertIn("Send email to ['alex.bykov@scylladb.com']", stdout)

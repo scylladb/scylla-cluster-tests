@@ -3,12 +3,13 @@ import time
 import logging
 import os
 
-import cluster
+from sdcm import cluster
 from sdcm.utils.common import retrying
-from remote import LocalCmdRunner
+from sdcm.remote import LocalCmdRunner
 
-logger = logging.getLogger(__name__)
-localrunner = LocalCmdRunner()
+
+LOGGER = logging.getLogger(__name__)
+LOCALRUNNER = LocalCmdRunner()
 
 BASE_NAME = 'db-node'
 LOADER_NAME = 'loader-node'
@@ -31,8 +32,8 @@ class CannotFindContainers(Exception):
     pass
 
 
-def _cmd(cmd, timeout=10, sudo=False):
-    res = localrunner.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
+def _cmd(cmd, timeout=10):
+    res = LOCALRUNNER.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout)
     if res.exit_status:
         if 'No such container:' in res.stderr:
             raise DockerContainerNotExists(res.stderr)
@@ -40,9 +41,9 @@ def _cmd(cmd, timeout=10, sudo=False):
     return res.stdout
 
 
-class DockerNode(cluster.BaseNode):
+class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
-    def __init__(self, name, credentials, parent_cluster, base_logdir=None, node_prefix=None):
+    def __init__(self, name, credentials, parent_cluster, base_logdir=None, node_prefix=None):  # pylint: disable=too-many-arguments
         ssh_login_info = {'hostname': None,
                           'user': 'scylla-test',
                           'key_file': credentials.key_file}
@@ -77,9 +78,9 @@ class DockerNode(cluster.BaseNode):
     def private_ip_address(self):
         return self._get_public_ip_address()
 
-    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False):
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True):  # pylint: disable=too-many-arguments
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-        logger.debug('run nodetool %s' % cmd)
+        LOGGER.debug('run nodetool %s', cmd)
         return _cmd('exec {} {}'.format(self.name, cmd))
 
     def wait_public_ip(self):
@@ -90,18 +91,18 @@ class DockerNode(cluster.BaseNode):
     def start(self):
         _cmd('start {}'.format(self.name))
 
-    def restart(self, timeout=30):
+    def restart(self, timeout=30):  # pylint: disable=arguments-differ
         _cmd('restart {}'.format(self.name), timeout=timeout)
 
     def stop(self, timeout=30):
         _cmd('stop {}'.format(self.name), timeout=timeout)
 
-    def destroy(self, force=True):
+    def destroy(self, force=True):  # pylint: disable=arguments-differ
         force_param = '-f' if force else ''
         _cmd('rm {} -v {}'.format(force_param, self.name))
 
 
-class DockerCluster(cluster.BaseCluster):
+class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         self._image = kwargs.get('docker_image', 'scylladb/scylla-nightly')
@@ -121,13 +122,14 @@ class DockerCluster(cluster.BaseCluster):
         _cmd('build --build-arg SOURCE_IMAGE={} -t {} {}'.format(self._image, self._node_img_tag, self._context_path),
              timeout=300)
 
-    def _clean_old_images(self):
+    @staticmethod
+    def _clean_old_images():
         images = _cmd('images -f "dangling=true" -q')
         if images:
             _cmd('rmi {}'.format(images), timeout=90)
 
     def _update_image(self):
-        logger.debug('update scylla image')
+        LOGGER.debug('update scylla image')
         _cmd('pull {}'.format(self._image), timeout=300)
         self._clean_old_images()
 
@@ -164,7 +166,7 @@ class DockerCluster(cluster.BaseCluster):
                 return node_name, node_index
             node_index += 1
 
-    def _create_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):
+    def _create_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
         """
         Create nodes from docker containers
         :param count: count of nodes to create
@@ -192,7 +194,7 @@ class DockerCluster(cluster.BaseCluster):
         c_ids = self._get_containers_by_prefix()
         for c_id in c_ids:
             node_name = self._get_connainer_name_by_id(c_id)
-            logger.debug('Node name: %s' % node_name)
+            LOGGER.debug('Node name: %s', node_name)
             new_node = self._create_node(node_name)
             if not new_node.is_running():
                 new_node.start()
@@ -200,19 +202,19 @@ class DockerCluster(cluster.BaseCluster):
             self.nodes.append(new_node)
         return self.nodes
 
-    def add_nodes(self, count, dc_idx=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if cluster.Setup.REUSE_CLUSTER:
             return self._get_nodes()
         else:
             return self._create_nodes(count, dc_idx, enable_auto_bootstrap)
 
     def destroy(self):
-        logger.info('Destroy nodes')
+        LOGGER.info('Destroy nodes')
         for node in self.nodes:
             node.destroy(force=True)
 
 
-class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):
+class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         self._user_prefix = kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX)
@@ -221,7 +223,7 @@ class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):
                                                   **kwargs)
 
     @retrying(n=30, sleep_time=3, allowed_exceptions=(cluster.ClusterNodesNotReady, DockerCommandError))
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):   # pylint: disable=unused-argument,arguments-differ
         node_list = node_list if node_list else self.nodes
         for node in node_list:
             node.wait_for_status_running()
@@ -237,7 +239,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
         DockerCluster.__init__(self, node_prefix=self._node_prefix, **kwargs)
 
 
-class MonitorSetDocker(DockerCluster, cluster.BaseMonitorSet):
+class MonitorSetDocker(DockerCluster, cluster.BaseMonitorSet):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), MONITOR_NAME)

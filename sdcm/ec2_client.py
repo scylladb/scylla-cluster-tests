@@ -2,13 +2,15 @@ import logging
 import datetime
 import time
 import json
-import boto3
 import base64
+
+import boto3
 from botocore.exceptions import ClientError, NoRegionError
 
-from .utils.common import retrying
+from sdcm.utils.common import retrying
 
-logger = logging.getLogger(__name__)
+
+LOGGER = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
 STATUS_PRICE_TOO_LOW = 'price-too-low'
@@ -59,12 +61,14 @@ class EC2Client(object):
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
 
-    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
+    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None):
         """
         Create a spot instance request
         :return: list of request id-s
         """
+
+        # pylint: disable=too-many-locals
         params = dict(DryRun=False,
                       InstanceCount=count,
                       Type=request_type,
@@ -75,7 +79,7 @@ class EC2Client(object):
                                            },
                       ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
                       )
-        logger.debug("block_device_mappings: %s" % block_device_mappings)
+        LOGGER.debug("block_device_mappings: %s", block_device_mappings)
         if block_device_mappings:
             params['LaunchSpecification']['BlockDeviceMappings'] = block_device_mappings
         if not duration:
@@ -87,15 +91,17 @@ class EC2Client(object):
         if user_data:
             params['LaunchSpecification'].update({'UserData': self._encode_user_data(user_data)})
 
-        logger.info('Sending spot request with params: %s', params)
+        LOGGER.info('Sending spot request with params: %s', params)
         resp = self._client.request_spot_instances(**params)
 
         request_ids = [req['SpotInstanceRequestId'] for req in resp['SpotInstanceRequests']]
-        logger.debug('Spot requests: %s', request_ids)
+        LOGGER.debug('Spot requests: %s', request_ids)
         return request_ids
 
-    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                            block_device_mappings=None, tags_list=[]):
+    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+                            block_device_mappings=None, tags_list=None):
+
+        tags_list = tags_list if tags_list else []
         spot_price = self._get_spot_price(instance_type)
         fleet_config = {'LaunchSpecifications':
                         [
@@ -122,12 +128,12 @@ class EC2Client(object):
             fleet_config['LaunchSpecifications'][0].update({'UserData': self._encode_user_data(user_data)})
         if block_device_mappings:
             fleet_config['LaunchSpecifications'][0]['BlockDeviceMappings'] = block_device_mappings
-        logger.info('Sending spot fleet request with params: %s', fleet_config)
+        LOGGER.info('Sending spot fleet request with params: %s', fleet_config)
         resp = self._client.request_spot_fleet(DryRun=False,
                                                SpotFleetRequestConfig=fleet_config)
 
         request_id = resp['SpotFleetRequestId']
-        logger.debug('Spot fleet request: %s', request_id)
+        LOGGER.debug('Spot fleet request: %s', request_id)
         return request_id
 
     @staticmethod
@@ -177,12 +183,12 @@ class EC2Client(object):
         Calculate spot price for bidding
         :return: spot bid price
         """
-        logger.info('Calculating spot price based on OnDemand price')
+        LOGGER.info('Calculating spot price based on OnDemand price')
 
         on_demand_price = float(self.get_instance_price(self.region_name, instance_type))
 
         price = dict(max=on_demand_price, desired=on_demand_price * self.spot_max_price_percentage)
-        logger.info('Spot bid price: %s', price)
+        LOGGER.info('Spot bid price: %s', price)
         return price
 
     def _is_request_fulfilled(self, request_ids):
@@ -203,13 +209,13 @@ class EC2Client(object):
         :param request_ids: spot request id-s
         :return: list of spot instance id-s
         """
-        logger.info('Waiting for spot instances...')
+        LOGGER.info('Waiting for spot instances...')
         timeout = 0
         status = False
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_request_fulfilled(request_ids)
-            logger.debug("{request_ids}: [{status}] - {resp}".format(**locals()))
+            LOGGER.debug("{request_ids}: [{status}] - {resp}".format(**locals()))
             if not status and resp == STATUS_PRICE_TOO_LOW:
                 break
             timeout += self._wait_interval
@@ -227,12 +233,13 @@ class EC2Client(object):
             if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
                     req['ActivityStatus'] != STATUS_FULFILLED:
                 if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
-                    tt = datetime.datetime.now().timetuple()
-                    search_start_time = datetime.datetime(tt.tm_year, tt.tm_mon, tt.tm_mday)
+                    current_time = datetime.datetime.now().timetuple()
+                    search_start_time = datetime.datetime(
+                        current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
                     resp = self._client.describe_spot_fleet_request_history(SpotFleetRequestId=request_id,
                                                                             StartTime=search_start_time,
                                                                             MaxResults=10)
-                    logger.debug('Fleet request error history: %s', resp)
+                    LOGGER.debug('Fleet request error history: %s', resp)
                     errors = [i['EventInformation']['EventSubType'] for i in resp['HistoryRecords']]
                     if FLEET_LIMIT_EXCEEDED_ERROR in errors:
                         return False, FLEET_LIMIT_EXCEEDED_ERROR
@@ -245,7 +252,7 @@ class EC2Client(object):
         :param request_id: spot fleet request id
         :return: list of spot instance id-s
         """
-        logger.info('Waiting for spot fleet...')
+        LOGGER.info('Waiting for spot fleet...')
         timeout = 0
         status = False
         while not status and timeout < self._timeout:
@@ -260,7 +267,8 @@ class EC2Client(object):
         resp = self._client.describe_spot_fleet_instances(SpotFleetRequestId=request_id)
         return [inst['InstanceId'] for inst in resp['ActiveInstances']], resp
 
-    def _encode_user_data(self, user_data):
+    @staticmethod
+    def _encode_user_data(user_data):
         return base64.b64encode(user_data)
 
     def get_instance(self, instance_id):
@@ -274,14 +282,15 @@ class EC2Client(object):
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(ClientError,),
               message="Waiting for instance is available")
-    def add_tags(self, instance_id, tags=[]):
+    def add_tags(self, instance_id, tags=None):
         """
         Add tags to instance
         """
+        tags = tags if tags else []
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
-    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
-                              count=1, duration=0, block_device_mappings=None, tags_list=[]):
+    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
+                              count=1, duration=0, block_device_mappings=None, tags_list=None):
         """
         Create spot instances
 
@@ -298,6 +307,9 @@ class EC2Client(object):
         :return: list of instance id-s
         """
 
+        # pylint: disable=too-many-locals
+
+        tags_list = tags_list if tags_list else []
         spot_price = self._get_spot_price(instance_type)
 
         request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
@@ -308,7 +320,7 @@ class EC2Client(object):
         if not instance_ids:
             raise CreateSpotInstancesError("Failed to get spot instances: %s" % resp)
 
-        logger.info('Spot instances: %s', instance_ids)
+        LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
             self.add_tags(instance_id, [{'Key': 'Name', 'Value': 'spot_{}_{}'.format(instance_id, ind)}])
 
@@ -317,8 +329,8 @@ class EC2Client(object):
         instances = [self.get_instance(instance_id) for instance_id in instance_ids]
         return instances
 
-    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                          block_device_mappings=None, tags_list=[]):
+    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+                          block_device_mappings=None, tags_list=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -332,6 +344,10 @@ class EC2Client(object):
         :param tags_list: list of tags to assign to fleet instances
         :return: list of instance id-s
         """
+        # pylint: disable=too-many-locals
+
+        tags_list = tags_list if tags_list else []
+
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
                                               user_data, count, block_device_mappings=block_device_mappings, tags_list=tags_list)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
@@ -340,7 +356,7 @@ class EC2Client(object):
             raise CreateSpotFleetError(error_response={'Error': {'Code': err_code, 'Message': resp}},
                                        operation_name='create_spot_fleet')
 
-        logger.info('Spot instances: %s', instance_ids)
+        LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
             self.add_tags(instance_id, [{'Key': 'Name', 'Value': 'spot_fleet_{}_{}'.format(instance_id, ind)}])
 
@@ -373,29 +389,3 @@ class EC2Client(object):
             raise GetInstanceByPrivateIpError("Cannot find instance by private ip: %s" % private_ip)
 
         return self.get_instance(instances['Reservations'][0]['Instances'][0]['InstanceId'])
-
-
-if __name__ == '__main__':
-    logging.basicConfig(filename='/tmp/ec2_client.log',
-                        filemode='w',
-                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%H:%M:%S',
-                        level=logging.INFO)
-
-    network_if = [{'DeviceIndex': 0,
-                   'SubnetId': 'subnet-ad3ce9f4',
-                   'AssociatePublicIpAddress': True,
-                   'Groups': ['sg-5e79983a']}]
-    user_data = '--clustername cluster-scale-test-xxx --bootstrap true --totalnodes 3'
-
-    ec2 = EC2Client(region_name='us-east1')
-    instance_type = 'm3.medium'
-    image_id = 'ami-56373b2d'
-    avail_zone = ec2.get_subnet_info(network_if[0]['SubnetId'])['AvailabilityZone']
-
-    inst = ec2.create_spot_instances(instance_type, image_id, avail_zone, network_if, user_data=user_data, count=2)
-    print inst
-    inst = ec2.create_spot_instances(instance_type, image_id, avail_zone, network_if, count=1, duration=60)
-    print inst
-    inst = ec2.create_spot_fleet(instance_type, image_id, avail_zone, network_if, user_data=user_data, count=2)
-    print inst

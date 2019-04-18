@@ -20,7 +20,8 @@ from sdcm.utils.common import FileFollowerThread
 class CassandraStressExporter(FileFollowerThread):
     METRICS = {}
 
-    def __init__(self, instance_name, metrics, cs_operation, cs_log_filename, loader_idx, cpu_idx):
+    def __init__(self, instance_name, metrics, cs_operation, cs_log_filename, loader_idx, cpu_idx):  # pylint: disable=too-many-arguments
+
         super(CassandraStressExporter, self).__init__()
         self.metrics = metrics
         self.cs_operation = cs_operation
@@ -76,53 +77,3 @@ class CassandraStressExporter(FileFollowerThread):
                 self.set_metric('lat_perc_999', lat_perc_999)
                 self.set_metric('lat_max', lat_max)
                 self.set_metric('errors', errors)
-
-
-if __name__ == "__main__":
-    import tempfile
-    import logging
-    import requests
-    import unittest
-
-    logging.basicConfig(level=logging.DEBUG)
-    from sdcm.prometheus import start_metrics_server
-    from sdcm.prometheus import nemesis_metrics_obj
-
-    class TestCassandraStressExporter(unittest.TestCase):
-        @classmethod
-        def setUpClass(cls):
-            cls.prom_address = start_metrics_server()
-            cls.metrics = nemesis_metrics_obj()
-
-        def test_01(self):
-            tmp_file = tempfile.NamedTemporaryFile(mode='w+')
-            cs_exporter = CassandraStressExporter("127.0.0.1", self.metrics, 'write', tmp_file.name, loader_idx=1, cpu_idx=0)
-
-            res = cs_exporter.start()
-
-            line = '[34.241.184.166] [stdout] total,      83086089,   70178,   70178,   70178,    14.2,    11.9,    33.2,    53.6,    77.7,   105.4, 1220.0,  0.00868,      0,      0,       0,       0,       0,       0'
-
-            tmp_file.file.write(line + '\n')
-            tmp_file.file.flush()
-
-            tmp_file.file.write(line[:30])
-            tmp_file.file.flush()
-
-            time.sleep(2)
-
-            tmp_file.file.write(line[30:] + '\n')
-            tmp_file.file.flush()
-
-            tmp_file.file.write(line[30:])
-            tmp_file.file.flush()
-
-            time.sleep(2)
-            output = requests.get("http://{}/metrics".format(self.prom_address)).text
-            assert 'collectd_cassandra_stress_write_gauge{cassandra_stress_write="0",cpu_idx="0",instance="127.0.0.1",loader_idx="1",type="ops"} 70178.0' in output
-
-            time.sleep(1)
-            cs_exporter.stop()
-
-            res.result()
-
-    unittest.main()

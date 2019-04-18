@@ -8,19 +8,18 @@ import argparse
 import socket
 import tempfile
 from collections import defaultdict
-from results_analyze import BaseResultsAnalyzer
+
 # disable InsecureRequestWarning
 import urllib3
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from sdcm.results_analyze import BaseResultsAnalyzer  # pylint: disable=wrong-import-position
+from sdcm.utils.log import setup_stdout_logger  # pylint: disable=wrong-import-position
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+setup_stdout_logger()
 
-logger = logging.getLogger("microbenchmarking")
-logger.setLevel(logging.DEBUG)
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+LOGGER = logging.getLogger("microbenchmarking")
 
 
 class LargeNumberOfDatasetsException(Exception):
@@ -55,7 +54,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             email_recipients=email_recipients,
             email_template_fp="results_microbenchmark.html",
             query_limit=10000,
-            logger=logger
+            logger=LOGGER
         )
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
@@ -65,10 +64,13 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.cur_version_info = None
         self.metrics = self.higher_better + self.lower_better
 
-    def check_regression(self, current_results):
+    def check_regression(self, current_results):  # pylint: disable=arguments-differ
+        # pylint: disable=too-many-locals
+
         if not current_results:
             return {}
-        START_DATE = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
+
+        start_date = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.test_args",  # [64-32.1)
@@ -86,17 +88,18 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         )
 
         self.db_version = self.cur_version_info["version"]
-        tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+        tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                          q="hostname:'%s' \
                                             AND versions.scylla-server.version:%s* \
-                                            AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,
+                                            AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,  # pylint: disable=unexpected-keyword-arg
                                                                                                self.db_version[:3]))
         assert tests_filtered, "No results from DB"
 
         results = []
         for doc in tests_filtered['hits']['hits']:
-            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], "%Y-%m-%d %H:%M:%S")
-            if doc_date > START_DATE:
+            doc_date = datetime.datetime.strptime(
+                doc['_source']['versions']['scylla-server']['run_date_time'], "%Y-%m-%d %H:%M:%S")
+            if doc_date > start_date:
                 results.append(doc)
 
         sorted_by_type = defaultdict(list)
@@ -125,19 +128,19 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         #           },
         # }
 
-        def set_results_for(metrica):
+        def set_results_for(current_result, metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
                                                                                   self._run_date_pattern))
 
-            def get_metrica_val(x):
-                metrica_val = x["_source"]["results"]["stats"].get(metrica, None)
+            def get_metrica_val(val):
+                metrica_val = val["_source"]["results"]["stats"].get(metrica, None)
                 return float(metrica_val) if metrica_val else None
 
-            def get_commit_id(x):
-                return x["_source"]['versions']['scylla-server']['commit_id']
+            def get_commit_id(val):
+                return val["_source"]['versions']['scylla-server']['commit_id']
 
-            def get_commit_date(x):
-                return datetime.datetime.strptime(x["_source"]['versions']['scylla-server']['date'],
+            def get_commit_date(val):
+                return datetime.datetime.strptime(val["_source"]['versions']['scylla-server']['date'],
                                                   "%Y%m%d").date()
 
             def get_best_result_for_metrica():
@@ -229,7 +232,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             report_results[test_type]["dataset_name"] = current_result['dataset_name']
             report_results[test_type][metrica] = stats
 
-        def set_results_for_sub(metrica):
+        def set_results_for_sub(current_result, metrica):
             report_results[test_type][metrica].update({'Stats': {}})
             for submetrica in self.submetrics.get(metrica):
                 submetrica_cur_val = float(current_result["results"]["stats"][submetrica])
@@ -242,9 +245,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 continue
             for metrica in self.metrics:
                 self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
-                set_results_for(metrica)
+                set_results_for(current_result, metrica)
                 if metrica in self.submetrics.keys():
-                    set_results_for_sub(metrica)
+                    set_results_for_sub(current_result, metrica)
 
         return report_results
 
@@ -274,11 +277,13 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         for_render["full_report"] = False
         summary_html = self.render_to_html(for_render)
         if send:
-            self.send_email(subject, summary_html, files=(html_file_path,))
+            return self.send_email(subject, summary_html, files=(html_file_path,))
         else:
             return html_file_path, summary_html
 
     def get_results(self, results_path, update_db):
+        # pylint: disable=too-many-locals
+
         bad_chars = " "
         os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
         results = {}
@@ -302,9 +307,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     test_args = os.path.splitext(new_filename)[0]
                     test_type = dirname + "_" + test_args
                     json_path = os.path.join(dirname, dataset_name, filename)
-                    with open(json_path, 'r') as f:
+                    with open(json_path, 'r') as json_file:
                         self.log.info("Reading: %s", json_path)
-                        datastore = json.load(f)
+                        datastore = json.load(json_file)
                     datastore.update({'hostname': self.hostname,
                                       'test_args': test_args,
                                       'test_run_date': self.test_run_date,
@@ -340,7 +345,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
             "hits.hits._source.test_run_date",
         )
-        testrun_results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+        testrun_results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                           q="hostname:'%s' AND versions.scylla-server.version:%s* AND test_run_date:\"%s\"" % (self.hostname,
                                                                                                                                self.db_version[:3],
                                                                                                                                testrun_id))
@@ -410,7 +415,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.versions.scylla-server.run_date_time"
         )
         self.log.info('Exclude tests before date {}'.format(date))
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                   q="hostname:'%s' AND versions.scylla-server.version:%s*" %
                                   (self.hostname, self.db_version[:3]))
         if not results:
@@ -419,7 +424,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         before_date_results = []
         for doc in results['hits']['hits']:
-            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], format_pattern)
+            doc_date = datetime.datetime.strptime(
+                doc['_source']['versions']['scylla-server']['run_date_time'], format_pattern)
             if doc_date < date:
                 before_date_results.append(doc)
 
@@ -443,7 +449,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         self.log.info('Exclude tests by commit id #{}'.format(commit_id))
 
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                   q="hostname:'{}' \
                                   AND versions.scylla-server.version:{}*\
                                   AND versions.scylla-server.commit_id:'{}'".format(self.hostname, self.db_version[:3], commit_id))
@@ -481,7 +487,7 @@ def main(args):
             report_results = mbra.check_regression(results)
             mbra.send_html_report(report_results, html_report_path=args.report_path)
         else:
-            logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
+            LOGGER.warning('Perf_fast_forward testrun is failed or not build results in json format')
             sys.exit(1)
 
 
@@ -525,5 +531,5 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    ARGS = parse_args()
+    main(ARGS)

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-import logging
 import os
 import sys
 import unittest
-import pytest
+import logging
 
+import pytest
 import click
 import click_completion
 from prettytable import PrettyTable
@@ -63,7 +63,7 @@ def provision(**kwargs):
     test = ClusterTester(methodName='setUp')
     test._setup_environment_variables()
     test.setUp()
-'''
+'''  # pylint: disable=pointless-string-statement
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
@@ -92,6 +92,7 @@ def clean_resources(ctx, user, test_id):
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.pass_context
 def list_resources(ctx, user, test_id, get_all, get_all_running):
+    # pylint: disable=too-many-locals
     params = dict()
 
     if user:
@@ -157,13 +158,13 @@ def list_ami_versions(region):
 
     amis = get_scylla_ami_versions(region)
 
-    x = PrettyTable(["Name", "ImageId", "CreationDate"])
-    x.align = "l"
+    tbl = PrettyTable(["Name", "ImageId", "CreationDate"])
+    tbl.align = "l"
 
     for ami in amis:
-        x.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
+        tbl.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
 
-    click.echo(x.get_string(title="Scylla AMI versions"))
+    click.echo(tbl.get_string(title="Scylla AMI versions"))
 
 
 @cli.command('list-ami-branch', help="""list Amazon Scylla branched AMI versions
@@ -176,13 +177,13 @@ def list_ami_branch(region, version):
 
     amis = get_branched_ami(version, region_name=region)
 
-    x = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId"])
-    x.align = "l"
+    tbl = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId"])
+    tbl.align = "l"
 
     for ami in amis:
-        x.add_row([ami.name, ami.id, ami.creation_date, get_tags(ami)['build-id']])
+        tbl.add_row([ami.name, ami.id, ami.creation_date, get_tags(ami)['build-id']])
 
-    click.echo(x.get_string(title="Scylla AMI branch versions"))
+    click.echo(tbl.get_string(title="Scylla AMI branch versions"))
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
@@ -195,13 +196,13 @@ def list_repos(dist_type, dist_version):
 
     repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
-    x = PrettyTable(["Version Family", "Repo Url"])
-    x.align = "l"
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
 
     for version_prefix, repo_url in repo_maps.items():
-        x.add_row([version_prefix, repo_url])
+        tbl.add_row([version_prefix, repo_url])
 
-    click.echo(x.get_string(title="Scylla Repos"))
+    click.echo(tbl.get_string(title="Scylla Repos"))
 
 
 @cli.command(help="Check test configuration file")
@@ -214,7 +215,7 @@ def conf(config_file, backend):
     config = SCTConfiguration()
     try:
         config.verify_configuration()
-    except Exception as ex:
+    except Exception as ex:  # pylint: disable=broad-except
         click.secho(str(ex), fg='red')
         exit(1)
     else:
@@ -238,10 +239,10 @@ def perf_regression_report(es_id, emails):
     email_list = emails.split(",")
     click.secho(message="Will send Performance Regression report to %s" % email_list, fg="green")
     LOGGER.setLevel(logging.DEBUG)
-    ra = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
-                                    send_email=True, email_recipients=email_list, logger=LOGGER)
+    results_analyzer = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
+                                                  send_email=True, email_recipients=email_list, logger=LOGGER)
     click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
-    ra.check_regression(es_id)
+    results_analyzer.check_regression(es_id)
     click.secho(message="Done." % email_list, fg="yellow")
 
 
@@ -253,12 +254,12 @@ def investigate():
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
 def show_log(test_id):
-    x = PrettyTable(["Log type", "Link"])
-    x.align = "l"
+    tbl = PrettyTable(["Log type", "Link"])
+    tbl.align = "l"
     files = list_logs_by_test_id(test_id)
     for log in files:
-        x.add_row([log["type"], log["link"]])
-    click.echo(x.get_string(title="Log links for testrun with test id {}".format(test_id)))
+        tbl.add_row([log["type"], log["link"]])
+    click.echo(tbl.get_string(title="Log links for testrun with test id {}".format(test_id)))
 
 
 @investigate.command('show-monitor', help="Show link to prometheus data snapshot")
@@ -269,14 +270,14 @@ def show_monitor(test_id, debug_log):
     if debug_log:
         LOGGER.setLevel(logging.DEBUG)
     status = restore_monitoring_stack(test_id)
-    x = PrettyTable(['Name', 'container', 'Link'])
-    x.align = 'l'
+    tbl = PrettyTable(['Name', 'container', 'Link'])
+    tbl.align = 'l'
     if status:
         click.echo('Monitoring stack restored')
 
-        x.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
-        x.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
-        click.echo(x.get_string(title='Grafana monitoring stack'))
+        tbl.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
+        tbl.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
+        click.echo(tbl.get_string(title='Grafana monitoring stack'))
     else:
         click.echo('Docker containers were not started. Please rerun comand with flag -l')
 
@@ -285,10 +286,10 @@ cli.add_command(investigate)
 
 
 @cli.command('unit-tests', help="Run all the SCT internal unit-tests")
-@click.option("-t", "--test", required=False, default="test*.py",
+@click.option("-t", "--test", required=False, default="",
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    pytest.main(['-v', '-p', 'no:warnings', 'unit_tests'])
+    pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)])
 
 
 class OutputLogger(object):
@@ -304,7 +305,7 @@ class OutputLogger(object):
         self.terminal.flush()
         self.log.flush()
 
-    def isatty(self):
+    def isatty(self):  # pylint: disable=no-self-use
         return False
 
 
@@ -341,4 +342,4 @@ def cloud_usage_report(emails):
 
 
 if __name__ == '__main__':
-    cli()  # pylint: disable=no-value-parameter
+    cli()

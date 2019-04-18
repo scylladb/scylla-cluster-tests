@@ -13,7 +13,7 @@ from sdcm.utils.common import FileFollowerThread, makedirs
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult():
+class NotGeminiErrorResult(object):  # pylint: disable=too-few-public-methods
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -33,7 +33,8 @@ class GeminiEventsPublisher(FileFollowerThread):
         super(GeminiEventsPublisher, self).__init__()
         self.gemini_log_filename = gemini_log_filename
         self.node = str(node)
-        self.gemini_events = [GeminiLogEvent(type='geminievent', regex=r'{"L":"(?P<type>[A-Z]+?)".+"M":"(?P<message>[\w\s.,]+?)"}', severity=Severity.CRITICAL)]
+        self.gemini_events = [GeminiLogEvent(
+            type='geminievent', regex=r'{"L":"(?P<type>[A-Z]+?)".+"M":"(?P<message>[\w\s.,]+?)"}', severity=Severity.CRITICAL)]
 
     def run(self):
         patterns = [(event, re.compile(event.regex)) for event in self.gemini_events]
@@ -46,20 +47,20 @@ class GeminiEventsPublisher(FileFollowerThread):
 
             for line_number, line in enumerate(self.follow_file(self.gemini_log_filename)):
                 for event, pattern in patterns:
-                    m = pattern.search(line)
-                    if m:
-                        d = m.groupdict()
-                        event.severity = getattr(Severity, self.severity_mapping[d['type']])
-                        event.add_info_and_publish(node=self.node, line=d['message'], line_number=line_number)
+                    match = pattern.search(line)
+                    if match:
+                        data = match.groupdict()
+                        event.severity = getattr(Severity, self.severity_mapping[data['type']])
+                        event.add_info_and_publish(node=self.node, line=data['message'], line_number=line_number)
                 if self.stopped():
                     break
             if self.stopped():
                 break
 
 
-class GeminiStressThread(object):
+class GeminiStressThread(object):  # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None):
+    def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None):  # pylint: disable=too-many-arguments
         self.loaders = loaders
         self.gemini_cmd = gemini_cmd
         self.test_cluster = test_cluster
@@ -110,7 +111,7 @@ class GeminiStressThread(object):
                                           log_file=log_file_name)
                 # sleep to gather all latest log messages
                 time.sleep(5)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error(details)
             result = getattr(details, "result", NotGeminiErrorResult(details))
 
@@ -129,19 +130,20 @@ class GeminiStressThread(object):
         for future in concurrent.futures.as_completed(self.result_futures, timeout=self.timeout):
             results.append(future.result())
 
-        for node, result, result_file in results:
+        for node, _, result_file in results:
 
             local_gemini_result_file = os.path.join(node.logdir, os.path.basename(result_file))
-            node.receive_files(src=result_file, dst=local_gemini_result_file)
-            with open(local_gemini_result_file) as rf:
-                content = rf.read()
+            node.remoter.receive_files(src=result_file, dst=local_gemini_result_file)
+            with open(local_gemini_result_file) as local_file:
+                content = local_file.read()
                 res = self._parse_gemini_summary_json(content)
                 if res:
                     command_result.append(res)
 
         return command_result
 
-    def verify_gemini_results(self, results):
+    @staticmethod
+    def verify_gemini_results(results):
 
         stats = {'status': None, 'results': [], 'errors': {}}
         if not results:
@@ -166,7 +168,7 @@ class GeminiStressThread(object):
         try:
             results = json.loads(json_str)
 
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Invalid json document {}".format(details))
 
         return results.get('result')

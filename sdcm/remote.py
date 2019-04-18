@@ -21,15 +21,18 @@ import time
 import getpass
 import socket
 
+import six.moves
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
-import six.moves
 
-from .log import SDCMAdapter
-from .utils.common import retrying
+from sdcm.log import SDCMAdapter
+from sdcm.utils.common import retrying
 
 
+# casue of this bug in astroid, and can't upgrade until python3
+# https://github.com/PyCQA/pylint/issues/1965
+# pylint: disable=too-many-function-args
 class OutputCheckError(Exception):
 
     """
@@ -63,7 +66,7 @@ def _scp_remote_escape(filename):
     return six.moves.shlex_quote("".join(new_name))
 
 
-def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',
+def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # pylint: disable=too-many-arguments
                       key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
     assert isinstance(connect_timeout, (int, long))
     ssh_full_path = LocalCmdRunner().run('which ssh').stdout
@@ -92,8 +95,9 @@ class CommandRunner(object):
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
 
-    def run(self):
-        raise Exception("Should be implemented in subclasses")
+    def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
+            connect_timeout=300, verbose=True, log_file=None, retry=0):
+        raise NotImplementedError("Should be implemented in subclasses")
 
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
@@ -117,7 +121,7 @@ class CommandRunner(object):
             return
 
 
-class LocalCmdRunner(CommandRunner):
+class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
     def __init__(self, password=''):
         hostname = socket.gethostname()
@@ -125,15 +129,13 @@ class LocalCmdRunner(CommandRunner):
         super(LocalCmdRunner, self).__init__(hostname, user=user, password=password)
         self._create_connection(hostname, user=user)
 
-    def run(self, cmd, ignore_status=False, sudo=False, verbose=True, timeout=300):
+    def run(self, cmd, timeout=300, ignore_status=False,  # pylint: disable=too-many-arguments
+            connect_timeout=300, verbose=True, log_file=None, retry=0):
+
         watchers = []
         start_time = time.time()
         if verbose:
             self.log.debug('Running command "{}"...'.format(cmd))
-        if sudo and self.password:
-            cmd = "sudo " + cmd
-            watchers.append(Responder(pattern=r'\[sudo\] password:',
-                                      response='{}\n'.format(self.password)))
         try:
             result = self.connection.local(cmd, warn=ignore_status,
                                            encoding='utf-8',
@@ -155,10 +157,10 @@ class LocalCmdRunner(CommandRunner):
         return result
 
 
-class RemoteCmdRunner(CommandRunner):
+class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, hostname, user="root", port=22, connect_timeout=60, password="",
-                 key_file=None, wait_key_installed=0, extra_ssh_options=""):
+    def __init__(self, hostname, user="root", port=22, connect_timeout=60, password="",  # pylint: disable=too-many-arguments
+                 key_file=None, extra_ssh_options=""):
 
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
 
@@ -196,9 +198,9 @@ class RemoteCmdRunner(CommandRunner):
             return "SSH access -> 'ssh %s@%s'" % (self.user,
                                                   self.hostname)
 
-    def run(self, cmd, timeout=None, ignore_status=False,
-            connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None, watch_stdout_pattern=None, retry=1, watchers=None):
+    def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments,arguments-differ
+            connect_timeout=300, verbose=True,
+            log_file=None, retry=1, watchers=None):
         self.connection.connect_timeout = connect_timeout
         watchers = watchers if watchers else []
         if verbose:
@@ -218,9 +220,9 @@ class RemoteCmdRunner(CommandRunner):
                 setattr(_result, 'duration', time.time() - start_time)
                 setattr(_result, 'exit_status', _result.exited)
                 return _result
-            except Exception as details:
+            except Exception as details:  # pylint: disable=broad-except
                 if hasattr(details, "result"):
-                    self._print_command_results(details.result, verbose)
+                    self._print_command_results(details.result, verbose)   # pylint: disable=no-member
                 raise
 
         result = _run()
@@ -236,17 +238,13 @@ class RemoteCmdRunner(CommandRunner):
         cmd = 'true'
         try:
             result = self.run(cmd, timeout=timeout, verbose=verbose)
-            if result.ok:
-                return True
-            else:
-                return False
-        except Exception as details:
+            return result.ok
+        except Exception as details:  # pylint: disable=broad-except
             self.log.debug(details)
             return False
 
-    def receive_files(self, src, dst, delete_dst=False,
-                      preserve_perm=True, preserve_symlinks=False,
-                      verbose=False, ssh_timeout=300):
+    def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
+                      preserve_perm=True, preserve_symlinks=False):
         """
         Copy files from the remote host to a local path.
 
@@ -270,8 +268,6 @@ class RemoteCmdRunner(CommandRunner):
             permissions on files and dirs.
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
-        :param verbose: Log commands being used and their outputs.
-        :param ssh_timeout: Timeout is used for self.ssh_run()
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed.
         """
@@ -293,8 +289,8 @@ class RemoteCmdRunner(CommandRunner):
                 result = self.connection.local(rsync, encoding='utf-8')
                 self.log.info(result.exited)
                 try_scp = False
-            except (Failure, UnexpectedExit) as e:
-                self.log.warning("Trying scp, rsync failed: %s", e)
+            except (Failure, UnexpectedExit) as ex:
+                self.log.warning("Trying scp, rsync failed: %s", ex)
                 # Make sure master ssh available
 
         if try_scp:
@@ -310,8 +306,8 @@ class RemoteCmdRunner(CommandRunner):
                                                           escape=False)
                 local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                r = self.connection.local(scp)
-                self.log.info("Command {} with status {}".format(r.command, r.exited))
+                result = self.connection.local(scp)
+                self.log.info("Command {} with status {}".format(result.command, result.exited))
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -320,8 +316,8 @@ class RemoteCmdRunner(CommandRunner):
             # options are only in very recent rsync versions
             self._set_umask_perms(dst)
 
-    def send_files(self, src, dst, delete_dst=False,
-                   preserve_symlinks=False, verbose=False, ssh_timeout=None):
+    def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
+                   preserve_symlinks=False, verbose=False):
         """
         Copy files from a local path to the remote host.
 
@@ -344,10 +340,11 @@ class RemoteCmdRunner(CommandRunner):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
-        :param ssh_timeout: Timeout is used for self.ssh_run()
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed
         """
+
+        # pylint: disable=too-many-branches,too-many-locals
         self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         source_is_dir = False
@@ -373,8 +370,8 @@ class RemoteCmdRunner(CommandRunner):
             if delete_dst:
                 dest_exists = False
                 try:
-                    r = self.run("test -x %s" % dst, verbose=False)
-                    if r.ok:
+                    result = self.run("test -x %s" % dst, verbose=False)
+                    if result.ok:
                         dest_exists = True
                 except (Failure, UnexpectedExit):
                     pass
@@ -382,8 +379,8 @@ class RemoteCmdRunner(CommandRunner):
                 dest_is_dir = False
                 if dest_exists:
                     try:
-                        r = self.run("test -d %s" % dst, verbose=False)
-                        if r.ok:
+                        result = self.run("test -d %s" % dst, verbose=False)
+                        if result.ok:
                             dest_is_dir = True
                     except (Failure, UnexpectedExit):
                         pass
@@ -407,8 +404,8 @@ class RemoteCmdRunner(CommandRunner):
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                r = self.connection.local(scp)
-                self.log.info('Command {} with status {}'.format(r.command, r.exited))
+                result = self.connection.local(scp)
+                self.log.info('Command {} with status {}'.format(result.command, result.exited))
 
     def use_rsync(self):
         if self._use_rsync is not None:
@@ -426,10 +423,7 @@ class RemoteCmdRunner(CommandRunner):
         Check if rsync is available on the remote host.
         """
         result = self.run("rsync --version", ignore_status=True)
-        if result.ok:
-            return True
-        else:
-            return False
+        return result.ok
 
     def _encode_remote_paths(self, paths, escape=True):
         """
@@ -469,13 +463,13 @@ class RemoteCmdRunner(CommandRunner):
         """
 
         # non-trailing slash paths should just work
-        if len(pth) == 0 or pth[-1] != "/":
+        if not pth or pth[-1] != "/":
             return [pth]
 
         # make a function to test if a pattern matches any files
         if is_local:
             def glob_matches_files(path, pattern):
-                return len(glob.glob(path + pattern)) > 0
+                return glob.glob(path + pattern)
         else:
             def glob_matches_files(path, pattern):
                 match_cmd = "ls \"%s\"%s" % (six.moves.shlex_quote(path), pattern)
@@ -505,7 +499,8 @@ class RemoteCmdRunner(CommandRunner):
         return sum((self._make_rsync_compatible_globs(path, is_local)
                     for path in source), [])
 
-    def _set_umask_perms(self, dest):
+    @staticmethod
+    def _set_umask_perms(dest):
         """
         Set permissions on all files and directories.
 
@@ -572,7 +567,7 @@ class RemoteCmdRunner(CommandRunner):
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
 
-    def run_output_check(self, cmd, timeout=None, ignore_status=False,
+    def run_output_check(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
                          stdout_ok_regexp=None, stdout_err_regexp=None,
                          stderr_ok_regexp=None, stderr_err_regexp=None,
                          connect_timeout=300):
@@ -629,8 +624,9 @@ class RemoteCmdRunner(CommandRunner):
             raise Failure(result)
 
 
-class OutputWatcher(StreamWatcher):
+class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
     def __init__(self, log):
+        super(OutputWatcher, self).__init__()
         self.len = 0
         self.log = log
 
@@ -645,16 +641,17 @@ class OutputWatcher(StreamWatcher):
         return []
 
 
-class LogWriteWatcher(StreamWatcher):
+class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
     def __init__(self, log_file):
+        super(LogWriteWatcher, self).__init__()
         self.len = 0
         self.log_file = log_file
 
     def submit(self, stream):
         stream_buffer = stream[self.len:]
 
-        with open(self.log_file, "a+") as f:
-            f.write(stream_buffer.encode('utf-8'))
+        with open(self.log_file, "a+") as log_file:
+            log_file.write(stream_buffer.encode('utf-8'))
 
         self.len = len(stream)
         return []
@@ -673,6 +670,7 @@ class FailuresWatcher(Responder):
         for line in new_.splitlines():
             if re.findall(self.sentinel, line, re.S):
                 return line
+        return None
 
     def submit(self, stream):
         index = getattr(self, "failure_index")

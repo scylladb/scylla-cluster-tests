@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2019 ScyllaDB
+from __future__ import print_function
 
 import os
 import re
@@ -52,14 +53,16 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                     break
 
                 for event, pattern in patterns:
-                    m = pattern.search(line)
-                    if m:
+                    match = pattern.search(line)
+                    if match:
                         event.add_info_and_publish(node=self.node, line=line, line_number=line_number)
 
 
-class CassandraStressThread(object):
-    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
-                 profile=None, node_list=[], round_robin=False):
+class CassandraStressThread(object):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
+                 profile=None, node_list=None, round_robin=False):
+        if not node_list:
+            node_list = []
         self.loader_set = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
@@ -101,7 +104,8 @@ class CassandraStressThread(object):
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
 
         if self.node_list and '-node' not in stress_cmd:
-            first_node = [n for n in self.node_list if n.dc_idx == loader_idx % 3]  # make sure each loader is targeting on datacenter/region
+            first_node = [n for n in self.node_list if n.dc_idx == loader_idx %
+                          3]  # make sure each loader is targeting on datacenter/region
             first_node = first_node[0] if first_node else self.node_list[0]
             stress_cmd += " -node {}".format(first_node.ip_address)
 
@@ -111,18 +115,19 @@ class CassandraStressThread(object):
         stress_cmd = self.create_stress_cmd(node, loader_idx, keyspace_idx)
 
         if self.profile:
-            with open(self.profile) as fp:
-                LOGGER.info('Profile content:\n%s' % fp.read())
+            with open(self.profile) as profile_file:
+                LOGGER.info('Profile content:\n%s', profile_file.read())
             node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)))
 
         stress_cmd_opt = stress_cmd.split()[1]
 
-        LOGGER.info('Stress command:\n%s' % stress_cmd)
+        LOGGER.info('Stress command:\n%s', stress_cmd)
 
         log_dir = os.path.join(self.output_dir, self.loader_set.name)
         if not os.path.exists(log_dir):
             makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-k%s-%s.log' % (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
+        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-k%s-%s.log' %
+                                     (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
@@ -171,7 +176,8 @@ class CassandraStressThread(object):
         for loader_idx, loader in enumerate(loaders):
             for cpu_idx in range(self.stress_num):
                 for ks_idx in range(1, self.keyspace_num + 1):
-                    self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx, ks_idx))]
+                    self.results_futures += [self.executor.submit(self._run_stress,
+                                                                  *(loader, loader_idx, cpu_idx, ks_idx))]
                     if loader_idx == 0 and cpu_idx == 0 and self.max_workers > 1:
                         # Wait for first stress thread to create the schema, before spawning new stress threads
                         time.sleep(30)
@@ -186,10 +192,10 @@ class CassandraStressThread(object):
         for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
-        for node, result in results:
+        for _, result in results:
             output = result.stdout + result.stderr
             lines = output.splitlines()
-            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)
+            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
             if node_cs_res:
                 ret.append(node_cs_res)
 
@@ -207,7 +213,7 @@ class CassandraStressThread(object):
         for node, result in results:
             output = result.stdout + result.stderr
             lines = output.splitlines()
-            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)
+            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
             if node_cs_res:
                 cs_summary.append(node_cs_res)
             for line in lines:
@@ -215,85 +221,3 @@ class CassandraStressThread(object):
                     errors += ['%s: %s' % (node, line.strip())]
 
         return cs_summary, errors
-
-
-if __name__ == '__main__':
-    import tempfile
-    from sdcm.remote import RemoteCmdRunner
-    import unittest
-    from sdcm.sct_events import start_events_device, stop_events_device
-
-    logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
-
-    class Node():
-        ssh_login_info = {'hostname': '34.253.205.91',
-                          'user': 'centos',
-                          'key_file': '~/.ssh/scylla-qa-ec2'}
-
-        remoter = RemoteCmdRunner(**ssh_login_info)
-        ip_address = '34.253.205.91'
-        cassandra_stress_version = '3.11'
-
-    class DbNode():
-        ip_address = "34.244.157.61"
-        dc_idx = 1
-
-    class LoaderSetDummy(object):
-        def get_db_auth(self):
-            return None
-
-        name = 'LoaderSetDummy'
-        nodes = [Node()]
-
-    class TestStressThread(unittest.TestCase):
-        @classmethod
-        def setUpClass(cls):
-            cls.temp_dir = tempfile.mkdtemp()
-            start_events_device(cls.temp_dir)
-            time.sleep(10)
-
-        @classmethod
-        def tearDownClass(cls):
-            stop_events_device()
-
-        def test_01(self):
-            from sdcm.prometheus import start_metrics_server
-            start_metrics_server()
-            cs = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()], stress_num=1,
-                                       stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
-
-            cs1 = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()],
-                                        stress_num=1,
-                                        stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
-
-            fs = cs.run()
-            time.sleep(5)
-            fs1 = cs1.run()
-            time.sleep(60)
-            print "killing"
-            Node().remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
-
-            print(cs.verify_results())
-
-            print(cs1.verify_results())
-
-        def test_02(self):
-
-            tmp_file = tempfile.NamedTemporaryFile(mode='w+')
-            tailer = CassandraStressEventsPublisher(node=Node(), cs_log_filename=tmp_file.name)
-
-            res = tailer.start()
-            bad_line = "Cannot achieve consistency level"
-            line = '[34.241.184.166] [stdout] total,      83086089,   70178,   70178,   70178,    14.2,    11.9,    33.2,    53.6,    77.7,   105.4, 1220.0,  0.00868,      0,      0,       0,       0,       0,       0'
-
-            tmp_file.file.write(line + '\n')
-            tmp_file.file.flush()
-
-            tmp_file.file.write(bad_line + '\n')
-            tmp_file.file.flush()
-            time.sleep(2)
-            tailer.stop()
-
-            res.result()
-
-    unittest.main(verbosity=2, defaultTest="TestStressThread.test_01")

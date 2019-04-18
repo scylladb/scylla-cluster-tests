@@ -6,10 +6,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 def setup_stdout_logger():
-    rootLogger = logging.getLogger()
-    rootLogger.setLevel(logging.INFO)
-    rootLogger.addHandler(logging.StreamHandler(sys.stdout))
-    return rootLogger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(logging.StreamHandler(sys.stdout))
+    return root_logger
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -68,7 +68,7 @@ class MakeFileHandler(logging.FileHandler):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
 
 
-class FilterRemote(logging.Filter):
+class FilterRemote(logging.Filter):  # pylint: disable=too-few-public-methods
     def filter(self, record):
         return not record.name == 'sdcm.remote'
 

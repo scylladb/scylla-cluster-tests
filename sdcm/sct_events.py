@@ -3,27 +3,24 @@ import os
 import re
 import logging
 import json
+from json import JSONEncoder
 import signal
 import time
-from multiprocessing import Process, Value, Event, Manager, current_process
-from json import JSONEncoder
+from multiprocessing import Process, Value, Event, current_process
 import atexit
-import dateutil.parser
 
 import enum
 from enum import Enum
 import zmq
 import requests
 from backports.datetime_timestamp import timestamp
+import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs
 from sdcm.utils.py3_backports import _fromtimestamp
 from sdcm.prometheus import nemesis_metrics_obj
 
 LOGGER = logging.getLogger(__name__)
-
-
-manager = Manager()
 
 
 class EventsDevice(Process):
@@ -42,22 +39,22 @@ class EventsDevice(Process):
         try:
             context = zmq.Context(1)
             # Socket facing clients
-            frontend = context.socket(zmq.SUB)
+            frontend = context.socket(zmq.SUB)  # pylint: disable=no-member
             self.pub_port.value = frontend.bind_to_random_port("tcp://*")
-            frontend.setsockopt(zmq.SUBSCRIBE, "")
+            frontend.setsockopt(zmq.SUBSCRIBE, "")  # pylint: disable=no-member
 
             # Socket facing services
-            backend = context.socket(zmq.PUB)
+            backend = context.socket(zmq.PUB)  # pylint: disable=no-member
             self.sub_port.value = backend.bind_to_random_port("tcp://*")
             LOGGER.info("EventDevice Listen on pub_port=%d, sub_port=%d", self.pub_port.value, self.sub_port.value)
 
-            backend.setsockopt(zmq.LINGER, 0)
-            frontend.setsockopt(zmq.LINGER, 0)
+            backend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
+            frontend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
 
             self.ready_event.set()
-            zmq.proxy(frontend, backend)
+            zmq.proxy(frontend, backend)  # pylint: disable=no-member
 
-        except Exception as e:
+        except Exception:  # pylint: disable=broad-except
             LOGGER.exception("zmq device failed")
         except (KeyboardInterrupt, SystemExit) as ex:
             LOGGER.debug("EventsDevice was halted by %s", ex.__class__.__name__)
@@ -67,11 +64,12 @@ class EventsDevice(Process):
             context.term()
 
     def subscribe_events(self, filter_type='', stop_event=None):
+        # pylint: disable=too-many-nested-blocks
         context = zmq.Context()
         LOGGER.info("subscribe to server with port %d", self.sub_port.value)
-        socket = context.socket(zmq.SUB)
+        socket = context.socket(zmq.SUB)  # pylint: disable=no-member
         socket.connect("tcp://localhost:%d" % self.sub_port.value)
-        socket.setsockopt(zmq.SUBSCRIBE, filter_type)
+        socket.setsockopt(zmq.SUBSCRIBE, filter_type)  # pylint: disable=no-member
 
         filters = dict()
 
@@ -106,7 +104,7 @@ class EventsDevice(Process):
 
     def publish_event(self, event):
         context = zmq.Context()
-        socket = context.socket(zmq.PUB)
+        socket = context.socket(zmq.PUB)  # pylint: disable=no-member
         socket.connect("tcp://localhost:%d" % self.pub_port.value)
         time.sleep(0.01)
 
@@ -116,14 +114,14 @@ class EventsDevice(Process):
 
 
 # monkey patch JSONEncoder make enums jsonable
-_saved_default = JSONEncoder().default  # Save default method.
+_SAVED_DEFAULT = JSONEncoder().default  # Save default method.
 
 
-def _new_default(self, obj):
+def _new_default(self, obj):  # pylint: disable=unused-argument
     if isinstance(obj, Enum):
         return obj.name  # Could also be obj.value
     else:
-        return _saved_default
+        return _SAVED_DEFAULT
 
 
 JSONEncoder.default = _new_default  # Set new default method.
@@ -159,9 +157,9 @@ class SystemEvent(SctEvent):
 
 
 class DbEventsFilter(SystemEvent):
-    def __init__(self, type, line=None, node=None):
+    def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
         super(DbEventsFilter, self).__init__()
-        self.id = id(self)
+        self.id = id(self)  # pylint: disable=invalid-name
         self.type = type
         self.line = line
         self.node = str(node) if node else None
@@ -234,8 +232,8 @@ class KillTestEvent(SctEvent):
         return "{0}: reason={1.reason}".format(super(KillTestEvent, self).__str__(), self)
 
 
-class DisruptionEvent(SctEvent):
-    def __init__(self, type, name, status, start=None, end=None, duration=None, node=None, error=None, full_traceback=None, **kwargs):
+class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, type, name, status, start=None, end=None, duration=None, node=None, error=None, full_traceback=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super(DisruptionEvent, self).__init__()
         self.name = name
         self.type = type
@@ -254,16 +252,15 @@ class DisruptionEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        if self.severity == Severity.NORMAL:
-            return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration}".format(
-                super(DisruptionEvent, self).__str__(), self)
-        elif self.severity == Severity.ERROR:
+        if self.severity == Severity.ERROR:
             return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
                 super(DisruptionEvent, self).__str__(), self)
+        return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration}".format(
+            super(DisruptionEvent, self).__str__(), self)
 
 
 class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, name, status=Severity.CRITICAL, node=None, message=None, error=None, **kwargs):
+    def __init__(self, type, name, status=Severity.CRITICAL, node=None, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super(ClusterHealthValidatorEvent, self).__init__()
         self.name = name
         self.type = type
@@ -282,10 +279,12 @@ class ClusterHealthValidatorEvent(SctEvent):
         elif self.severity in (Severity.CRITICAL, Severity.ERROR):
             return "{0}: type={1.type} name={1.name} node={1.node} error={1.error}".format(
                 super(ClusterHealthValidatorEvent, self).__str__(), self)
+        else:
+            return super(ClusterHealthValidatorEvent, self).__str__()
 
 
 class FullScanEvent(SctEvent):
-    def __init__(self, type, ks_cf, db_node_ip, severity=Severity.NORMAL, message=None):
+    def __init__(self, type, ks_cf, db_node_ip, severity=Severity.NORMAL, message=None):   # pylint: disable=redefined-builtin,too-many-arguments
         super(FullScanEvent, self).__init__()
         self.type = type
         self.ks_cf = ks_cf
@@ -302,7 +301,7 @@ class FullScanEvent(SctEvent):
 
 
 class GeminiEvent(SctEvent):
-    def __init__(self, type, cmd, result=None):
+    def __init__(self, type, cmd, result=None):  # pylint: disable=redefined-builtin
         super(GeminiEvent, self).__init__()
         self.type = type
         self.cmd = cmd
@@ -327,7 +326,7 @@ class GeminiEvent(SctEvent):
 
 
 class CassandraStressEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
+    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
         super(CassandraStressEvent, self).__init__()
         self.type = type
         self.node = str(node)
@@ -338,16 +337,16 @@ class CassandraStressEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        if self.stress_cmd:
-            return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
-                super(CassandraStressEvent, self).__str__(), self)
         if self.errors:
             return "{0}: type={1.type} node={1.node}\n{2}".format(
                 super(CassandraStressEvent, self).__str__(), self, "\n".join(self.errors))
 
+        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
+            super(CassandraStressEvent, self).__str__(), self)
+
 
 class YcsbStressEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
+    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
         super(YcsbStressEvent, self).__init__()
         self.type = type
         self.node = str(node)
@@ -362,10 +361,11 @@ class YcsbStressEvent(SctEvent):
             super(YcsbStressEvent, self).__str__(), self)
         if self.errors:
             return "{0}\nerrors:\n\n{1}".format(fmt, "\n".join(self.errors))
+        return fmt
 
 
-class DatabaseLogEvent(SctEvent):
-    def __init__(self, type, regex, severity=Severity.CRITICAL):
+class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, type, regex, severity=Severity.CRITICAL):  # pylint: disable=redefined-builtin
         super(DatabaseLogEvent, self).__init__()
         self.type = type
         self.regex = regex
@@ -378,8 +378,8 @@ class DatabaseLogEvent(SctEvent):
 
     def add_info(self, node, line, line_number):
         try:
-            t = dateutil.parser.parse(line.split()[0])
-            self.timestamp = timestamp(t)
+            log_time = dateutil.parser.parse(line.split()[0])
+            self.timestamp = timestamp(log_time)
         except ValueError:
             self.timestamp = time.time()
         self.line = line
@@ -505,7 +505,7 @@ class PrometheusDumper(threading.Thread):
                                                           ['event_type', 'type', 'severity', 'node'])
 
         for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
-            events_gauge.labels(event_type,
+            events_gauge.labels(event_type,  # pylint: disable=no-member
                                 getattr(message_data, 'type', ''),
                                 message_data.severity,
                                 getattr(message_data, 'node', '')).set(message_data.timestamp)
@@ -558,7 +558,8 @@ class GrafanaAnnotator(threading.Thread):
         return res[0]
 
     def find_panel(self, dashboard, panel_title_prefix="Requests Served per"):
-        dashboard_data = requests.get(self.grafana_base_url + '/api/dashboards/uid/{}'.format(dashboard['uid']), auth=self.auth).json()
+        dashboard_data = requests.get(self.grafana_base_url +
+                                      '/api/dashboards/uid/{}'.format(dashboard['uid']), auth=self.auth).json()
         for row in dashboard_data['dashboard']['rows']:
             for panel in row['panels']:
                 if panel['title'].startswith(panel_title_prefix):
@@ -566,6 +567,7 @@ class GrafanaAnnotator(threading.Thread):
                     return panel_id, panel
 
         LOGGER.error("Failed to find panel id that match [%s]", panel_title_prefix)
+        return None
 
 
 EVENTS_PROCESSES = dict()

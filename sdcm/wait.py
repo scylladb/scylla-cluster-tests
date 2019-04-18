@@ -44,29 +44,30 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
     res = None
 
     def retry_logger(retry_state):
+        # pylint: disable=protected-access
         LOGGER.debug('wait_for: Retrying {}: attempt {} ended with: {}'.format(text if text else retry_state.fn.__name__,
                                                                                retry_state.attempt_number,
                                                                                str(retry_state.outcome._exception) if retry_state.outcome._exception else retry_state.outcome._result))
 
     try:
-        r = tenacity.Retrying(
+        retry = tenacity.Retrying(
             reraise=throw_exc,
             stop=tenacity.stop_after_delay(timeout),
             wait=tenacity.wait_fixed(step),
             before_sleep=retry_logger,
             retry=(retry_if_result(lambda value: not value) | retry_if_exception_type())
         )
-        res = r.call(func, **kwargs)
+        res = retry.call(func, **kwargs)
 
-    except Exception as ex:
+    except Exception as ex:  # pylint: disable=broad-except
         err = 'Wait for: {}: timeout - {} seconds - expired'.format(text if text else func.__name__, timeout)
         LOGGER.error(err)
-        if hasattr(ex, 'last_attempt') and ex.last_attempt.exception() is not None:
-            LOGGER.error("last error: %s", repr(ex.last_attempt.exception()))
+        if hasattr(ex, 'last_attempt') and ex.last_attempt.exception() is not None:  # pylint: disable=no-member
+            LOGGER.error("last error: %s", repr(ex.last_attempt.exception()))  # pylint: disable=no-member
         else:
             LOGGER.error("last error: %s", repr(ex))
         if throw_exc:
-            if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:
+            if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
                 raise RetryError(err)
             raise
 

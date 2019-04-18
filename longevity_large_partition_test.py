@@ -9,9 +9,10 @@ class LargePartitionLongevetyTest(LongevityTest):
         self._pre_create_schema()
         self.test_custom_time()
 
-    def _pre_create_schema(self, in_memory=False):
+    def _pre_create_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
             session.execute("""
                     CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
             """)

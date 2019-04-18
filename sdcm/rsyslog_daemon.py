@@ -61,8 +61,8 @@ include(text=`echo $CNF_CALL_LOG_TO_LOGSENE`)
 
 
 def generate_conf_file():
-    fd, conf_path = mkstemp(prefix="sct-rsyslog", suffix=".conf")
-    with os.fdopen(fd, 'w') as file_obj:
+    conf_fd, conf_path = mkstemp(prefix="sct-rsyslog", suffix=".conf")
+    with os.fdopen(conf_fd, 'w') as file_obj:
         file_obj.write(RSYSLOG_CONF.format(owner=getpass.getuser()))
     LOGGER.debug("rsyslog conf file created in '%s'", conf_path)
     return conf_path
@@ -78,7 +78,7 @@ def start_rsyslog(docker_name, log_dir, port="514"):
 
     :return: the listening port
     """
-    global RSYSLOG_DOCKER_ID, RSYSLOG_CONF_PATH
+    global RSYSLOG_DOCKER_ID, RSYSLOG_CONF_PATH  # pylint: disable=global-statement
 
     log_dir = os.path.abspath(log_dir)
 
@@ -102,7 +102,7 @@ def start_rsyslog(docker_name, log_dir, port="514"):
         -v {conf_path}:/etc/rsyslog.conf \
         -p {port} \
         --name {docker_name}-rsyslogd rsyslog/syslog_appliance_alpine
-    '''.format(**locals()))
+    '''.format(log_dir=log_dir, mount_log_dir=mount_log_dir, conf_path=conf_path, port=port, docker_name=docker_name))
 
     RSYSLOG_DOCKER_ID = res.stdout.strip()
     LOGGER.info("Rsyslog started. Container id: %s", RSYSLOG_DOCKER_ID)
@@ -116,7 +116,7 @@ def start_rsyslog(docker_name, log_dir, port="514"):
 
 
 def stop_rsyslog():
-    global RSYSLOG_DOCKER_ID, RSYSLOG_CONF_PATH
+    global RSYSLOG_DOCKER_ID, RSYSLOG_CONF_PATH  # pylint: disable=global-statement
     if RSYSLOG_DOCKER_ID:
         local_runner = LocalCmdRunner()
         local_runner.run("docker kill {id}".format(id=RSYSLOG_DOCKER_ID), ignore_status=True)
@@ -124,7 +124,7 @@ def stop_rsyslog():
     if RSYSLOG_CONF_PATH:
         try:
             os.remove(RSYSLOG_CONF_PATH)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
 
     RSYSLOG_CONF_PATH = None

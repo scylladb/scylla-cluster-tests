@@ -13,10 +13,11 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import time
+
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.sla import ServiceLevel, Role, User
-import time
 
 
 class SlaPerUserTest(LongevityTest):
@@ -75,9 +76,9 @@ class SlaPerUserTest(LongevityTest):
     @staticmethod
     def user_to_scheduler_group(test_users, scheduler_shares):
         for user, shares in test_users.iteritems():
-            for sg, sg_shares in scheduler_shares.iteritems():
+            for scheduler_group, sg_shares in scheduler_shares.iteritems():
                 if shares[0] in sg_shares:
-                    test_users[user].append(sg)
+                    test_users[user].append(scheduler_group)
                     break
         return test_users
 
@@ -124,43 +125,43 @@ class SlaPerUserTest(LongevityTest):
                     ]
         """
         for entity in entities_list_of_dict:
-            sl = entity.get('service_level')
+            service_level = entity.get('service_level')
             role = entity.get('role')
             user = entity.get('user')
-            if sl:
-                sl.create()
+            if service_level:
+                service_level.create()
             if role:
                 role.create()
-                role.attach_service_level(service_level=sl)
+                role.attach_service_level(service_level=service_level)
             if user:
                 user.create()
                 if role:
                     role.grant_me_to(grant_to=user)
                 else:
-                    user.attach_service_level(service_level=sl)
+                    user.attach_service_level(service_level=service_level)
 
     def validate_deviation(self, expected_ratio, actual_ratio, msg):
         dev = self.calculate_deviation(expected_ratio, actual_ratio)
         self.assertIsNotNone(dev, 'Can\'t compare expected and actual shares ratio. Expected: '
                                   '{expected_ratio}. Actual: {actual_ratio}'
-                             .format(**locals())
+                             .format(expected_ratio=expected_ratio, actual_ratio=actual_ratio)
                              )
         # TODO: formulate error message
         self.assertTrue(dev <= self.VALID_DEVIATION_PRC, '{msg}. Actual shares ratio ({actual_ratio}) is not '
                                                          'as expected ({expected_ratio})'
-                        .format(**locals())
+                        .format(msg=msg, actual_ratio=actual_ratio, expected_ratio=expected_ratio)
                         )
 
     @staticmethod
     def calculate_deviation(first, second):
         if first and second:
-            f, s = (first, second) if first > second else (second, first)
-            dev = float(abs(f - s) * 100 / s)
+            _first, _second = (first, second) if first > second else (second, first)
+            dev = float(abs(_first - _second) * 100 / _second)
             return dev
         return None
 
     @staticmethod
-    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):
+    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):  # pylint: disable=invalid-name
         """
         :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops, scheduler_runtime etc..).
                         If metrics name is not defined - ration will be calculated for service_shares
@@ -214,7 +215,7 @@ class SlaPerUserTest(LongevityTest):
 
         return results
 
-    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):
+    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):  # pylint: disable=invalid-name
         end_time = int(time.time())
         scylla_load = self.prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time)
 
@@ -223,15 +224,15 @@ class SlaPerUserTest(LongevityTest):
 
     def clean_auth(self, entities_list_of_dict):
         for entity in entities_list_of_dict:
-            sl = entity.get('service_level')
+            service_level = entity.get('service_level')
             role = entity.get('role')
             user = entity.get('user')
             if user:
                 user.drop()
             if role:
                 role.drop()
-            if sl:
-                sl.drop()
+            if service_level:
+                service_level.drop()
 
         self.backgroud_task = None
         self.connection_cql.cluster.shutdown()
@@ -245,7 +246,7 @@ class SlaPerUserTest(LongevityTest):
                      ]
         self.run_stress_and_verify_threads(params={'stress_cmd': read_cmds})
 
-    def define_read_cassandra_stress_command(self, user, load_type, workload_type, threads, stress_duration_min,
+    def define_read_cassandra_stress_command(self, user, load_type, workload_type, threads, stress_duration_min,  # pylint: disable=invalid-name, too-many-locals,too-many-arguments
                                              max_rows_for_read=None):
         """
         :param user: dict with User/Role/ServiceLevel objects
@@ -254,26 +255,26 @@ class SlaPerUserTest(LongevityTest):
                                 or
                               throughput: no restriction
         """
-        def latency():
+        def latency():  # pylint: disable=unused-variable
             return '%d throttle=20000/s' % threads
 
-        def throughput():
+        def throughput():  # pylint: disable=unused-variable
             return threads
 
-        def cache_only(max_rows_for_read):
+        def cache_only(max_rows_for_read):  # pylint: disable=unused-variable
             if not max_rows_for_read:
-                max_rows_for_cache_read = self.num_of_partitions * 0.25
+                max_rows_for_read = self.num_of_partitions * 0.25
             return 'seq=1..%d' % max_rows_for_read
 
         # Read from cache and disk
-        def mixed(max_rows_for_read):
+        def mixed(max_rows_for_read):  # pylint: disable=unused-variable
             if not max_rows_for_read:
-                max_rows_for_cache_read = self.num_of_partitions
+                max_rows_for_read = self.num_of_partitions
             return "'dist=gauss(1..%d, %d, %d)'" % (max_rows_for_read,
                                                     max_rows_for_read / 2,
                                                     max_rows_for_read * 0.05)
 
-        def disk_only(max_rows_for_read):
+        def disk_only(max_rows_for_read):  # pylint: disable=unused-variable
             if not max_rows_for_read:
                 max_rows_for_read = self.num_of_partitions * 0.3
             return 'seq=%d..%d' % (max_rows_for_read+(self.num_of_partitions*0.3), self.num_of_partitions)
@@ -354,7 +355,7 @@ class SlaPerUserTest(LongevityTest):
         finally:
             self.clean_auth(entities_list_of_dict=read_users)
 
-    def test_read_throughput_vs_latency_cache_and_disk(self):
+    def test_read_throughput_vs_latency_cache_and_disk(self):  # pylint: disable=invalid-name
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the full data set (that is read from both the cache and the disk)
@@ -395,9 +396,9 @@ class SlaPerUserTest(LongevityTest):
                                                                stress_duration_min=stress_duration)
                      ]
 
-        self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds)
+        self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds, latency_user=read_users[1])
 
-    def test_read_throughput_vs_latency_cache_only(self):
+    def test_read_throughput_vs_latency_cache_only(self):  # pylint: disable=invalid-name
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -445,9 +446,9 @@ class SlaPerUserTest(LongevityTest):
                                                                max_rows_for_read=max_key_for_read)
                      ]
 
-        self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds)
+        self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds, latency_user=read_users[1])
 
-    def test_read_throughput_vs_latency_disk_only(self):
+    def test_read_throughput_vs_latency_disk_only(self):  # pylint: disable=invalid-name
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -501,6 +502,7 @@ class SlaPerUserTest(LongevityTest):
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds, latency_user=read_users[1])
 
     def _throughput_latency_tests_run(self, read_cmds, read_users, latency_user):
+        # pylint: disable=too-many-locals
         try:
             # Run latency workload
             test_start_time = time.time()

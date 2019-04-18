@@ -16,7 +16,6 @@
 import os
 import re
 import time
-import yaml
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.alternator import create_table as alternator_create_table
@@ -96,6 +95,8 @@ class LongevityTest(ClusterTester):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
         stress_queue = list()
@@ -118,7 +119,8 @@ class LongevityTest(ClusterTester):
             # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
             # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
             if pre_create_schema:
-                self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get('scylla_encryption_options', None))
+                self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
+                    'scylla_encryption_options', None))
 
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
@@ -282,6 +284,7 @@ class LongevityTest(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS keyspace1
                 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
@@ -360,6 +363,7 @@ class LongevityTest(ClusterTester):
             'document_id': self.get_doc_id()
         }
 
-    def _get_critical_errors(self):
+    @staticmethod
+    def _get_critical_errors():
         critical = open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r').readlines()
         return ("No critical errors in critical.log", None) if not critical else ("FAILED", critical)

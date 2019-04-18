@@ -75,7 +75,7 @@ class MgmtCliTest(ClusterTester):
 
         mgr_cluster.update(ssh_user=origin_ssh_user, ssh_identity_file=origin_rsa_id)
         mgr_cluster.delete()
-        mgr_cluster2 = manager_tool.add_cluster(name=cluster_name, host=selected_host)
+        manager_tool.add_cluster(name=cluster_name, host=selected_host)
 
     def _get_cluster_hosts_ip(self):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips()]
@@ -92,11 +92,8 @@ class MgmtCliTest(ClusterTester):
 
         # Keyspaces without tables won't appear in the repair, so the must have one
         self.log.info("createing the table {} in the keyspace {}".format(table_name, keyspace_name))
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            session.execute("use {}".format(keyspace_name))
-            result = self.create_cf(session, table_name)
-            if result:
-                self.log.info(result.response_future)
+
+        self.create_table(table_name, keyspace_name=keyspace_name)
 
     def test_manager_sanity(self):
         """
@@ -139,8 +136,10 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, db_cluster=self.db_cluster)
-        other_host, other_host_ip = [host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(
+            name=cluster_name, db_cluster=self.db_cluster)
+        other_host, other_host_ip = [
+            host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
 
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
@@ -160,8 +159,10 @@ class MgmtCliTest(ClusterTester):
         time.sleep(sleep)
 
         dict_host_health = mgr_cluster.get_hosts_health()
-        assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(other_host_ip)
-        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(other_host_ip)
+        assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(
+            other_host_ip)
+        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(
+            other_host_ip)
 
         other_host.start_scylla_server()
 
@@ -170,17 +171,21 @@ class MgmtCliTest(ClusterTester):
         new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
-        res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(node_ip=selected_host_ip, single_node=True, create_user=new_user)
+        res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(
+            node_ip=selected_host_ip, single_node=True, create_user=new_user)
         self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
         new_user_login_message = "This account is currently not available"
         # sudo ssh -i /root/.ssh/qa_user.pem -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 qa_user@54.163.180.81
-        new_user_login_cmd = "sudo ssh -i {} -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 {}@{}".format(new_user_identity_file, new_user, selected_host_ip)
+        new_user_login_cmd = "sudo ssh -i {} -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 {}@{}".format(
+            new_user_identity_file, new_user, selected_host_ip)
         self.log.debug("new_user_login_cmd command is: {}".format(new_user_login_cmd))
         res_new_user_login_cmd = manager_tool.manager_node.remoter.run(new_user_login_cmd, ignore_status=True)
         self.log.debug("res_new_user_login_cmd is: {}".format(res_new_user_login_cmd))
-        assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(res_new_user_login_cmd.stdout, new_user_login_message)
+        assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(
+            res_new_user_login_cmd.stdout, new_user_login_message)
 
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip, single_node=True)
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup",
+                                               host=selected_host_ip, single_node=True)
         # self.log.debug('mgr_cluster: {}'.format(mgr_cluster))
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
@@ -235,11 +240,11 @@ class MgmtCliTest(ClusterTester):
     def _generate_load(self):
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
-        stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
 
-    def test_repair_multiple_keyspace_types(self):
+    def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
@@ -255,7 +260,7 @@ class MgmtCliTest(ClusterTester):
         self.log.info('Task: {} is done.'.format(repair_task.id))
         self.log.debug("sctool version is : {}".format(manager_tool.version))
 
-        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",
+        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",  # pylint: disable=invalid-name
                                              self.SIMPLESTRATEGY_KEYSPACE_NAME]
         repair_progress_table = repair_task.detailed_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")
@@ -268,13 +273,14 @@ class MgmtCliTest(ClusterTester):
                 "The repair of the keyspace {} stopped at {}%".format(
                     keyspace_name, keyspace_repair_percentage)
 
-        localstrategy_keyspace_percentage = self._keyspace_value_in_progress_table(
+        localstrategy_keyspace_percentage = self._keyspace_value_in_progress_table(   # pylint: disable=invalid-name
             repair_task, repair_progress_table, self.LOCALSTRATEGY_KEYSPACE_NAME)
         assert localstrategy_keyspace_percentage is None, \
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
         self.log.info("the sctool repair commend was completed successfully")
 
-    def _keyspace_value_in_progress_table(self, repair_task, repair_progress_table, keyspace_name):
+    @staticmethod
+    def _keyspace_value_in_progress_table(repair_task, repair_progress_table, keyspace_name):
         try:
             table_repair_progress = repair_task.sctool.get_table_value(repair_progress_table, keyspace_name)
             table_repair_percentage = float(table_repair_progress.replace('%', ''))

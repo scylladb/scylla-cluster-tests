@@ -1,16 +1,18 @@
 import os
 import logging
 import math
-import jinja2
 import pprint
-from es import ES
-from send_email import Email
 from datetime import datetime
-from db_stats import TestStatsMixin
+
+import jinja2
+
+from sdcm.db_stats import TestStatsMixin
+from sdcm.es import ES
+from sdcm.send_email import Email
 
 
-log = logging.getLogger(__name__)
-pp = pprint.PrettyPrinter(indent=2)
+LOGGER = logging.getLogger(__name__)
+PP = pprint.PrettyPrinter(indent=2)
 
 
 class QueryFilter(object):
@@ -42,7 +44,7 @@ class QueryFilter(object):
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
         test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-        test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", "\:"))
+        test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", r"\:"))
         return test_details
 
     def test_cmd_details(self):
@@ -52,7 +54,7 @@ class QueryFilter(object):
         try:
             return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
         except KeyError:
-            log.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
+            LOGGER.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
         return None
 
 
@@ -72,18 +74,18 @@ class QueryFilterCS(QueryFilter):
 
     def test_cmd_details(self):
         test_details = ""
-        for cs in self.test_details_params():
+        for cassandra_stress in self.test_details_params():
             for param in self.cs_params():
                 if param == 'rate threads':
-                    test_details += ' AND test_details.{}.rate\ threads: {}'.format(
-                        cs, self.test_doc['_source']['test_details'][cs][param])
-                elif param == 'duration' and cs.startswith('preload'):
+                    test_details += r' AND test_details.{}.rate\ threads: {}'.format(
+                        cassandra_stress, self.test_doc['_source']['test_details'][cassandra_stress][param])
+                elif param == 'duration' and cassandra_stress.startswith('preload'):
                     continue
                 else:
-                    param_val = self.test_doc['_source']['test_details'][cs][param]
+                    param_val = self.test_doc['_source']['test_details'][cassandra_stress][param]
                     if param in ['profile', 'ops']:
                         param_val = "\"{}\"".format(param_val)
-                    test_details += ' AND test_details.{}.{}: {}'.format(cs, param, param_val)
+                    test_details += ' AND test_details.{}.{}: {}'.format(cassandra_stress, param, param_val)
         return test_details
 
 
@@ -101,24 +103,24 @@ class QueryFilterScyllaBench(QueryFilter):
         return ' '.join(test_details)
 
 
-class BaseResultsAnalyzer(object):
-    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
+class BaseResultsAnalyzer(object):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),  # pylint: disable=too-many-arguments
                  email_template_fp="", query_limit=1000, logger=None):
         self._es = ES()
-        self._conf = self._es._conf
+        self._conf = self._es._conf  # pylint: disable=protected-access
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
         self._send_email = send_email
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
-        self.log = logger if logger else log
+        self.log = logger if logger else LOGGER
 
     def get_all(self):
         """
         Get all the test results in json format
         """
-        return self._es.search(index=self._es_index, size=self._limit)
+        return self._es.search(index=self._es_index, size=self._limit)  # pylint: disable=unexpected-keyword-arg
 
     def get_test_by_id(self, test_id):
         """
@@ -133,10 +135,10 @@ class BaseResultsAnalyzer(object):
 
     def _test_version(self, test_doc):
         if test_doc['_source'].get('versions'):
-            for v in ('scylla-server', 'scylla-enterprise-server'):
-                k = test_doc['_source']['versions'].get(v)
-                if k:
-                    return k
+            for value in ('scylla-server', 'scylla-enterprise-server'):
+                key = test_doc['_source']['versions'].get(value)
+                if key:
+                    return key
 
         self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
@@ -155,25 +157,22 @@ class BaseResultsAnalyzer(object):
         html = template.render(results)
         self.log.info("Results has been rendered to html")
         if html_file_path:
-            with open(html_file_path, "w") as f:
-                f.write(html)
+            with open(html_file_path, "w") as html_file:
+                html_file.write(html)
             self.log.info("HTML report saved to '%s'.", html_file_path)
         return html
 
     def send_email(self, subject, content, html=True, files=()):
         if self._send_email and self._email_recipients:
             self.log.debug('Send email to {}'.format(self._email_recipients))
-            em = Email()
-            em.send(subject, content, html=html, recipients=self._email_recipients, files=files)
+            email = Email()
+            email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self._send_email, self._email_recipients)
 
     def gen_kibana_dashboard_url(self, dashboard_path=""):
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
-
-    def check_regression(self):
-        return NotImplementedError("check_regression should be implemented!")
 
 
 class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
@@ -183,7 +182,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):  # pylint: disable=too-many-arguments
         super(PerformanceResultsAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
@@ -193,7 +192,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             logger=logger
         )
 
-    def _remove_non_stat_keys(self, stats):
+    @staticmethod
+    def _remove_non_stat_keys(stats):
         for non_stat_key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
             if non_stat_key in stats:
                 del stats[non_stat_key]
@@ -217,15 +217,16 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     def _test_version(self, test_doc):
         if test_doc['_source'].get('versions'):
-            for v in ('scylla-server', 'scylla-enterprise-server'):
-                k = test_doc['_source']['versions'].get(v)
-                if k:
-                    return k
+            for value in ('scylla-server', 'scylla-enterprise-server'):
+                key = test_doc['_source']['versions'].get(value)
+                if key:
+                    return key
 
         self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    def _get_grafana_snapshot(self, test_doc):
+    @staticmethod
+    def _get_grafana_snapshot(test_doc):
         grafana_snapshots = test_doc['_source']['test_details'].get('grafana_snapshots')
         if grafana_snapshots and isinstance(grafana_snapshots, list):
             return grafana_snapshots
@@ -234,7 +235,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         else:
             return []
 
-    def _get_grafana_screenshot(self, test_doc):
+    @staticmethod
+    def _get_grafana_screenshot(test_doc):
         grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshot')
         if not grafana_screenshots:
             grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshots')
@@ -246,12 +248,14 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         else:
             return []
 
-    def _get_setup_details(self, test_doc, is_gce):
+    @staticmethod
+    def _get_setup_details(test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
         if "aws" in setup_details['cluster_backend']:
             setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
-        for sp in QueryFilter(test_doc, is_gce).setup_instance_params():
-            setup_details.update([(sp.replace('gce_', ''), test_doc['_source']['setup_details'].get(sp))])
+        for setup_param in QueryFilter(test_doc, is_gce).setup_instance_params():
+            setup_details.update(
+                [(setup_param.replace('gce_', ''), test_doc['_source']['setup_details'].get(setup_param))])
         return setup_details
 
     def _get_best_value(self, key, val1, val2):
@@ -259,7 +263,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return val1 if val1 > val2 else val2
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
 
-    def _query_filter(self, test_doc, is_gce):
+    @staticmethod
+    def _query_filter(test_doc, is_gce):
         return QueryFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
             else QueryFilterCS(test_doc, is_gce)()
 
@@ -303,13 +308,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
         # get test res
         from sortedcontainers import SortedDict
         doc = self.get_test_by_id(test_id)
         if not doc:
             self.log.error('Cannot find test by id: {}!'.format(test_id))
             return False
-        self.log.debug(pp.pformat(doc))
+        self.log.debug(PP.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
@@ -325,7 +332,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results.stats_total',
                        'hits.hits._source.results.throughput',
                        'hits.hits._source.versions']
-        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path, size=self._limit)
+        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,  # pylint: disable=unexpected-keyword-arg
+                                         size=self._limit)
 
         if not tests_filtered:
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
@@ -355,17 +363,17 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         #     }
         # }
         # Find best results for each version
-        for tr in tests_filtered['hits']['hits']:
-            if tr['_id'] == test_id:  # filter the current test
+        for row in tests_filtered['hits']['hits']:
+            if row['_id'] == test_id:  # filter the current test
                 continue
-            if '_source' not in tr:  # non-valid record?
-                self.log.error('Skip non-valid test: %s', tr['_id'])
+            if '_source' not in row:  # non-valid record?
+                self.log.error('Skip non-valid test: %s', row['_id'])
                 continue
-            version_info = self._test_version(tr)
+            version_info = self._test_version(row)
             version = version_info['version']
             if not version:
                 continue
-            curr_test_stats = self._test_stats(tr)
+            curr_test_stats = self._test_stats(row)
             if not curr_test_stats:
                 continue
             if version not in group_by_version:
@@ -387,8 +395,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # compare with the best in the test version and all the previous versions
         test_version_info = self._test_version(doc)
         test_version = test_version_info['version']
-        for version in group_by_version.keys():
-            if version == test_version and not len(group_by_version[test_version]['tests']):
+        for version in group_by_version:
+            if version == test_version and group_by_version[test_version]['tests']:
                 self.log.info('No previous tests in the current version {} to compare'.format(test_version))
                 continue
             cmp_res = self.cmp(test_stats,
@@ -410,7 +418,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        test_version=test_version_info,
                        res_list=res_list,
                        setup_details=self._get_setup_details(doc, is_gce),
-                       prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
+                       prometheus_stats={stat: doc["_source"]["results"].get(
+                           stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
                        prometheus_stats_units=TestStatsMixin.PROMETHEUS_STATS_UNITS,
                        grafana_snapshots=self._get_grafana_snapshot(doc),
                        grafana_screenshots=self._get_grafana_screenshot(doc),
@@ -419,7 +428,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        dashboard_master=self.gen_kibana_dashboard_url(dashboard_path),
                        )
         self.log.debug('Regression analysis:')
-        self.log.debug(pp.pformat(results))
+        self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
         html = self.render_to_html(results)

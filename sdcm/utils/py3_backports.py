@@ -3,13 +3,15 @@ import time
 import math
 from datetime import timedelta, datetime
 
-'''TODO: backports from python 3.3'''
+# TODO: backports from python 3.3
 
 
 def _fromtimestamp(t, tz=None):
     """Construct a datetime from a POSIX timestamp (like time.time()).
     A timezone info object may be passed in as well.
     """
+
+    # pylint: disable=invalid-name,too-many-locals, unused-variable,protected-access
     frac, t = math.modf(t)
     us = int(round(frac * 1e6))
     if us >= 1000000:

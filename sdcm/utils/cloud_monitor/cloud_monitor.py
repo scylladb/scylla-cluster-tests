@@ -9,8 +9,8 @@ LOGGER = getLogger(__name__)
 CLOUD_PROVIDERS = ("aws", "gce")
 
 
-class CloudInstance(object):
-    def __init__(self, cloud, name, region_az, state, lifecycle, instance_type, owner, create_time):
+class CloudInstance(object):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+    def __init__(self, cloud, name, region_az, state, lifecycle, instance_type, owner, create_time):  # pylint: disable=too-many-arguments
         self.cloud = cloud
         self.name = name
         self.region_az = region_az
@@ -87,7 +87,3 @@ def cloud_report(mail_to):
     notify_by_email(general_report=GeneralReport(cloud_instances),
                     detailed_report=DetailedReport(cloud_instances),
                     recipients=mail_to)
-
-
-if __name__ == "__main__":
-    cloud_report()

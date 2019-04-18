@@ -1,5 +1,6 @@
-import boto3
 import json
+
+import boto3
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 

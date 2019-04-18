@@ -53,6 +53,6 @@ class HintedHandoffTest(ClusterTester):
         self.wait_for_hints_to_be_sent(node=node3, num_dest_nodes=2)
         self.log.info("Stopping Scylla on node3")
         node3.stop_scylla()
-        stress_queue = self.run_stress_thread(stress_cmd=self.stress_read_cmd, stress_num=1)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.stress_read_cmd, stress_num=1)
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.verify_no_drops_and_errors(starting_from=self.start_time)
