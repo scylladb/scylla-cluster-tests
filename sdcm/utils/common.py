@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2017 ScyllaDB
+
+# pylint: disable=too-many-lines
 import itertools
 import os
 import logging
@@ -17,38 +19,34 @@ import random
 import socket
 import time
 import datetime
-import requests
 import tempfile
 import re
 import errno
 import threading
-import concurrent.futures
 import select
-import sys
-import math
 import json
 import shutil
-
 from textwrap import dedent
 from functools import wraps
-from collections import defaultdict
-from datetime import timedelta
 from enum import Enum
-
+from collections import defaultdict
+import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+
+import requests
 import boto3
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-logger = logging.getLogger('utils')
+LOGGER = logging.getLogger('utils')
 
 
 def _remote_get_hash(remoter, file_path):
     try:
         result = remoter.run('md5sum {}'.format(file_path), verbose=True)
         return result.stdout.strip().split()[0]
-    except Exception as details:
-        logger.error(str(details))
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error(str(details))
         return None
 
 
@@ -56,10 +54,10 @@ def _remote_get_file(remoter, src, dst, user_agent=None):
     cmd = 'curl -L {} -o {}'.format(src, dst)
     if user_agent:
         cmd += ' --user-agent %s' % user_agent
-    result = remoter.run(cmd, ignore_status=True)
+    return remoter.run(cmd, ignore_status=True)
 
 
-def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):
+def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):  # pylint: disable=too-many-arguments
     _remote_get_file(remoter, src, dst, user_agent)
     if not hash_expected:
         return
@@ -69,14 +67,14 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     assert _remote_get_hash(remoter, dst) == hash_expected
 
 
-class retrying(object):
+class retrying(object):  # pylint: disable=invalid-name,too-few-public-methods
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
     def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message=""):
         assert n > 0, "Number of retries parameter should be greater then 0 (current: %s)" % n
-        self.n = n  # number of times to retry
+        self.n = n  # number of times to retry  # pylint: disable=invalid-name
         self.sleep_time = sleep_time  # number seconds to sleep between retries
         self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
         self.message = message  # string that will be printed between retries
@@ -90,13 +88,13 @@ class retrying(object):
             for i in xrange(self.n):
                 try:
                     if self.message:
-                        logger.info("%s [try #%s]" % (self.message, i))
+                        LOGGER.info("%s [try #%s]", self.message, i)
                     return func(*args, **kwargs)
-                except self.allowed_exceptions as e:
-                    logger.debug("'%s': failed with '%r', retrying [#%s]" % (func.func_name, e, i))
+                except self.allowed_exceptions as ex:
+                    LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.func_name, ex, i)
                     time.sleep(self.sleep_time)
                     if i == self.n - 1:
-                        logger.error("'%s': Number of retries exceeded!", func.func_name)
+                        LOGGER.error("'%s': Number of retries exceeded!", func.func_name)
                         raise
         return inner
 
@@ -128,14 +126,14 @@ def log_run_info(arg):
         @wraps(func)
         def inner(*args, **kwargs):
             class_name = ""
-            if len(args) > 0 and func.__name__ in dir(args[0]):
+            if args and func.__name__ in dir(args[0]):
                 class_name = " <%s>" % args[0].__class__.__name__
             action = "%s%s" % (msg, class_name)
             start_time = datetime.datetime.now()
-            logger.debug("BEGIN: %s", action)
+            LOGGER.debug("BEGIN: %s", action)
             res = func(*args, **kwargs)
             end_time = datetime.datetime.now()
-            logger.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
+            LOGGER.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
             return res
         return inner
 
@@ -168,7 +166,7 @@ def get_job_name():
 
 
 def verify_scylla_repo_file(content, is_rhel_like=True):
-    logger.info('Verifying Scylla repo file')
+    LOGGER.info('Verifying Scylla repo file')
     if is_rhel_like:
         body_prefix = ['#', '[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
                        'skip_if_unavailable=', 'gpgkey=', 'repo_gpgcheck=', 'enabled_metadata=']
@@ -177,10 +175,10 @@ def verify_scylla_repo_file(content, is_rhel_like=True):
     for line in content.split('\n'):
         valid_prefix = False
         for prefix in body_prefix:
-            if line.startswith(prefix) or len(line.strip()) == 0:
+            if line.startswith(prefix) or not line.strip():
                 valid_prefix = True
                 break
-        logger.debug(line)
+        LOGGER.debug(line)
         assert valid_prefix, 'Repository content has invalid line: {}'.format(line)
 
 
@@ -213,22 +211,25 @@ class S3Storage(object):
     def generate_url(self, file_path, dest_dir=''):
         bucket_name = self.bucket_name
         file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(**locals())
+        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(dest_dir=dest_dir,
+                                                                                      file_name=file_name,
+                                                                                      bucket_name=bucket_name)
 
     def upload_file(self, file_path, dest_dir=''):
         try:
             s3_url = self.generate_url(file_path, dest_dir)
-            with open(file_path) as fh:
-                mydata = fh.read()
-                logger.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
+            with open(file_path) as file_handle:
+                mydata = file_handle.read()
+                LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
                 response = requests.put(s3_url, data=mydata)
-                logger.debug(response)
+                LOGGER.debug(response)
                 return s3_url if response.ok else ""
-        except Exception as e:
-            logger.debug("Unable to upload to S3: %s" % e)
+        except Exception as ex:  # pylint: disable=broad-except
+            LOGGER.debug("Unable to upload to S3: %s", ex)
             return ""
 
-    def download_file(self, link, dst_dir=""):
+    @staticmethod
+    def download_file(link, dst_dir=""):
         resp = requests.get(link)
         try:
             if resp.status_code == 200:
@@ -242,11 +243,12 @@ class S3Storage(object):
 
                 if not os.path.exists(dst):
                     os.mkdir(dst)
-                with open(os.path.join(dst, os.path.basename(link)), 'wb') as fh:
-                    fh.write(resp.content)
+                with open(os.path.join(dst, os.path.basename(link)), 'wb') as file_handle:
+                    file_handle.write(resp.content)
                 return os.path.join(os.path.abspath(dst), os.path.basename(link))
-        except Exception as details:
-            logger.warning("File {} is not downloaded by reason: {}".format(file_path), details)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.warning("File {} is not downloaded by reason: {}".format(file_path, details))
+        return None
 
 
 def get_latest_gemini_version():
@@ -254,8 +256,8 @@ def get_latest_gemini_version():
 
     results = S3Storage(bucket_name).search_by_path(path='gemini')
     versions = set()
-    for f in results:
-        versions.add(f.split('/')[1])
+    for result_file in results:
+        versions.add(result_file.split('/')[1])
 
     return str(sorted(versions)[-1])
 
@@ -282,33 +284,35 @@ def list_logs_by_test_id(test_id):
 
 
 def restore_monitoring_stack(test_id):
+    # pylint: disable=too-many-locals
     from sdcm.remote import LocalCmdRunner
 
-    lr = LocalCmdRunner()
-    logger.info("Checking that docker is available...")
-    result = lr.run('docker ps', ignore_status=True, verbose=False)
+    localrunner = LocalCmdRunner()
+    LOGGER.info("Checking that docker is available...")
+    result = localrunner.run('docker ps', ignore_status=True, verbose=False)
     if result.ok:
-        logger.info('Docker is available')
+        LOGGER.info('Docker is available')
     else:
-        logger.warning('Docker is not available on your computer. Please install docker software before continue')
+        LOGGER.warning('Docker is not available on your computer. Please install docker software before continue')
         return False
 
     monitor_stack_base_dir = tempfile.mkdtemp()
     stored_files_by_test_id = list_logs_by_test_id(test_id)
     monitor_stack_archives = []
-    for f in stored_files_by_test_id:
-        if f['type'] in ['monitoring_data_stack', 'prometheus']:
-            monitor_stack_archives.append(f)
+    for stored_file in stored_files_by_test_id:
+        if stored_file['type'] in ['monitoring_data_stack', 'prometheus']:
+            monitor_stack_archives.append(stored_file)
     if not monitor_stack_archives or len(monitor_stack_archives) < 2:
-        logger.warning('There is no available archive files for monitoring data stack restoring for test id : {}'.format(test_id))
+        LOGGER.warning(
+            'There is no available archive files for monitoring data stack restoring for test id : {}'.format(test_id))
         return False
 
     for arch in monitor_stack_archives:
-        logger.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
+        LOGGER.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
         local_path_monitor_stack = S3Storage().download_file(arch['link'], dst_dir=monitor_stack_base_dir)
         monitor_stack_workdir = os.path.dirname(local_path_monitor_stack)
         monitoring_stack_archive_file = os.path.basename(local_path_monitor_stack)
-        logger.info('Extracting data from archive {}'.format(arch['file_path']))
+        LOGGER.info('Extracting data from archive {}'.format(arch['file_path']))
         if arch['type'] == 'prometheus':
             monitoring_stack_data_dir = os.path.join(monitor_stack_workdir, 'monitor_data_dir')
             cmd = dedent("""
@@ -319,9 +323,9 @@ def restore_monitoring_stack(test_id):
                 chmod -R 777 {data_dir}
                 """.format(data_dir=monitoring_stack_data_dir,
                            archive=monitoring_stack_archive_file))
-            result = lr.run(cmd, ignore_status=True)
+            result = localrunner.run(cmd, ignore_status=True)
         else:
-            branches = re.search('(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>.*)\.tar\.gz',
+            branches = re.search(r'(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>.*)\.tar\.gz',
                                  monitoring_stack_archive_file)
             monitoring_branch = branches.group('monitoring_branch')
             scylla_version = branches.group('scylla_version')
@@ -329,13 +333,14 @@ def restore_monitoring_stack(test_id):
                 cd {workdir}
                 tar -xvf {archive}
                 """.format(workdir=monitor_stack_workdir, archive=monitoring_stack_archive_file))
-            result = lr.run(cmd, ignore_status=True)
+            result = localrunner.run(cmd, ignore_status=True)
         if not result.ok:
-            logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
+            LOGGER.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
             return False
-        logger.info("Extracting data finished")
+        LOGGER.info("Extracting data finished")
+        return True
 
-    logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
+    LOGGER.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
 
     monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-monitoring-{}'.format(monitoring_branch))
 
@@ -343,48 +348,54 @@ def restore_monitoring_stack(test_id):
         sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
         sct_dashboard_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', sct_dashboard_file_name)
         if not os.path.exists(sct_dashboard_file):
-            logger.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
+            LOGGER.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
             return False
 
         dashboard_url = 'http://localhost:3000/api/dashboards/db'
-        with open(sct_dashboard_file, "r") as f:
-            dashboard_config = json.load(f)
+        with open(sct_dashboard_file, "r") as file_handle:
+            dashboard_config = json.load(file_handle)
 
-        res = requests.post(dashboard_url, data=json.dumps(dashboard_config), headers={'Content-Type': 'application/json'})
+        res = requests.post(dashboard_url, data=json.dumps(dashboard_config),
+                            headers={'Content-Type': 'application/json'})
         if res.status_code != 200:
-            logger.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
+            LOGGER.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
             return False
-        logger.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
+        LOGGER.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
+        return True
 
     def upload_annotations():
         annotations_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', 'annotations.json')
         if not os.path.exists(annotations_file):
-            logger.info('There is no annotations file.Skip loading annotations')
+            LOGGER.info('There is no annotations file.Skip loading annotations')
             return False
 
-        with open(annotations_file, "r") as f:
-            annotations = json.load(f)
+        with open(annotations_file, "r") as file_handle:
+            annotations = json.load(file_handle)
 
         annotations_url = "http://localhost:3000/api/annotations"
-        for an in annotations:
-            res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
+        for annotation in annotations:
+            res = requests.post(annotations_url, data=json.dumps(annotation),
+                                headers={'Content-Type': 'application/json'})
             if res.status_code != 200:
-                logger.info('Error during uploading annotation {}. Error message {}'.format(an, res.text))
+                LOGGER.info('Error during uploading annotation {}. Error message {}'.format(annotation, res.text))
                 return False
-        logger.info('Annotations loaded successfully')
+        LOGGER.info('Annotations loaded successfully')
+        return True
 
     @retrying(n=3, sleep_time=1, message='Start docker containers')
     def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
-        lr.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
+        localrunner.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
         cmd = dedent("""cd {monitoring_dockers_dir};
                 ./start-all.sh \
                 -s {monitoring_dockers_dir}/config/scylla_servers.yml \
                 -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
-                -d {monitoring_stack_data_dir} -v {scylla_version}""".format(**locals()))
-        res = lr.run(cmd, ignore_status=True)
+                -d {monitoring_stack_data_dir} -v {scylla_version}""".format(monitoring_dockers_dir=monitoring_dockers_dir,
+                                                                             monitoring_stack_data_dir=monitoring_stack_data_dir,
+                                                                             scylla_version=scylla_version))
+        res = localrunner.run(cmd, ignore_status=True)
         if res.ok:
-            r = lr.run('docker ps')
-            logger.info(r.stdout.encode('utf-8'))
+            result = localrunner.run('docker ps')
+            LOGGER.info(result.stdout.encode('utf-8'))
             return True
         else:
             raise Exception('dockers start failed. {}'.format(res))
@@ -404,7 +415,7 @@ def all_aws_regions():
 AWS_REGIONS = all_aws_regions()
 
 
-class ParallelObject:
+class ParallelObject(object):  # pylint: disable=too-few-public-methods
     """
         Run function in with supplied args in parallel using thread.
     """
@@ -423,14 +434,17 @@ class ParallelObject:
                 fun_args = args
                 fun_kwargs = kwargs
                 fun_name = fun.__name__
-                logger.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(**locals()))
+                LOGGER.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(thread_name=thread_name,
+                                                                                           fun_name=fun_name,
+                                                                                           fun_args=fun_args,
+                                                                                           fun_kwargs=fun_kwargs))
                 return_val = fun(*args, **kwargs)
-                logger.debug("[{thread_name}] Done.".format(**locals()))
+                LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
                 return return_val
             return inner
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
-            logger.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
+            LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
             if not self.disable_logging:
                 func = func_wrap(func)
             return list(pool.map(func, self.objects, timeout=self.timeout))
@@ -470,7 +484,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     aws_regions = [region_name] if region_name else AWS_REGIONS
 
     def get_instances(region):
-        logger.info('Going to list aws region "%s"', region)
+        LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client = boto3.client('ec2', region_name=region)
         custom_filter = []
@@ -479,20 +493,21 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         response = client.describe_instances(Filters=custom_filter)
         instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
             'Instances']]
-        logger.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
+        LOGGER.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100).run(get_instances)
 
-    for region_name in instances.keys():
+    for curr_region_name in instances:
         if running:
-            instances[region_name] = [i for i in instances[region_name] if i['State']['Name'] == 'running']
+            instances[curr_region_name] = [i for i in instances[curr_region_name] if i['State']['Name'] == 'running']
         else:
-            instances[region_name] = [i for i in instances[region_name] if not i['State']['Name'] == 'terminated']
+            instances[curr_region_name] = [i for i in instances[curr_region_name]
+                                           if not i['State']['Name'] == 'terminated']
     if not group_as_region:
         instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
-        logger.info("Found total of %s instances.", len(instances))
+        LOGGER.info("Found total of %s instances.", len(instances))
     else:
-        logger.info("Found total of %s instances.", sum([len(value) for _, value in instances.items()]))
+        LOGGER.info("Found total of %s instances.", sum([len(value) for _, value in instances.items()]))
     return instances
 
 
@@ -513,9 +528,9 @@ def clean_instances_aws(tags_dict):
             tags = aws_tags_to_dict(instance.get('Tags'))
             name = tags.get("Name", "N/A")
             instance_id = instance['InstanceId']
-            logger.info("Going to delete '{instance_id}' [name={name}] ".format(**locals()))
+            LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             response = client.terminate_instances(InstanceIds=[instance_id])
-            logger.debug("Done. Result: %s\n", response['TerminatingInstances'])
+            LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
 def get_all_gce_regions():
@@ -570,7 +585,7 @@ def list_instances_gce(tags_dict=None, running=False):
                                 gcp_credentials["private_key"],
                                 project=gcp_credentials["project_id"])
 
-    logger.info("Going to get all instances from GCE")
+    LOGGER.info("Going to get all instances from GCE")
     all_gce_instances = compute_engine.list_nodes()
     # filter instances by tags since libcloud list_nodes() doesn't offer any filtering
     if tags_dict:
@@ -583,7 +598,7 @@ def list_instances_gce(tags_dict=None, running=False):
         instances = [i for i in instances if i.state == 'running']
     else:
         instances = [i for i in instances if not i.state == 'terminated']
-    logger.info("Done. Found total of %s instances.", len(instances))
+    LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
 
 
@@ -598,13 +613,13 @@ def clean_instances_gce(tags_dict):
     all_gce_instances = list_instances_gce(tags_dict=tags_dict)
 
     for instance in all_gce_instances:
-        logger.info("Going to delete: {}".format(instance.name))
+        LOGGER.info("Going to delete: {}".format(instance.name))
         # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
         res = instance.destroy()
-        logger.info("{} deleted. res={}".format(instance.name, res))
+        LOGGER.info("{} deleted. res={}".format(instance.name, res))
 
 
-_scylla_ami_cache = defaultdict(dict)
+_SCYLLA_AMI_CACHE = defaultdict(dict)
 
 
 def get_scylla_ami_versions(region):
@@ -616,25 +631,25 @@ def get_scylla_ami_versions(region):
     :rtype: list
     """
 
-    if _scylla_ami_cache[region]:
-        return _scylla_ami_cache[region]
+    if _SCYLLA_AMI_CACHE[region]:
+        return _SCYLLA_AMI_CACHE[region]
 
-    EC2 = boto3.client('ec2', region_name=region)
-    response = EC2.describe_images(
+    ec2 = boto3.client('ec2', region_name=region)
+    response = ec2.describe_images(
         Owners=['797456418907'],  # ScyllaDB
         Filters=[
             {'Name': 'name', 'Values': ['ScyllaDB *']},
         ],
     )
 
-    _scylla_ami_cache[region] = sorted(response['Images'],
+    _SCYLLA_AMI_CACHE[region] = sorted(response['Images'],
                                        key=lambda x: x['CreationDate'],
                                        reverse=True)
 
-    return _scylla_ami_cache[region]
+    return _SCYLLA_AMI_CACHE[region]
 
 
-_s3_scylla_repos_cache = defaultdict(dict)
+_S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
 
 
 def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
@@ -647,36 +662,38 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     :return: a mapping of versions prefixes to repos
     :rtype: dict
     """
-    if (dist_type, dist_version) in _s3_scylla_repos_cache:
-        return _s3_scylla_repos_cache[(dist_type, dist_version)]
+    if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
+        return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
     s3_client = boto3.client('s3')
     bucket = 'downloads.scylladb.com'
 
     if dist_type == 'centos':
-        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/',  Delimiter='/')
+        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/', Delimiter='/')
 
-        for f in response['Contents']:
-            filename = os.path.basename(f['Key'])
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
             # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
             if filename.startswith('scylla-') and filename.endswith('.repo'):
                 version_prefix = filename.replace('.repo', '').split('-')[-1]
-                _s3_scylla_repos_cache[(dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+                _S3_SCYLLA_REPOS_CACHE[(
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file['Key'])
 
     elif dist_type == 'ubuntu' or dist_type == 'debian':
-        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type),  Delimiter='/')
-        for f in response['Contents']:
-            filename = os.path.basename(f['Key'])
+        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
             if filename.startswith('scylla-') and filename.endswith('-{}.list'.format(dist_version)):
 
                 version_prefix = filename.replace('-{}.list'.format(dist_version), '').split('-')[-1]
-                _s3_scylla_repos_cache[(dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=f['Key'])
+                _S3_SCYLLA_REPOS_CACHE[(
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file['Key'])
 
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
-    return _s3_scylla_repos_cache[(dist_type, dist_version)]
+    return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 
 def pid_exists(pid):
@@ -702,23 +719,23 @@ def safe_kill(pid, signal):
     try:
         os.kill(pid, signal)
         return True
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         return False
 
 
-class FileFollowerIterator(object):
+class FileFollowerIterator(object):  # pylint: disable=too-few-public-methods
     def __init__(self, filename, thread_obj):
         self.filename = filename
         self.thread_obj = thread_obj
 
     def __iter__(self):
-        with open(self.filename, 'r') as input:
+        with open(self.filename, 'r') as input_file:
             line = ''
             while not self.thread_obj.stopped():
                 poller = select.poll()
-                poller.register(input, select.POLLIN)
+                poller.register(input_file, select.POLLIN)
                 if poller.poll(100):
-                    line += input.readline()
+                    line += input_file.readline()
                 if not line or not line.endswith('\n'):
                     time.sleep(0.1)
                     continue
@@ -773,7 +790,7 @@ class MethodVersionNotFound(Exception):
     pass
 
 
-class version(object):
+class version(object):  # pylint: disable=invalid-name,too-few-public-methods
     VERSIONS = {}
     """
         Runs a method according to the version attribute of the class method
@@ -824,11 +841,11 @@ class version(object):
 
 
 def get_free_port():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('', 0))
-    addr = s.getsockname()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('', 0))
+    addr = sock.getsockname()
     port = addr[1]
-    s.close()
+    sock.close()
     return port
 
 
@@ -849,7 +866,7 @@ def get_branched_ami(ami_version, region_name):
     branch, build_id = ami_version.split(':')
     ec2 = boto3.resource('ec2', region_name=region_name)
 
-    logger.info("Looking for AMI match [%s]", ami_version)
+    LOGGER.info("Looking for AMI match [%s]", ami_version)
     if build_id == 'latest' or build_id == 'all':
         filters = [{'Name': 'tag:branch', 'Values': [branch]}]
     else:
@@ -874,6 +891,8 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         loader_node {BaseNode} -- LoaderNoder to send request
         db_node_ip {str} -- ip of db_node
     """
+    # pylint: disable=too-many-locals
+
     def get_tables_columns_list(entity_type):
         if entity_type == 'view':
             cmd = "paging off; SELECT keyspace_name, view_name FROM system_schema.views"
@@ -923,14 +942,14 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
 
 
 def remove_files(path):
-    logger.debug("Remove path %s", path)
+    LOGGER.debug("Remove path %s", path)
     try:
         if os.path.isdir(path):
             shutil.rmtree(path=path, ignore_errors=True)
         if os.path.isfile(path):
             os.remove(path)
-    except Exception as details:
-        logger.error("Error during remove archived logs %s", details)
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error("Error during remove archived logs %s", details)
 
 
 def format_timestamp(timestamp):

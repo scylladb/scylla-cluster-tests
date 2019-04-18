@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+# pylint: disable=too-many-lines
+
 import Queue
 import atexit
 import getpass
@@ -22,37 +24,29 @@ import tempfile
 import threading
 import time
 import uuid
-import yaml
 import shutil
 import itertools
-import json
 import io
-import concurrent.futures
-
 from base64 import decodestring
-
-import requests
-
-from invoke.exceptions import UnexpectedExit, Failure
-
-from collections import defaultdict
-
-from sdcm.mgmt import ScyllaManagerError
-from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from datetime import datetime
+
+from invoke.exceptions import UnexpectedExit, Failure
+import yaml
+import requests
 from paramiko import SSHException
 
+from sdcm.collectd import ScyllaCollectdSetup
+from sdcm.mgmt import ScyllaManagerError
+from sdcm.prometheus import start_metrics_server
 from sdcm.rsyslog_daemon import start_rsyslog
-from .log import SDCMAdapter
-from .remote import RemoteCmdRunner, LocalCmdRunner
-from . import wait
+from sdcm.log import SDCMAdapter
+from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
+from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
-from .collectd import ScyllaCollectdSetup
-from .db_stats import PrometheusDBStats
-
-from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent, \
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
@@ -84,31 +78,35 @@ SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
 
-logger = logging.getLogger(__name__)
-localrunner = LocalCmdRunner()
+LOGGER = logging.getLogger(__name__)
+LOCALRUNNER = LocalCmdRunner()
 
 
 def set_ip_ssh_connections(ip_type):
+    # pylint: disable=global-statement
     global IP_SSH_CONNECTIONS
     IP_SSH_CONNECTIONS = ip_type
 
 
 def set_duration(duration):
+    # pylint: disable=global-statement
     global TEST_DURATION
     TEST_DURATION = duration
 
 
 def set_libvirt_uri(libvirt_uri):
+    # pylint: disable=global-statement
     global LIBVIRT_URI
     LIBVIRT_URI = libvirt_uri
 
 
 def clean_domain(domain_name):
+    # pylint: disable=global-statement
     global LIBVIRT_URI
-    localrunner.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
+    LOCALRUNNER.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
                     ignore_status=True)
 
-    localrunner.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
+    LOCALRUNNER.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
                     ignore_status=True)
 
 
@@ -118,6 +116,7 @@ def remove_if_exists(file_path):
 
 
 def cleanup_instances(behavior='destroy'):
+    # pylint: disable=global-statement
     global OPENSTACK_INSTANCES
     global OPENSTACK_SERVICE
     global CREDENTIALS
@@ -152,6 +151,7 @@ def stop_instances():
 
 
 def remove_cred_from_cleanup(cred):
+    # pylint: disable=global-statement
     global CREDENTIALS
     if cred in CREDENTIALS:
         CREDENTIALS.remove(cred)
@@ -192,7 +192,7 @@ class Setup(object):
             with open(test_id_file_path, "w") as test_id_file:
                 test_id_file.write(str(test_id))
         else:
-            logger.warning("TestID already set!")
+            LOGGER.warning("TestID already set!")
 
     @classmethod
     def logdir(cls):
@@ -231,10 +231,7 @@ class Setup(object):
 
     @classmethod
     def keep_cluster(cls, val='destroy'):
-        if val in 'keep':
-            cls.KEEP_ALIVE = True
-        else:
-            cls.KEEP_ALIVE = False
+        cls.KEEP_ALIVE = bool(val == 'keep')
 
     @classmethod
     def mixed_cluster(cls, val=False):
@@ -283,7 +280,7 @@ class Setup(object):
                        sudo systemctl restart rsyslog
                        '''.format(*cls.RSYSLOG_ADDRESS))
 
-        post_boot_script += dedent('''
+        post_boot_script += dedent(r'''
                sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
                sudo systemctl restart sshd
                sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
@@ -317,7 +314,7 @@ def get_username():
     if is_email_in_scylladb_domain(git_user_email):
         return get_email_user(git_user_email)
     # we are outside of Hydra
-    res = localrunner.run(cmd="git config --get user.email", ignore_status=True)
+    res = LOCALRUNNER.run(cmd="git config --get user.email", ignore_status=True)
     if is_email_in_scylladb_domain(res.stdout):
         return get_email_user(res.stdout)
     # we didn't find email, fallback to current user with unknown email user identifier
@@ -340,11 +337,14 @@ def create_common_tags():
 class NodeError(Exception):
 
     def __init__(self, msg=None):
+        super(NodeError, self).__init__()
         self.msg = msg
 
     def __str__(self):
         if self.msg is not None:
             return self.msg
+        else:
+            return ""
 
 
 class PrometheusSnapshotErrorException(Exception):
@@ -375,10 +375,10 @@ class UserRemoteCredentials(object):
         pass
 
 
-class BaseNode(object):
+class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
         self.is_seed = False
         self.dc_idx = dc_idx
@@ -393,7 +393,7 @@ class BaseNode(object):
         self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
 
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
 
         self._journal_thread = None
@@ -445,7 +445,7 @@ class BaseNode(object):
         if not self._short_hostname:
             try:
                 self._short_hostname = self.remoter.run('hostname -s').stdout.strip()
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 return "no_booted_yet"
         return self._short_hostname
 
@@ -533,7 +533,8 @@ class BaseNode(object):
 
     @property
     def is_client_encrypt(self):
-        result = self.remoter.run("grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
+        result = self.remoter.run(
+            "grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
         return 'true' in result.stdout.lower()
 
     @property
@@ -571,14 +572,16 @@ class BaseNode(object):
     def is_debian(self):
         return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
 
+    # pylint: disable=too-many-arguments
     def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
-                    debian8_pkgs=None, debian9_pkgs=None):
+                    debian8_pkgs=None, debian9_pkgs=None, ubuntu18_pkgs=None):
         """
         Support to install packages to multiple distros
 
         :param pkgs: default package name string
         :param apt_pkgs: special package name string for apt-get
         """
+        # pylint: disable=too-many-return-statements
         # install packages for special debian like system
         if self.is_ubuntu14() and ubuntu14_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
@@ -622,7 +625,7 @@ class BaseNode(object):
             result = self.remoter.run('sudo test -e %s' % file_path,
                                       ignore_status=True)
             return result.exit_status == 0
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error checking if file %s exists: %s',
                            file_path, details)
 
@@ -708,49 +711,9 @@ class BaseNode(object):
             self.remoter.run(db_services_log_cmd,
                              verbose=True, ignore_status=True,
                              log_file=self.database_log)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
-
-    def run(self, cmd, timeout=None, ignore_status=False,
-            connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None, watch_stdout_pattern=None):
-        """
-        Run a shell command on a Node. Shorthand to remoter.run.
-
-        See remote.Remoter.run() docstring for parameter documentation.
-        """
-        return self.remoter.run(cmd=cmd, timeout=timeout,
-                                ignore_status=ignore_status,
-                                connect_timeout=connect_timeout,
-                                options=options, verbose=verbose,
-                                args=args, log_file=log_file,
-                                watch_stdout_pattern=watch_stdout_pattern)
-
-    def send_files(self, src, dst, delete_dst=False,
-                   preserve_symlinks=False, verbose=False):
-        """
-        Copy files from a local path to a Node. Shorthand to remoter.send_files.
-
-        See remote.Remoter.send_files() docstring for parameter documentation.
-        """
-        self.remoter.send_files(src=src, dst=dst, delete_dst=delete_dst,
-                                preserve_symlinks=preserve_symlinks,
-                                verbose=verbose)
-
-    def receive_files(self, src, dst, delete_dst=False,
-                      preserve_perm=True, preserve_symlinks=False,
-                      verbose=False):
-        """
-        Copy files from this Node to a local path. Shorthand to remoter.receive_files.
-
-        See remote.Remoter.receive_files() docstring for parameter
-        documentation.
-        """
-        self.remoter.receive_files(src=src, dst=dst, delete_dst=delete_dst,
-                                   preserve_perm=preserve_perm,
-                                   preserve_symlinks=preserve_symlinks,
-                                   verbose=verbose)
 
     def journal_thread(self):
         read_from_timestamp = None
@@ -786,7 +749,7 @@ class BaseNode(object):
                 backtrace_cmd += ' -1'
             return self.remoter.run(backtrace_cmd,
                                     verbose=False, ignore_status=True)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving core dump backtraces : %s',
                            details)
 
@@ -833,7 +796,8 @@ class BaseNode(object):
                     self.log.debug('Found coredump file: {}'.format(coredump))
                     url, download_instructions = self._upload_coredump(coredump)
                 finally:
-                    CoreDumpEvent(corefile_url=url, download_instructions=download_instructions, backtrace=output, node=self)
+                    CoreDumpEvent(corefile_url=url, download_instructions=download_instructions,
+                                  backtrace=output, node=self)
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
@@ -885,7 +849,7 @@ class BaseNode(object):
             self.termination_event.wait(15)
             try:
                 self.search_database_log(start_from_beginning=False, publish_events=True)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 self.log.exception("failed to read db log")
             except (SystemExit, KeyboardInterrupt) as ex:
                 self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
@@ -909,7 +873,7 @@ class BaseNode(object):
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
 
-    def hard_reboot(self):
+    def hard_reboot(self):  # pylint: disable=no-self-use
         # Need to re-implement this method if the backend supports hard reboot.
         raise Exception("The backend doesn't support hard_reboot")
 
@@ -924,7 +888,7 @@ class BaseNode(object):
             except SSHException as ex:
                 self.log.debug("Network isn't available, reboot might already start, %s" % ex)
                 return False
-            except Exception as ex:
+            except Exception as ex:  # pylint: disable=broad-except
                 self.log.debug('Failed to get uptime during reboot, %s' % ex)
                 return False
 
@@ -972,10 +936,10 @@ class BaseNode(object):
 
         try:
             result = self.remoter.run(cmd=cpuinfo_cmd, verbose=False)
-            model = re.findall('^model\sname\s:(.+)$', result.stdout.strip(), re.MULTILINE)
+            model = re.findall(r'^model\sname\s:(.+)$', result.stdout.strip(), re.MULTILINE)
             return model[0].strip()
 
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving CPU model info : %s',
                            details)
             return None
@@ -994,7 +958,7 @@ class BaseNode(object):
         try:
             result = self.remoter.run(cmd, verbose=False)
             return result.stdout.strip()
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving installed packages: %s',
                            details)
             return None
@@ -1009,7 +973,7 @@ class BaseNode(object):
         try:
             result = self.remoter.run(cmd, verbose=False)
             return result.stdout.strip()
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving command \'%s\' result : %s',
                            (cmd, details))
             return None
@@ -1032,7 +996,7 @@ class BaseNode(object):
                                               # -n don't translate port numbers to names
                                               verbose=False, ignore_status=True)
             return result_netstat.exit_status == 0
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
@@ -1082,7 +1046,7 @@ class BaseNode(object):
             self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s > /dev/null 2>&1' %
                              pcap_tmp_file, ignore_status=True)
             self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
@@ -1153,7 +1117,7 @@ class BaseNode(object):
         try:
             result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
             return result.exit_status == 0
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
             return False
 
@@ -1185,9 +1149,9 @@ class BaseNode(object):
         """
         if not os.path.exists(self.database_log):
             return 0
-        with open(self.database_log) as f:
-            f.seek(0, os.SEEK_END)
-            return f.tell()
+        with open(self.database_log) as log_file:
+            log_file.seek(0, os.SEEK_END)
+            return log_file.tell()
 
     def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True):
         """
@@ -1197,6 +1161,7 @@ class BaseNode(object):
         :param publish_events: if True will publish events
         :return: list of (line, error) tuples
         """
+        # pylint: disable=too-many-branches,too-many-locals
 
         matches = []
         patterns = []
@@ -1223,16 +1188,16 @@ class BaseNode(object):
             start_search_from_byte = self.last_log_position
             last_line_no = self.last_line_no
 
-        with open(self.database_log, 'r') as f:
+        with open(self.database_log, 'r') as db_file:
             if start_search_from_byte:
-                f.seek(start_search_from_byte)
-            for index, line in enumerate(f, start=last_line_no):
+                db_file.seek(start_search_from_byte)
+            for index, line in enumerate(db_file, start=last_line_no):
                 if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
-                    logger.debug(line.strip())
+                    LOGGER.debug(line.strip())
 
-                m = backtrace_regex.search(line)
-                if m and backtraces:
-                    data = m.groupdict()
+                match = backtrace_regex.search(line)
+                if match and backtraces:
+                    data = match.groupdict()
                     if data['other_bt']:
                         backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
                     if data['scylla_bt']:
@@ -1241,22 +1206,22 @@ class BaseNode(object):
                 if index not in self._database_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in patterns:
-                        m = pattern.search(line)
-                        if m:
+                        match = pattern.search(line)
+                        if match:
                             self._database_log_errors_index.append(index)
-                            e = event.clone_with_info(node=self, line_number=index, line=line)
-                            backtraces.append(dict(event=e, backtrace=[]))
+                            cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
+                            backtraces.append(dict(event=cloned_event, backtrace=[]))
                             matches.append((index, line))
 
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
-                self.last_log_position = f.tell() + 1
+                self.last_log_position = db_file.tell() + 1
 
         if publish_events:
             traces_count = 0
-            for b in backtraces:
-                b['event'].add_backtrace_info(raw_backtrace="\n".join(b['backtrace']))
-                if b['event'].type == 'BACKTRACE':
+            for backtrace in backtraces:
+                backtrace['event'].add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+                if backtrace['event'].type == 'BACKTRACE':
                     traces_count += 1
 
             # filter function to attach the backtrace to the correct error and not to the back traces
@@ -1283,9 +1248,10 @@ class BaseNode(object):
                     if backtrace['event'].raw_backtrace:
                         try:
                             scylla_debug_info = self.get_scylla_debuginfo_file()
-                            output = self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
+                            output = self.remoter.run(
+                                'addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
                             backtrace['event'].add_backtrace_info(backtrace=output.stdout)
-                        except Exception:
+                        except Exception:  # pylint: disable=broad-except
                             self.log.exception("failed to decode backtrace")
                 backtrace['event'].publish()
 
@@ -1333,6 +1299,7 @@ class BaseNode(object):
         cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
         self.remoter.run(cmd)
 
+    # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
                      client_encrypt=None, append_conf=None, append_scylla_args=None, debug_install=False,
@@ -1340,71 +1307,74 @@ class BaseNode(object):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
-        with open(yaml_dst_path, 'r') as f:
-            scylla_yaml_contents = f.read()
+        with open(yaml_dst_path, 'r') as scylla_yaml_file:
+            scylla_yaml_contents = scylla_yaml_file.read()
 
         if seed_address:
             # Set seeds
-            p = re.compile('seeds:.*')
-            scylla_yaml_contents = p.sub('seeds: "{0}"'.format(seed_address),
-                                         scylla_yaml_contents)
+            pattern = re.compile('seeds:.*')
+            scylla_yaml_contents = pattern.sub('seeds: "{0}"'.format(seed_address),
+                                               scylla_yaml_contents)
 
             # Set listen_address
-            p = re.compile('listen_address:.*')
-            scylla_yaml_contents = p.sub('listen_address: {0}'.format(self.private_ip_address),
-                                         scylla_yaml_contents)
+            pattern = re.compile('listen_address:.*')
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
+                                               scylla_yaml_contents)
             # Set rpc_address
-            p = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = p.sub('\nrpc_address: {0}'.format(self.private_ip_address),
-                                         scylla_yaml_contents)
+            pattern = re.compile('\n[# ]*rpc_address:.*')
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
+                                               scylla_yaml_contents)
         if broadcast:
             # Set broadcast_address
-            p = re.compile('[# ]*broadcast_address:.*')
-            scylla_yaml_contents = p.sub('broadcast_address: {0}'.format(broadcast),
-                                         scylla_yaml_contents)
+            pattern = re.compile('[# ]*broadcast_address:.*')
+            scylla_yaml_contents = pattern.sub('broadcast_address: {0}'.format(broadcast),
+                                               scylla_yaml_contents)
 
             # Set broadcast_rpc_address
-            p = re.compile('[# ]*broadcast_rpc_address:.*')
-            scylla_yaml_contents = p.sub('broadcast_rpc_address: {0}'.format(broadcast),
-                                         scylla_yaml_contents)
+            pattern = re.compile('[# ]*broadcast_rpc_address:.*')
+            scylla_yaml_contents = pattern.sub('broadcast_rpc_address: {0}'.format(broadcast),
+                                               scylla_yaml_contents)
 
         if cluster_name:
-            p = re.compile('[# ]*cluster_name:.*')
-            scylla_yaml_contents = p.sub('cluster_name: {0}'.format(cluster_name),
-                                         scylla_yaml_contents)
+            pattern = re.compile('[# ]*cluster_name:.*')
+            scylla_yaml_contents = pattern.sub('cluster_name: {0}'.format(cluster_name),
+                                               scylla_yaml_contents)
 
         # disable hinted handoff (it is enabled by default in Scylla). Expected values: "enabled"/"disabled"
         if hinted_handoff == 'disabled':
-            p = re.compile('[# ]*hinted_handoff_enabled:.*')
-            scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents, count=1)
+            pattern = re.compile('[# ]*hinted_handoff_enabled:.*')
+            scylla_yaml_contents = pattern.sub('hinted_handoff_enabled: false', scylla_yaml_contents, count=1)
 
         if murmur3_partitioner_ignore_msb_bits:
-            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
-            p = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
-            if p.findall(scylla_yaml_contents):
-                scylla_yaml_contents = p.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
-                                             scylla_yaml_contents)
+            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(
+                murmur3_partitioner_ignore_msb_bits))
+            pattern = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
+            if pattern.findall(scylla_yaml_contents):
+                scylla_yaml_contents = pattern.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
+                                                   scylla_yaml_contents)
             else:
-                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(murmur3_partitioner_ignore_msb_bits)
+                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(
+                    murmur3_partitioner_ignore_msb_bits)
 
         if enable_exp:
             scylla_yaml_contents += "\nexperimental: true\n"
 
         if endpoint_snitch:
-            p = re.compile('endpoint_snitch:.*')
-            scylla_yaml_contents = p.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
-                                         scylla_yaml_contents)
+            pattern = re.compile('endpoint_snitch:.*')
+            scylla_yaml_contents = pattern.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
+                                               scylla_yaml_contents)
         if not client_encrypt:
-            p = re.compile('.*enabled: true.*# <client_encrypt>.*')
-            scylla_yaml_contents = p.sub('   enabled: false                    # <client_encrypt>', scylla_yaml_contents)
+            pattern = re.compile('.*enabled: true.*# <client_encrypt>.*')
+            scylla_yaml_contents = pattern.sub(
+                '   enabled: false                    # <client_encrypt>', scylla_yaml_contents)
 
         if self.enable_auto_bootstrap:
             if 'auto_bootstrap' in scylla_yaml_contents:
                 if re.findall("auto_bootstrap: False", scylla_yaml_contents):
                     self.log.debug('auto_bootstrap is not set as expected, update it to `True`.')
-                p = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = p.sub('auto_bootstrap: True',
-                                             scylla_yaml_contents)
+                pattern = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = pattern.sub('auto_bootstrap: True',
+                                                   scylla_yaml_contents)
             else:
                 self.log.debug('auto_bootstrap is missing, set it `True`.')
                 scylla_yaml_contents += "\nauto_bootstrap: True\n"
@@ -1412,21 +1382,21 @@ class BaseNode(object):
             if 'auto_bootstrap' in scylla_yaml_contents:
                 if re.findall("auto_bootstrap: True", scylla_yaml_contents):
                     self.log.debug('auto_bootstrap is not set as expected, update it to `False`.')
-                p = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = p.sub('auto_bootstrap: False',
-                                             scylla_yaml_contents)
+                pattern = re.compile('auto_bootstrap:.*')
+                scylla_yaml_contents = pattern.sub('auto_bootstrap: False',
+                                                   scylla_yaml_contents)
             else:
                 self.log.debug('auto_bootstrap is missing, set it `False`.')
                 scylla_yaml_contents += "\nauto_bootstrap: False\n"
 
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
-            p = re.compile('[# ]*authenticator:.*')
-            scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
-                                         scylla_yaml_contents)
+            pattern = re.compile('[# ]*authenticator:.*')
+            scylla_yaml_contents = pattern.sub('authenticator: {0}'.format(authenticator),
+                                               scylla_yaml_contents)
         if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
-            p = re.compile('[# ]*authorizer:.*')
-            scylla_yaml_contents = p.sub('authorizer: {0}'.format(authorizer),
-                                         scylla_yaml_contents)
+            pattern = re.compile('[# ]*authorizer:.*')
+            scylla_yaml_contents = pattern.sub('authorizer: {0}'.format(authorizer),
+                                               scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
             self.remoter.send_files(src='./data_dir/ssl_conf',
@@ -1452,7 +1422,7 @@ server_encryption_options:
             scylla_yaml_contents += client_encrypt_conf
 
         if self.replacement_node_ip:
-            logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
+            self.log.debug("%s is a replacement node for '%s'.", self.name, self.replacement_node_ip)
             scylla_yaml_contents += "\nreplace_address_first_boot: %s\n" % self.replacement_node_ip
 
         if alternator_port:
@@ -1465,8 +1435,8 @@ server_encryption_options:
         if append_conf:
             scylla_yaml_contents += append_conf
 
-        with open(yaml_dst_path, 'w') as f:
-            f.write(scylla_yaml_contents)
+        with open(yaml_dst_path, 'w') as scylla_yaml_file:
+            scylla_yaml_file.write(scylla_yaml_contents)
 
         self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
         self.remoter.send_files(src=yaml_dst_path,
@@ -1475,9 +1445,11 @@ server_encryption_options:
 
         if append_scylla_args:
             if self.is_rhel_like():
-                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+                self.remoter.run(
+                    "sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
             elif self.is_debian() or self.is_ubuntu():
-                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /'  /etc/default/scylla-server" % append_scylla_args)
+                self.remoter.run(
+                    "sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /'  /etc/default/scylla-server" % append_scylla_args)
 
         if debug_install and self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
@@ -1515,10 +1487,10 @@ server_encryption_options:
         """
         self.stop_scylla_server(verify_down=False, ignore_status=True)
         if self.is_rhel_like():
-            self.remoter.run('sudo yum remove -y scylla\*')
+            self.remoter.run('sudo yum remove -y scylla\\*')
         else:
             self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
-            self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
+            self.remoter.run('sudo apt-get remove -y scylla\\*', ignore_status=True)
         self.update_repo_cache()
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
@@ -1535,7 +1507,7 @@ server_encryption_options:
                 self.remoter.run('sudo rm -rf /var/cache/apt/')
                 self.remoter.run('sudo apt-get update', retry=3)
                 self.remoter.run("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections")
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             self.log.error('Failed to update repo cache: %s', ex)
 
     def upgrade_system(self):
@@ -1547,7 +1519,8 @@ server_encryption_options:
             else:
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
         else:
-            self.remoter.run('sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
+            self.remoter.run(
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
         # update repo cache after upgrade
         self.update_repo_cache()
 
@@ -1584,14 +1557,19 @@ server_encryption_options:
                 self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
-                self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
-                self.remoter.run("sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list")
-                self.remoter.run("echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
+                self.remoter.run(
+                    'echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
+                self.remoter.run(
+                    r"sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list")
+                self.remoter.run(
+                    "echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install gnupg-curl -y')
-                self.remoter.run('sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
+                self.remoter.run(
+                    'sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
                 self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19')
-                self.remoter.run('echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
+                self.remoter.run(
+                    'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
@@ -1606,26 +1584,30 @@ server_encryption_options:
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
 
-            self.remoter.run('sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
+            self.remoter.run(
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
+            self.remoter.run(
+                'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
 
     def install_scylla_debuginfo(self):
         if not self.scylla_version:
             self.get_scylla_version()
         if self.is_rhel_like():
-            self.remoter.run(r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+            self.remoter.run(
+                r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
         else:
-            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'
+                             .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
     def get_scylla_version(self):
         version_commands = ["scylla --version", "rpm -q {}".format(self.scylla_pkg())]
         for version_cmd in version_commands:
             try:
                 result = self.remoter.run(version_cmd)
-            except Exception as ex:
+            except Exception as ex:  # pylint: disable=broad-except
                 self.log.error('Failed getting scylla version: %s', ex)
             else:
                 match = re.match(r"((\d+)\.(\d+)\.([\d\w]+)\.?([\d\w]+)?).*", result.stdout)
@@ -1636,6 +1618,7 @@ server_encryption_options:
                     return scylla_version
                 else:
                     self.log.error("Unknown ScyllaDB version")
+        return None
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -1644,9 +1627,9 @@ server_encryption_options:
         :param nvme: NVMe(True) or SCSI(False) disk
         :return: list of disk names
         """
-        patt = ('nvme0n*', 'nvme0n\w+') if nvme else ('sd[b-z]', 'sd\w+')
+        patt = (r'nvme0n*', r'nvme0n\w+') if nvme else (r'sd[b-z]', r'sd\w+')
         result = self.remoter.run('ls /dev/{}'.format(patt[0]))
-        disks = re.findall('/dev/{}'.format(patt[1]), result.stdout)
+        disks = re.findall(r'/dev/{}'.format(patt[1]), result.stdout)
         assert disks, 'Failed to find disks!'
         self.log.debug("Found disks: %s", disks)
         return disks
@@ -1688,6 +1671,7 @@ server_encryption_options:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
         time.sleep(5)
 
+    # pylint: disable=too-many-branches,too-many-statements
     def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
@@ -1703,7 +1687,7 @@ server_encryption_options:
             self.remoter.run(
                 cmd="sudo echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99jessie-backports")
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
-            install_transport_https = dedent("""
+            install_transport_https = dedent(r"""
                             if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
                             sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
                             echo 'Acquire::Check-Valid-Until false;' > /etc/apt/apt.conf.d/99jessie-backports
@@ -1766,7 +1750,7 @@ server_encryption_options:
         if self.is_docker():
             try:
                 self.remoter.run('echo no| sudo scyllamgr_setup')
-            except Exception as ex:
+            except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
@@ -1775,7 +1759,7 @@ server_encryption_options:
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
-        """.format(**locals()))  # generate ssh public key from private key.
+        """.format(mgmt_user=mgmt_user, rsa_id_dst=rsa_id_dst, rsa_id_dst_pub=rsa_id_dst_pub))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
         if self.is_docker():
@@ -1792,7 +1776,7 @@ server_encryption_options:
 
     def retrieve_scylla_manager_log(self):
         mgmt_log_name = os.path.join(self.logdir, 'scylla_manager.log')
-        cmd = "sudo journalctl -u scylla-manager -f".format(mgmt_log_name)
+        cmd = "sudo journalctl -u scylla-manager -f"
         self.remoter.run(cmd, ignore_status=True, verbose=True, log_file=mgmt_log_name)
 
     def scylla_manager_log_thread(self):
@@ -1812,7 +1796,8 @@ server_encryption_options:
     def collect_mgmt_log(self):
         self.log.debug("Collect scylla manager log ...")
         mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
-        self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
+        self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name),
+                         ignore_status=True, verbose=False)
         self.log.debug("Collected log : {}".format(mgmt_log_name))
         return mgmt_log_name
 
@@ -1991,25 +1976,26 @@ server_encryption_options:
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
                                            text="Wait for re-sharding to be started", status='start')
         if not resharding_started:
-            logger.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
-                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+            self.log.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
+                           'Check the log for the details'.format(murmur3_partitioner_ignore_msb_bits))
+
             return
 
         resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
                                             text="Wait for re-sharding to be finished", status='finish')
 
         if not resharding_finished:
-            logger.error('Resharding was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
-                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+            self.log.error('Resharding was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
+                           'Check the log for the details'.format(murmur3_partitioner_ignore_msb_bits))
         else:
-            logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
-                         format(murmur3_partitioner_ignore_msb_bits))
+            self.log.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
+                           format(murmur3_partitioner_ignore_msb_bits))
 
     def _gen_nodetool_cmd(self, sub_cmd, args, options):
         credentials = self.parent_cluster.get_db_auth()
         if credentials:
             options += '-u {} -pw {} '.format(*credentials)
-        return "nodetool {options} {sub_cmd} {args}".format(**locals())
+        return "nodetool {options} {sub_cmd} {args}".format(options=options, sub_cmd=sub_cmd, args=args)
 
     def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True):
         """
@@ -2044,7 +2030,7 @@ server_encryption_options:
         try:
             self.log.info('Status for %s node %s: %s' % (node_type, self.name, self.run_nodetool('status')))
 
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             ClusterHealthValidatorEvent(type='error', name='NodesStatus', status=Severity.CRITICAL,
                                         node=self.name,
                                         error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex,
@@ -2132,9 +2118,9 @@ server_encryption_options:
                 if gossip_node_schema_version and peer_schema_version != gossip_node_schema_version:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
                                   'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
-        except Exception as e:
+        except Exception as ex:  # pylint: disable=broad-except
             errors.append('Validate schema version failed.{} Error: {}'
-                          .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(e)))
+                          .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(ex)))
 
         if errors:
             ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.CRITICAL,
@@ -2145,8 +2131,9 @@ server_encryption_options:
         credentials = self.parent_cluster.get_db_auth()
         auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
         use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
-        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout}".format(**locals())
-        return 'cqlsh {options} -e "{command}" {host} {port}'.format(**locals())
+        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout}".format(
+            auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout, connect_timeout=connect_timeout)
+        return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host, port=port)
 
     def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None, connect_timeout=5):
         """Runs CQL command using cqlsh utility"""
@@ -2179,17 +2166,18 @@ server_encryption_options:
             """.format(startup_script_remote_path))
 
         result = self.remoter.run("sudo bash -ce '%s'" % cmds)
-        logger.debug(result.stdout)
+        LOGGER.debug(result.stdout)
 
 
-class BaseCluster(object):
+class BaseCluster(object):  # pylint: disable=too-many-instance-attributes
 
     """
     Cluster of Node objects.
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=[10], params=None, region_names=None):
+                 node_prefix='node', n_nodes=3, params=None, region_names=None):
         if cluster_uuid is None:
             self.uuid = Setup.test_id()
         else:
@@ -2206,7 +2194,7 @@ class BaseCluster(object):
                                    self.name)
         makedirs(self.logdir)
 
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
         self.params = params
@@ -2259,13 +2247,13 @@ class BaseCluster(object):
                 node.get_backtraces()
                 if node.n_coredumps > 0:
                     self.coredumps[node.name] = node.n_coredumps
-            except Exception as ex:
-                self.log.warning("Unable to get coredump status from node {node}: {ex}".format(**locals()))
+            except Exception as ex:  # pylint: disable=broad-except
+                self.log.warning("Unable to get coredump status from node {node}: {ex}".format(node=node, ex=ex))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
-    def get_node_ips_param(public_ip=True):
+    def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
     def wait_for_init(self):
@@ -2305,13 +2293,16 @@ class BaseCluster(object):
         else:
             raise ValueError('Unsupported type: {}'.format(type(param)))
 
-    def set_tc(self, node, dst_nodes):
+    @staticmethod
+    def set_tc(node, dst_nodes):
         node.remoter.run("sudo modprobe sch_netem")
         node.remoter.run("sudo tc qdisc del dev eth0 root", ignore_status=True)
         node.remoter.run("sudo tc qdisc add dev eth0 handle 1: root prio")
         for dst in dst_nodes:
-            node.remoter.run("sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst {} flowid 2:1".format(dst.private_ip_address))
-        node.remoter.run("sudo tc qdisc add dev eth0 parent 1:1 handle 2:1 netem delay 100ms 20ms 25% reorder 5% 25% loss random 5% 25%")
+            node.remoter.run("sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst {} flowid 2:1".format(
+                dst.private_ip_address))
+        node.remoter.run(
+            "sudo tc qdisc add dev eth0 parent 1:1 handle 2:1 netem delay 100ms 20ms 25% reorder 5% 25% loss random 5% 25%")
         node.remoter.run("sudo tc qdisc show dev eth0", verbose=True)
         node.remoter.run("sudo tc filter show dev eth0", verbose=True)
 
@@ -2319,8 +2310,7 @@ class BaseCluster(object):
         if self._param_enabled('enable_tc'):
             for node in self.nodes:
                 dst_nodes = [n for n in self.nodes if n.dc_idx != node.dc_idx]
-                local_nodes = [n for n in self.nodes if n.dc_idx == node.dc_idx and n != node]
-                self.set_tc(node, dst_nodes, local_nodes)
+                self.set_tc(node, dst_nodes)
 
     def destroy(self):
         self.log.info('Destroy nodes')
@@ -2344,6 +2334,18 @@ class BaseCluster(object):
         password = self.params.get('authenticator_password', default=None)
         return (user, password) if user and password else None
 
+    def write_node_public_ip_file(self):
+        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
+        with open(public_ip_file_path, 'w') as public_ip_file:
+            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
+            public_ip_file.write("\n")
+
+    def write_node_private_ip_file(self):
+        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
+        with open(private_ip_file_path, 'w') as private_ip_file:
+            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
+            private_ip_file.write("\n")
+
 
 class NodeSetupFailed(Exception):
     pass
@@ -2361,8 +2363,8 @@ def wait_for_init_wrap(method):
     """
     def wrapper(*args, **kwargs):
         cl_inst = args[0]
-        logger.debug('Class instance: %s', cl_inst)
-        logger.debug('Method kwargs: %s', kwargs)
+        LOGGER.debug('Class instance: %s', cl_inst)
+        LOGGER.debug('Method kwargs: %s', kwargs)
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         setup_kwargs = {k: kwargs[k] for k in kwargs if k != 'node_list'}
@@ -2373,7 +2375,7 @@ def wait_for_init_wrap(method):
             status = True
             try:
                 cl_inst.node_setup(node, **setup_kwargs)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 cl_inst.log.exception('Node setup failed: %s', str(node))
                 status = False
 
@@ -2418,7 +2420,7 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
-class BaseScyllaCluster(object):
+class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
 
     def __init__(self, *args, **kwargs):
         self.termination_event = threading.Event()
@@ -2435,12 +2437,13 @@ class BaseScyllaCluster(object):
         return 'db_nodes_public_ip' if public_ip else 'db_nodes_private_ip'
 
     def get_scylla_args(self):
-        return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else\
+        # pylint: disable=no-member
+        return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
 
     def get_seed_nodes_from_node(self):
         if self.seed_nodes_ips is None:
-            node = self.nodes[0]
+            node = self.nodes[0]  # pylint: disable=no-member
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                          'scylla.yaml')
             node.remoter.receive_files(src=SCYLLA_YAML_PATH,
@@ -2450,28 +2453,28 @@ class BaseScyllaCluster(object):
                 try:
                     self.seed_nodes_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
                 except Exception as details:
-                    self.log.debug('Loaded YAML data structure: %s', conf_dict)
-                    self.log.error('Scylla YAML config contents:')
+                    self.log.debug('Loaded YAML data structure: %s', conf_dict)  # pylint: disable=no-member
+                    self.log.error('Scylla YAML config contents:')  # pylint: disable=no-member
                     with open(yaml_dst_path, 'r') as yaml_stream:
-                        self.log.error(yaml_stream.read())
+                        self.log.error(yaml_stream.read())  # pylint: disable=no-member
                     raise ValueError('Exception determining seed node ips: %s' %
                                      details)
         return self.seed_nodes_ips
 
     def enable_client_encrypt(self):
-        for node in self.nodes:
-            logger.debug("Enabling client encryption on node")
+        for node in self.nodes:  # pylint: disable=no-member
+            self.log.debug("Enabling client encryption on node")  # pylint: disable=no-member
             node.enable_client_encrypt()
 
     def disable_client_encrypt(self):
-        for node in self.nodes:
-            logger.debug("Disabling client encryption on node")
+        for node in self.nodes:  # pylint: disable=no-member
+            self.log.debug("Disabling client encryption on node")  # pylint: disable=no-member
             node.disable_client_encrypt()
 
     def get_seed_nodes(self):
         seed_nodes_ips = self.get_seed_nodes_from_node()
         seed_nodes = []
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             if node.ip_address in seed_nodes_ips:
                 node.is_seed = True  # TODO: check if we need to change the is_seed, later on
                 seed_nodes.append(node)
@@ -2485,17 +2488,17 @@ class BaseScyllaCluster(object):
         """
 
         node_ips = [node.ip_address for node
-                    in self.nodes if node.is_seed]
+                    in self.nodes if node.is_seed]  # pylint: disable=no-member
         seeds = ",".join(node_ips)
 
         assert seeds, "We should have at least one selected seed by now"
         return seeds
 
     def _update_db_binary(self, new_scylla_bin, node_list):
-        self.log.debug('User requested to update DB binary...')
+        self.log.debug('User requested to update DB binary...')  # pylint: disable=no-member
 
         seed_nodes = self.get_seed_nodes()
-        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]
+        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]  # pylint: disable=no-member
 
         def update_scylla_bin(node, queue):
             node.log.info('Updating DB binary')
@@ -2514,7 +2517,7 @@ class BaseScyllaCluster(object):
                 cp -f /tmp/scylla {binary_path}
                 chown root.root {binary_path}
                 chmod +x {binary_path}
-            """.format(**locals()))
+            """.format(binary_path=binary_path))
             node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
             queue.put(node)
             queue.task_done()
@@ -2532,24 +2535,24 @@ class BaseScyllaCluster(object):
         start_time = time.time()
 
         # First, stop *all* non seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
+        self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
         # First, stop *all* seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
+        self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)  # pylint: disable=no-member
         # Then, update bin only on requested nodes
-        self.run_func_parallel(func=update_scylla_bin, node_list=node_list)
+        self.run_func_parallel(func=update_scylla_bin, node_list=node_list)  # pylint: disable=no-member
         # Start all seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
+        self.run_func_parallel(func=start_scylla, node_list=seed_nodes)  # pylint: disable=no-member
         # Start all non seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
+        self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
-        self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))
+        self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))  # pylint: disable=no-member
 
     def _update_db_packages(self, new_scylla_bin, node_list):
-        self.log.debug('User requested to update DB packages...')
+        self.log.debug('User requested to update DB packages...')  # pylint: disable=no-member
 
         seed_nodes = self.get_seed_nodes()
-        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]
+        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]  # pylint: disable=no-member
 
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB packages')
@@ -2577,39 +2580,39 @@ class BaseScyllaCluster(object):
 
         if len(node_list) == 1:
             # Stop only new nodes
-            self.run_func_parallel(func=stop_scylla, node_list=node_list)
+            self.run_func_parallel(func=stop_scylla, node_list=node_list)  # pylint: disable=no-member
             # Then, update packages only on requested node
-            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
             # Start new nodes
-            self.run_func_parallel(func=start_scylla, node_list=node_list)
+            self.run_func_parallel(func=start_scylla, node_list=node_list)  # pylint: disable=no-member
         else:
             # First, stop *all* non seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)
+            self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
             # First, stop *all* seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)
+            self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)  # pylint: disable=no-member
             # Then, update packages only on requested nodes
-            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
+            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
             # Start all seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=seed_nodes)
+            self.run_func_parallel(func=start_scylla, node_list=seed_nodes)  # pylint: disable=no-member
             # Start all non seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)
+            self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
-        self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
+        self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))  # pylint: disable=no-member
 
     def update_db_binary(self, node_list=None):
         if node_list is None:
-            node_list = self.nodes
+            node_list = self.nodes  # pylint: disable=no-member
 
-        new_scylla_bin = self.params.get('update_db_binary')
+        new_scylla_bin = self.params.get('update_db_binary')  # pylint: disable=no-member
         if new_scylla_bin:
             self._update_db_binary(new_scylla_bin, node_list)
 
     def update_db_packages(self, node_list=None):
-        new_scylla_bin = self.params.get('update_db_packages')
+        new_scylla_bin = self.params.get('update_db_packages')  # pylint: disable=no-member
         if new_scylla_bin:
             if node_list is None:
-                node_list = self.nodes
+                node_list = self.nodes  # pylint: disable=no-member
             self._update_db_packages(new_scylla_bin, node_list)
 
     def get_node_info_list(self, verification_node):
@@ -2617,7 +2620,7 @@ class BaseScyllaCluster(object):
             !!! Deprecated !!!!
             use self.get_nodetool_status instead
         """
-        assert verification_node in self.nodes
+        assert verification_node in self.nodes  # pylint: disable=no-member
         cmd_result = verification_node.run_nodetool('status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
@@ -2642,7 +2645,7 @@ class BaseScyllaCluster(object):
                     pass
         return node_info_list
 
-    def get_nodetool_status(self, verification_node=None):
+    def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
             Status format:
@@ -2662,7 +2665,7 @@ class BaseScyllaCluster(object):
         :return: dict
         """
         if not verification_node:
-            verification_node = random.choice(self.nodes)
+            verification_node = random.choice(self.nodes)  # pylint: disable=no-member
         status = {}
         res = verification_node.run_nodetool('status')
         data_centers = res.stdout.strip().split("Data center: ")
@@ -2682,25 +2685,25 @@ class BaseScyllaCluster(object):
                                      'rack': rack,
                                      }
                         status[dc_name][ip] = node_info
-                    except ValueError as e:
+                    except ValueError:
                         pass
         return status
 
     def check_cluster_health(self):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             node.check_node_health()
 
         ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=Severity.NORMAL,
                                     message='Cluster health check finished')
 
-    def check_nodes_up_and_normal(self, nodes=[]):
+    def check_nodes_up_and_normal(self, nodes=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
-            nodes = self.nodes
+            nodes = self.nodes  # pylint: disable=no-member
         status = self.get_nodetool_status()
         up_statuses = []
         for node in nodes:
-            for dc, dc_status in status.iteritems():
+            for dc_status in status.values():
                 ip_status = dc_status.get(node.ip_address)
                 if ip_status and ip_status["state"] == "UN":
                     up_statuses.append(True)
@@ -2715,15 +2718,16 @@ class BaseScyllaCluster(object):
         self.check_nodes_up_and_normal(nodes=nodes)
 
     def get_scylla_version(self):
-        if not self.nodes[0].scylla_version:
-            scylla_version = self.nodes[0].get_scylla_version()
+        if not self.nodes[0].scylla_version:  # pylint: disable=no-member
+            scylla_version = self.nodes[0].get_scylla_version()  # pylint: disable=no-member
 
             if scylla_version:
-                for node in self.nodes:
+                for node in self.nodes:  # pylint: disable=no-member
                     node.scylla_version = scylla_version
 
     def get_test_keyspaces(self):
-        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces', split=True)
+        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces',  # pylint: disable=no-member
+                                      split=True)
         return [ks.strip() for ks in out[3:-3] if 'system' not in ks]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
@@ -2739,25 +2743,27 @@ class BaseScyllaCluster(object):
         if not keyspaces:
             keyspaces = self.get_test_keyspaces()
 
-        self.log.debug("Waiting for threshold: %s" % (threshold))
-        node = self.nodes[0]
+        self.log.debug("Waiting for threshold: %s" % (threshold))  # pylint: disable=no-member
+        node = self.nodes[0]  # pylint: disable=no-member
         node_space = 0
         # Calculate space on the disk of all test keyspaces on the one node.
         # It's decided to check the threshold on one node only
         for keyspace_name in keyspaces:
-            self.log.debug("Get cfstats on the node %s for %s keyspace" % (node.name, keyspace_name))
+            self.log.debug("Get cfstats on the node %s for %s keyspace" %   # pylint: disable=no-member
+                           (node.name, keyspace_name))
             node_space += node.get_cfstats(keyspace_name)[key]
-        self.log.debug("Current cfstats on the node %s for %s keyspaces: %s" % (node.name, keyspaces, node_space))
+        self.log.debug("Current cfstats on the node %s for %s keyspaces: %s" %  # pylint: disable=no-member
+                       (node.name, keyspaces, node_space))
         reached_threshold = True
         if node_space < threshold:
             reached_threshold = False
         if reached_threshold:
-            self.log.debug("Done waiting on cfstats: %s" % node_space)
+            self.log.debug("Done waiting on cfstats: %s" % node_space)  # pylint: disable=no-member
         return reached_threshold
 
     def wait_total_space_used_per_node(self, size=None, keyspace='keyspace1'):
         if size is None:
-            size = int(self.params.get('space_node_threshold'))
+            size = int(self.params.get('space_node_threshold'))  # pylint: disable=no-member
         if size:
             if keyspace and not isinstance(keyspace, list):
                 keyspace = [keyspace]
@@ -2768,7 +2774,7 @@ class BaseScyllaCluster(object):
 
     def add_nemesis(self, nemesis, tester_obj):
         for nem in nemesis:
-            for i in range(nem['num_threads']):
+            for _ in range(nem['num_threads']):
                 self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
                                                    termination_event=self.termination_event))
 
@@ -2794,15 +2800,15 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
 
     def node_config_setup(self, node, seed_address, endpoint_snitch):
-        node.config_setup(seed_address=seed_address, cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,
-                          authenticator=self.params.get('authenticator'),
-                          server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=self._param_enabled('client_encrypt'),
-                          append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),
-                          hinted_handoff=self.params.get('hinted_handoff'),
-                          authorizer=self.params.get('authorizer'),
-                          alternator_port=self.params.get('alternator_port'))
+        node.config_setup(seed_address=seed_address, cluster_name=self.name,  # pylint: disable=no-member
+                          enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,  # pylint: disable=no-member
+                          authenticator=self.params.get('authenticator'),  # pylint: disable=no-member
+                          server_encrypt=self._param_enabled('server_encrypt'),  # pylint: disable=no-member
+                          client_encrypt=self._param_enabled('client_encrypt'),  # pylint: disable=no-member
+                          append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),  # pylint: disable=no-member
+                          hinted_handoff=self.params.get('hinted_handoff'),  # pylint: disable=no-member
+                          authorizer=self.params.get('authorizer'),  # pylint: disable=no-member
+                          alternator_port=self.params.get('alternator_port'))  # pylint: disable=no-member
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
@@ -2818,18 +2824,18 @@ class BaseScyllaCluster(object):
             node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
             node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
-        endpoint_snitch = self.params.get('endpoint_snitch')
+        endpoint_snitch = self.params.get('endpoint_snitch')  # pylint: disable=no-member
         seed_address = self.get_seed_nodes_by_flag()
 
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()
-            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))  # pylint: disable=no-member
             node.install_scylla_debuginfo()
 
             if Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = 'GossipingPropertyFileSnitch'
-                node.datacenter_setup(self.datacenter)
+                node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
 
             self.node_config_setup(node, seed_address, endpoint_snitch)
             try:
@@ -2847,10 +2853,10 @@ class BaseScyllaCluster(object):
             node.wait_ssh_up()
 
             if node.ip_address in seed_address_list:
-                self.log.info('Seed node is up after reboot')
+                self.log.info('Seed node is up after reboot')  # pylint: disable=no-member
                 self._seed_node_rebooted = True
 
-            self.log.info('io.conf right after reboot')
+            self.log.info('io.conf right after reboot')  # pylint: disable=no-member
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
         node.wait_db_up(timeout=timeout)
@@ -2868,12 +2874,11 @@ class BaseScyllaCluster(object):
         for node in nodes_list:
             if not os.path.exists(node.database_log):
                 error_msg = "No db log from node [%s] " % node
-                logger.warning(error_msg)
                 raise Exception(error_msg)
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):  # pylint: disable=unused-argument
         """
         Scylla cluster setup.
         :param node_list: List of nodes to watch for init.
@@ -2881,41 +2886,43 @@ class BaseScyllaCluster(object):
         :param timeout: timeout in minutes to wait for init to be finished
         :return:
         """
-        node_list = node_list or self.nodes
+        node_list = node_list or self.nodes  # pylint: disable=no-member
         self.update_db_binary(node_list)
         self.update_db_packages(node_list)
         self.get_seed_nodes()
         self.get_scylla_version()
-        self.set_traffic_control()
+        self.set_traffic_control()  # pylint: disable=no-member
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
-        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].check_node_health())
+        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" %  # pylint: disable=no-member
+                      self.nodes[0].check_node_health())  # pylint: disable=no-member
 
     def restart_scylla(self, nodes=None):
         if nodes:
             nodes_to_restart = nodes
         else:
-            nodes_to_restart = self.nodes
-        self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])
+            nodes_to_restart = self.nodes  # pylint: disable=no-member
+        self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])  # pylint: disable=no-member
         for node in nodes_to_restart:
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
-            self.log.debug("'{0.name}' restarted.".format(node))
+            self.log.debug("'{0.name}' restarted.".format(node))  # pylint: disable=no-member
 
     def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
         os.mkdir(storing_dir)
 
-        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
-        for node in self.nodes:
+        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo',
+                            '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
+        for node in self.nodes:  # pylint: disable=no-member
             storing_dir_for_node = os.path.join(storing_dir, node.name)
             src_dir = node.prepare_files_for_archive(files_to_archive)
-            node.receive_files(src=src_dir, dst=storing_dir)
+            node.remoter.receive_files(src=src_dir, dst=storing_dir)
             with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
                 pkg_list_file.write(node.get_installed_packages())
-            with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as co:
-                co.write(node.get_console_output())
+            with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as console_output_file:
+                console_output_file.write(node.get_console_output())
             with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
                 imagedata = node.get_console_screenshot()
                 cscrn.write(decodestring(imagedata))
@@ -2933,7 +2940,7 @@ class BaseLoaderSet(object):
 
     @property
     def gemini_version(self):
-        result = self.nodes[0].run('cd $HOME; ./gemini --version')
+        result = self.nodes[0].run('cd $HOME; ./gemini --version')  # pylint: disable=no-member
         # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
         # take only version number - 1.0.1
         self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
@@ -2949,9 +2956,9 @@ class BaseLoaderSet(object):
         #       in data_dir for each test
         gemini_schema_url = self.params.get('gemini_schema_url')
         if not gemini_url or not gemini_schema_url:
-            logger.warning('Gemini URLs should be defined to run the gemini tool')
+            self.log.warning('Gemini URLs should be defined to run the gemini tool')  # pylint: disable=no-member
         else:
-            gemini_tar = os.path.basename(gemini_url)
+            gemini_tar = os.path.basename(gemini_url)  # pylint: disable=unused-variable
             install_gemini_script = dedent("""
                 cd $HOME
                 rm -rf gemini*
@@ -2961,10 +2968,10 @@ class BaseLoaderSet(object):
                 curl -LO  {gemini_schema_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
-            logger.debug('Gemini version {}'.format(self.gemini_version))
+            self.log.debug('Gemini version {}'.format(self.gemini_version))  # pylint: disable=no-member
 
-    def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
-        self.log.info('Setup in BaseLoaderSet')
+    def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
+        self.log.info('Setup in BaseLoaderSet')  # pylint: disable=no-member
         node.wait_ssh_up(verbose=verbose)
         # update repo cache and system after system is up
         node.update_repo_cache()
@@ -2978,7 +2985,7 @@ class BaseLoaderSet(object):
         self.install_gemini(node=node)
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         if result.exit_status == 0:
-            self.log.debug('Skip loader setup for using a prepared AMI')
+            self.log.debug('Skip loader setup for using a prepared AMI')  # pylint: disable=no-member
             return
 
         if node.is_ubuntu14():
@@ -2993,7 +3000,7 @@ class BaseLoaderSet(object):
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
         elif node.is_debian8():
-            install_java_script = dedent("""
+            install_java_script = dedent(r"""
                 sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
                 echo 'deb http://archive.debian.org/debian jessie-backports main' |sudo tee /etc/apt/sources.list.d/backports.list
                 sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
@@ -3054,24 +3061,25 @@ class BaseLoaderSet(object):
         return 'loaders_public_ip' if public_ip else 'loaders_private_ip'
 
     def get_loader(self):
-
         if not self._loader_cycle:
-            self._loader_cycle = itertools.cycle([node for node in self.nodes])
+            self._loader_cycle = itertools.cycle([node for node in self.nodes])  # pylint: disable=no-member
         return next(self._loader_cycle)
 
     def kill_stress_thread(self):
-        for loader in self.nodes:
+        for loader in self.nodes:  # pylint: disable=no-member
             try:
                 loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
-            except Exception as ex:
-                self.log.warning("failed to kill stress-command on [%s]: [%s]", str(loader), str(ex))
+            except Exception as ex:  # pylint: disable=broad-except
+                self.log.warning("failed to kill stress-command on [%s]: [%s]",   # pylint: disable=no-member
+                                 str(loader), str(ex))
 
     def kill_ycsb_thread(self):
-        for loader in self.nodes:
+        for loader in self.nodes:  # pylint: disable=no-member
             try:
                 loader.remoter.run(cmd='pgrep -f ycsb | xargs -I{}  kill -TERM -{}', ignore_status=True)
-            except Exception as ex:
-                self.log.warning("failed to kill ycsb stress command on [%s]: [%s]", str(loader), str(ex))
+            except Exception as ex:  # pylint: disable=broad-except
+                self.log.warning("failed to kill ycsb stress command on [%s]: [%s]",  # pylint: disable=no-member
+                                 str(loader), str(ex))
 
     @staticmethod
     def _parse_cs_summary(lines):
@@ -3089,7 +3097,7 @@ class BaseLoaderSet(object):
                 continue
             # Parse loader & cpu info
             if line.startswith('TAG:'):
-                ret = re.findall("TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
+                ret = re.findall(r"TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
                 results['loader_idx'] = ret[0][0]
                 results['cpu_idx'] = ret[0][1]
                 results['keyspace_idx'] = ret[0][2]
@@ -3109,18 +3117,18 @@ class BaseLoaderSet(object):
             key = line[:split_idx].strip().lower()
             value = line[split_idx + 1:].split()[0].replace(",", "")
             results[key] = value
-            m = re.findall('.*READ:(\d+), WRITE:(\d+)]', line)
-            if m:  # parse results for mixed workload
-                results['%s read' % key] = m[0][0]
-                results['%s write' % key] = m[0][1]
+            match = re.findall(r'.*READ:(\d+), WRITE:(\d+)]', line)
+            if match:  # parse results for mixed workload
+                results['%s read' % key] = match[0][0]
+                results['%s write' % key] = match[0][1]
 
         if not enable_parse:
-            logger.warning('Cannot find summary in c-stress results: %s', lines[-10:])
+            LOGGER.warning('Cannot find summary in c-stress results: %s', lines[-10:])  # pylint: disable=no-member
             return {}
         return results
 
     @staticmethod
-    def _parse_bench_summary(lines):
+    def _parse_bench_summary(lines):  # pylint: disable=too-many-branches
         """
         Parsing bench results, only parse the summary results.
         Collect results of all nodes and return a dictionaries' list,
@@ -3134,6 +3142,7 @@ class BaseLoaderSet(object):
         for line in lines:
             line.strip()
             # Parse load params
+            # pylint: disable=too-many-boolean-expressions
             if line.startswith('Mode:') or line.startswith('Workload:') or line.startswith('Timeout:') or \
                     line.startswith('Consistency level:') or line.startswith('Partition count') or \
                     line.startswith('Clustering rows:') or line.startswith('Clustering row size:') or \
@@ -3222,19 +3231,20 @@ class BaseLoaderSet(object):
     def get_stress_results_bench(self, queue):
         results = []
         ret = []
-        self.log.debug('Wait for %s bench stress threads results', queue[TASK_QUEUE].qsize())
+        self.log.debug('Wait for %s bench stress threads results',  # pylint: disable=no-member
+                       queue[TASK_QUEUE].qsize())
         queue[TASK_QUEUE].join()
         while not queue[RES_QUEUE].empty():
             results.append(queue[RES_QUEUE].get())
 
-        for node, result in results:
+        for _, result in results:
             output = result.stdout + result.stderr
             lines = output.splitlines()
             ret.append(self._parse_bench_summary(lines))
 
         return ret
 
-    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=[]):
+    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=None):
         queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
@@ -3242,7 +3252,7 @@ class BaseLoaderSet(object):
 
             CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
-            logdir = os.path.join(output_dir, self.name)
+            logdir = os.path.join(output_dir, self.name)  # pylint: disable=no-member
             makedirs(logdir)
 
             log_file_name = os.path.join(logdir,
@@ -3250,8 +3260,7 @@ class BaseLoaderSet(object):
                                          (loader_idx, uuid.uuid4()))
             ips = ",".join([n.private_ip_address for n in node_list])
             bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
-            result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(
-                                      stress_cmd.strip(), ips, bench_log),
+            result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(stress_cmd.strip(), ips, bench_log),
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
@@ -3261,7 +3270,7 @@ class BaseLoaderSet(object):
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
-        for loader_idx, loader in enumerate(self.nodes):
+        for loader_idx, loader in enumerate(self.nodes):  # pylint: disable=no-member
             setup_thread = threading.Thread(target=node_run_stress_bench,
                                             args=(loader, loader_idx,
                                                   stress_cmd, node_list))
@@ -3272,33 +3281,34 @@ class BaseLoaderSet(object):
         return queue
 
     def kill_stress_thread_bench(self):
-        for loader in self.nodes:
+        for loader in self.nodes:  # pylint: disable=no-member
             sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', ignore_status=True)
             if sb_active.exit_status == 0:
                 kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
-                    self.log.error('Terminate scylla-bench on node %s:\n%s', loader, kill_result)
+                    self.log.error('Terminate scylla-bench on node %s:\n%s',  # pylint: disable=no-member
+                                   loader, kill_result)
 
     def kill_gemini_thread(self):
-        for loader in self.nodes:
+        for loader in self.nodes:  # pylint: disable=no-member
             sb_active = loader.remoter.run(cmd='pgrep -f gemini', ignore_status=True)
             if sb_active.exit_status == 0:
                 kill_result = loader.remoter.run('pkill -f -TERM gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
-                    self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
+                    self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)  # pylint: disable=no-member
 
     def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
         os.mkdir(storing_dir)
 
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             storing_dir_for_node = os.path.join(storing_dir, node.name)
             if os.path.exists(node.logdir):
                 shutil.copytree(node.logdir, storing_dir_for_node)
         return storing_dir
 
 
-class BaseMonitorSet(object):
+class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     # This is a Mixin for monitoring cluster and should not be inherited
     def __init__(self, targets, params):
         self.targets = targets
@@ -3309,11 +3319,13 @@ class BaseMonitorSet(object):
         self.monitor_branch = self.params.get('monitor_branch')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
+        self.grafana_start_time = 0
 
     @property
     def monitor_install_path_base(self):
         if not self._monitor_install_path_base:
-            self._monitor_install_path_base = self.nodes[0].remoter.run("echo $HOME").stdout.strip()
+            self._monitor_install_path_base = self.nodes[0].remoter.run(  # pylint: disable=no-member
+                "echo $HOME").stdout.strip()
         return self._monitor_install_path_base
 
     @property
@@ -3339,7 +3351,8 @@ class BaseMonitorSet(object):
 
     @property
     def monitoring_version(self):
-        self.log.debug("Using %s ScyllaDB version to derive monitoring version" % self.scylla_version)
+        self.log.debug("Using %s ScyllaDB version to derive monitoring version" %  # pylint: disable=no-member
+                       self.scylla_version)
         version = re.match(r"(\d+\.\d+)", self.scylla_version)
         if not version:
             return 'master'
@@ -3350,8 +3363,8 @@ class BaseMonitorSet(object):
     def is_enterprise(self):
         return self.targets["db_cluster"].nodes[0].is_enterprise
 
-    def node_setup(self, node, **kwargs):
-        self.log.info('Setup in BaseMonitorSet')
+    def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
+        self.log.info('Setup in BaseMonitorSet')  # pylint: disable=no-member
         node.wait_ssh_up()
         # update repo cache and system after system is up
         node.update_repo_cache()
@@ -3373,7 +3386,8 @@ class BaseMonitorSet(object):
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url("http://{0.external_address}:{1.grafana_port}".format(node, self))
+        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
+            "http://{0.external_address}:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
@@ -3382,9 +3396,10 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
+                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
 
-    def configure_ngrok(self, ngrok_name):
+    def configure_ngrok(self):
         port = self.local_metrics_addr.split(':')[1]
 
         requests.delete('http://localhost:4040/api/tunnels/sct')
@@ -3398,13 +3413,14 @@ class BaseMonitorSet(object):
         res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
         assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
         ngrok_address = res.json()['public_url'].replace('http://', '')
+
         return "{}:80".format(ngrok_address)
 
     def set_local_sct_ip(self):
 
         ngrok_name = self.params.get('sct_ngrok_name', default=None)
         if ngrok_name:
-            return self.configure_ngrok(ngrok_name)
+            return self.configure_ngrok()
 
         sct_public_ip = self.params.get('sct_public_ip')
         if sct_public_ip:
@@ -3416,7 +3432,8 @@ class BaseMonitorSet(object):
     def wait_for_init(self):
         pass
 
-    def install_scylla_monitoring_prereqs(self, node):
+    @staticmethod
+    def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
         if node.is_rhel_like():
             node.remoter.run("sudo yum install -y epel-release")
             node.update_repo_cache()
@@ -3477,7 +3494,7 @@ class BaseMonitorSet(object):
         """.format(self))
         node.remoter.run("bash -ce '%s'" % install_script)
 
-    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
+    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
         db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
@@ -3487,14 +3504,14 @@ class BaseMonitorSet(object):
             local_template = os.path.join(temp_dir, template_fn)
             node.remoter.receive_files(src=prometheus_yaml_template,
                                        dst=local_template_tmp)
-            with open(local_template_tmp) as f:
-                templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
-                self.log.debug("Configs %s" % templ_yaml)
+            with open(local_template_tmp) as output_file:
+                templ_yaml = yaml.load(output_file, Loader=yaml.SafeLoader)  # to override avocado
+                self.log.debug("Configs %s" % templ_yaml)  # pylint: disable=no-member
             loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
 
             # remove those jobs if exists, for support of 'reuse_cluster: true'
-            def remove_sct_metrics(x):
-                return x['job_name'] not in ['stress_metrics', 'sct_metrics']
+            def remove_sct_metrics(metric):
+                return metric['job_name'] not in ['stress_metrics', 'sct_metrics']
             templ_yaml["scrape_configs"] = filter(remove_sct_metrics, templ_yaml["scrape_configs"])
 
             scrape_configs = templ_yaml["scrape_configs"]
@@ -3509,11 +3526,11 @@ class BaseMonitorSet(object):
             if self.sct_ip_port:
                 scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
                                            static_configs=[dict(targets=[self.sct_ip_port])]))
-            with open(local_template, "w") as fo:
-                yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
-            node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
-            localrunner.run("rm -rf {temp_dir}".format(**locals()))
-        self._monitoring_targets = " ".join(db_targets_list)
+            with open(local_template, "w") as output_file:
+                yaml.safe_dump(templ_yaml, output_file, default_flow_style=False)  # to remove tag !!python/unicode
+            node.remoter.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True)
+            LOCALRUNNER.run("rm -rf {temp_dir}".format(**locals()))
+        self._monitoring_targets = " ".join(db_targets_list)  # pylint: disable=attribute-defined-outside-init
         configure_script = dedent("""
             cd {0.monitor_install_path}
             mkdir -p {0.monitoring_conf_dir}
@@ -3545,15 +3562,15 @@ class BaseMonitorSet(object):
             description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
           }
         """)
-        with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
-            f.write(conf)
-            node.send_files(src=f.name, dst=f.name)
-            node.remoter.run("bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
+        with tempfile.NamedTemporaryFile("w", bufsize=0) as alert_cont_tmp_file:
+            alert_cont_tmp_file.write(conf)
+            node.remoter.send_files(src=alert_cont_tmp_file.name, dst=alert_cont_tmp_file.name)
+            node.remoter.run("bash -ce 'cat %s >> %s'" % (alert_cont_tmp_file.name, alertmanager_conf_file))
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for restarting scylla monitoring")
     def restart_scylla_monitoring(self, sct_metrics=False):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             self.stop_scylla_monitoring(node)
             # We use sct_metrics=False, alert_manager=False since they should be configured once
             self.configure_scylla_monitoring(node, sct_metrics=sct_metrics, alert_manager=False)
@@ -3562,9 +3579,9 @@ class BaseMonitorSet(object):
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
-            self._monitoring_targets = " ".join(db_targets_list)
+            self._monitoring_targets = " ".join(db_targets_list)  # pylint: disable=attribute-defined-outside-init
             configure_script = dedent("""
                         cd {0.monitor_install_path}
                         mkdir -p {0.monitoring_conf_dir}
@@ -3592,7 +3609,7 @@ class BaseMonitorSet(object):
         def _register_grafana_json(json_filename):
             url = "http://{0.external_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
             json_path = get_data_dir_path(json_filename)
-            result = localrunner.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+            result = LOCALRUNNER.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                      (url, json_path))
             return result.exited == 0
 
@@ -3600,7 +3617,7 @@ class BaseMonitorSet(object):
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
                       json_filename=sct_dashboard_json)
 
-    def get_sct_dashboards_config(self, node):
+    def get_sct_dashboards_config(self):
         sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         return get_data_dir_path(sct_dashboard_json_filename)
@@ -3610,8 +3627,8 @@ class BaseMonitorSet(object):
             local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
             node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
             return local_monitoring_data_dir
-        except Exception as e:
-            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+        except Exception:  # pylint: disable=broad-except
+            self.log.exception("Unable to download Prometheus data")  # pylint: disable=no-member
             return ""
 
     @log_run_info
@@ -3625,15 +3642,15 @@ class BaseMonitorSet(object):
             res = requests.get(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port))
             if res.ok:
                 return res.text
-        except Exception as ex:
-            logger.warning("unable to get grafana annotations [%s]", str(ex))
-            return ""
+        except Exception as ex:  # pylint: disable=broad-except
+            LOGGER.warning("unable to get grafana annotations [%s]", str(ex))  # pylint: disable=no-member
+        return ""
 
     def set_grafana_annotations(self, node, annotations_data):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
         res = requests.post(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port),
                             data=annotations_data, headers={'Content-Type': 'application/json'})
-        logger.info("posting annotations result: %s", res)
+        self.log.info("posting annotations result: %s", res)  # pylint: disable=no-member
 
     def stop_scylla_monitoring(self, node):
         kill_script = dedent("""
@@ -3645,25 +3662,27 @@ class BaseMonitorSet(object):
     def install_phantom_js(self):
         if not self.phantomjs_installed:
             phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
-            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
-            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
+            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(phantomjs_base=phantomjs_base)
+            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(
+                phantomjs_tar=phantomjs_tar)
             install_phantom_js_script = dedent("""
                 rm -rf {phantomjs_base}*
                 curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
-            """.format(**locals()))
-            localrunner.run("bash -ce '%s'" % install_phantom_js_script)
-            localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js")
+            """.format(phantomjs_base=phantomjs_base, phantomjs_url=phantomjs_url, phantomjs_tar=phantomjs_tar))
+            LOCALRUNNER.run("bash -ce '%s'" % install_phantom_js_script)
+            LOCALRUNNER.run(
+                "cd phantomjs-2.1.1-linux-x86_64 && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js")
             self.phantomjs_installed = True
         else:
-            self.log.debug("PhantomJS is already installed!")
+            self.log.debug("PhantomJS is already installed!")  # pylint: disable=no-member
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=too-many-locals,invalid-name
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         if not test_start_time:
-            self.log.error("No start time for test")
+            self.log.error("No start time for test")  # pylint: disable=no-member
             return {}
         start_time = str(test_start_time).split('.')[0] + '000'
 
@@ -3684,89 +3703,92 @@ class BaseMonitorSet(object):
 
         try:
             self.install_phantom_js()
-            for n, node in enumerate(self.nodes):
+            for i, node in enumerate(self.nodes):  # pylint: disable=no-member
                 screenshots = []
                 snapshots = []
-                for i, screenshot in enumerate(screenshot_names):
+                for screenshot in screenshot_names:
                     version = self.monitoring_version.replace('.', '-')
-                    path = screenshot['path'].format(
+                    screenshot_path = screenshot['path'].format(
                         version=version,
                         scr_name=screenshot['name'])
                     grafana_url = screenshot_url_tmpl.format(
                         node_ip=node.external_address,
                         grafana_port=self.grafana_port,
-                        path=path,
+                        path=screenshot_path,
                         st=start_time)
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
-                                                 "grafana-screenshot-%s-%s-%s.png" % (screenshot['name'], datetime_now, n))
+                                                 "grafana-screenshot-%s-%s-%s.png" % (screenshot['name'], datetime_now, i))
 
                     screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path, screenshot['size']))
                     snapshots.append(self._get_shared_snapshot_link(grafana_url))
 
                 return {'screenshots': screenshots, 'snapshots': snapshots}
 
-        except Exception as details:
-            self.log.error('Error taking monitor snapshot: %s',
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error('Error taking monitor snapshot: %s',  # pylint: disable=no-member
                            str(details))
             return {}
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
-        if not self.nodes:
+        if not self.nodes:  # pylint: disable=no-member
             return annotations_url
         try:
-            annotations = self.get_grafana_annotations(self.nodes[0])
+            annotations = self.get_grafana_annotations(self.nodes[0])  # pylint: disable=no-member
             if annotations:
                 annotations_url = S3Storage().generate_url('annotations.json', Setup.test_id())
-                logger.info("Uploading 'annotations.json' to {s3_url}".format(s3_url=annotations_url))
+                self.log.info("Uploading 'annotations.json' to {s3_url}".format(  # pylint: disable=no-member
+                    s3_url=annotations_url))
                 response = requests.put(annotations_url, data=annotations)
                 response.raise_for_status()
-        except Exception:
-            logger.exception("failed to upload annotations to S3")
+        except Exception:  # pylint: disable=broad-except
+            self.log.exception("failed to upload annotations to S3")  # pylint: disable=no-member
 
         return annotations_url
 
-    def _get_screenshot_link(self, grafana_url, snapshot_path, size):
-        localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" %s" % (
+    @staticmethod
+    def _get_screenshot_link(grafana_url, snapshot_path, size):
+        LOCALRUNNER.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" %s" % (
                         grafana_url, snapshot_path, size))
         return S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id())
 
     def _get_shared_snapshot_link(self, grafana_url):
-        result = localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
+        result = LOCALRUNNER.run(
+            "cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
         # since there is only one monitoring node returning here
         output = result.stdout.strip()
         if "Error" in output:
-            self.log.info(output)
+            self.log.info(output)  # pylint: disable=no-member
             return ""
         else:
-            self.log.info("Shared grafana snapshot: {}".format(output))
+            self.log.info("Shared grafana snapshot: {}".format(output))  # pylint: disable=no-member
             return output
 
     @log_run_info
     def download_monitor_data(self):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             try:
                 snapshot_archive = self.get_prometheus_snapshot(node)
-                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
 
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
-            except Exception, details:
-                self.log.error('Error downloading prometheus data dir: %s',
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error('Error downloading prometheus data dir: %s',  # pylint: disable=no-member
                                str(details))
                 return ""
 
     def download_scylla_manager_log(self):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             try:
                 scylla_mgmt_log_path = node.collect_mgmt_log()
                 scylla_manager_local_log_path = os.path.join(node.logdir, 'scylla_manager_log')
-                node.receive_files(src=scylla_mgmt_log_path, dst=scylla_manager_local_log_path)
+                node.remoter.receive_files(src=scylla_mgmt_log_path, dst=scylla_manager_local_log_path)
                 shutil.make_archive(scylla_manager_local_log_path, 'zip', scylla_mgmt_log_path)
                 link = S3Storage().upload_file("{}.zip".format(scylla_manager_local_log_path), dest_dir=Setup.test_id())
-                self.log.info("Scylla manager log uploaded {}".format(link))
-            except Exception, details:
-                self.log.error('Error downloading scylla manager log : %s',
+                self.log.info("Scylla manager log uploaded {}".format(link))  # pylint: disable=no-member
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error('Error downloading scylla manager log : %s',  # pylint: disable=no-member
                                str(details))
 
     def collect_scylla_monitoring_logs(self, node):
@@ -3785,9 +3807,10 @@ class BaseMonitorSet(object):
         if result.exit_status == 0:
             monitoring_dockers = [docker.strip() for docker in result.stdout.split('\n') if docker.strip()]
         else:
-            self.log.warning("Getting running docker containers failed: {}".format(result))
+            self.log.warning("Getting running docker containers failed: {}".format(result))  # pylint: disable=no-member
 
-        self.log.debug("Next monitoring dockers are running: {}".format(monitoring_dockers))
+        self.log.debug("Next monitoring dockers are running: {}".format(  # pylint: disable=no-member
+            monitoring_dockers))
         return monitoring_dockers
 
     def _collect_monitoring_docker_log(self, node, docker):
@@ -3797,25 +3820,25 @@ class BaseMonitorSet(object):
         if result.exit_status == 0:
             return log_path
         else:
-            self.log.warning("Collecting {} log failed {}".format(docker, result))
+            self.log.warning("Collecting {} log failed {}".format(docker, result))  # pylint: disable=no-member
             return ""
 
     def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
         os.mkdir(storing_dir)
 
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             scylla_mgmt_log = node.collect_mgmt_log()
-            node.receive_files(src=scylla_mgmt_log, dst=storing_dir)
+            node.remoter.receive_files(src=scylla_mgmt_log, dst=storing_dir)
             monitoring_dockers_logs = self.collect_scylla_monitoring_logs(node)
-            node.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
+            node.remoter.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
 
         return storing_dir
 
     @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, ), message='Create prometheus snapshot')
     def create_prometheus_snapshot(self, node):
-        ps = PrometheusDBStats(host=node.external_address)
-        result = ps.create_snapshot()
+        p_stats = PrometheusDBStats(host=node.external_address)
+        result = p_stats.create_snapshot()
         if result and "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
                                         "snapshots",
@@ -3828,15 +3851,16 @@ class BaseMonitorSet(object):
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
         except PrometheusSnapshotErrorException as details:
-            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(details))
+            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(   # pylint: disable=no-member
+                details))
             snapshot_dir = self.monitoring_data_dir
 
-        archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)
+        archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)  # pylint: disable=no-member
         result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
                                                                  archive_snapshot_name),
                                   ignore_status=True)
         if result.exit_status > 0:
-            self.log.warning('Unable to create archive {}'.format(result))
+            self.log.warning('Unable to create archive {}'.format(result))  # pylint: disable=no-member
             return ""
 
         try:
@@ -3848,14 +3872,14 @@ class BaseMonitorSet(object):
             local_archive_path = os.path.join(local_snapshot_data_dir,
                                               os.path.basename(archive_snapshot_name))
             if os.path.exists(local_archive_path):
-                self.log.info('Remove previous file {}'.format(local_archive_path))
+                self.log.info('Remove previous file {}'.format(local_archive_path))  # pylint: disable=no-member
                 os.remove(local_archive_path)
 
             node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
             return local_archive_path
 
-        except Exception as e:
-            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+        except Exception:  # pylint: disable=broad-except
+            self.log.exception("Unable to download Prometheus data:")  # pylint: disable=no-member
             return ""
 
     def get_monitoring_data_stack(self, node):
@@ -3864,28 +3888,29 @@ class BaseMonitorSet(object):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir))
-        sct_dashboard_file = self.get_sct_dashboards_config(node)
+        sct_dashboard_file = self.get_sct_dashboards_config()
         node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
 
         annotations_json = self.get_grafana_annotations(node)
         if annotations_json:
             tmp_dir = tempfile.mkdtemp()
-            with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
-                f.write(annotations_json)
+            with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as annotations_file:
+                annotations_file.write(annotations_json)
             node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
 
         node.remoter.run("cd {}; tar -czvf {} {}/".format(self.monitor_install_path_base,
                                                           archive_name,
                                                           os.path.basename(self.monitor_install_path)),
                          ignore_status=True)
-        node.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
-                           dst=self.logdir)
-        return os.path.join(self.logdir, archive_name)
+        node.remoter.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
+                                   dst=self.logdir)  # pylint: disable=no-member
+        return os.path.join(self.logdir, archive_name)  # pylint: disable=no-member
 
     def download_monitoring_data_stack(self):
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             local_path_to_monitor_stack = self.get_monitoring_data_stack(node)
-            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
+            self.log.info('Path to monitoring stack {}'.format(  # pylint: disable=no-member
+                local_path_to_monitor_stack))
 
             return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
 
@@ -3894,7 +3919,7 @@ class NoMonitorSet(object):
 
     def __init__(self):
 
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.nodes = []
 
     def __str__(self):
@@ -3921,5 +3946,5 @@ class NoMonitorSet(object):
     def collect_logs(self, storing_dir):
         pass
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
         return {}

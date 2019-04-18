@@ -29,6 +29,7 @@ class SnitchTest(ClusterTester):
         assert 'GoogleCloudSnitch' in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 
         with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+            # pylint: disable=no-member
             result = list(session.execute('select * from system.peers'))
             self.log.debug(result)
             assert result, 'ERROR: system.peers should be not empty.'

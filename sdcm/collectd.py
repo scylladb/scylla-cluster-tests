@@ -14,11 +14,21 @@
 import os
 import tempfile
 import shutil
-
 from textwrap import dedent
 
 
-class CollectdSetup(object):
+class CollectdSetup(object):  # pylint: disable=too-many-instance-attributes
+    def __init__(self):
+        self.node = None
+        self._collectd_cfg = None
+
+        self.collectd_exporter_system_base_dir = '/var/tmp'  # pylint: disable=invalid-name
+        self.collectd_exporter_base_dir = 'collectd_exporter-0.3.1.linux-amd64'
+        self.collectd_exporter_tarball = '%s.tar.gz' % self.collectd_exporter_base_dir
+        self.collectd_exporter_base_url = 'https://github.com/prometheus/collectd_exporter/releases/download/0.3.1'
+        self.collectd_exporter_system_dir = os.path.join(
+            self.collectd_exporter_system_base_dir, self.collectd_exporter_base_dir)
+        self.collectd_exporter_path = os.path.join(self.collectd_exporter_system_dir, 'collectd_exporter')
 
     def start_collectd_service(self):
         raise NotImplementedError
@@ -38,7 +48,7 @@ class CollectdSetup(object):
         tmp_path_remote = "/tmp/scylla-collectd.conf"
 
         with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(self._collectd_cfg)
+            tmp_cfg_prom.write(self._collectd_cfg)   # pylint: disable=no-member
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
             command = "sudo mv %s %s" % (tmp_path_remote, system_path_remote)
@@ -46,23 +56,12 @@ class CollectdSetup(object):
             self.node.remoter.run('sudo sh -c "echo FQDNLookup   false >> /etc/collectd.conf"')
             self.start_collectd_service()
         finally:
-            pass
             shutil.rmtree(tmp_dir_exporter)
-
-    def _set_exporter_path(self):
-        self.collectd_exporter_system_base_dir = '/var/tmp'
-        self.collectd_exporter_base_dir = 'collectd_exporter-0.3.1.linux-amd64'
-        self.collectd_exporter_tarball = '%s.tar.gz' % self.collectd_exporter_base_dir
-        self.collectd_exporter_base_url = 'https://github.com/prometheus/collectd_exporter/releases/download/0.3.1'
-        self.collectd_exporter_system_dir = os.path.join(self.collectd_exporter_system_base_dir,
-                                                         self.collectd_exporter_base_dir)
-        self.collectd_exporter_path = os.path.join(self.collectd_exporter_system_dir, 'collectd_exporter')
 
     def install(self, node):
         self.node = node
 
         self._setup_collectd()
-        self._set_exporter_path()
         self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
                               (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
                                self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))
@@ -479,7 +478,6 @@ WantedBy=multi-user.target
         else:
             self.node.remoter.run('sudo apt-get install -y collectd')
         self._setup_collectd()
-        self._set_exporter_path()
         self.node.remoter.run('curl --insecure %s/%s -o %s/%s -L' %
                               (self.collectd_exporter_base_url, self.collectd_exporter_tarball,
                                self.collectd_exporter_system_base_dir, self.collectd_exporter_tarball))

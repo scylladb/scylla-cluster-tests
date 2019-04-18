@@ -18,7 +18,7 @@ import logging
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class SstableCorruptTest(ClusterTester):
@@ -28,14 +28,14 @@ class SstableCorruptTest(ClusterTester):
     """
 
     def _run_stress(self, cmd, population_size):
-        logger.debug('Runn stress %s' % cmd)
+        LOGGER.debug('Runn stress %s', cmd)
         ip = self.db_cluster.get_node_private_ips()[0]
         stress_cmd = "cassandra-stress {} n={} -pop seq=1..{} -node {} -port jmx=6868".format(cmd, population_size,
                                                                                               population_size, ip)
         self.run_stress(stress_cmd=stress_cmd)
 
     def corrupt_sstables(self):
-        logger.debug('Corrupt sstables')
+        LOGGER.debug('Corrupt sstables')
         src = get_data_dir_path('corrupt_sstables.sh')
         dst = '/tmp/corrupt_sstables.sh'
         node = self.db_cluster.nodes[0]
@@ -56,12 +56,12 @@ class SstableCorruptTest(ClusterTester):
         population_size = 1000000
         self._run_stress('write', population_size)
 
-        logger.debug('Flush sstables')
+        LOGGER.debug('Flush sstables')
         self.db_cluster.nodes[0].run_nodetool('flush')
 
         self.corrupt_sstables()
         self._run_stress('read', population_size)
 
-        logger.debug('Restart node')
+        LOGGER.debug('Restart node')
         self.db_cluster.nodes[0].remoter.run('sudo systemctl restart scylla-server.service')
         self._run_stress('read', population_size)

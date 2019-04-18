@@ -2,16 +2,15 @@ import smtplib
 import os.path
 import logging
 import tempfile
-
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import jinja2
 
-from keystore import KeyStore
+from sdcm.keystore import KeyStore
 
-log = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class Email(object):
@@ -30,8 +29,8 @@ class Email(object):
         self._connect()
 
     def _retrieve_credentials(self):
-        ks = KeyStore()
-        creds = ks.get_email_credentials()
+        keystore = KeyStore()
+        creds = keystore.get_email_credentials()
         self._user = creds["user"]
         self._password = creds["password"]
 
@@ -41,7 +40,7 @@ class Email(object):
         self.conn.starttls()
         self.conn.login(user=self._user, password=self._password)
 
-    def send(self, subject, content, recipients, html=True, files=()):
+    def send(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
         """
         :param subject: text
         :param content: text/html
@@ -82,7 +81,7 @@ class BaseEmailReporter(object):
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
         self.email_recipients = email_recipients
         self.email_template_fp = email_template_fp if email_template_fp else self.email_template_file
-        self.log = logger if logger else log
+        self.log = logger if logger else LOGGER
         self.logdir = logdir if logdir else tempfile.mkdtemp()
 
     def build_data_for_render(self, results):
@@ -105,8 +104,8 @@ class BaseEmailReporter(object):
     def save_html_to_file(self, results, html_file_path=""):
         if html_file_path:
             html = self.render_to_html(results)
-            with open(html_file_path, "w") as f:
-                f.write(html)
+            with open(html_file_path, "w") as html_file:
+                html_file.write(html)
             self.log.info("HTML report saved to '%s'.", html_file_path)
         else:
             self.log.error("File for HTML report is missing")
@@ -114,8 +113,8 @@ class BaseEmailReporter(object):
     def send_email(self, subject, content, html=True, files=()):
         if self.email_recipients:
             self.log.debug('Send email to {}'.format(self.email_recipients))
-            em = Email()
-            em.send(subject, content, html=html, recipients=self.email_recipients, files=files)
+            email = Email()
+            email.send(subject, content, html=html, recipients=self.email_recipients, files=files)
         else:
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self.send_email, self.email_recipients)
@@ -126,7 +125,7 @@ class BaseEmailReporter(object):
             self.log.info('Send email with results to {}'.format(self.email_recipients))
             html, report_file = self.build_report(email_data)
             self.send_email(subject=email_data['subject'], content=html, files=(report_file, ))
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error during sending email: %s", details, exc_info=True)
 
     def build_report(self, email_data):

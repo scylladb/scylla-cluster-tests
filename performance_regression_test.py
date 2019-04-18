@@ -16,6 +16,7 @@
 
 import os
 import time
+
 import yaml
 
 from sdcm.tester import ClusterTester
@@ -23,7 +24,7 @@ from sdcm.tester import ClusterTester
 KB = 1024
 
 
-class PerformanceRegressionTest(ClusterTester):
+class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
     """
     Test Scylla performance regression with cassandra-stress.
@@ -32,21 +33,18 @@ class PerformanceRegressionTest(ClusterTester):
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
     ops_threshold_prc = 200
 
-    def __init__(self, *args, **kwargs):
-        super(PerformanceRegressionTest, self).__init__(*args, **kwargs)
-
     # Helpers
     def display_single_result(self, result):
-        self.log.info(self.str_pattern % (result['op rate'],
-                                          result['partition rate'],
-                                          result['row rate'],
-                                          result['latency mean'],
-                                          result['latency median'],
-                                          result['latency 95th percentile'],
-                                          result['latency 99th percentile'],
-                                          result['latency 99.9th percentile'],
-                                          result['Total partitions'],
-                                          result['Total errors']))
+        self.log.info(self.str_pattern, result['op rate'],
+                      result['partition rate'],
+                      result['row rate'],
+                      result['latency mean'],
+                      result['latency median'],
+                      result['latency 95th percentile'],
+                      result['latency 99th percentile'],
+                      result['latency 99.9th percentile'],
+                      result['Total partitions'],
+                      result['Total errors'])
 
     def get_test_xml(self, result, test_name=''):
         test_content = """
@@ -104,11 +102,11 @@ class PerformanceRegressionTest(ClusterTester):
         return test_content
 
     def display_results(self, results, test_name=''):
-        self.log.info(self.str_pattern % ('op-rate', 'partition-rate',
-                                          'row-rate', 'latency-mean',
-                                          'latency-median', 'l-94th-pct',
-                                          'l-99th-pct', 'l-99.9th-pct',
-                                          'total-partitions', 'total-err'))
+        self.log.info(self.str_pattern, 'op-rate', 'partition-rate',
+                      'row-rate', 'latency-mean',
+                      'latency-median', 'l-94th-pct',
+                      'l-99th-pct', 'l-99.9th-pct',
+                      'total-partitions', 'total-err')
 
         test_xml = ""
         try:
@@ -116,14 +114,14 @@ class PerformanceRegressionTest(ClusterTester):
                 self.display_single_result(single_result)
                 test_xml += self.get_test_xml(single_result, test_name=test_name)
 
-            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w') as f:
+            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w') as pref_file:
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
-                f.write(content)
-        except Exception as ex:
+                pref_file.write(content)
+        except Exception as ex:  # pylint: disable=broad-except
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
-    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',
+    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments
                   save_stats=True):
         if debug_message:
             self.log.debug(debug_message)
@@ -140,6 +138,7 @@ class PerformanceRegressionTest(ClusterTester):
             total_ops = self._get_total_ops()
             self.log.debug('Total ops: {}'.format(total_ops))
             return total_ops
+        return None
 
     def _get_total_ops(self):
         return self._stats['results']['stats_total']['op rate']
@@ -336,6 +335,7 @@ class PerformanceRegressionTest(ClusterTester):
     def _scylla_bench_prepare_table(self):
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
             session.execute("""
                 CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
                 AND durable_writes = true;
@@ -486,17 +486,20 @@ class PerformanceRegressionTest(ClusterTester):
             self.log.debug('Finish stress test with user profile {}'.format(user_profile))
 
         def get_mv_name(user_profile):
+
             # Get materialized view name from user profile
-            up = yaml.load(open(user_profile), Loader=yaml.SafeLoader)
+
+            user_profile_yaml = yaml.load(open(user_profile), Loader=yaml.SafeLoader)
             mv_name = ''
 
-            for k in up:
+            for k in user_profile_yaml:
                 if isinstance(k, tuple) and k[0] == 'extra_definitions':
                     mv_name = k[1][0].split(' AS')[0].split(' ')[-1]
                     break
 
             if not mv_name:
-                assert False, 'Failed to recognoze materialized view name from {0}: {1}'.format(user_profile, up)
+                assert False, 'Failed to recognoze materialized view name from {0}: {1}'.format(
+                    user_profile, user_profile_yaml)
 
             return mv_name
 
@@ -507,10 +510,11 @@ class PerformanceRegressionTest(ClusterTester):
 
             try:
                 with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+                    # pylint: disable=no-member
                     self.log.debug('Run query: {}'.format(query))
                     session.execute(query)
-            except Exception as e:
-                self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, e.message))
+            except Exception as ex:
+                self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, ex.message))
                 raise Exception
 
             self.log.debug('Finish dropping materialized view {}'.format(mv_name))
@@ -532,8 +536,8 @@ class PerformanceRegressionTest(ClusterTester):
         #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)],
         #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)]
         #   ]
-        for c in mv_commands:
-            cmd_mv, cmd_mv_profile = c[0][1], c[1][1]
+        for cmd in mv_commands:
+            cmd_mv, cmd_mv_profile = cmd[0][1], cmd[1][1]
             run_workload(cmd_mv, cmd_mv_profile)
             drop_mv(get_mv_name(cmd_mv_profile))
             time.sleep(60)
@@ -557,7 +561,7 @@ class PerformanceRegressionTest(ClusterTester):
         self._mixed_with_mv(on_populated=False)
 
     # Counter Tests
-    def test_uniform_counter_update_bench(self):
+    def test_uniform_counter_update_bench(self):  # pylint: disable=invalid-name
         """
         Test steps:
 

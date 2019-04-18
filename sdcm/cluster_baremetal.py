@@ -1,10 +1,8 @@
-import tempfile
 import logging
-from textwrap import dedent
 
-import cluster
+from sdcm import cluster
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 BASE_NAME = 'db-node'
 LOADER_NAME = 'loader-node'
@@ -17,7 +15,7 @@ class NodeIpsNotConfiguredError(Exception):
 
 class PhysicalMachineNode(cluster.BaseNode):
 
-    def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
+    def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):  # pylint: disable=too-many-arguments
         ssh_login_info = {'hostname': None,
                           'user': credentials.name,
                           'key_file': credentials.key_file}
@@ -45,7 +43,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
         pass
 
-    def detect_disks(self):
+    def detect_disks(self, nvme=True):  # pylint: disable=unused-argument
         """
         Detect local disks
         """
@@ -56,6 +54,9 @@ class PhysicalMachineNode(cluster.BaseNode):
         assert disks, 'Failed to find disks!'
         return disks
 
+    def reboot(self, hard=True, verify_ssh=True):
+        raise NotImplementedError("reboot not implemented")
+
     def restart(self):
         self.remoter.run('sudo reboot -h now', ignore_status=True)
 
@@ -63,7 +64,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         self.stop_task_threads()  # For future implementation of destroy
 
 
-class PhysicalMachineCluster(cluster.BaseCluster):
+class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         self.nodes = []
@@ -88,7 +89,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
                                    base_logdir=self.logdir,
                                    node_prefix=self.node_prefix)
 
-    def add_nodes(self, count, dc_idx=0):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
         for node_index in xrange(count):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             self.nodes.append(self._create_node(node_name,
@@ -96,7 +97,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
                                                 self._node_private_ips[node_index]))
 
     def destroy(self):
-        logger.info('Destroy nodes')
+        LOGGER.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
 
@@ -109,7 +110,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         super(ScyllaPhysicalCluster, self).__init__(node_prefix=kwargs.get('node_prefix', self._node_prefix),
                                                     **kwargs)
 
-    def node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False, timeout=3600):
         """
         Configure scylla.yaml on cluster nodes.
         We have to modify scylla.yaml on our own because we are not on AWS,
@@ -118,7 +119,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         pass  # self._node_setup(node, verbose)
 
 
-class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
+class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)

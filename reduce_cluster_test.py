@@ -13,19 +13,22 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+# TODO: this test seem to totally unused, hence disabling all pylint checks
+# pylint: disable=all
+
 import logging
 import datetime
+import time
 
 from sdcm.tester import ClusterTester
 from sdcm.tester import teardown_on_exception
 from sdcm.nemesis import Nemesis
-from sdcm.nemesis import log_time_elapsed
-import time
+from sdcm.nemesis import log_time_elapsed_and_status
 
 
 class DecommissionNoAddMonkey(Nemesis):
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_decommission(add_node=False)
         self.monitoring_set.reconfigure_scylla_monitoring()
@@ -99,7 +102,7 @@ class ReduceClusterTest(ClusterTester):
         self.db_cluster.wait_total_space_used_per_node()
 
         start = datetime.datetime.now()
-        self.log.info('Starting to reduce cluster: %s' % str(start))
+        self.log.info('Starting to reduce cluster: %s', str(start))
 
         self.db_cluster.add_nemesis(nemesis=DecommissionNoAddMonkey,
                                     tester_obj=self)
@@ -113,8 +116,8 @@ class ReduceClusterTest(ClusterTester):
             self.db_cluster.stop_nemesis(timeout=None)
 
         end = datetime.datetime.now()
-        self.log.info('Reducing cluster finished: %s' % str(end))
-        self.log.info('Reducing cluster costs: %s' % str(end - start))
+        self.log.info('Reducing cluster finished: %s', str(end))
+        self.log.info('Reducing cluster costs: %s', str(end - start))
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)

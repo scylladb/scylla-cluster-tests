@@ -10,9 +10,6 @@ class InMemoryPerformanceRegressionTest(PerformanceRegressionTest):
     Test Scylla performance regression with cassandra-stress.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(InMemoryPerformanceRegressionTest, self).__init__(*args, **kwargs)
-
     @log_run_info
     @retrying(n=3, sleep_time=15, allowed_exceptions=(UnexpectedExit, Failure))  # retrying since SSH can fail with 255
     def run_compaction_on_all_nodes(self):

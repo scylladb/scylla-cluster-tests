@@ -29,13 +29,14 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
         super(PerformanceRegressionUserProfilesTest, self).__init__(*args, **kwargs)
         self.create_stats = False
 
-    def _clean_keyspace(self, cs_profile):
+    def _clean_keyspace(self, cs_profile):  # pylint: disable=invalid-name
         with open(cs_profile) as fdr:
-            ks = [line.split(':')[-1].strip() for line in fdr.readlines() if line.startswith('keyspace:')]
-        if ks:
-            self.log.debug('Drop keyspace {}'.format(ks[0]))
+            key_space = [line.split(':')[-1].strip() for line in fdr.readlines() if line.startswith('keyspace:')]
+        if key_space:
+            self.log.debug('Drop keyspace {}'.format(key_space[0]))
             with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                session.execute('DROP KEYSPACE IF EXISTS {};'.format(ks[0]))
+                # pylint: disable=no-member
+                session.execute('DROP KEYSPACE IF EXISTS {};'.format(key_space[0]))
 
     def test_user_profiles(self):
         """

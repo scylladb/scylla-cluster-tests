@@ -45,9 +45,9 @@ class GrowClusterTest(ClusterTester):
                                     '/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml',
                                     verbose=True)
         ip = self.db_cluster.get_node_private_ips()[0]
-        return ('cassandra-stress user '
-                'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
-                'ops\(insert=1\) -node %s' % ip)
+        return (r'cassandra-stress user '
+                r'profile=/tmp/cassandra-stress-custom-mixed-narrow-wide-row.yaml '
+                r'ops\(insert=1\) -node %s' % ip)
 
     def get_stress_cmd(self, mode='write', duration=None):
         """
@@ -87,7 +87,7 @@ class GrowClusterTest(ClusterTester):
 
         time.sleep(2 * 60)
         start = datetime.datetime.now()
-        self.log.info('Starting to grow cluster: %s' % str(start))
+        self.log.info('Starting to grow cluster: %s', str(start))
 
         add_node_cnt = self.params.get('add_node_cnt', default=1)
         node_cnt = len(self.db_cluster.nodes)
@@ -97,8 +97,8 @@ class GrowClusterTest(ClusterTester):
             node_cnt = len(self.db_cluster.nodes)
 
         end = datetime.datetime.now()
-        self.log.info('Growing cluster finished: %s' % str(end))
-        self.log.info('Growing cluster costs: %s' % str(end - start))
+        self.log.info('Growing cluster finished: %s', str(end))
+        self.log.info('Growing cluster costs: %s', str(end - start))
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)
@@ -152,7 +152,7 @@ class GrowClusterTest(ClusterTester):
         self.grow_cluster(cluster_target_size=self._cluster_target_size,
                           stress_cmd=self.get_stress_cmd())
 
-    def test_grow_3_to_4_large_partition(self):
+    def test_grow_3_to_4_large_partition(self):  # pylint: disable=invalid-name
         """
         Shorter version of the cluster growth test.
 
@@ -177,7 +177,7 @@ class GrowClusterTest(ClusterTester):
         duration = 0
         wait_interval = 60
         max_random_cnt = 3
-        self.log.info('Starting to add/remove nodes: %s' % str(start))
+        self.log.info('Starting to add/remove nodes: %s', str(start))
 
         while duration <= self._duration:
             time.sleep(wait_interval)
@@ -187,21 +187,22 @@ class GrowClusterTest(ClusterTester):
             if max_add_cnt >= 1:
                 add_cnt = random.randint(1, max_add_cnt)
                 self.log.info('Add %s nodes to cluster', add_cnt)
-                for i in range(add_cnt):
+                for _ in range(add_cnt):
                     self.add_nodes(1)
                 time.sleep(wait_interval)
             rm_cnt = random.randint(1, max_random_cnt) if len(self.db_cluster.nodes) >= 10 else 0
             if rm_cnt > 0:
                 self.log.info('Remove %s nodes from cluster', rm_cnt)
-                for i in range(rm_cnt):
-                    dn = nemesis.DecommissionMonkey(self.db_cluster, self.loaders, self.monitors, None)
-                    dn.disrupt(add_node=False)
+                for _ in range(rm_cnt):
+                    decommision_nemesis = nemesis.DecommissionMonkey(
+                        tester_obj=self, termination_event=self.db_cluster.termination_event)
+                    decommision_nemesis.disrupt(add_node=False)
             duration = (datetime.datetime.now() - start).seconds / 60  # current duration in minutes
             self.log.info('Count of nodes in cluster: %s', len(self.db_cluster.nodes))
 
         end = datetime.datetime.now()
-        self.log.info('Add/remove nodes finished: %s' % str(end))
-        self.log.info('Duration: %s' % str(end - start))
+        self.log.info('Add/remove nodes finished: %s', str(end))
+        self.log.info('Duration: %s', str(end - start))
 
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)

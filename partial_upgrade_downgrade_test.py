@@ -13,11 +13,13 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+# TODO: this test seem to be broken, hence disabling all pylint checks
+# pylint: disable=all
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path
 from sdcm.nemesis import UpgradeNemesis
-from sdcm.nemesis import log_time_elapsed
+from sdcm.nemesis import log_time_elapsed_and_status
 
 
 class PartialUpgradeDowngradeNemesis(UpgradeNemesis):
@@ -35,7 +37,7 @@ class PartialUpgradeDowngradeNemesis(UpgradeNemesis):
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
 
-    @log_time_elapsed
+    @log_time_elapsed_and_status
     def disrupt(self):
         self.log.info('PartialUpgradeDowngrade Nemesis begin')
 

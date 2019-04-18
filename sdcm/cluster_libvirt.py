@@ -2,9 +2,7 @@ import subprocess
 import time
 import os
 import shutil
-import threading
 import uuid
-import Queue
 import xml.etree.cElementTree as etree
 import atexit
 
@@ -13,16 +11,16 @@ from sdcm.remote import LocalCmdRunner
 from sdcm import cluster
 
 
-localrunner = LocalCmdRunner()
+LOCALRUNNER = LocalCmdRunner()
 
 
-class LibvirtNode(cluster.BaseNode):
+class LibvirtNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
     """
     Wraps a domain object, so that we can also control the it through SSH.
     """
 
-    def __init__(self, domain, hypervisor, parent_cluster, node_prefix='node', node_index=1,
+    def __init__(self, domain, hypervisor, parent_cluster, node_prefix='node', node_index=1,  # pylint: disable=too-many-arguments
                  domain_username='root', domain_password='', base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._backing_image = None
@@ -59,6 +57,8 @@ class LibvirtNode(cluster.BaseNode):
             # Just return the first address, this is a best effort attempt
             return addresses[0]
 
+        return None
+
     @property
     def public_ip_address(self):
         return self._get_public_ip_address()
@@ -93,13 +93,13 @@ class LibvirtNode(cluster.BaseNode):
         self.log.info('Destroyed')
 
 
-class LibvirtCluster(cluster.BaseCluster):
+class LibvirtCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     """
     Cluster of Node objects, started on Libvirt.
     """
 
-    def __init__(self, domain_info, hypervisor, cluster_uuid=None,
+    def __init__(self, domain_info, hypervisor, cluster_uuid=None,  # pylint: disable=too-many-arguments
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
         self._domain_info = domain_info
@@ -114,20 +114,8 @@ class LibvirtCluster(cluster.BaseCluster):
         return 'LibvirtCluster %s (Image: %s)' % (self.name,
                                                   os.path.basename(self._domain_info['image']))
 
-    def write_node_public_ip_file(self):
-        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
-        with open(public_ip_file_path, 'w') as public_ip_file:
-            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
-            public_ip_file.write("\n")
-
-    def write_node_private_ip_file(self):
-        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
-        with open(private_ip_file_path, 'w') as private_ip_file:
-            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
-            private_ip_file.write("\n")
-
-    def add_nodes(self, count, user_data=None):
-        del user_data
+    def add_nodes(self, count, **kwargs):  # pylint: disable=unused-argument, arguments-differ
+        # pylint: disable=too-many-locals
         nodes = []
         os_type = self._domain_info['os_type']
         os_variant = self._domain_info['os_variant']
@@ -157,7 +145,7 @@ class LibvirtCluster(cluster.BaseCluster):
                                 '--vnc --noautoconsole --import' %
                                 (uri, name, memory, os_type, os_variant,
                                  dst_image_path, bridge))
-            localrunner.run(virt_install_cmd)
+            LOCALRUNNER.run(virt_install_cmd)
             cluster.LIBVIRT_DOMAINS.append(name)
             for domain in self._hypervisor.listAllDomains():
                 if domain.name() == name:
@@ -171,7 +159,7 @@ class LibvirtCluster(cluster.BaseCluster):
                                        domain_password=self._domain_info[
                                            'password'],
                                        base_logdir=self.logdir)
-                    node._backing_image = dst_image_path
+                    node._backing_image = dst_image_path  # pylint: disable=protected-access
                     nodes.append(node)
         self.log.info('added nodes: %s', nodes)
         self._node_index += len(nodes)
@@ -181,9 +169,9 @@ class LibvirtCluster(cluster.BaseCluster):
         return nodes
 
 
-class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
+class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):  # pylint: disable=abstract-method
 
-    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,  # pylint: disable=too-many-arguments
                  params=None):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -198,106 +186,10 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
                                                    params=params)
         self.seed_nodes_ips = None
 
-    def _node_setup(self, node):
-        # Sometimes people might set up base images with
-        # previous versions of scylla installed (they shouldn't).
-        # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y "scylla*"')
-        node.remoter.run('sudo yum remove -y abrt')
-        # Let's re-create the yum database upon update
-        node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y --skip-broken')
-        node.remoter.run('sudo yum install -y rsync tcpdump screen')
-        node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
-                          cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'),
-                          append_conf=self.params.get('append_conf'),
-                          hinted_handoff=self.params.get('hinted_handoff'))
 
-        node.remoter.run(
-            'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
-        node.remoter.run('sudo systemctl enable scylla-server.service')
-        node.remoter.run('sudo systemctl enable scylla-jmx.service')
-        node.remoter.run('sudo systemctl start scylla-server.service')
-        node.remoter.run('sudo systemctl start scylla-jmx.service')
-        node.remoter.run('sudo iptables -F')
+class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method
 
-    def wait_for_init(self, node_list=None, verbose=False):
-        """
-        Configure scylla.yaml on all cluster nodes.
-
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-
-        :param node_list: List of nodes to watch for init.
-        :param verbose: Whether to print extra info while watching for init.
-        :return:
-        """
-        if node_list is None:
-            node_list = self.nodes
-
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node)
-            node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                             verbose=verbose, ignore_status=True)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        # avoid using node.remoter in thread
-        for node in node_list:
-            node.wait_ssh_up(verbose=verbose)
-
-        # If we setup all nodes in paralel, we might have troubles
-        # with nodes not able to contact the seed node.
-        # Let's setup the seed node first, then set up the others
-        seed_address = self.get_seed_nodes_by_flag()
-        seed_address_list = seed_address.split(',')
-        for i in seed_address_list:
-            node_setup(i)
-        for node in node_list:
-            if node in seed_address_list:
-                continue
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list),
-                              int(time_elapsed))
-            except Queue.Empty:
-                pass
-
-        self.update_db_binary(node_list)
-        self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
-        if not node_list[0].scylla_version:
-            result = node_list[0].remoter.run("scylla --version")
-            for node in node_list:
-                node.scylla_version = result.stdout
-
-    def destroy(self):
-        self.stop_nemesis()
-        super(ScyllaLibvirtCluster, self).destroy()
-
-
-class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):
-
-    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=10,  # pylint: disable=too-many-arguments
                  params=None):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = cluster.prepend_user_prefix(
@@ -313,9 +205,9 @@ class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):
                                                params=params)
 
 
-class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):
+class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):  # pylint: disable=abstract-method
 
-    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=1,
+    def __init__(self, domain_info, hypervisor, user_prefix, n_nodes=1,  # pylint: disable=too-many-arguments
                  params=None, targets=None):
         cluster_uuid = uuid.uuid4()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')

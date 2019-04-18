@@ -10,9 +10,8 @@ from sdcm.sct_events import start_events_device, stop_events_device
 from sdcm.sct_events import EVENTS_PROCESSES
 
 
-class DummyNode(BaseNode):
+class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _database_log = None
-
     @property
     def private_ip_address(self):
         return '127.0.0.1'
@@ -34,13 +33,13 @@ class DummyNode(BaseNode):
         self._database_log = x
 
 
-class DummeyOutput(object):
+class DummeyOutput(object):  # pylint: disable=too-few-public-methods
     def __init__(self, stdout):
         self.stdout = stdout
 
 
-class DummyRemote(object):
-    def run(self, *args, **kwargs):
+class DummyRemote(object):  # pylint: disable=too-few-public-methods
+    def run(self, *args, **kwargs):  # pylint: disable=no-self-use
         logging.info(args, kwargs)
         return DummeyOutput(args[0])
 
@@ -71,24 +70,25 @@ class TestBaseNode(unittest.TestCase):
         critical_errors = self.node.search_database_log()
         self.assertEqual(len(critical_errors), 34)
 
-        for line_number, line in critical_errors:
+        for _, line in critical_errors:
             print line
 
-    def test_search_database_log_teardown(self):
+    def test_search_database_log_teardown(self):  # pylint: disable=invalid-name
         critical_errors = self.node.search_database_log(start_from_beginning=True, publish_events=False)
         self.assertEqual(len(critical_errors), 36)
 
-        for line_number, line in critical_errors:
+        for _, line in critical_errors:
             print line
 
-    def test_search_database_log_specific_log(self):
-        errors = self.node.search_database_log(search_pattern='Failed to load schema version', start_from_beginning=True, publish_events=False)
+    def test_search_database_log_specific_log(self):  # pylint: disable=invalid-name
+        errors = self.node.search_database_log(
+            search_pattern='Failed to load schema version', start_from_beginning=True, publish_events=False)
         self.assertEqual(len(errors), 2)
 
         for line_number, line in errors:
             print line_number, line
 
-    def test_search_database_interlace_reactor_stall(self):
+    def test_search_database_interlace_reactor_stall(self):  # pylint: disable=invalid-name
         self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database_interlace_stall.log')
 
         _ = self.node.search_database_log()

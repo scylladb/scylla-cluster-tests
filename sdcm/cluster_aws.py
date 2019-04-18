@@ -3,22 +3,22 @@ import time
 import uuid
 import os
 import tempfile
-import yaml
 import json
 import base64
-
-from botocore.exceptions import WaiterError, ClientError
 from textwrap import dedent
 from threading import Thread
 from datetime import datetime
 
-import cluster
-import ec2_client
+import yaml
+from botocore.exceptions import WaiterError, ClientError
+
+from sdcm import cluster
+from sdcm import ec2_client
 from sdcm.utils.common import retrying, list_instances_aws
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
-from . import wait
+from sdcm import wait
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
@@ -40,22 +40,23 @@ class PublicIpNotReady(Exception):
     pass
 
 
-class AWSCluster(cluster.BaseCluster):
+class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method,
 
     """
     Cluster of Node objects, started on Amazon EC2.
     """
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, cluster_uuid=None,
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None, node_type=None):
+        # pylint: disable=too-many-locals
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
-        for idx, region_name in enumerate(region_names):
+        for idx, _ in enumerate(region_names):
             credential = credentials[idx]
             cluster.CREDENTIALS.append(credential)
 
@@ -87,19 +88,7 @@ class AWSCluster(cluster.BaseCluster):
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
-    def write_node_public_ip_file(self):
-        public_ip_file_path = os.path.join(self.logdir, 'public_ips')
-        with open(public_ip_file_path, 'w') as public_ip_file:
-            public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
-            public_ip_file.write("\n")
-
-    def write_node_private_ip_file(self):
-        private_ip_file_path = os.path.join(self.logdir, 'private_ips')
-        with open(private_ip_file_path, 'w') as private_ip_file:
-            private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
-            private_ip_file.write("\n")
-
-    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=[]):
+    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug("Creating {count} on-demand instances using AMI id '{ami_id}'... ".format(**locals()))
         instances = self._ec2_services[dc_idx].create_instances(ImageId=ami_id,
@@ -113,14 +102,15 @@ class AWSCluster(cluster.BaseCluster):
                                                                 TagSpecifications=[
                                                                     {
                                                                         'ResourceType': 'instance',
-                                                                        'Tags': tags_list
+                                                                        'Tags': tags_list if tags_list else []
                                                                     },
                                                                 ],
                                                                 )
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-locals
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
                                    spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
@@ -132,7 +122,7 @@ class AWSCluster(cluster.BaseCluster):
                            user_data=ec2_user_data,
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
-                           tags_list=tags_list)
+                           tags_list=tags_list if tags_list else [])
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
             spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
@@ -163,7 +153,8 @@ class AWSCluster(cluster.BaseCluster):
                 if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
                     self.log.debug('Cannot create spot instance(-s): %s.'
                                    'Creating on demand instance(-s) instead.', cl_ex)
-                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+                    instances_i = self._create_on_demand_instances(
+                        count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
                     instances.extend(instances_i)
                 else:
                     raise
@@ -191,12 +182,13 @@ class AWSCluster(cluster.BaseCluster):
 
         return instances
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, tags_list=[]):
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, tags_list=None):  # pylint: disable=too-many-arguments
+        tags_list = tags_list if tags_list else []
         instances = []
-        MAX_NUM_ON_DEMAND = 2
-        if isinstance(self, ScyllaAWSCluster) or isinstance(self, CassandraAWSCluster):
+        max_num_on_demand = 2
+        if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
             if count > 2:
-                count_on_demand = MAX_NUM_ON_DEMAND
+                count_on_demand = max_num_on_demand
             elif count == 2:
                 count_on_demand = 1
             else:
@@ -204,8 +196,8 @@ class AWSCluster(cluster.BaseCluster):
 
             if self.nodes:
                 num_of_on_demand = len([node for node in self.nodes if not node.is_spot])
-                if num_of_on_demand < MAX_NUM_ON_DEMAND:
-                    count_on_demand = MAX_NUM_ON_DEMAND - num_of_on_demand
+                if num_of_on_demand < max_num_on_demand:
+                    count_on_demand = max_num_on_demand - num_of_on_demand
                 else:
                     count_on_demand = 0
 
@@ -213,17 +205,20 @@ class AWSCluster(cluster.BaseCluster):
 
             if count_spot > 0:
                 self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+                instances.extend(self._create_spot_instances(
+                    count_spot, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
             if count_on_demand > 0:
                 self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+                instances.extend(self._create_on_demand_instances(
+                    count_on_demand, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
             self.instance_provision = 'mixed'
         elif isinstance(self, LoaderSetAWS):
             self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
             instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
         elif isinstance(self, MonitorSetAWS):
             self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+            instances.extend(self._create_on_demand_instances(
+                count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
         else:
             raise Exception('Unsuported type of cluster type %s' % self)
         return instances
@@ -244,12 +239,12 @@ class AWSCluster(cluster.BaseCluster):
             for tag in item['Tags']:
                 if tag['Key'] == 'NodeIndex':
                     return tag['Value']
-            else:
-                return '0'
+            return '0'
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
-    def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
+    @staticmethod
+    def update_bootstrap(ec2_user_data, enable_auto_bootstrap):
         """
         Update --bootstrap argument inside ec2_user_data string.
         """
@@ -292,7 +287,7 @@ class AWSCluster(cluster.BaseCluster):
         self.write_node_private_ip_file()
         return added_nodes
 
-    def _create_node(self, instance, ami_username, node_prefix, node_index,
+    def _create_node(self, instance, ami_username, node_prefix, node_index,  # pylint: disable=too-many-arguments
                      base_logdir, dc_idx):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
                        credentials=self._credentials[dc_idx], parent_cluster=self, ami_username=ami_username,
@@ -306,13 +301,13 @@ class AWSNode(cluster.BaseNode):
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
+    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, ami_username='root',
                  base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2_service = ec2_service
-        logger.debug("Waiting until instance {0._instance} starts running...".format(self))
+        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
         self._wait_public_ip()
         ssh_login_info = {'hostname': None,
@@ -341,11 +336,7 @@ class AWSNode(cluster.BaseNode):
 
     @property
     def is_spot(self):
-        if (self._instance.instance_lifecycle and
-                'spot' in self._instance.instance_lifecycle.lower()):
-            return True
-        else:
-            return False
+        return bool(self._instance.instance_lifecycle and 'spot' in self._instance.instance_lifecycle.lower())
 
     @property
     def public_ip_address(self):
@@ -382,13 +373,14 @@ class AWSNode(cluster.BaseNode):
         if not ok:
             try:
                 self._instance.reload()
-            except Exception as e:
-                logger.exception("Error while reloading instance metadata: %s", e)
+            except Exception as ex:  # pylint: disable=broad-except
+                LOGGER.exception("Error while reloading instance metadata: %s", ex)
             finally:
                 method_name = instance_method.__name__
                 instance_id = self._instance.id
-                logger.debug(self._instance.meta.data)
-                msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(**locals())
+                LOGGER.debug(self._instance.meta.data)
+                msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(
+                    method_name=method_name, instance_id=instance_id)
                 raise cluster.NodeError(msg)
 
     @retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
@@ -397,7 +389,7 @@ class AWSNode(cluster.BaseNode):
         self._instance.reload()
         if self._instance.public_ip_address is None:
             raise PublicIpNotReady(self._instance)
-        logger.debug("[{0._instance}] Got public ip: {0._instance.public_ip_address}".format(self))
+        LOGGER.debug("[{0._instance}] Got public ip: {0._instance.public_ip_address}".format(self))
 
     def restart(self):
         # We differenciate between "Restart" and "Reboot".
@@ -405,7 +397,7 @@ class AWSNode(cluster.BaseNode):
         # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
         # need to setup the instance and treat it as a new instance.
         if self._instance.spot_instance_request_id:
-            logger.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
+            LOGGER.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
             return
 
         event_filters = ()
@@ -462,32 +454,34 @@ class AWSNode(cluster.BaseNode):
             self._spot_aws_termination_task.join(timeout)
         super(AWSNode, self).stop_task_threads(timeout)
 
-    def get_aws_termination_notification(self):
+    def get_aws_termination_notification(self):  # pylint: disable=invalid-name
         try:
-            result = self.remoter.run('curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
+            result = self.remoter.run(
+                'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
             status = result.stdout.strip()
             if '404 - Not Found' not in status:
                 return status
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.warning('Error during getting aws termination notification %s' % details)
         return None
 
-    def monitor_aws_termination_thread(self):
+    def monitor_aws_termination_thread(self):  # pylint: disable=invalid-name
         while True:
             duration = 5
             if self.termination_event.isSet():
                 break
             try:
                 self.wait_ssh_up(verbose=False)
-            except Exception as ex:
-                logger.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
+            except Exception as ex:  # pylint: disable=broad-except
+                LOGGER.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
                                "Error details: '%s'", self.name, ex)
                 continue
             aws_message = self.get_aws_termination_notification()
             if aws_message:
                 self.log.warning('Got spot termination notification from AWS %s' % aws_message)
                 terminate_action = json.loads(aws_message)
-                terminate_action_timestamp = time.mktime(datetime.strptime(terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
+                terminate_action_timestamp = time.mktime(datetime.strptime(
+                    terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
                 duration = terminate_action_timestamp - time.time() - 15
                 if duration <= 0:
                     duration = 5
@@ -495,7 +489,7 @@ class AWSNode(cluster.BaseNode):
                 SpotTerminationEvent(node=self, aws_message=terminate_action)
             time.sleep(duration)
 
-    def start_aws_termination_monitoring(self):
+    def start_aws_termination_monitoring(self):  # pylint: disable=invalid-name
         self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
         self._spot_aws_termination_task.daemon = True
         self._spot_aws_termination_task.start()
@@ -528,13 +522,14 @@ class AWSNode(cluster.BaseNode):
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=[10],
+                 n_nodes=3,
                  params=None):
+        # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = cluster.Setup.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -664,13 +659,14 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
 class CassandraAWSCluster(ScyllaAWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
-                 n_nodes=[10],
+                 n_nodes=3,
                  params=None):
+        # pylint: disable=too-many-locals
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
@@ -685,21 +681,21 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, sum(n_nodes)))
 
-        super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
-                                               ec2_subnet_id=ec2_subnet_id,
-                                               ec2_security_group_ids=ec2_security_group_ids,
-                                               ec2_instance_type=ec2_instance_type,
-                                               ec2_ami_username=ec2_ami_username,
-                                               ec2_user_data=user_data,
-                                               ec2_block_device_mappings=ec2_block_device_mappings,
-                                               cluster_uuid=cluster_uuid,
-                                               services=services,
-                                               credentials=credentials,
-                                               cluster_prefix=cluster_prefix,
-                                               node_prefix=node_prefix,
-                                               n_nodes=n_nodes,
-                                               params=params,
-                                               node_type=node_type)
+        super(CassandraAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
+                                                  ec2_subnet_id=ec2_subnet_id,
+                                                  ec2_security_group_ids=ec2_security_group_ids,
+                                                  ec2_instance_type=ec2_instance_type,
+                                                  ec2_ami_username=ec2_ami_username,
+                                                  ec2_user_data=user_data,
+                                                  ec2_block_device_mappings=ec2_block_device_mappings,
+                                                  cluster_uuid=cluster_uuid,
+                                                  services=services,
+                                                  credentials=credentials,
+                                                  cluster_prefix=cluster_prefix,
+                                                  node_prefix=node_prefix,
+                                                  n_nodes=n_nodes,
+                                                  params=params,
+                                                  node_type=node_type)
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -725,12 +721,12 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                        count,
                                                        seeds))
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
-        added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx)
+        added_nodes = super(CassandraAWSCluster, self).add_nodes(count=count,
+                                                                 ec2_user_data=ec2_user_data,
+                                                                 dc_idx=dc_idx)
         return added_nodes
 
-    def node_setup(self, node, verbose=False):
+    def node_setup(self, node, verbose=False, timeout=3600):
         node.wait_ssh_up(verbose=verbose)
         node.wait_db_up(verbose=verbose)
 
@@ -745,17 +741,18 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
         self.get_seed_nodes()
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
+        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         node_type = 'loader'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
@@ -783,11 +780,12 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, ec2_instance_type='c4.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
+        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')

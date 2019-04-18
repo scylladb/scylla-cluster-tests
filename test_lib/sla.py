@@ -20,7 +20,7 @@ def sla_result_to_dict(sla_result):
 DEFAULT_SERVICE_LEVEL_SHARES = 1000
 
 
-class ServiceLevel(object):
+class ServiceLevel(object):  # pylint: disable=too-many-instance-attributes
     # The class provide interface to manage SERVICE LEVEL
     def __init__(self, session, name, service_shares=None, verbose=True):
         self.session = session
@@ -102,11 +102,11 @@ class ServiceLevel(object):
         return sla_result_to_dict(res)
 
 
-class UserRoleBase(object):
+class UserRoleBase(object):  # pylint: disable=too-many-instance-attributes
     # Base class for ROLES and USERS
     AUTHENTICATION_ENTITY = ''
 
-    def __init__(self, session, name, password=None, superuser=None, verbose=True, **kwargs):
+    def __init__(self, session, name, password=None, superuser=None, verbose=True):  # pylint: disable=too-many-arguments
         self._name = name
         self.password = password
         self.session = session
@@ -167,44 +167,47 @@ class UserRoleBase(object):
     def grant_me_to(self, grant_to):
         role_be_granted = self.name
         grant_to = grant_to.name
-        query = 'GRANT {role_be_granted} to {grant_to}'.format(**locals())
+        query = 'GRANT {role_be_granted} to {grant_to}'.format(role_be_granted=role_be_granted, grant_to=grant_to)
         if self.verbose:
             self.log.debug('GRANT role query: {}'.format(query))
         try:
             self.session.execute(query)
-        except InvalidRequest as e:
-            assert e.message.split('message=')[1].replace('"', '') == \
-                '{grant_to} already includes role {role_be_granted}.'.format(**locals()), \
-                'Unexpected error during grant: {}'.format(e.message)
+        except InvalidRequest as ex:
+            assert ex.message.split('message=')[1].replace('"', '') == \
+                '{grant_to} already includes role {role_be_granted}.'.format(role_be_granted=role_be_granted, grant_to=grant_to), \
+                'Unexpected error during grant: {}'.format(ex.message)
         except Exception:
             raise
-        self.log.debug('Role "{role_be_granted}" has been granted to {grant_to}'.format(**locals()))
+        self.log.debug('Role "{role_be_granted}" has been granted to {grant_to}'.format(
+            role_be_granted=role_be_granted, grant_to=grant_to))
 
     def revoke_me_from(self, revoke_from):
         role_be_revoked = self.name
         role_revokes_from = revoke_from.name
-        query = 'REVOKE {role_be_revoked} FROM {role_revokes_from}'.format(**locals())
+        query = 'REVOKE {role_be_revoked} FROM {role_revokes_from}'.format(role_be_revoked=role_be_revoked,
+                                                                           role_revokes_from=role_revokes_from)
         if self.verbose:
             self.log.debug('REVOKE role query: {}'.format(query))
         try:
             self.session.execute(query)
-        except InvalidRequest as e:
-            assert e.message.split('message=')[1].replace('"', '') == \
+        except InvalidRequest as ex:
+            assert ex.message.split('message=')[1].replace('"', '') == \
                 '{role_revokes_from} was not granted role {role_be_revoked}, so it cannot be revoked.' \
-                .format(**locals()), \
-                'Unexpected error during revoke: {}'.format(e.message)
+                .format(role_be_revoked=role_be_revoked, role_revokes_from=role_revokes_from), \
+                'Unexpected error during revoke: {}'.format(ex.message)
         except Exception:
             raise
-        self.log.debug('Role "{role_be_revoked}" has been revocked from {role_revokes_from}'.format(**locals()))
+        self.log.debug('Role "{role_be_revoked}" has been revocked from {role_revokes_from}'.format(
+            role_be_revoked=role_be_revoked, role_revokes_from=role_revokes_from))
 
-    def list_attached_sla_of_user_or_role(self):
+    def list_attached_sla_of_user_or_role(self):  # pylint: disable=invalid-name
         query = 'LIST ATTACHED SERVICE_LEVEL OF {}'.format(self.name)
         if self.verbose:
             self.log.debug('List attached service level(s) query: {}'.format(query))
         res = list(self.session.execute(query))
         return sla_result_to_dict(res)
 
-    def list_all_attached_service_levels(self):
+    def list_all_attached_service_levels(self):   # pylint: disable=invalid-name
         query = 'LIST ATTACHED ALL SERVICE_LEVELS'
         if self.verbose:
             self.log.debug('List attached service level(s) query: {}'.format(query))
@@ -233,7 +236,7 @@ class Role(UserRoleBase):
     # The class provide interface to manage ROLES
     AUTHENTICATION_ENTITY = 'ROLE'
 
-    def __init__(self, session, name, password=None, login=False, superuser=False, options_dict=None, verbose=True):
+    def __init__(self, session, name, password=None, login=False, superuser=False, options_dict=None, verbose=True):  # pylint: disable=too-many-arguments
         super(Role, self).__init__(session, name, password, superuser, verbose)
         self.login = login
         self.options_dict = options_dict
@@ -266,9 +269,6 @@ class Role(UserRoleBase):
 class User(UserRoleBase):
     # The class provide interface to manage USERS
     AUTHENTICATION_ENTITY = 'USER'
-
-    def __init__(self, session, name, password=None, superuser=None, verbose=True):
-        super(User, self).__init__(session, name, password, superuser, verbose)
 
     def create(self):
         user_options_str = '{password}{superuser}'.format(password=' PASSWORD \'{}\''

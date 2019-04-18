@@ -29,7 +29,8 @@ class CorruptThenRebuildTest(ClusterTester):
         self.db_cluster.wait_total_space_used_per_node(50 * (1024 ** 3))  # calculates 50gb in bytes
 
         # run rebuild
-        current_nemesis = nemesis.CorruptThenRebuildMonkey(self.db_cluster, self.loaders, self.monitors, None)
+        current_nemesis = nemesis.CorruptThenRebuildMonkey(
+            tester_obj=self, termination_event=self.db_cluster.termination_event)
         current_nemesis.disrupt()
 
         for stress in write_queue:

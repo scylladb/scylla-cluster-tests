@@ -18,6 +18,7 @@ def start_auto_ssh(docker_name, node, local_port, remote_port):
     :param remote_port: the source port on the remote
     :return: None
     """
+    # pylint: disable=protected-access
 
     host_name = node._ssh_login_info['hostname']
     user_name = node._ssh_login_info['user']
@@ -35,10 +36,11 @@ def start_auto_ssh(docker_name, node, local_port, remote_port):
            -v {key_path}:/id_rsa  \
            --restart always \
            --name {docker_name}-{host_name}-autossh jnovack/autossh
-       '''.format(**locals()))
+       '''.format(host_name=host_name, user_name=user_name, local_port=local_port, remote_port=remote_port, key_path=key_path, docker_name=docker_name))
 
     atexit.register(stop_auto_ssh, docker_name, node)
-    LOGGER.debug('{docker_name}-{host_name}-autossh {res.stdout}'.format(**locals()))
+    LOGGER.debug('{docker_name}-{host_name}-autossh {res.stdout}'.format(docker_name=docker_name,
+                                                                         host_name=host_name, res=res))
 
 
 def stop_auto_ssh(docker_name, node):
@@ -48,8 +50,11 @@ def stop_auto_ssh(docker_name, node):
     :param node: an instance of a class derived from BaseNode that has _ssh_login_info
     :return: None
     """
+    # pylint: disable=protected-access
+
     host_name = node._ssh_login_info['hostname']
 
-    LOGGER.debug("killing {docker_name}-{host_name}-autossh".format(**locals()))
+    LOGGER.debug("killing {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name))
     local_runner = LocalCmdRunner()
-    local_runner.run("docker rm -f {docker_name}-{host_name}-autossh".format(**locals()), ignore_status=True)
+    local_runner.run(
+        "docker rm -f {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name), ignore_status=True)

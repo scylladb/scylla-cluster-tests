@@ -6,8 +6,7 @@ import itertools
 from sdcm.sct_config import SCTConfiguration
 
 
-# pylint: disable=missing-docstring
-class ConfigurationTests(unittest.TestCase):
+class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
     @classmethod
     def setUpClass(cls):
         logging.basicConfig(level=logging.ERROR)
@@ -39,7 +38,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_03_dump_help_config_yaml(self):
         logging.debug(self.conf.dump_help_config_yaml())
 
-    def test_03_dump_help_config_markdown(self):
+    def test_03_dump_help_config_markdown(self):  # pylint: disable=invalid-name
         logging.debug(self.conf.dump_help_config_markdown())
 
     def test_04_check_env_parse(self):
@@ -99,10 +98,11 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_WHAT_IS_THAT'] = 'just_made_this_up'
         os.environ['SCT_WHAT_IS_THAT_2'] = 'what is this ?'
         conf = SCTConfiguration()
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError) as context:
             conf.verify_configuration()
 
-        self.assertEquals(cm.exception.message, 'Unsupported environment variables were used:\n\t - SCT_WHAT_IS_THAT=just_made_this_up\n\t - SCT_WHAT_IS_THAT_2=what is this ?')
+        self.assertEqual(context.exception.message,
+                         'Unsupported environment variables were used:\n\t - SCT_WHAT_IS_THAT=just_made_this_up\n\t - SCT_WHAT_IS_THAT_2=what is this ?')
 
     def test_10_longevity(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -112,8 +112,8 @@ class ConfigurationTests(unittest.TestCase):
         conf.verify_configuration()
         self.assertEqual(conf.get('user_prefix'), 'longevity-50gb-4d-not-jenkins-maste')
 
-    def test_10_mananger_regression(self):
-
+    @staticmethod
+    def test_10_mananger_regression():
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
 
@@ -138,7 +138,8 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0f1aa8afb878fed2b ami-027c1337dcb46da50')
 
-    def test_12_scylla_version_ami_case1(self):
+    @staticmethod
+    def test_12_scylla_version_ami_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
@@ -147,20 +148,22 @@ class ConfigurationTests(unittest.TestCase):
         conf = SCTConfiguration()
         conf.verify_configuration()
 
-    def test_12_scylla_version_ami_case2(self):
+    def test_12_scylla_version_ami_case2(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         self.assertRaisesRegexp(ValueError, r"AMI for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
-    def test_12_scylla_version_repo(self):
+    @staticmethod
+    def test_12_scylla_version_repo():
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
 
-    def test_12_scylla_version_repo_case1(self):
+    @staticmethod
+    def test_12_scylla_version_repo_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
@@ -168,13 +171,13 @@ class ConfigurationTests(unittest.TestCase):
         conf = SCTConfiguration()
         conf.verify_configuration()
 
-    def test_12_scylla_version_repo_case2(self):
+    def test_12_scylla_version_repo_case2(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
         self.assertRaisesRegexp(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
-    def test_12_scylla_version_repo_ubuntu(self):
+    def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
@@ -183,10 +186,12 @@ class ConfigurationTests(unittest.TestCase):
         conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
-        self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
-        self.assertEqual(conf.get('scylla_repo_loader'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+        self.assertEqual(conf.get('scylla_repo'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+        self.assertEqual(conf.get('scylla_repo_loader'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
 
-    def test_12_scylla_version_repo_ubuntu_loader_centos(self):
+    def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
@@ -195,10 +200,12 @@ class ConfigurationTests(unittest.TestCase):
         conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
-        self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
-        self.assertEqual(conf.get('scylla_repo_loader'), "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.0.repo")
+        self.assertEqual(conf.get('scylla_repo'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+        self.assertEqual(conf.get('scylla_repo_loader'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.0.repo")
 
-    def test_13_scylla_version_ami_branch(self):
+    def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:60'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
@@ -207,7 +214,7 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0fd79a6f4ca83b0d6 ami-03d6caf668ad59911')
 
-    def test_13_scylla_version_ami_branch_latest(self):
+    def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:latest'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
@@ -220,6 +227,8 @@ class ConfigurationTests(unittest.TestCase):
     def test_config_dupes(self):
         def get_dupes(c):
             '''sort/tee/izip'''
+
+            # pylint: disable=invalid-name
             a, b = itertools.tee(sorted(c))
             next(b, None)
             r = None
@@ -256,7 +265,9 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(conf.get('security_group_ids'), 'sg-c5e1f7a0')
 
     def test_15_new_scylla_repo(self):
-        centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
+        centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/'\
+                      '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1'\
+                      '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_REPO'] = centos_repo

@@ -1,18 +1,16 @@
 import time
 import logging
-import threading
-import Queue
 import atexit
 
 from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
 
-import cluster
+from sdcm import cluster
 
-loggger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
-def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):
+def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):  # pylint: disable=too-many-arguments
     service_cls = get_driver(Provider.OPENSTACK)
     service = service_cls(user, password,
                           ex_force_auth_version=auth_version,
@@ -24,18 +22,18 @@ def get_openstack_service(user, password, auth_version, auth_url, service_type, 
     return service
 
 
-def clean_openstack_instance(user, password, auth_version, auth_url, service_type, service_name, service_region,
+def clean_openstack_instance(user, password, auth_version, auth_url, service_type, service_name, service_region,  # pylint: disable=too-many-arguments
                              tenant, instance_name):
     try:
         service = get_openstack_service(user, password, auth_version, auth_url, service_type, service_name,
                                         service_region, tenant)
         instance = [n for n in service.list_nodes() if n.name == instance_name][0]
         service.destroy_node(instance)
-    except Exception as details:
-        loggger.error(str(details))
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error(str(details))
 
 
-def clean_openstack_credential(user, password, auth_version, auth_url, service_type, service_name, service_region,
+def clean_openstack_credential(user, password, auth_version, auth_url, service_type, service_name, service_region,  # pylint: disable=too-many-arguments
                                tenant, credential_key_name, credential_key_file):
     try:
         service = get_openstack_service(user, password, auth_version, auth_url, service_type, service_name,
@@ -43,17 +41,17 @@ def clean_openstack_credential(user, password, auth_version, auth_url, service_t
         key_pair = service.get_key_pair(credential_key_name)
         service.delete_key_pair(key_pair)
         cluster.remove_if_exists(credential_key_file)
-    except Exception as details:
-        loggger.error(str(details))
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.exception(str(details))
 
 
-class OpenStackNode(cluster.BaseNode):
+class OpenStackNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
     """
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, openstack_instance, openstack_service, parent_cluster, credentials,
+    def __init__(self, openstack_instance, openstack_service, parent_cluster, credentials,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, openstack_image_username='root',
                  base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
@@ -63,7 +61,6 @@ class OpenStackNode(cluster.BaseNode):
         ssh_login_info = {'hostname': None,
                           'user': openstack_image_username,
                           'key_file': credentials.key_file,
-                          'wait_key_installed': 30,
                           'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
                                             parent_cluster=parent_cluster,
@@ -115,16 +112,17 @@ class OpenStackNode(cluster.BaseNode):
         self.log.info('Destroyed')
 
 
-class OpenStackCluster(cluster.BaseCluster):
+class OpenStackCluster(cluster.BaseCluster):  # pylint: disable=abstract-method,too-many-instance-attributes
 
     """
     Cluster of Node objects, started on OpenStack.
     """
 
-    def __init__(self, openstack_image, openstack_network, service, credentials, cluster_uuid=None,
+    def __init__(self, openstack_image, openstack_network, service, credentials, cluster_uuid=None,  # pylint: disable=too-many-arguments
                  openstack_instance_type='m1.small', openstack_image_username='root',
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None):
+        # pylint: disable=too-many-locals
         if credentials.type == 'generated':
             credential_key_name = credentials.key_pair_name
             credential_key_file = credentials.key_file
@@ -168,7 +166,7 @@ class OpenStackCluster(cluster.BaseCluster):
                                                     self._openstack_image,
                                                     self._openstack_instance_type)
 
-    def add_nodes(self, count, ec2_user_data=''):
+    def add_nodes(self, count, ec2_user_data=''):  # pylint: disable=arguments-differ
         nodes = []
         size = [d for d in self._openstack_service.list_sizes() if d.name == self._openstack_instance_type][0]
         image = self._openstack_service.get_image(self._openstack_image)
@@ -191,10 +189,10 @@ class OpenStackCluster(cluster.BaseCluster):
         return nodes
 
 
-class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):
-    def __init__(self, openstack_image, openstack_network, service, credentials,
+class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):  # pylint: disable=abstract-method
+    def __init__(self, openstack_image, openstack_network, service, credentials,  # pylint: disable=too-many-arguments,unused-argument
                  openstack_instance_type='m1.small',
-                 openstack_image_username='centos', scylla_repo=None,
+                 openstack_image_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -217,106 +215,10 @@ class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):
                                                                     ec2_user_data=ec2_user_data)
         return added_nodes
 
-    def _node_setup(self, node):
-        # Sometimes people might set up base images with
-        # previous versions of scylla installed (they shouldn't).
-        # But anyway, let's cover our bases as much as possible.
-        node.remoter.run('sudo yum remove -y "scylla*"')
-        node.remoter.run('sudo yum remove -y abrt')
-        # Let's re-create the yum database upon update
-        node.remoter.run('sudo yum clean all')
-        node.remoter.run('sudo yum update -y --skip-broken')
-        node.remoter.run('sudo yum install -y rsync tcpdump screen wget')
-        node.download_scylla_repo(self.params.get('scylla_repo'))
-        node.remoter.run('sudo yum install -y {}'.format(node.scylla_pkg()))
-        node.config_setup(seed_address=self.get_seed_nodes_by_flag(),
-                          cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'),
-                          append_conf=self.params.get('append_conf'),
-                          hinted_handoff=self.params.get('hinted_handoff'))
 
-        node.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
-        # Work around a systemd bug in RHEL 7.3 -> https://github.com/scylladb/scylla/issues/1846
-        node.remoter.run('sudo sh -c "sed -i s/OnBootSec=0/OnBootSec=3/g /usr/lib/systemd/system/scylla-housekeeping.timer"')
-        node.remoter.run('sudo cat /usr/lib/systemd/system/scylla-housekeeping.timer')
-        node.remoter.run('sudo systemctl daemon-reload')
-        node.remoter.run('sudo systemctl enable scylla-server.service')
-        node.remoter.run('sudo systemctl enable scylla-jmx.service')
-        node.restart()
-        node.wait_ssh_up()
-        node.wait_db_up()
-        node.wait_jmx_up()
+class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method
 
-    def wait_for_init(self, node_list=None, verbose=False):
-        """
-        Configure scylla.yaml on all cluster nodes.
-
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-
-        :param node_list: List of nodes to watch for init.
-        :param verbose: Whether to print extra info while watching for init.
-        :return:
-        """
-        if node_list is None:
-            node_list = self.nodes
-
-        queue = Queue.Queue()
-
-        def node_setup(node):
-            node.wait_ssh_up(verbose=verbose)
-            self._node_setup(node=node)
-            node.wait_db_up(verbose=verbose)
-            node.remoter.run('sudo yum install -y {}-gdb'.format(node.scylla_pkg()),
-                             verbose=verbose, ignore_status=True)
-            queue.put(node)
-            queue.task_done()
-
-        start_time = time.time()
-
-        # If we setup all nodes in paralel, we might have troubles
-        # with nodes not able to contact the seed node.
-        # Let's setup the seed node first, then set up the others
-        seed_address = self.get_seed_nodes_by_flag()
-        seed_address_list = seed_address.split(',')
-        for i in seed_address_list:
-            node_setup(i)
-        for node in node_list:
-            if node in seed_address_list:
-                continue
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(queue.get(block=True, timeout=5))
-                time_elapsed = time.time() - start_time
-                self.log.info("(%d/%d) DB nodes ready. Time elapsed: %d s",
-                              len(results), len(node_list),
-                              int(time_elapsed))
-            except Queue.Empty:
-                pass
-
-        self.update_db_binary(node_list)
-        self.get_seed_nodes()
-        time_elapsed = time.time() - start_time
-        self.log.debug('Setup duration -> %s s', int(time_elapsed))
-        if not node_list[0].scylla_version:
-            result = node_list[0].remoter.run("scylla --version")
-            for node in node_list:
-                node.scylla_version = result.stdout
-
-    def destroy(self):
-        self.stop_nemesis()
-        super(ScyllaOpenStackCluster, self).destroy()
-
-
-class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):
-
-    def __init__(self, openstack_image, openstack_network, service, credentials,
+    def __init__(self, openstack_image, openstack_network, service, credentials,  # pylint: disable=too-many-arguments
                  openstack_instance_type='m1.small',
                  openstack_image_username='centos', scylla_repo=None,
                  user_prefix=None, n_nodes=10, params=None):
@@ -335,12 +237,13 @@ class LoaderSetOpenStack(OpenStackCluster, cluster.BaseLoaderSet):
         self.scylla_repo = scylla_repo
 
 
-class MonitorSetOpenStack(cluster.BaseMonitorSet, OpenStackCluster):
+class MonitorSetOpenStack(cluster.BaseMonitorSet, OpenStackCluster):  # pylint: disable=abstract-method
 
-    def __init__(self, openstack_image, openstack_network, service, credentials,
+    def __init__(self, openstack_image, openstack_network, service, credentials,  # pylint: disable=too-many-arguments
                  openstack_instance_type='m1.small',
                  openstack_image_username='centos', scylla_repo=None,
-                 user_prefix=None, n_nodes=10, targets={}, params=None):
+                 user_prefix=None, n_nodes=10, targets=None, params=None):
+        targets = targets if targets else {}
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         cluster.BaseMonitorSet.__init__(self,

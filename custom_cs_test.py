@@ -39,7 +39,7 @@ class CustomCsTest(ClusterTester):
                                     '/tmp/cassandra-stress-custom.yaml',
                                     verbose=True)
         ip = self.db_cluster.get_node_private_ips()[0]
-        cs_command = ('cassandra-stress user '
-                      'profile=/tmp/cassandra-stress-custom.yaml '
-                      'ops\(insert=1\) -node %s' % ip)
+        cs_command = (r'cassandra-stress user '
+                      r'profile=/tmp/cassandra-stress-custom.yaml '
+                      r'ops\(insert=1\) -node %s' % ip)
         self.run_stress(stress_cmd=cs_command)

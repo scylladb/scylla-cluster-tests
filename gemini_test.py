@@ -28,6 +28,7 @@ class GeminiTest(ClusterTester):
     Test Scylla with gemini - tool for testing data integrity
     https://github.com/scylladb/gemini
     """
+    gemini_results = None
 
     def test_random_load(self):
         """

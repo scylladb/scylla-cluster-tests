@@ -8,7 +8,7 @@ import datetime
 
 from sdcm.prometheus import start_metrics_server
 
-from sdcm.sct_events import (start_events_device, stop_events_device, GrafanaAnnotator, Event, TestKiller, PrometheusDumper, EventsFileLogger,
+from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
                              InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity)
 
@@ -48,7 +48,7 @@ class SctEventsTests(unittest.TestCase):
 
         cls.killed = Event()
 
-        def callback(x):
+        def callback(var):  # pylint: disable=unused-argument
             cls.killed.set()
 
         cls.test_killer = TestKiller(timeout_before_kill=5, test_callback=callback)
@@ -62,29 +62,35 @@ class SctEventsTests(unittest.TestCase):
             process.join()
         stop_events_device()
 
-    def test_event_info(self):
+    @staticmethod
+    def test_event_info():
         InfoEvent(message='jkgkjgl')
 
-    def test_cassandra_stress(self):
+    @staticmethod
+    def test_cassandra_stress():
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf",
                                  log_file_name="/filename/"))
 
-    def test_coredump_event(self):
+    @staticmethod
+    def test_coredump_event():
         str(CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
-                          node="node xy", download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 ."))
+                          node="node xy",
+                          download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 ."))
 
-    def test_scylla_log_event(self):
+    @staticmethod
+    def test_scylla_log_event():
         str(DatabaseLogEvent(type="A", regex="B"))
 
-        e = DatabaseLogEvent(type="A", regex="B")
-        e.add_info("node", line='[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 2000 ms',
-                   line_number=213)
-        e.add_backtrace_info("0x002342340\n0x12423434")
+        event = DatabaseLogEvent(type="A", regex="B")
+        event.add_info("node", line='[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 2000 ms',
+                       line_number=213)
+        event.add_backtrace_info("0x002342340\n0x12423434")
 
-        str(e)
+        str(event)
 
-    def test_disruption_event(self):
+    @staticmethod
+    def test_disruption_event():
         try:
             1 / 0
         except ZeroDivisionError:
@@ -98,18 +104,18 @@ class SctEventsTests(unittest.TestCase):
 
         print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
 
-    def test_filter(self):
+    @staticmethod
+    def test_filter():
+        enospc_line = "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
         with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
+                                                                                    line=enospc_line)
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-
+                                                                                    line=enospc_line)
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-
+                                                                                    line=enospc_line)
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
+                                                                                    line=enospc_line)
 
     def test_filter_repair(self):
 
@@ -203,7 +209,8 @@ class SctEventsTests(unittest.TestCase):
                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 5000 ms")
         self.assertTrue(event.severity == Severity.CRITICAL)
 
-    def test_spot_termination(self):
+    @staticmethod
+    def test_spot_termination():
         str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
 
     def test_default_filters(self):
