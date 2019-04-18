@@ -2346,6 +2346,9 @@ class BaseLoaderSet(object):
             self.kill_stress_thread()
             return
 
+        cs_exporter_setup = CassandraStressExporterSetup()
+        cs_exporter_setup.install(node)
+
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
@@ -2391,8 +2394,6 @@ class BaseLoaderSet(object):
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
 
         node.wait_cs_installed(verbose=verbose)
-        cs_exporter_setup = CassandraStressExporterSetup()
-        cs_exporter_setup.install(node)
 
         # scylla-bench
         node.remoter.run('sudo yum install git -y')
