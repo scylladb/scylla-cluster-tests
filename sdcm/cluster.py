@@ -1308,9 +1308,8 @@ server_encryption_options:
             raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
         if self.is_debian8():
             self.remoter.run(cmd="sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
-            self.remoter.run(cmd="sudo touch /etc/apt/sources.list.d/jessie-backports.list")
             self.remoter.run(
-                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/jessie-backports.list")
+                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee -a /etc/apt/sources.list.d/jessie-backports.list")
             self.remoter.run(cmd="sudo touch /etc/apt/apt.conf.d/99jessie-backports")
             self.remoter.run(
                 cmd="sudo echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99jessie-backports")
@@ -3044,7 +3043,7 @@ class BaseMonitorSet(object):
                 pip install --upgrade pip
                 pip install pyyaml
             """)
-        elif node.is_debian():
+        elif node.is_debian8():
             node.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
             node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
             node.remoter.run(cmd="sudo apt-get dist-upgrade -y")
