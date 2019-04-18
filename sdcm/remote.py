@@ -96,7 +96,7 @@ class CommandRunner(object):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
 
     def run(self):
-        raise "Should be implemented in subclasses"
+        raise Exception("Should be implemented in subclasses")
 
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
@@ -119,9 +119,6 @@ class CommandRunner(object):
                 self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
             return
 
-        if result.ok:
-            self.log.info("Command {} finished with status {}".format(result.command, result.exited))
-
 
 class LocalCmdRunner(CommandRunner):
 
@@ -134,6 +131,8 @@ class LocalCmdRunner(CommandRunner):
     def run(self, cmd, ignore_status=False, sudo=False, verbose=True, timeout=30):
         watchers = []
         start_time = time.time()
+        if verbose:
+            self.log.debug('Running command "{}"...'.format(cmd))
         if sudo and self.password:
             cmd = "sudo " + cmd
             watchers.append(Responder(pattern=r'\[sudo\] password:',
@@ -202,8 +201,8 @@ class RemoteCmdRunner(CommandRunner):
         for i in range(retry + 1):
             watchers = []
             try:
-
-                self.log.debug('Run command {}'.format(cmd))
+                if verbose:
+                    self.log.debug('Running command "{}"...'.format(cmd))
                 watchers.append(OutputWatcher(self, verbose))
                 start_time = time.time()
                 if log_file:
@@ -227,7 +226,7 @@ class RemoteCmdRunner(CommandRunner):
         return result
 
     def is_up(self, timeout=30):
-        return self._ssh_ping(timeout=30)
+        return self._ssh_ping(timeout=timeout)
 
     def _ssh_ping(self, timeout=30, verbose=False):
         cmd = 'true'
@@ -395,11 +394,11 @@ class RemoteCmdRunner(CommandRunner):
 
                 if dest_exists and dest_is_dir:
                     cmd = "rm -rf %s && mkdir %s" % (dst, dst)
-                    r = self.run(cmd)
+                    self.run(cmd, verbose=verbose)
 
                 elif not dest_exists and dest_is_dir:
                     cmd = "mkdir %s" % dst
-                    self.run(cmd, warn=verbose)
+                    self.run(cmd, verbose=verbose)
 
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
@@ -422,7 +421,7 @@ class RemoteCmdRunner(CommandRunner):
         """
         Check if rsync is available on the remote host.
         """
-        result = self.run("rsync --version", warn=True)
+        result = self.run("rsync --version", ignore_status=True)
         if result.ok:
             return True
         else:
