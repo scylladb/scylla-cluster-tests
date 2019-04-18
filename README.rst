@@ -457,6 +457,26 @@ Save the journalctl of one node to the database.log and move to the folder
 
 For examples see utilities documentation
 
+FAQ
+====
+**Q:** My c-s and memesis metrics are not exposed to the monitor while running locally, why ?
+
+**A:** since your computer isn't exposed to the internet, the monitor can't reach it::
+
+    # ngrok can be used to help with it
+    # goto https://ngrok.com/download, then in a separate terminal window
+    ./ngrok start --none
+
+    # back when you want to run your test
+    export SCT_NGROK_NAME=`whoami`
+
+    # run you test
+    hydra.sh run ....
+
+    # while test running your metrics api would be exposed for example:
+    # http://fruch.ngrok.io
+
+
 TODO
 ====
 
