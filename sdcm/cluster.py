@@ -27,6 +27,8 @@ import shutil
 
 from base64 import decodestring
 
+import requests
+
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
@@ -3093,7 +3095,29 @@ class BaseMonitorSet(object):
         if self.params.get('use_mgmt', default=None):
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
 
+    def configure_ngrok(self, ngrok_name):
+        port = self.local_metrics_addr.split(':')[1]
+
+        requests.delete('http://localhost:4040/api/tunnels/sct')
+
+        tunnel = {
+            "addr": port,
+            "proto": "http",
+            "name": "sct",
+            "subdomain": ngrok_name,
+            "bind_tls": False
+        }
+        res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
+        assert res.ok, "failed to add a ngrok tunnel [%s, %s]".format(res, res.text)
+
+        return "{}.ngrok.io:80".format(ngrok_name)
+
     def set_local_sct_ip(self):
+
+        ngrok_name = self.params.get('sct_ngrok_name', default=None)
+        if ngrok_name:
+            return self.configure_ngrok(ngrok_name)
+
         sct_public_ip = self.params.get('sct_public_ip')
         if sct_public_ip:
             return sct_public_ip + ':' + self.local_metrics_addr.split(':')[1]
