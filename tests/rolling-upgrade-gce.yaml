@@ -23,6 +23,7 @@ ip_ssh_connections: 'private'
 authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
+authorizer: 'ScyllaAuthorizer'
 
 backends: !mux
     gce: !mux
