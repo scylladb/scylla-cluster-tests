@@ -27,3 +27,4 @@ server_encrypt: 'true'
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
+authorizer: 'ScyllaAuthorizer'
