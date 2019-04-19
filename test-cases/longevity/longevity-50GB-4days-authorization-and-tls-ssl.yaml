@@ -34,5 +34,6 @@ client_encrypt: 'false'
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
+authorizer: 'ScyllaAuthorizer'
 
 use_mgmt: true
