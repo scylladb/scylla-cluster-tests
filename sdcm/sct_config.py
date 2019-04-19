@@ -254,6 +254,9 @@ class SCTConfiguration(dict):
         dict(name="authenticator_password", env="SCT_AUTHENTICATOR_PASSWORD",  type=str,
              help="the password if PasswordAuthenticator is used"),
 
+        dict(name="authorizer", env="SCT_AUTHORIZER",  type=str,
+             help="which authorizer scylla will use AllowAllAuthorizer/ScyllaAuthorizer"),
+
         dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF",  type=str,
              help="Replication factor will be set to system_auth"),
 
