@@ -1114,7 +1114,8 @@ class BaseNode(object):
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
                      server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
-                     debug_install=False, hinted_handoff_disabled=False, murmur3_partitioner_ignore_msb_bits=None):
+                     debug_install=False, hinted_handoff_disabled=False, murmur3_partitioner_ignore_msb_bits=None,
+                     authorizer=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1207,6 +1208,10 @@ class BaseNode(object):
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
             p = re.compile('[# ]*authenticator:.*')
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
+                                         scylla_yaml_contents)
+        if authorizer in ['AllowAllAuthorizer', 'ScyllaAuthorizer']:
+            p = re.compile('[# ]*authorizer:.*')
+            scylla_yaml_contents = p.sub('authorizer: {0}'.format(authorizer),
                                          scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
@@ -2300,7 +2305,8 @@ class BaseScyllaCluster(object):
                           client_encrypt=self._param_enabled('client_encrypt'),
                           append_conf=self.params.get('append_conf'),
                           hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'),
-                          append_scylla_args=self.get_scylla_args())
+                          append_scylla_args=self.get_scylla_args(),
+                          authorizer=self.params.get('authorizer'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
