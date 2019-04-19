@@ -2530,7 +2530,7 @@ class BaseLoaderSet(object):
         return queue
 
     def kill_stress_thread(self):
-        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
+        kill_script_contents = 'for PID in `pgrep -f cassandra-stress`; do pkill -TERM -P $PID; done'
         kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
                                              content=kill_script_contents)
         kill_script.save()
