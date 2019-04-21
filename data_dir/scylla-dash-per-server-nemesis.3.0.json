@@ -441,7 +441,7 @@
                         "renderer": "flot",
                         "seriesOverrides": [
                             {
-                                "alias": "/method=\"[a-z]/",
+                                "alias": "/method=\"[a-zA-Z]/",
                                  "fill": 2,
                                  "lines": true,
                                  "yaxis": 2
