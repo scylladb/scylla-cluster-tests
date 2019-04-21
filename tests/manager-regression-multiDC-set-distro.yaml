@@ -31,13 +31,22 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'AMI_ID_EAST'
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
             ami_id_monitor: AMI_ID_MONITOR # Debian-8: ami-cb4b94dd # Ubuntu16.4: 'ami-1c5cc366' # CentOs-7: ami-9887c6e7
             ami_monitor_user: AMI_MONITOR_USER # admin / ubuntu / centos
-
+        eu_west_1_and_us_west_2:
+            region_name: 'eu-west-1 us-west-2'
+            security_group_ids: 'sg-059a7f66a947d4b5c sg-81703ae4'
+            subnet_id: 'subnet-088fddaf520e4c7a8 subnet-5207ee37'
+            ami_id_db_scylla: 'AMI_ID_EU_WEST AMI_ID_US_WEST'
+            ami_id_loader: 'ami-07d0df7186ef5adc5' # Loader dedicated AMI
+            ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
 
 databases: !mux
     scylla:

@@ -104,11 +104,11 @@ backends: !mux
             subnet_id: 'subnet-10a04c75'
             ami_id_db_scylla: 'ami-19eca679'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-19eca679'
+            ami_id_loader: 'ami-0dad569a4bdbc86a1' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3cf7c979'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-19eca679'
+            ami_id_monitor: 'ami-074e2d6769f445be5' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
         us_west_2:
             user_credentials_path: ''
@@ -121,7 +121,7 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-1cff962c'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-ec3e9e8c'
+            ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
         us_east_1:
             user_credentials_path: ''
@@ -130,11 +130,11 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'ami-79d3f06e'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-79d3f06e'
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-79d3f06e'
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
         #multiple datacenters
         us_east_1_and_us_west_2:
