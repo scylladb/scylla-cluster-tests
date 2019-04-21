@@ -1061,6 +1061,7 @@ client_encryption_options:
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
                 self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
+                self.remoter.run("sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list")
                 self.remoter.run("echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install gnupg-curl -y')
@@ -1919,6 +1920,7 @@ class BaseLoaderSet(object):
             install_java_script = dedent("""
                 sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
                 echo 'deb http://archive.debian.org/debian jessie-backports main' |sudo tee /etc/apt/sources.list.d/backports.list
+                sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
                 echo 'Acquire::Check-Valid-Until false;' |sudo tee /etc/apt/apt.conf.d/99jessie-backports
                 apt-get update
                 apt-get install gnupg-curl -y
