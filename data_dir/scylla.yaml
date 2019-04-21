@@ -117,7 +117,7 @@ backends: !mux
             subnet_id: 'subnet-5207ee37'
             ami_id_db_scylla: 'ami-ec3e9e8c'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-ec3e9e8c'
+            ami_id_loader: 'ami-0011d4855d80b3127' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-1cff962c'
             ami_db_cassandra_user: 'ubuntu'
@@ -144,11 +144,11 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'ami-79d3f06e ami-ec3e9e8c'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-79d3f06e'
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-79d3f06e'
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
 
     openstack: !mux
