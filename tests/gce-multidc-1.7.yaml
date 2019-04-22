@@ -36,12 +36,12 @@ backends: !mux
             security_group_ids: 'sg-c5e1f7a0 sg-81703ae4'
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'ami-40a0e756 ami-77e78617'
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-40a0e756'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-40a0e756'
             ami_monitor_user: 'centos'
     gce: !mux
         cluster_backend: 'gce'

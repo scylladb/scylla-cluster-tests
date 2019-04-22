@@ -56,8 +56,8 @@ backends: !mux
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_loader: 'AMI_ID'
-            ami_id_monitor: 'AMI_ID'
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
 
     docker: !mux
         cluster_backend: 'docker'
