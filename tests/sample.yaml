@@ -54,8 +54,8 @@ backends: !mux
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
-            ami_id_monitor: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
-            ami_id_loader: 'ami-b4f8b4cb'  # Scylla 2.2 AMI
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             aws_root_disk_size_monitor: 10  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
