@@ -82,10 +82,6 @@ class Nemesis(object):
         if self.tester.create_stats:
             self.tester.update({'nemesis': self.stats})
 
-    def publish_event(self, disrupt, status=True, data={}):
-        data['node'] = self.target_node
-        DisruptionEvent(name=disrupt, status=status, **data)
-
     def set_target_node(self):
         filter_seed = self.cluster.params.get('nemesis_filter_seeds', default=True)
         if filter_seed:
@@ -104,7 +100,7 @@ class Nemesis(object):
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while True:
-            self._set_current_disruption()
+            self._set_current_disruption(report=False)
             self.disrupt()
             if self.termination_event is not None:
                 if self.termination_event.isSet():
@@ -261,12 +257,20 @@ class Nemesis(object):
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
 
-    def _set_current_disruption(self, label=None):
+    def get_disrupt_name(self):
+        return self.current_disruption.split()[0]
+
+    def get_class_name(self):
+        return self.__class__.__name__.replace('Monkey', '')
+
+    def _set_current_disruption(self, label=None, report=True):
         if not label:
             label = "%s on target node %s" % (self.__class__.__name__, self.target_node)
         self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
         self.log.info(label)
+        if report:
+            DisruptionEvent(type='start', name=self.get_disrupt_name(), status=True, node=str(self.target_node))
 
     def disrupt_destroy_data_then_repair(self):
         self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
@@ -437,7 +441,9 @@ class Nemesis(object):
                 self.log.error(str(details))
             return search_database_enospc(node) > orig_errors
 
-        with DbEventsFilter(type='NO_SPACE_ERROR'), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
+        with DbEventsFilter(type='NO_SPACE_ERROR'), \
+                DbEventsFilter(type='BACKTRACE', line='No space left on device'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device'):
             for node in nodes:
                 result = node.remoter.run('cat /proc/mounts')
                 if '/var/lib/scylla' not in result.stdout:
@@ -536,6 +542,8 @@ class Nemesis(object):
                 self._run_nodetool(cmd, node)
 
     def disrupt_truncate(self):
+        self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
+
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
         table_truncate_count = 0
@@ -563,7 +571,6 @@ class Nemesis(object):
             self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
 
         # do the actual truncation
-        self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
         cql = 'TRUNCATE {}.{}'.format(keyspace_truncate, table)
         self._run_in_cqlsh(cql)
 
@@ -877,12 +884,14 @@ def log_time_elapsed_and_status(method):
         num_nodes_before = len(args[0].cluster.nodes)
         start_time = time.time()
         args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
-        class_name = args[0].__class__.__name__.replace('Monkey', '')
+        class_name = args[0].get_class_name()
         if class_name.find('Chaos') < 0:
             args[0].metrics_srv.event_start(class_name)
         result = None
         error = None
         status = True
+        target_node = str(args[0].target_node)
+
         try:
             result = method(*args, **kwargs)
         except Exception as details:
@@ -898,14 +907,14 @@ def log_time_elapsed_and_status(method):
             log_info = {'operation': args[0].current_disruption,
                         'start': int(start_time),
                         'end': int(end_time),
-                        'duration': time_elapsed}
+                        'duration': time_elapsed,
+                        'node': target_node}
             args[0].operation_log.append(log_info)
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
 
             if class_name.find('Chaos') < 0:
                 args[0].metrics_srv.event_stop(class_name)
-            disrupt = args[0].current_disruption.split()[0]
-            log_info['node'] = args[0].current_disruption.replace(disrupt, '').strip()
+            disrupt = args[0].get_disrupt_name()
             del log_info['operation']
 
             if error:
@@ -913,7 +922,7 @@ def log_time_elapsed_and_status(method):
                 status = False
 
             args[0].update_stats(disrupt, status, log_info)
-            args[0].publish_event(disrupt, status, log_info)
+            DisruptionEvent(type='end', name=disrupt, status=status, **log_info)
             print_nodetool_status(args[0])
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
