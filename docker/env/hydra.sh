@@ -48,7 +48,7 @@ subcommand="$1"
 if [[ ${subcommand} == 'run' ]];  then
     echo "run"
     shift
-    CMD="avocado --show test run $@"
+    CMD="avocado --show avocado.test:info run $@"
 elif [[ ${subcommand} == 'bash'* ]] || [[ ${subcommand} == 'avocado'* ]] || [[ ${subcommand} == 'python'* ]]; then
     echo "running  ${subcommand}"
 else
