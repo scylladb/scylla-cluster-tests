@@ -334,7 +334,7 @@ class BaseNode(object):
 
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
-        self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='28: No space left on device'),
+        self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
                                        DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),

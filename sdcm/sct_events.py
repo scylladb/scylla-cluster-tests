@@ -203,9 +203,10 @@ class KillTestEvent(SctEvent):
 
 
 class DisruptionEvent(SctEvent):
-    def __init__(self, name, status, start, end, duration, node=None, error=None, full_traceback=None, **kwargs):
+    def __init__(self, type, name, status, start=None, end=None, duration=None, node=None, error=None, full_traceback=None, **kwargs):
         super(DisruptionEvent, self).__init__()
         self.name = name
+        self.type = type
         self.start = start
         self.end = end
         self.duration = duration
@@ -215,17 +216,17 @@ class DisruptionEvent(SctEvent):
             self.error = error
             self.full_traceback = full_traceback
 
-        self.__dict__.update(**kwargs)
+        self.__dict__.update(kwargs)
         self.publish()
 
     def __str__(self):
         if self.severity == Severity.NORMAL:
-            return "{}: name={} node={} duration={}".format(
-                super(DisruptionEvent, self).__str__(), self.name, self.node, self.duration
+            return "{}: type={} name={} node={} duration={}".format(
+                super(DisruptionEvent, self).__str__(), self.type, self.name, self.node, self.duration
             )
         elif self.severity == Severity.ERROR:
-            return "{}: name={} node={} duration={} error={}\n{}".format(
-                super(DisruptionEvent, self).__str__(), self.name, self.node, self.duration,
+            return "{}: type={} name={} node={} duration={} error={}\n{}".format(
+                super(DisruptionEvent, self).__str__(), self.type, self.name, self.node, self.duration,
                 self.error,
                 str(self.full_traceback)
             )
@@ -415,10 +416,12 @@ if __name__ == "__main__":
             except ZeroDivisionError:
                 _full_traceback = traceback.format_exc()
 
-            str(DisruptionEvent(name="ChaosMonkeyLimited", status=False, error=str(Exception("long one")),
+            str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=False, error=str(Exception("long one")),
                                 full_traceback=_full_traceback, duration=20, start=1, end=2, node='test'))
 
-            str(DisruptionEvent(name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2, node='test'))
+            str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2, node='test'))
+
+            print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
 
         def test_kill_test_event(self):
             str(KillTestEvent(reason="Don't like this test"))
