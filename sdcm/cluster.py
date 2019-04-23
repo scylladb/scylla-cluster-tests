@@ -1353,6 +1353,14 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_ubuntu18() or self.is_ubuntu16():
+                install_prereqs = dedent("""
+                    apt-get install software-properties-common -y
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    add-apt-repository -y ppa:scylladb/ppa
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
                 self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
