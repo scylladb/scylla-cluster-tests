@@ -2461,7 +2461,10 @@ class BaseLoaderSet(object):
         node.wait_cs_installed(verbose=verbose)
 
         # scylla-bench
-        node.remoter.run('sudo yum install git -y')
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install git -y')
+        else:
+            node.remoter.run('sudo apt-get install git -y')
         node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz')
         node.remoter.run('sudo tar -C /usr/local -xvzf go1.9.2.linux-amd64.tar.gz')
         node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
