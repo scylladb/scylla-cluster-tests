@@ -420,6 +420,8 @@ class BaseNode(object):
                 distro = Distro.UBUNTU14
             elif 'Ubuntu 16.04' in result.stdout:
                 distro = Distro.UBUNTU16
+            elif 'Ubuntu 18.04' in result.stdout:
+                distro = Distro.UBUNTU18
             elif 'Debian GNU/Linux 8' in result.stdout:
                 distro = Distro.DEBIAN8
             elif 'Debian GNU/Linux 9' in result.stdout:
@@ -455,8 +457,11 @@ class BaseNode(object):
     def is_ubuntu16(self):
         return self.distro == Distro.UBUNTU16
 
+    def is_ubuntu18(self):
+        return self.distro == Distro.UBUNTU18
+
     def is_ubuntu(self):
-        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14
+        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14 or self.distro == Distro.UBUNTU18
 
     def is_debian8(self):
         return self.distro == Distro.DEBIAN8
