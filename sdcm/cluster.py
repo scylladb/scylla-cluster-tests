@@ -487,6 +487,9 @@ class BaseNode(object):
         if self.is_ubuntu16() and ubuntu16_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
             return
+        if self.is_ubuntu18() and ubuntu18_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu18_pkgs)
+            return
         if self.is_ubuntu14() and ubuntu14_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
             return

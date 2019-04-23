@@ -397,12 +397,12 @@ LoadPlugin processes
         if self.node.is_rhel_like():
             # Disable SELinux to allow the unix socket plugin to work
             self.node.remoter.run('sudo setenforce 0', ignore_status=True)
-        if self.node.is_rhel_like() or self.node.is_ubuntu16():
+        if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
             self.node.remoter.run('sudo systemctl enable collectd.service')
         if self.node.is_docker():
             self.node.remoter.run('sudo /usr/sbin/collectd')
         else:
-            if self.node.is_rhel_like() or self.node.is_ubuntu16():
+            if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
                 self.node.remoter.run('sudo systemctl restart collectd.service')
             else:
                 self.node.remoter.run('sudo service collectd restart')
@@ -435,7 +435,7 @@ WantedBy=multi-user.target
             if self.node.is_docker():
                 self.node.remoter.run('sudo {} -collectd.listen-address=:65534 &'.format(self.collectd_exporter_path))
             else:
-                if self.node.is_rhel_like() or self.node.is_ubuntu16():
+                if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
                     self.node.remoter.run('sudo systemctl start collectd-exporter.service')
                 else:
                     self.node.remoter.run('sudo service collectd-exporter start')
