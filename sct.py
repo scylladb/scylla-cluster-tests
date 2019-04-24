@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import sys
 
 import click
 import click_completion
@@ -257,6 +258,15 @@ def show_monitor(test_id, debug_log):
 
 
 cli.add_command(investigate)
+
+
+@cli.command('unit-tests', help="Run all the SCT internal unit-tests")
+def unit_tests():
+    import unittest
+
+    test_suite = unittest.TestLoader().discover('unit_tests', top_level_dir='.')
+    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
+    sys.exit(not result.wasSuccessful())
 
 
 if __name__ == '__main__':

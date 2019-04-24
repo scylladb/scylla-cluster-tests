@@ -44,7 +44,7 @@ from .db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
 
 from avocado.utils import runtime as avocado_runtime
-from sdcm.sct_events import EVENTS_GRAFANA_ANNOTATOR
+from sdcm.sct_events import EVENTS_PROCESSES
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -1085,10 +1085,14 @@ class BaseNode(object):
 
         matches = []
         patterns = []
+        backtraces = []
+
         index = 0
         # prepare/compile all regexes
         for expression in self._database_error_events:
             patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+
+        backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
         if not os.path.exists(self.database_log):
             return matches
@@ -1104,19 +1108,58 @@ class BaseNode(object):
             if start_search_from_byte:
                 f.seek(start_search_from_byte)
             for index, line in enumerate(f, start=last_line_no):
+                m = backtrace_regex.search(line)
+                if m and backtraces:
+                    data = m.groupdict()
+                    if data['other_bt']:
+                        backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
+                    if data['scylla_bt']:
+                        backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
+
                 if index not in self._database_log_errors_index:
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in patterns:
                         m = pattern.search(line)
                         if m:
                             self._database_log_errors_index.append(index)
-                            if publish_events:
-                                event.add_info_and_publish(node=self, line_number=index, line=line)
-                            if event.severity == Severity.CRITICAL:
+                            e = event.clone_with_info(node=self, line_number=index, line=line)
+                            backtraces.append(dict(event=e, backtrace=[]))
+
+                            if e.severity == Severity.CRITICAL:
                                 matches.append((index, line))
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
                 self.last_log_position = f.tell() + 1
+
+        if publish_events:
+            for b in backtraces:
+                b['event'].add_backtrace_info(raw_backtrace="\n".join(b['backtrace']))
+
+            # filter function to attach the backtrace to the correct error and not to the back traces
+            # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
+            def filter_backtraces(backtrace):
+                last_error = filter_backtraces.last_error
+                try:
+                    if (last_error and
+                            backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 10
+                            and not filter_backtraces.last_error.type == 'BACKTRACE'):
+                        last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+                        return False
+                    return True
+                finally:
+                    filter_backtraces.last_error = backtrace['event']
+            filter_backtraces.last_error = None
+
+            backtraces = filter(filter_backtraces, backtraces)
+
+            for backtrace in backtraces:
+                if backtrace['event'].raw_backtrace:
+                    try:
+                        output = self.remoter.run('addr2line -Cpife /usr/lib/debug/bin/scylla.debug %s' % " ".join(backtrace['event'].raw_backtrace.split('\n')), verbose=False)
+                        backtrace['event'].add_backtrace_info(backtrace=output.stdout)
+                    except Exception:
+                        self.log.exception("failed to decode backtrace")
+                backtrace['event'].publish()
 
         return matches
 
@@ -1306,7 +1349,6 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
-
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -1454,7 +1496,6 @@ server_encryption_options:
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-
 
             install_transport_backports = dedent("""
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
@@ -1707,10 +1748,10 @@ server_encryption_options:
         self.start_scylla()
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
-                                            text="Wait for re-sharding to be started", status='start')
+                                           text="Wait for re-sharding to be started", status='start')
         if not resharding_started:
             logger.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
-                             'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
             return
 
         resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
@@ -2328,7 +2369,7 @@ class BaseScyllaCluster(object):
         for nem in nemesis:
             for i in range(nem['num_threads']):
                 self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
-                                    termination_event=self.termination_event))
+                                                   termination_event=self.termination_event))
 
     def clean_nemesis(self):
         self.nemesis = []
@@ -3012,7 +3053,7 @@ class BaseMonitorSet(object):
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        EVENTS_GRAFANA_ANNOTATOR.set_grafana_url("http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
+        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url("http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
