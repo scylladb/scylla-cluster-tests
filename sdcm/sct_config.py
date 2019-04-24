@@ -148,6 +148,9 @@ class SCTConfiguration(dict):
 
              help="Url to the repo of scylla version to install scylla from for managment tests"),
 
+        dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
+             help="Url to the repo of scylla version to install c-s for loader"),
+
         dict(name="scylla_mgmt_repo", env="SCT_SCYLLA_MGMT_REPO",
              type=str,
              help="Url to the repo of scylla manager version to install for management tests"),

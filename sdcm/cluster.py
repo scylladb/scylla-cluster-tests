@@ -2511,7 +2511,10 @@ class BaseLoaderSet(object):
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
-        node.download_scylla_repo(self.params.get('scylla_repo'))
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
