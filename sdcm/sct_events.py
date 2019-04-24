@@ -7,15 +7,15 @@ import signal
 import time
 from multiprocessing import Process, Value, Event, Manager, current_process
 from json import JSONEncoder
+import atexit
 
 import enum
 from enum import Enum
 import zmq
+import requests
 
 from sdcm.utils import safe_kill, pid_exists, _fromtimestamp
 from sdcm.prometheus import nemesis_metrics_obj
-
-import requests
 
 LOGGER = logging.getLogger(__name__)
 
@@ -104,8 +104,6 @@ class EventsDevice(Process):
             log_file.write(event.to_json() + '\n')
 
 
-EVENTS_PROCESS = EventsDevice()
-
 # monkey patch JSONEncoder make enums jsonable
 _saved_default = JSONEncoder().default  # Save default method.
 
@@ -136,7 +134,7 @@ class SctEvent(object):
         return _fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     def publish(self):
-        EVENTS_PROCESS.publish_event(self)
+        EVENTS_PROCESSES['MainDevice'].publish_event(self)
 
     def __str__(self):
         return "({} {})".format(self.__class__.__name__, self.severity)
@@ -264,9 +262,11 @@ class DatabaseLogEvent(SctEvent):
         self.line_number = 0
         self.line = None
         self.node = None
+        self.backtrace = None
+        self.raw_backtrace = None
         self.severity = severity
 
-    def add_info_and_publish(self, node, line, line_number):
+    def add_info(self, node, line, line_number):
         self.timestamp = time.time()
         self.line = line
         self.line_number = line_number
@@ -282,9 +282,31 @@ class DatabaseLogEvent(SctEvent):
             except (ValueError, IndexError):
                 LOGGER.exception("failed to read REACTOR_STALLED line=[%s] ", line)
 
+    def add_backtrace_info(self, backtrace=None, raw_backtrace=None):
+        if backtrace:
+            self.backtrace = backtrace
+        if raw_backtrace:
+            self.raw_backtrace = raw_backtrace
+
+    def clone_with_info(self, node, line, line_number):
+        ret = DatabaseLogEvent(type='', regex='')
+        ret.__dict__.update(self.__dict__)
+        ret.add_info(node, line, line_number)
+        return ret
+
+    def add_info_and_publish(self, node, line, line_number):
+        self.add_info(node, line, line_number)
         self.publish()
 
     def __str__(self):
+        if self.backtrace:
+            return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.backtrace}".format(
+                super(DatabaseLogEvent, self).__str__(), self)
+
+        if self.raw_backtrace:
+            return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.raw_backtrace}".format(
+                super(DatabaseLogEvent, self).__str__(), self)
+
         return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}".format(
             super(DatabaseLogEvent, self).__str__(), self)
 
@@ -314,7 +336,7 @@ class TestKiller(Process):
         self.timeout_before_kill = timeout_before_kill
 
     def run(self):
-        for event_type, message_data in EVENTS_PROCESS.subscribe_events():
+        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
             if event_type == 'KillTestEvent':
                 time.sleep(self.timeout_before_kill)
                 LOGGER.debug("Killing the test")
@@ -339,7 +361,7 @@ class EventsFileLogger(Process):
     def run(self):
         LOGGER.info("writing to %s", self.events_filename)
 
-        for event_type, message_data in EVENTS_PROCESS.subscribe_events():
+        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
             msg = "{}: {}".format(message_data.formatted_timestamp(), str(message_data).strip())
             with open(self.events_filename, 'a+') as log_file:
                 log_file.write(msg + '\n')
@@ -359,7 +381,7 @@ class PrometheusDumper(threading.Thread):
                                                           'Gauge for sct events',
                                                           ['event_type', 'type', 'severity', 'node'])
 
-        for event_type, message_data in EVENTS_PROCESS.subscribe_events(stop_event=self.stop_event):
+        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
             events_gauge.labels(event_type,
                                 getattr(message_data, 'type', ''),
                                 message_data.severity,
@@ -383,7 +405,7 @@ class GrafanaAnnotator(threading.Thread):
         self.url_set.set()
 
     def run(self):
-        for event_class, message_data in EVENTS_PROCESS.subscribe_events(stop_event=self.stop_event):
+        for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
             # waiting until the monitor url is set, and we can start using the api
             self.url_set.wait()
             if self.grafana_base_url:
@@ -419,130 +441,29 @@ class GrafanaAnnotator(threading.Thread):
         LOGGER.error("Failed to find panel id that match [%s]", panel_title_prefix)
 
 
-EVENTS_TASK_KILLER = TestKiller()
-EVENTS_FILE_LOOGER = EventsFileLogger()
-EVENTS_GRAFANA_ANNOTATOR = GrafanaAnnotator()
+EVENTS_PROCESSES = dict()
 
 
-def start_events_device(log_dir):
-    EVENTS_PROCESS.start(log_dir)
-    EVENTS_PROCESS.ready_event.wait(timeout=5)
-    EVENTS_FILE_LOOGER.start(log_dir)
-    EVENTS_TASK_KILLER.start()
-    EVENTS_GRAFANA_ANNOTATOR.start()
+def start_events_device(log_dir, timeout=5):
+    EVENTS_PROCESSES['MainDevice'] = EventsDevice()
+    EVENTS_PROCESSES['MainDevice'].start(log_dir)
+    EVENTS_PROCESSES['MainDevice'].ready_event.wait(timeout=timeout)
+
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger()
+    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
+
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start(log_dir)
+    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
 
 
 def stop_events_device():
-    EVENTS_FILE_LOOGER.terminate()
-    EVENTS_TASK_KILLER.terminate()
-    EVENTS_GRAFANA_ANNOTATOR.terminate()
-    EVENTS_PROCESS.terminate()
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].terminate()
+    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].terminate()
+    EVENTS_PROCESSES['MainDevice'].terminate()
 
-    EVENTS_FILE_LOOGER.join()
-    EVENTS_TASK_KILLER.join()
-    EVENTS_GRAFANA_ANNOTATOR.join()
-
-    EVENTS_PROCESS.join()
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].join()
+    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].join()
+    EVENTS_PROCESSES['MainDevice'].join()
 
 
-if __name__ == "__main__":
-    import traceback
-    import unittest
-    import tempfile
-
-    from sdcm.prometheus import start_metrics_server
-
-    class SctEventsTests(unittest.TestCase):
-
-        @classmethod
-        def setUpClass(cls):
-            cls.temp_dir = tempfile.mkdtemp()
-
-            start_metrics_server()
-
-            EVENTS_PROCESS.start(cls.temp_dir)
-            EVENTS_PROCESS.ready_event.wait(timeout=5)
-            time.sleep(5)
-
-            cls.killed = Event()
-
-            def callback(x):
-                cls.killed.set()
-
-            cls.grafana_annotator = GrafanaAnnotator()
-            cls.grafana_annotator.start()
-            cls.test_killer = TestKiller(timeout_before_kill=5, test_callback=callback)
-            cls.test_killer.start()
-            cls.prometheus_dumper = PrometheusDumper()
-            cls.prometheus_dumper.start()
-            cls.event_logger = EventsFileLogger()
-            cls.event_logger.start(log_dir=cls.temp_dir)
-            time.sleep(5)
-
-        @classmethod
-        def tearDownClass(cls):
-            cls.grafana_annotator.set_grafana_url(grafana_base_url='')
-            for t in [cls.event_logger, cls.prometheus_dumper, cls.grafana_annotator, cls.test_killer, EVENTS_PROCESS]:
-                t.terminate()
-                t.join()
-
-        def test_event_info(self):
-            InfoEvent(message='jkgkjgl')
-
-        def test_cassandra_stress(self):
-            str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
-            str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf", log_file_name="/filename/"))
-
-        def test_coredump_event(self):
-            str(CoreDumpEvent(corefile_urls=['http://', "fsdfs", "sdsfgfg"], backtrace="asfasdfsdf", download_instructions=""))
-
-        def test_scylla_log_event(self):
-            str(DatabaseLogEvent(type="A", regex="B"))
-
-        def test_disruption_event(self):
-            try:
-                1/0
-            except ZeroDivisionError:
-                _full_traceback = traceback.format_exc()
-
-            str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=False, error=str(Exception("long one")),
-                                full_traceback=_full_traceback, duration=20, start=1, end=2, node='test'))
-
-            str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2, node='test'))
-
-            print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
-
-        def test_filter(self):
-            with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
-
-                DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22, line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-                DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                        line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-
-                DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                        line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-
-                DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
-                                                                                        line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
-
-        def test_stall_severity(self):
-            event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
-            event.add_info_and_publish(node="A", line_number=22, line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 2000 ms")
-            self.assertTrue(event.severity == Severity.NORMAL)
-
-            event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
-            event.add_info_and_publish(node="A", line_number=22, line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 5000 ms")
-            self.assertTrue(event.severity == Severity.CRITICAL)
-
-        def test_spot_termination(self):
-            str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
-
-        def test_kill_test_event(self):
-            self.assertTrue(self.test_killer.is_alive())
-            str(KillTestEvent(reason="Don't like this test"))
-
-            LOGGER.info('sent kill')
-            self.assertTrue(self.killed.wait(20), "kill wasn't sent")
-
-    logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
-    unittest.main(verbosity=2)
+atexit.register(stop_events_device)

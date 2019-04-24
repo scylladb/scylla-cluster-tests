@@ -1,0 +1,68 @@
+import unittest
+import tempfile
+import logging
+import shutil
+import os.path
+
+from sdcm.cluster import BaseNode
+from sdcm.sct_events import start_events_device, stop_events_device
+
+
+class DummyNode(BaseNode):
+    @property
+    def private_ip_address(self):
+        return '127.0.0.1'
+
+    @property
+    def public_ip_address(self):
+        return '127.0.0.1'
+
+    def start_task_threads(self):
+        # disable all background threads
+        pass
+
+
+class DummeyOutput(object):
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+
+class DummyRemote(object):
+    def run(self, *args, **kwargs):
+        logging.info(args, kwargs)
+        return DummeyOutput(args[0])
+
+
+logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
+
+
+class TestBaseNode(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.mkdtemp()
+        start_events_device(cls.temp_dir, timeout=5)
+
+        cls.node = DummyNode(name='test_node', base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node.remoter = DummyRemote()
+
+        cls.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database.log')
+
+    @classmethod
+    def tearDownClass(cls):
+        stop_events_device()
+        shutil.rmtree(cls.temp_dir)
+
+    def test_search_database_log(self):
+        critical_errors = self.node.search_database_log()
+        self.assertEqual(len(critical_errors), 2)
+
+        for line_number, line in critical_errors:
+            print line
+
+    def test_search_database_log_teardown(self):
+        critical_errors = self.node.search_database_log(start_from_beginning=True, publish_events=False)
+        self.assertEqual(len(critical_errors), 2)
+
+        for line_number, line in critical_errors:
+            print line
