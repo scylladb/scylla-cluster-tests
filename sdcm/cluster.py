@@ -1359,6 +1359,9 @@ server_encryption_options:
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     add-apt-repository -y ppa:scylladb/ppa
+                    apt-get update
+                    apt-get install -y openjdk-8-jre-headless
+                    update-java-alternatives -s java-1.8.0-openjdk-amd64
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
