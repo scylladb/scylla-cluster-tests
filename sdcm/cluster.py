@@ -2898,7 +2898,7 @@ class BaseMonitorSet(object):
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
         self.monitor_branch = self.params.get('monitor_branch', default='branch-2.3')
-        self.monitor_install_path_base = "/var/lib/scylla"
+        self.monitor_install_path_base = "/home/{}".format(self.params.get('ami_monitor_user'), default='centos')
         self.monitor_install_path = os.path.join(self.monitor_install_path_base,
                                                  "scylla-grafana-monitoring-{}".format(self.monitor_branch))
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
@@ -2991,9 +2991,12 @@ class BaseMonitorSet(object):
         if node.is_rhel_like():
             prereqs_script = dedent("""
                 yum install -y epel-release
-                yum install -y python-pip unzip wget docker
+                yum install -y python-pip unzip wget
                 pip install --upgrade pip
                 pip install pyyaml
+                curl -fsSL get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                systemctl start docker
             """)
         elif node.is_ubuntu():
             prereqs_script = dedent("""
@@ -3005,6 +3008,7 @@ class BaseMonitorSet(object):
                 easy_install pip
                 pip install --upgrade pip
                 pip install pyyaml
+                systemctl start docker
             """)
         elif node.is_debian8():
             node.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
@@ -3023,10 +3027,14 @@ class BaseMonitorSet(object):
                 easy_install pip
                 pip install --upgrade pip
                 pip install pyyaml
+                systemctl start docker
             """)
         else:
             raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
+
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
+        node.remoter.run("sudo usermod -aG docker $USER")
+        node.remoter.reconnect()
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
@@ -3035,7 +3043,7 @@ class BaseMonitorSet(object):
             wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{0.monitor_branch}.zip
             unzip {0.monitor_branch}.zip
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % install_script)
+        node.remoter.run("bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
         db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
@@ -3059,7 +3067,6 @@ class BaseMonitorSet(object):
                                            static_configs=[dict(targets=[self.sct_ip_port])]))
             with open(local_template, "w") as fo:
                 yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
-            node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
             node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
             localrunner.run("rm -rf {temp_dir}".format(**locals()))
         self._monitoring_targets = " ".join(db_targets_list)
@@ -3068,7 +3075,7 @@ class BaseMonitorSet(object):
             mkdir -p {0.monitoring_conf_dir}
             ./genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
+        node.remoter.run("bash -ce '%s'" % configure_script, verbose=True)
         if alert_manager:
             self.configure_alert_manager(node)
 
@@ -3097,8 +3104,7 @@ class BaseMonitorSet(object):
         with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
             f.write(conf)
             node.send_files(src=f.name, dst=f.name)
-            node.remoter.run("chmod 777 %s" % f.name)
-            node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
+            node.remoter.run("bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for restarting scylla monitoring")
@@ -3123,23 +3129,15 @@ class BaseMonitorSet(object):
             node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
 
     def start_scylla_monitoring(self, node):
-        if node.is_rhel_like() or node.is_ubuntu16():
-            run_script = dedent("""
-                cd {0.monitor_install_path}
-                sudo systemctl start docker
-                mkdir -p {0.monitoring_data_dir}
-                chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
-            """.format(self))
-        else:
-            run_script = dedent("""
-                cd {0.monitor_install_path}
-                sudo service docker start || true
-                mkdir -p {0.monitoring_data_dir}
-                chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
-            """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % run_script, verbose=True)
+        run_script = dedent("""
+            cd {0.monitor_install_path}
+            mkdir -p {0.monitoring_data_dir}
+            ./start-all.sh \
+            -s {0.monitoring_conf_dir}/scylla_servers.yml \
+            -n {0.monitoring_conf_dir}/node_exporter_servers.yml \
+            -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
+        """.format(self))
+        node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
 
     def add_sct_dashboards_to_grafana(self, node):
@@ -3190,7 +3188,7 @@ class BaseMonitorSet(object):
             cd {0.monitor_install_path}
             ./kill-all.sh
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % kill_script)
+        node.remoter.run("bash -ce '%s'" % kill_script)
 
     def install_phantom_js(self):
         if not self.phantomjs_installed:
@@ -3323,7 +3321,7 @@ class BaseMonitorSet(object):
 
     def _get_running_monitoring_dockers(self, node):
         monitoring_dockers = []
-        result = node.remoter.run("sudo docker ps -a --format {{.Names}}", ignore_status=True)
+        result = node.remoter.run("docker ps -a --format {{.Names}}", ignore_status=True)
         if result.exit_status == 0:
             monitoring_dockers = [docker.strip() for docker in result.stdout.split('\n') if docker.strip()]
         else:
@@ -3334,7 +3332,7 @@ class BaseMonitorSet(object):
 
     def _collect_monitoring_docker_log(self, node, docker):
         log_path = "/tmp/{}.log".format(docker)
-        cmd = "sudo docker logs --details -t {} > {}".format(docker, log_path)
+        cmd = "docker logs --details -t {} > {}".format(docker, log_path)
         result = node.remoter.run(cmd, ignore_status=True)
         if result.exit_status == 0:
             return log_path
