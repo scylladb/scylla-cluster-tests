@@ -337,6 +337,7 @@ class BaseNode(object):
         self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='28: No space left on device'),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
+                                       DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
                                        DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
                                        DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
                                        DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
