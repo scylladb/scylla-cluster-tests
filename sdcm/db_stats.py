@@ -115,6 +115,14 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
+def get_gemini_cmd_params(cmd):
+    cmd = cmd.strip()
+    cmd_params = {
+        'raw_cmd': cmd
+    }
+    return cmd_params
+
+
 class PrometheusDBStats(object):
     def __init__(self, host, port=9090):
         self.host = host
@@ -379,6 +387,8 @@ class TestStatsMixin(Stats):
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
+        elif stresser == 'gemini':
+            cmd_params = get_gemini_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
@@ -419,12 +429,13 @@ class TestStatsMixin(Stats):
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
-    def update_stress_results(self, results):
+    def update_stress_results(self, results, calculate_average=True):
         if 'stats' not in self._stats['results']:
             self._stats['results']['stats'] = results
         else:
             self._stats['results']['stats'].extend(results)
-        self.calculate_stats_average()
+        if calculate_average:
+            self.calculate_stats_average()
         self.update(dict(results=self._stats['results']))
 
     def calculate_stats_average(self):

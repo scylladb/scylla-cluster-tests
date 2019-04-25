@@ -226,7 +226,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.db_cluster.wait_for_init(node_list=self.db_cluster.nodes[:seeds_num])
             self.db_cluster.wait_for_init(node_list=self.db_cluster.nodes[seeds_num:])
         else:
-            self.db_cluster.wait_for_init(verbose=True)
+            self.db_cluster.wait_for_init()
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
 
@@ -808,9 +808,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def run_gemini(self, cmd, duration=None):
 
         timeout = self.get_duration(duration)
-        time.sleep(30)
         test_node = random.choice(self.db_cluster.nodes)
         oracle_node = random.choice(self.cs_db_cluster.nodes)
+        if self.create_stats:
+            self.update_stress_cmd_details(cmd, stresser='gemini')
         return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
                                               test_node=test_node.ip_address,
                                               oracle_node=oracle_node.ip_address)
@@ -854,7 +855,27 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_gemini_results(self, queue):
         results = self.loaders.get_gemini_results(queue)
-        return results
+        result = self.verify_gemini_results(results)
+        return result
+
+    def verify_gemini_results(self, results):
+        stats = {'status': None, 'results': []}
+        if not results:
+            self.log.error('Gemini results are not found')
+            stats['status'] = 'FAILED'
+        else:
+            for res in results:
+                stats['results'].append(res)
+                for err_type in ['write_errors', 'read_errors', 'errors']:
+                    if res[err_type]:
+                        self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                        stats['status'] = 'FAILED'
+        if not stats['status']:
+            stats['status'] = "PASSED"
+        if self.create_stats:
+            self.update_stress_results(results, calculate_average=False)
+            self.update({'status': stats['status'], 'test_details': {'status': stats['status']}})
+        return stats
 
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
         """Run thread of cql command select count(*)
