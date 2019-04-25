@@ -29,6 +29,7 @@ from avocado.utils import astring
 from avocado.utils import path
 
 from .log import SDCMAdapter
+from .utils import retrying
 
 
 LOGGER_NAME = 'avocado.test'
@@ -169,19 +170,33 @@ class RemoteCmdRunner(CommandRunner):
         self.connect_timeout = connect_timeout
         self._use_rsync = False
         self.known_hosts_file = tempfile.mkstemp()[1]
-        config = Config(overrides={
-                        'load_ssh_config': False,
-                        'UserKnownHostsFile': self.known_hosts_file,
-                        'ServerAliveInterval': 300,
-                        'StrictHostKeyChecking': 'no'})
-        self._create_connection(hostname,
+        self.ssh_config = Config(overrides={
+                                 'load_ssh_config': False,
+                                 'UserKnownHostsFile': self.known_hosts_file,
+                                 'ServerAliveInterval': 300,
+                                 'StrictHostKeyChecking': 'no'})
+        self.connect_config = {'key_filename': os.path.expanduser(self.key_file)}
+        self._create_connection(self.hostname,
                                 user=self.user,
                                 port=self.port,
-                                config=config,
+                                config=self.ssh_config,
+                                connect_timeout=self.connect_timeout,
+                                connect_kwargs=self.connect_config)
+
+    @retrying(n=5, sleep_time=1, allowed_exceptions=(Exception, ), message="Reconnecting")
+    def reconnect(self):
+        self.log.debug('Reconnecting to host ...')
+        self.connection.close()
+        self.connection = None
+        self._create_connection(self.hostname,
+                                user=self.user,
+                                port=self.port,
+                                config=self.ssh_config,
                                 connect_timeout=self.connect_timeout,
                                 connect_kwargs={
                                     'key_filename': os.path.expanduser(self.key_file),
                                 })
+        self.log.debug('SSH reconnected')
 
     def ssh_debug_cmd(self):
         if self.key_file:
