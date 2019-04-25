@@ -51,3 +51,6 @@ databases: !mux
         instance_type_db_oracle: 'i3.8xlarge'
         ami_id_db_oracle: 'AMI-ID-ORACLE'
         append_scylla_args_oracle: '--enable-cache false'
+
+send_email: true
+email_recipients: ['rnd-internal@scylladb.com']
