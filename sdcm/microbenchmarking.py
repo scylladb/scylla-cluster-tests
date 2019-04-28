@@ -219,41 +219,48 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         summary_html = self.render_to_html(for_render)
         self.send_email(subject, summary_html, files=(html_file_path,))
 
-    def get_results(self, results_path, update_db):
-        bad_chars = " "
-        os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
+    def load_and_update_results(self, testset_dir, dataset_name, files, update_db=False):
+        if dataset_name:
+            self.log.info('Dataset name: {}'.format(dataset_name))
         results = {}
-        for (fullpath, subdirs, files) in os.walk(os.getcwd()):
-            self.log.info(fullpath)
-            if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
-                    len(subdirs) > 1):
-                raise Exception('Test set {} has more than one datasets: {}'.format(
-                    os.path.basename(fullpath),
-                    subdirs))
+        for filename in files:
+            test_args = os.path.splitext(filename)[0]
+            test_type = testset_dir + "_" + test_args
+            json_path = os.path.join(testset_dir, dataset_name, filename)
+            with open(json_path, 'r') as f:
+                self.log.info("Reading: %s", json_path)
+                datastore = json.load(f)
+            datastore.update({'hostname': self.hostname,
+                              'test_args': test_args,
+                              'test_run_date': self.test_run_date,
+                              'dataset_name': dataset_name,
+                              'excluded': False
+                              })
+            if update_db:
+                self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
+                                    doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
+            results[test_type] = datastore
+        return results
 
-            if not subdirs:
-                dataset_name = os.path.basename(fullpath)
-                self.log.info('Dataset name: {}'.format(dataset_name))
-                dirname = os.path.basename(os.path.dirname(fullpath))
-                self.log.info("Test set: {}".format(dirname))
-                for filename in files:
-                    new_filename = "".join(c for c in filename if c not in bad_chars)
-                    test_args = os.path.splitext(new_filename)[0]
-                    test_type = dirname + "_" + test_args
-                    json_path = os.path.join(dirname, dataset_name, filename)
-                    with open(json_path, 'r') as f:
-                        self.log.info("Reading: %s", json_path)
-                        datastore = json.load(f)
-                    datastore.update({'hostname': self.hostname,
-                                      'test_args': test_args,
-                                      'test_run_date': self.test_run_date,
-                                      'dataset_name': dataset_name,
-                                      'excluded': False
-                                      })
-                    if update_db:
-                        self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
-                                            doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
-                    results[test_type] = datastore
+    def get_results(self, results_path, update_db):
+        tests_dir = os.path.join(results_path, "perf_fast_forward_output")
+        results = {}
+        for test_set in os.listdir(tests_dir):
+            test_set_path = os.path.join(tests_dir, test_set)
+            data_sets = os.listdir(test_set_path)
+            is_old_format = all(ds.endswith(".json") for ds in data_sets)
+            if not is_old_format and len(data_sets) > 1:
+                raise Exception("Only one dataset is supported! got '%s'." % len(data_sets))
+            if is_old_format:
+                logger.warning("'%s' dir uses old MBM results structure!!!" % test_set_path)
+                test_results = data_sets
+                results.update(self.load_and_update_results(testset_dir=test_set_path, dataset_name="",
+                                                            files=test_results, update_db=update_db))
+            else:
+                for data_set in data_sets:
+                    test_results = os.listdir(os.path.join(tests_dir, test_set, data_set))
+                    results.update(self.load_and_update_results(testset_dir=test_set_path, dataset_name=data_set,
+                                                                files=test_results, update_db=update_db))
         return results
 
     def exclude_test_run(self, testrun_id=''):
