@@ -158,7 +158,7 @@ backends: !mux
             subnet_id: 'subnet-10a04c75'
             ami_id_db_scylla: 'ami-19eca679'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-0dad569a4bdbc86a1' # Loader dedicated AMI
+            ami_id_loader: 'ami-0a2ac860155a18864' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3cf7c979'
             ami_db_cassandra_user: 'ubuntu'
@@ -171,7 +171,7 @@ backends: !mux
             subnet_id: 'subnet-5207ee37'
             ami_id_db_scylla: 'ami-ec3e9e8c'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-0011d4855d80b3127' # Loader dedicated AMI
+            ami_id_loader: 'ami-0e4373a35e7d9ccdb' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-1cff962c'
             ami_db_cassandra_user: 'ubuntu'
@@ -184,7 +184,7 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'ami-79d3f06e'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
@@ -198,7 +198,7 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'ami-79d3f06e ami-ec3e9e8c'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'

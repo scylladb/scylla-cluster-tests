@@ -39,7 +39,7 @@ backends: !mux
             subnet_id: 'subnet-c327759a'
             ami_db_scylla_user: 'centos'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
