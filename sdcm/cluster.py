@@ -1589,16 +1589,20 @@ server_encryption_options:
         self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
         return ''
 
-    def _resharding_finished(self):
+    def _resharding_status(self, status):
         """
         Check is there's Reshard listed in the log
+        status : expected values: "start" or "finish"
         """
         patt = re.compile('RESHARD')
         out = self.run_nodetool("compactionstats")
-        m = patt.search(out)
-        # If 'RESHARD' is not found in the compactionstats output, return True - means resharding was finished
-        # (or was not started)
-        return True if not m else False
+        found = patt.search(out)
+        # wait_for_status=='finish': If 'RESHARD' is not found in the compactionstats output, return True -
+        # means resharding was finished
+        # wait_for_status=='start: If 'RESHARD' is found in the compactionstats output, return True -
+        # means resharding was started
+
+        return bool(found) if status == 'start' else not bool(found)
 
     # Default value of murmur3_partitioner_ignore_msb_bits parameter is 12
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits=12):
@@ -1607,10 +1611,18 @@ server_encryption_options:
         self.config_setup(murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.start_scylla()
 
-        resharding_finished = wait.wait_for(func=self._resharding_finished, step=5, timeout=3600,
-                                            text="Wait for re-sharding to be finished")
+        resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
+                                            text="Wait for re-sharding to be started", status='start')
+        if not resharding_started:
+            logger.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
+                             'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+            return
+
+        resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
+                                            text="Wait for re-sharding to be finished", status='finish')
+
         if not resharding_finished:
-            logger.error('Resharding has not been started or was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
+            logger.error('Resharding was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
                          'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
         else:
             logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
