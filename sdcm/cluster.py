@@ -735,15 +735,11 @@ class BaseNode(object):
         :return: Number of coredumps
         :rtype: int
         """
-        try:
-            n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>/dev/null'
-            result = self.remoter.run(n_backtraces_cmd,
-                                      verbose=False, ignore_status=True)
-            return len(result.stdout.splitlines())
-        except Exception as details:
-            self.log.error('Error retrieving number of core dumps : %s',
-                           details)
-            return None
+        n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1 ||true'
+        result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
+        if "No coredumps found" in result.stdout:
+            return 0
+        return len(result.stdout.splitlines())
 
     def get_backtraces(self):
         """
