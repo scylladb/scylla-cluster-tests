@@ -180,6 +180,11 @@ class MgmtCliTest(ClusterTester):
         for repair_task in repair_task_list:
             self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
 
+        self.log.info('Running a new repair task after upgrade')
+        repair_task = mgr_cluster.create_repair_task()
+        self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
+
+
     def test_manager_rollback_upgrade(self):
         """
         Test steps:
