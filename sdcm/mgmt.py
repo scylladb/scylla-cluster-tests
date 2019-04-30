@@ -164,7 +164,8 @@ class ManagerTask(ScyllaManagerBase):
         """
         cmd = "task list -c {}".format(self.cluster_id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
-        return self.get_property(parsed_table=res, column_name='status')
+        str_status = self.get_property(parsed_table=res, column_name='status')
+        return TaskStatus.from_str(str_status)
 
         # expecting output of:
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
