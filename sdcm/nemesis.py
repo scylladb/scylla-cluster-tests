@@ -613,10 +613,18 @@ class Nemesis(object):
 
         node.remoter.run('cqlsh {} -e "{}" {}'.format(cql_auth, cmd, node.private_ip_address), verbose=True)
 
-    def _modify_table_property(self, name, val, keyspace="keyspace1", table="standard1"):
+    def _modify_table_property(self, name, val):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
-        cmd = "ALTER TABLE {keyspace}.{table} WITH {name} = {val};".format(**locals())
+
+        ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                                        db_node_ip=self.target_node.ip_address)
+        keyspace_table = ks_cfs[0] if ks_cfs else ks_cfs
+        if not keyspace_table:
+            self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
+            return
+
+        cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
         self._run_in_cqlsh(cmd)
 
     def modify_table_comment(self):

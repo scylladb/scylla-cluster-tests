@@ -2934,7 +2934,7 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
-    def get_non_system_ks_cf_list(self, loader_node, db_node_ip):
+    def get_non_system_ks_cf_list(self, loader_node, db_node_ip, request_timeout=300):
         """Get all not system keyspace.tables pairs
 
         Arguments:
@@ -2942,7 +2942,8 @@ class BaseLoaderSet(object):
             db_node_ip {str} -- ip of db_node
         """
         cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
-        result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+        result = loader_node.remoter.run('cqlsh --request-timeout={} --no-color --execute "{}" {}'
+                                         .format(request_timeout, cmd, db_node_ip), verbose=False)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
