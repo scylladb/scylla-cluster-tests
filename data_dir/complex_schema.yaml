@@ -1,13 +1,13 @@
 ### DML ###
 
-# cassandra-stress user profile=data_dir/sst3_schema.yaml  ops'(insert=3,read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1,alter_table=1,delete_row=0.1)' cl=QUORUM duration=10m
+# cassandra-stress user profile=data_dir/complex_schema.yaml  ops'(insert=3,read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1,alter_table=1,delete_row=0.1)' cl=QUORUM duration=10m
 
 # Keyspace Name
-keyspace: keyspace_sst3
+keyspace: keyspace_complex
 
 # The CQL for creating a keyspace (optional if it already exists)
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS keyspace_sst3 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+  CREATE KEYSPACE IF NOT EXISTS keyspace_complex WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
 
 # Table name
 table: user_with_ck
