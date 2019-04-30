@@ -931,6 +931,14 @@ class SCTConfiguration(dict):
         :raise Exception: on unsupported backends
         """
 
+        # check if there are SCT_* environment variable which aren't documented
+        config_keys = set([opt['env'] for opt in self.config_options])
+        env_keys = set([o for o in os.environ.keys() if o.startswith('SCT_')])
+        unknown_env_keys = (env_keys.difference(config_keys))
+        if unknown_env_keys:
+            output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
+            raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
+
         # check for unsupported configuration
         config_names = set([o['name'] for o in self.config_options])
         unsupported_option = set(self.keys()).difference(config_names)
@@ -1103,6 +1111,17 @@ if __name__ == "__main__":
             os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
             conf = SCTConfiguration()
             self.assertRaises(ValueError, conf.verify_configuration)
+
+        def test_09_unknown_env(self):
+            os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
+            os.environ['SCT_WHAT_IS_THAT'] = 'just_made_this_up'
+            os.environ['SCT_WHAT_IS_THAT_2'] = 'what is this ?'
+            conf = SCTConfiguration()
+            with self.assertRaises(ValueError) as cm:
+                conf.verify_configuration()
+
+            self.assertEquals(cm.exception.message, 'Unsupported environment variables were used:\n\t - SCT_WHAT_IS_THAT=just_made_this_up\n\t - SCT_WHAT_IS_THAT_2=what is this ?')
 
         def test_10_longevity(self):
             os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
