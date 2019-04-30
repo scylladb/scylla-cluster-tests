@@ -736,14 +736,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.get_cluster_baremetal()
 
         seeds_num = self.params.get('seeds_num', default=1)
-        if self.params.get('instance_provision') == 'mixed':
-            for node in self.db_cluster.nodes:
-                if seeds_num == 0:
-                    break
-                if node.is_spot:
-                    node.is_seed = True
-                    seeds_num -= 1
-        else:
+        if cluster_backend not in ['aws', 'aws-siren']:
             for i in range(seeds_num):
                 self.db_cluster.nodes[i].is_seed = True
 
