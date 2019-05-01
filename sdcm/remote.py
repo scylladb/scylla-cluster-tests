@@ -28,7 +28,7 @@ from invoke.watchers import StreamWatcher, Responder
 from avocado.utils import astring
 from avocado.utils import path
 
-from .log import SDCMAdapter
+from log import SDCMAdapter
 
 
 LOGGER_NAME = 'avocado.test'

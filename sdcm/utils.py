@@ -25,7 +25,7 @@ import select
 import sys
 import math
 
-from .remote import LocalCmdRunner
+from remote import LocalCmdRunner
 from textwrap import dedent
 from functools import wraps
 from collections import defaultdict
