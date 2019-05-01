@@ -10,6 +10,7 @@ import time
 import datetime
 
 from sdcm import wait
+from sdcm.utils import Distro
 
 logger = logging.getLogger(__name__)
 
@@ -419,11 +420,15 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def __init__(self, manager_node):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
-        # self._manager_node = manager_node
         sleep = 30
         logger.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
         time.sleep(sleep)
         logger.debug("Initiating Scylla-Manager, version: {}".format(self.version))
+        LIST_SUPPORTED_DISTROS = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16]
+        self.DEFAULT_USER = "centos"
+        if manager_node.distro not in LIST_SUPPORTED_DISTROS:
+            raise ScyllaManagerError(
+                "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
 
     @property
     def version(self):
