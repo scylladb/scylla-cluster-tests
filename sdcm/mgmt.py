@@ -468,16 +468,14 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def __init__(self, manager_node):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
-        # self._manager_node = manager_node
         sleep = 30
         logger.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
         time.sleep(sleep)
         logger.debug("Initiating Scylla-Manager, version: {}".format(self.version))
-        dict_distro_user = {Distro.CENTOS7: 'centos', Distro.DEBIAN8: 'admin', Distro.UBUNTU16: 'ubuntu'}
-        try:
-            self.user = dict_distro_user[manager_node.distro]
-        except KeyError as e:
-            raise ScyllaManagerError("Non-supported Distro found on Monitoring Node: {} - {}".format(manager_node.distro, e))
+        LIST_SUPPORTED_DISTROS = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16]
+        self.DEFAULT_USER = "centos"
+        if manager_node.distro not in LIST_SUPPORTED_DISTROS:
+            raise ScyllaManagerError("Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
 
     @property
     def version(self):
@@ -580,7 +578,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
-        user = user or self.user
+        user = user or self.DEFAULT_USER
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
         res_ssh_setup = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
         ssh_user = create_user or 'scylla-manager'
