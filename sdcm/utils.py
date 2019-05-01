@@ -240,7 +240,7 @@ class S3Storage(object):
 
 
 def list_logs_by_test_id(test_id):
-    log_types = ['db-cluster', 'monitor-set', 'prometheus', 'grafana', 'job', 'annotations']
+    log_types = ['db-cluster', 'monitor-set', 'prometheus', 'grafana', 'job', 'annotations', 'monitoring_data_stack']
     results = []
 
     if not test_id:
