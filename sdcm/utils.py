@@ -25,7 +25,6 @@ import select
 import sys
 import math
 
-from .remote import LocalCmdRunner
 from textwrap import dedent
 from functools import wraps
 from collections import defaultdict
@@ -259,6 +258,8 @@ def list_logs_by_test_id(test_id):
 
 
 def restore_monitoring_stack(test_id):
+    from .remote import LocalCmdRunner
+
     lr = LocalCmdRunner()
     logger.info("Checking that docker is available...")
     result = lr.run('docker ps', ignore_status=True, verbose=False)
