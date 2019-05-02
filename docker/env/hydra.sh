@@ -78,7 +78,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
-    -u $(id -u ${USER}):$(grep "docker" /etc/group|cut -d: -f3) \
+    -u $(id -u ${USER}):$(grep "docker:" /etc/group|cut -d: -f3) \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
     ${AWS_OPTIONS} \
