@@ -1240,10 +1240,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         finally:
             if self._failure_post_behavior == 'destroy':
                 clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
-            self.zip_and_upload_job_log()
-
             InfoEvent('TEST_END')
             stop_events_device()
+            self.collect_events_log()
+            self.zip_and_upload_job_log()
 
     def zip_and_upload_job_log(self):
         job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
@@ -1259,6 +1259,24 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
         if self.create_stats:
             self.log.info("ES document id: {}".format(self.get_doc_id()))
+
+    def collect_events_log(self):
+        event_log_base_dir = os.path.dirname(os.path.dirname(self.logdir))
+        event_log_dir = os.path.join(event_log_base_dir, 'events_log')
+        if not os.path.exists(event_log_dir):
+            os.mkdir(event_log_dir)
+        for f in ['events.log', 'raw_events.log']:
+            f_path = os.path.join(event_log_base_dir, f)
+            shutil.copy(f_path, event_log_dir)
+        archive_name = os.path.basename(event_log_dir)
+        try:
+            event_log_archive = shutil.make_archive(archive_name, 'zip', event_log_dir)
+            s3_link = S3Storage().upload_file(file_path=event_log_archive, dest_dir=cluster.Setup.test_id())
+            if self.create_stats:
+                self.update({'test_details': {'log_files': {'events_log': s3_link}}})
+            self.log.info('Link to events log archive {}'.format(s3_link))
+        except Exception as details:
+            self.log.warning('Errors during creating and uploading archive of events log. {}'.format(details))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
