@@ -807,8 +807,10 @@ class Nemesis(object):
                            text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
-        thread1.join(timeout=120)
+        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception"), \
+             DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'):
+            self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
+            thread1.join(timeout=120)
 
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
