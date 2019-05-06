@@ -29,8 +29,6 @@ import itertools
 from base64 import decodestring
 import requests
 
-import requests
-
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
@@ -3202,6 +3200,11 @@ class BaseMonitorSet(object):
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
                       json_filename=sct_dashboard_json)
 
+    def get_sct_dashboards_config(self, node):
+        sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
+
+        return get_data_dir_path(sct_dashboard_json_filename)
+
     def download_monitoring_data_dir(self, node):
         try:
             local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
@@ -3299,7 +3302,7 @@ class BaseMonitorSet(object):
                            str(details))
         return {}
 
-    def upload_annotations_to_s3(self, ):
+    def upload_annotations_to_s3(self):
         annotations_url = ''
         if not self.nodes:
             return annotations_url
@@ -3442,9 +3445,22 @@ class BaseMonitorSet(object):
 
     def get_monitoring_data_stack(self, node):
         archive_name = "monitoring_data_stack_{0.monitor_branch}_{0.monitoring_version}.tar.gz".format(self)
-        node.remoter.run("cd {}; sudo tar -czvf {} {}/".format(self.monitor_install_path_base,
-                                                               archive_name,
-                                                               os.path.basename(self.monitor_install_path)),
+
+        sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
+
+        node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir))
+        sct_dashboard_file = self.get_sct_dashboards_config(node)
+        node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
+
+        annotations_json = self.get_grafana_annotations(node)
+        tmp_dir = tempfile.mkdtemp()
+        with open(os.path.join(tmp_dir, 'annotations.json'), 'w') as f:
+            f.write(annotations_json)
+        node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
+
+        node.remoter.run("cd {}; tar -czvf {} {}/".format(self.monitor_install_path_base,
+                                                          archive_name,
+                                                          os.path.basename(self.monitor_install_path)),
                          ignore_status=True)
         node.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
                            dst=self.logdir)

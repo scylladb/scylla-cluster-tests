@@ -187,15 +187,7 @@ class RemoteCmdRunner(CommandRunner):
     def reconnect(self):
         self.log.debug('Reconnecting to host ...')
         self.connection.close()
-        self.connection = None
-        self._create_connection(self.hostname,
-                                user=self.user,
-                                port=self.port,
-                                config=self.ssh_config,
-                                connect_timeout=self.connect_timeout,
-                                connect_kwargs={
-                                    'key_filename': os.path.expanduser(self.key_file),
-                                })
+        self.connection.open()
         self.log.debug('SSH reconnected')
 
     def ssh_debug_cmd(self):
