@@ -24,6 +24,7 @@ import concurrent.futures
 import select
 import sys
 import math
+import json
 
 from textwrap import dedent
 from functools import wraps
@@ -241,8 +242,7 @@ class S3Storage(object):
 def list_logs_by_test_id(test_id):
     log_types = ['db-cluster', 'monitor-set',
                  'prometheus', 'grafana',
-                 'job', 'annotations',
-                 'monitoring_data_stack', 'events']
+                 'job', 'monitoring_data_stack', 'events']
     results = []
 
     if not test_id:
@@ -307,7 +307,7 @@ def restore_monitoring_stack(test_id):
             cmd = dedent("""
                 cd {workdir}
                 tar -xvf {archive}
-                """.format(workdir=monitor_stack_workdir, archive=os.path.basename(local_path_monitor_stack)))
+                """.format(workdir=monitor_stack_workdir, archive=monitoring_stack_archive_file))
             result = lr.run(cmd, ignore_status=True)
         if not result.ok:
                 logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
@@ -317,6 +317,40 @@ def restore_monitoring_stack(test_id):
     logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
 
     monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-grafana-monitoring-{}'.format(monitoring_branch))
+
+    def upload_sct_dashboards():
+        sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
+        sct_dashboard_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', sct_dashboard_file_name)
+        if not os.path.exists(sct_dashboard_file):
+            logger.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
+            return False
+
+        dashboard_url = 'http://localhost:3000/api/dashboards/db'
+        with open(sct_dashboard_file, "r") as f:
+            dashboard_config = json.load(f)
+
+        res = requests.post(dashboard_url, data=json.dumps(dashboard_config), headers={'Content-Type': 'application/json'})
+        if res.status_code != 200:
+            logger.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
+            return False
+        logger.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
+
+    def upload_annotations():
+        annotations_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', 'annotations.json')
+        if not os.path.exists(annotations_file):
+            logger.info('There is no annotations file.Skip loading annotations')
+            return False
+
+        with open(annotations_file, "r") as f:
+            annotations = json.load(f)
+
+        annotations_url = "http://localhost:3000/api/annotations"
+        for an in annotations:
+            res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
+            if res.status_code != 200:
+                logger.info('Error during uploading annotation {}. Error message {}'.format(an, res.text))
+                return False
+        logger.info('Annotations loaded successfully')
 
     @retrying(n=3, sleep_time=1, message='Start docker containers')
     def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
@@ -336,6 +370,8 @@ def restore_monitoring_stack(test_id):
 
     status = False
     status = start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version)
+    upload_sct_dashboards()
+    upload_annotations()
     return status
 
 
