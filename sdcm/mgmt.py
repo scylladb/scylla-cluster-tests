@@ -228,11 +228,12 @@ class HealthcheckTask(ManagerTask):
 
 class ManagerCluster(ScyllaManagerBase):
 
-    def __init__(self, manager_node, cluster_id, client_encrypt=False):
+    def __init__(self, manager_node, cluster_id, ssh_identity_file, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
+        self.ssh_identity_file = ssh_identity_file
 
     def create_repair_task(self):
         cmd = "repair -c {}".format(self.id)
