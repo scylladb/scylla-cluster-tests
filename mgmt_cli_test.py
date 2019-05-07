@@ -66,7 +66,7 @@ class MgmtCliTest(ClusterTester):
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
         origin_ssh_user = mgr_cluster.ssh_user
-        origin_rsa_id = mgmt.MANAGER_IDENTITY_FILE
+        origin_rsa_id = mgr_cluster.ssh_identity_file
         new_ssh_user = "centos"
         new_rsa_id = '/tmp/scylla-test'
 
