@@ -159,7 +159,7 @@ class MgmtCliTest(ClusterTester):
         new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR,new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
-        res_ssh_setup = manager_tool.scylla_mgr_ssh_setup(node_ip=selected_host_ip, single_node=True, create_user=new_user)
+        res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(node_ip=selected_host_ip, single_node=True, create_user=new_user)
         self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
         new_user_login_message = "This account is currently not available"
         # sudo ssh -i /root/.ssh/qa_user.pem -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 qa_user@54.163.180.81

@@ -534,7 +534,19 @@ class ScyllaManagerTool(ScyllaManagerBase):
         logger.debug("SSH setup command is: {}".format(cmd))
         res = self.manager_node.remoter.run(cmd)
         MgrUtils.verify_errorless_result(cmd=cmd, res=res)
-        return res
+
+        ssh_identity_file = [arg for arg in res.stdout.split('\n') if "--ssh-identity-file" in arg][0].split()[-1]
+
+        try:
+            logger.debug("res.stdout: {}".format(res.stdout))
+            logger.debug("res.stdout.split('\n'): {}".format(res.stdout.split('\n')))
+            logger.debug("res.stdout.split('\n')[-2]: {}".format(res.stdout.split('\n')[-1]))
+            logger.debug("res.stdout.split('\n')[-2].split(): {}".format(res.stdout.split('\n')[-1].split()))
+            # ssh_identity_file = res.stdout.split('\n')[-1].split()[-1]
+        except Exception as e:
+            raise ScyllaManagerError("Failed to parse scyllamgr_ssh_setup output: {}".format(e))
+
+        return res, ssh_identity_file
 
     def _get_cluster_hosts_ip(self, db_cluster):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips(db_cluster=db_cluster)]
@@ -580,10 +592,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         user = user or self.DEFAULT_USER
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        res_ssh_setup = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
+        res_ssh_setup, ssh_identity_file = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
         ssh_user = create_user or 'scylla-manager'
-        manager_identity_file = MANAGER_IDENTITY_FILE
-        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, manager_identity_file,
+        # manager_identity_file = ssh_identity_file
+        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, ssh_identity_file,
                                                                                             ssh_user, name)
         # Adding client-encryption parameters if required
         if client_encrypt != False:
