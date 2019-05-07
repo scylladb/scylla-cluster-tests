@@ -359,6 +359,15 @@ class UpgradeTest(FillDatabaseData):
         # wait for the sst3 workload to finish
         self.verify_stress_thread(sst3_cs_thread_pool)
 
+        error_factor = 2
+        schema_load_error_num = 0
+
+        for node in self.db_cluster.nodes:
+            errors = node.search_database_log('Failed to load schema version')
+            schema_load_error_num += len(errors)
+        self.log.debug('schema_load_error_num: %d' % schema_load_error_num)
+        assert schema_load_error_num <= error_factor * 8 * len(self.db_cluster.nodes), 'Only allowing shards_num * %s schema load errors per host during the entire test' % error_factor
+
         self.log.debug('start sstabledump verify')
         self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f |grep -v manifest.json |grep -v snapshots`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
 
