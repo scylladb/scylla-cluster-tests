@@ -58,8 +58,8 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
-        cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name, host=selected_host)
+        cluster_name = 'mgr_cluster_crud'
+        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
 
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
