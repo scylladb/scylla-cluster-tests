@@ -726,13 +726,6 @@ class SCTConfiguration(dict):
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
-
-        dict(name="disable_read_repair_chance", env="SCT_DISABLE_READ_REPAIR_CHANCE",  type=str_or_list,
-
-             help="""cassandra-stress commands.
-                You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure.
-                multiple commands can passed as a list"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',

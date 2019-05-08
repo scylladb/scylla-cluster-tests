@@ -276,11 +276,6 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
-        node = self.db_cluster.nodes[0]
-        cmd = 'ALTER TABLE keyspace1.standard1 with dclocal_read_repair_chance = 0.0 and read_repair_chance =0.0'
-        if self.params.get('disable_read_repair_chance', default=None):
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
-
         # upgrade first node
         self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
