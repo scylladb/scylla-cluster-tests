@@ -204,6 +204,17 @@ class SCTConfiguration(dict):
             using ngrok server, see readme for more instructions
          """),
 
+        dict(name="cleanup_cluster", env="SCT_CLEANUP_CLUSTER", type=str,
+             help="""
+             If true, will cleanup the cluster before running setup
+             If not true, and reuse_cluster not set, and the cluster
+             is installed, the pre-setup will fail.
+             """),
+
+        dict(name="enable_scylla_developer_mode", env="SCT_ENABLE_SCYLLA_DEVELOPER_MODE", type=str,
+             help="developer mode will make scylla_setup verification to skip disk/network checks"),
+
+
         dict(name="reuse_cluster", env="SCT_REUSE_CLUSTER", type=str,
              help="""
             If true `test_id` would be used to run a test with existing cluster.
@@ -516,6 +527,9 @@ class SCTConfiguration(dict):
 
         # baremetal config options
 
+        dict(name="baremetal_username", env="SCT_BAREMETAL_USERNAME", type=str,
+             help="The user name that would be used for ssh access"),
+
         dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP",  type=str_or_list,
              help=""),
 
@@ -820,7 +834,7 @@ class SCTConfiguration(dict):
 
         'libvirt':  ['libvirt_uri', 'libvirt_bridge', 'scylla_repo'],
 
-        'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
+        'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path', 'baremetal_username'],
 
         'openstack': ['openstack_user', 'openstack_password', 'openstack_tenant', 'openstack_auth_version',
                       'openstack_auth_url', 'openstack_service_type', 'openstack_service_name', 'openstack_service_region',

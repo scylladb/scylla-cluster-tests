@@ -173,6 +173,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cluster.Setup.set_test_id(self.params.get('test_id'))
         cluster.Setup.set_test_name(self.id())
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
+        cluster.Setup.cleanup_cluster(self.params.get('cleanup_cluster', default=False))
+        cluster.Setup.enable_scylla_developer_mode(self.params.get('enable_scylla_developer_mode', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
         cluster_backend = self.params.get('cluster_backend', default='')
         if cluster_backend == 'aws':
@@ -565,7 +567,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     params=self.params,
                     targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
                 )
-                return cluster_baremetal.ScyllaPhysicalCluster(**params)
+                return cluster_baremetal.ScyllaCloudPhysicalCluster(**params)
 
         db_type = self.params.get('db_type')
         if db_type in ('scylla', 'cassandra'):
@@ -701,27 +703,40 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def get_cluster_baremetal(self):
         user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-        params = dict(
-            n_nodes=[self.params.get('n_db_nodes')],
-            public_ips=self.params.get('db_nodes_public_ip', None),
-            private_ips=self.params.get('db_nodes_private_ip', None),
+        username = self.params.get('baremetal_username', None)
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials, username=username))
+        common_params = dict(
             user_prefix=self.params.get('user_prefix', None),
             credentials=self.credentials,
             params=self.params,
-            targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
         )
-        self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
-        params['n_nodes'] = int(self.params.get('n_loaders'))
-        params['public_ips'] = self.params.get('loaders_public_ip')
-        params['private_ips'] = self.params.get('loaders_private_ip')
-        self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
+        db_params = dict(
+            n_nodes=[self.params.get('n_db_nodes')],
+            public_ips=self.params.get('db_nodes_public_ip', None),
+            private_ips=self.params.get('db_nodes_private_ip', None),
+            **common_params
+        )
 
-        params['n_nodes'] = self.params.get('n_monitor_nodes')
-        params['public_ips'] = self.params.get('monitor_nodes_public_ip')
-        params['private_ips'] = self.params.get('monitor_nodes_private_ip')
-        self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
+        self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**db_params)
+
+        loader_params = dict(
+            n_nodes=self.params.get('n_loaders'),
+            public_ips=self.params.get('loaders_public_ip'),
+            private_ips=self.params.get('loaders_private_ip'),
+            **common_params
+        )
+
+        self.loaders = cluster_baremetal.LoaderSetPhysical(**loader_params)
+
+        monitor_params = dict(
+            targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+            n_nodes=self.params.get('n_monitor_nodes'),
+            public_ips=self.params.get('monitor_nodes_public_ip'),
+            private_ips=self.params.get('monitor_nodes_private_ip'),
+            **common_params
+        )
+        self.monitors = cluster_baremetal.MonitorSetPhysical(**monitor_params)
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -1249,6 +1264,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.db_cluster.stop_nemesis(timeout=1800)
             # TODO: this should be run in parallel
             for node in self.db_cluster.nodes:
+                node.stop_scylla(verify_down=False, verify_up=False, ignore_status=True)
                 node.stop_task_threads(timeout=60)
 
         if self.loaders is not None:

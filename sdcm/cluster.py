@@ -164,6 +164,8 @@ class Setup(object):
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
     MULTI_REGION = False
+    CLEANUP_CLUSTER = False
+    ENABLE_SCYLLA_DEVELOPER_MODE = False
 
     _test_id = None
     _test_name = None
@@ -210,6 +212,14 @@ class Setup(object):
     @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
+
+    @classmethod
+    def cleanup_cluster(cls, val=False):
+        cls.CLEANUP_CLUSTER = val
+
+    @classmethod
+    def enable_scylla_developer_mode(cls, val=False):
+        cls.ENABLE_SCYLLA_DEVELOPER_MODE = val
 
     @classmethod
     def keep_cluster(cls, val='destroy'):
@@ -259,10 +269,10 @@ def prepend_user_prefix(user_prefix, base_name):
 
 class UserRemoteCredentials(object):
 
-    def __init__(self, key_file):
+    def __init__(self, key_file, username=None):
         self.type = 'user'
         self.key_file = key_file
-        self.name = os.path.basename(self.key_file)
+        self.name = username if username else os.path.basename(self.key_file)
         self.key_pair_name = self.name
 
     def __str__(self):
@@ -333,6 +343,12 @@ class BaseNode(object):
         self._distro = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
+        self.yum_path = '/etc/yum.repos.d'
+        self.apt_path = '/etc/apt/sources.list.d'
+        self.rhel_repo_path = '%s/scylla.repo' % self.yum_path
+        self.repo_path = '%s/scylla.list' % self.apt_path
+        self.rhel_manager_repo_path = '%s/scylla-manager.repo' % self.yum_path
+        self.manager_repo_path = '%s/scylla-manager.list' % self.apt_path
 
     @property
     def cassandra_stress_version(self):
@@ -375,6 +391,18 @@ class BaseNode(object):
     @distro.setter
     def distro(self, new_distro):
         self._distro = new_distro
+
+    def open_firewall_port(self, port_number):
+        if self.is_rhel_like():
+            open_port_cmd = dedent('''
+                firewall-cmd --zone=public --add-port={port_number}/tcp --permanent
+                firewall-cmd --reload
+                iptables -I INPUT -p tcp -m tcp --dport {port_number} -j ACCEPT
+                iptables-save
+            '''.format(port_number=port_number))
+            self.remoter.run('sudo bash -cxe "{}"'.format(open_port_cmd), ignore_status=True)
+        else:
+            logger.warning('open firewall port is supported only for RHEL now')
 
     def probe_distro(self):
         # Probe the distro type
@@ -1010,7 +1038,7 @@ class BaseNode(object):
         if uuid_result.exit_status == 0 and mark_result.exit_status != 0:
             result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
             self.remoter.run(cmd % result.stdout.strip())
-            self.remoter.run('sudo -u scylla touch %s' % mark_path,
+            self.remoter.run('sudo -n -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
     def wait_db_up(self, verbose=True, timeout=3600):
@@ -1350,43 +1378,64 @@ server_encryption_options:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
             return
         if self.is_rhel_like():
-            repo_path = '/etc/yum.repos.d/scylla.repo'
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-            self.remoter.run('sudo chown root:root %s' % repo_path)
-            self.remoter.run('sudo chmod 644 %s' % repo_path)
-            result = self.remoter.run('cat %s' % repo_path, verbose=True)
+            self.remoter.run('sudo curl -o %s -L %s' % (self.rhel_repo_path, scylla_repo))
+            self.remoter.run('sudo chown root:root %s' % self.rhel_repo_path)
+            self.remoter.run('sudo chmod 644 %s' % self.rhel_repo_path)
+            result = self.remoter.run('cat %s' % self.rhel_repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
             self.remoter.run('sudo yum clean all')
         else:
-            repo_path = '/etc/apt/sources.list.d/scylla.list'
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-            result = self.remoter.run('cat %s' % repo_path, verbose=True)
+            self.remoter.run('sudo curl -o %s -L %s' % (self.repo_path, scylla_repo))
+            result = self.remoter.run('cat %s' % self.repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
     def download_scylla_manager_repo(self, scylla_repo):
         if self.is_rhel_like():
-            repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+            repo_path = self.rhel_manager_repo_path
         else:
-            repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+            repo_path = self.manager_repo_path
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
-    def clean_scylla(self):
+    def clean_scylla_db(self):
         """
         Uninstall scylla
         """
+        self.log.info('CLEANING UP SCYLLADB')
         self.stop_scylla_server(verify_down=False, ignore_status=True)
+        self.remoter.run('sudo rm -rf /run/log/journal/*', ignore_status=True)
         if self.is_rhel_like():
             self.remoter.run('sudo yum remove -y scylla\*')
             self.remoter.run('sudo yum clean all')
+            self.remoter.run('sudo rm -f %s' % self.rhel_repo_path)
+
         else:
-            self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
             self.remoter.run('sudo apt-get clean all')
-        self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
-        self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
+            self.remoter.run('sudo rm -f %s' % self.repo_path)
+
+        scylla_mount = self.remoter.run('mount | grep scylla | awk -F" " \'{print $3}\'')
+        if scylla_mount.stdout:
+            self.remoter.run('sudo umount %s' % scylla_mount.stdout.strip())
+
+        md_device = self.remoter.run('ls /dev/md*', ignore_status=True)
+        if md_device.return_code == 0:
+            for dev in md_device.stdout.splitlines():
+                self.remoter.run('sudo mdadm --stop %s' % dev.split('/')[-1])
+        cleanup_cmd = dedent('''
+            # stopping previous runs of journalctl -f
+            kill -9 $(ps -fe | grep "journalctl -f" | awk '{print $2}')
+            pkill -9 node_exporter
+            rm -rf /var/lib/scylla*
+            rm -rf /usr/lib/scylla*
+            rm -f /usr/bin/node_exporter
+            rm -f /usr/bin/prometheus-node_exporter
+            rm -rf /etc/scylla*
+            rm -rf /opt/scylladb*
+        ''')
+        self.remoter.run('sudo bash -cx "{}"'.format(cleanup_cmd), ignore_status=True)
 
     def install_scylla(self, scylla_repo):
         """
@@ -1395,15 +1444,14 @@ server_encryption_options:
         """
         if self.is_rhel_like():
             result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-            if result.exit_status == 0:
-                self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-            else:
-                self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+            if result.exit_status != 0:
+                self.remoter.run('sudo yum install -y epel-release')
+            self.remoter.run('sudo yum update -y --skip-broken', retry=3)
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
-            self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+            self.remoter.run('sudo yum install -y {0} {0}-debuginfo'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
             self.remoter.run('sudo yum install -y scylla-debuginfo', ignore_status=True)
         else:
@@ -1462,9 +1510,9 @@ server_encryption_options:
         :param nvme: NVMe(True) or SCSI(False) disk
         :return: list of disk names
         """
-        patt = ('nvme0n*', 'nvme0n\w+') if nvme else ('sd[b-z]', 'sd\w+')
-        result = self.remoter.run('ls /dev/{}'.format(patt[0]))
-        disks = re.findall('/dev/{}'.format(patt[1]), result.stdout)
+        device_pattern, disk_pattern = ('nvme*n*', 'nvme\w+n\w+') if nvme else ('sd[b-z]', 'sd\w+')
+        result = self.remoter.run('ls /dev/{}'.format(device_pattern))
+        disks = re.findall('/dev/{}'.format(disk_pattern), result.stdout)
         assert disks, 'Failed to find disks!'
         self.log.debug("Found disks: %s", disks)
         return disks
@@ -1475,7 +1523,8 @@ server_encryption_options:
         Setup scylla
         :param disks: list of disk names
         """
-        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        result = self.remoter.run('/sbin/ip -f inet -o address show | grep -v "lo " | awk -F" " \'{print $2}\'',
+                                  verbose=True)
         devname = result.stdout.strip()
         self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
         result = self.remoter.run('cat /proc/mounts')
@@ -1486,6 +1535,8 @@ server_encryption_options:
         if not self.is_ubuntu14():
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
+        self.start_scylla()
+        self.start_scylla_jmx()
 
     def upgrade_mgmt(self, scylla_mgmt_repo):
         self.download_scylla_manager_repo(scylla_mgmt_repo)
@@ -1696,7 +1747,7 @@ server_encryption_options:
             self.wait_jmx_up(timeout=timeout)
 
     @log_run_info
-    def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
+    def start_scylla(self, verify_up=True, verify_down=False, timeout=900):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
@@ -1722,8 +1773,9 @@ server_encryption_options:
             self.wait_jmx_down(timeout=timeout)
 
     @log_run_info
-    def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
-        self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+    def stop_scylla(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
+        self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout,
+                                ignore_status=ignore_status)
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
@@ -2470,9 +2522,20 @@ class BaseScyllaCluster(object):
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = self.get_seed_nodes_by_flag()
 
+        # FIXME: get the port numbers from config yaml
+        scylla_default_ports = (9042, 7000, 7001, 7199, 10000, 9180, 9100, 9160)
+
+        for port in scylla_default_ports:
+            node.open_firewall_port(port_number=port)
+
+        if Setup.CLEANUP_CLUSTER:
+            node.clean_scylla_db()
+
         if not Setup.REUSE_CLUSTER:
-            node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+
+            if Setup.ENABLE_SCYLLA_DEVELOPER_MODE:
+                node.remoter.run('sudo /usr/lib/scylla/scylla_dev_mode_setup --developer-mode 1')
 
             if Setup.MULTI_REGION:
                 if not endpoint_snitch:
@@ -2501,6 +2564,7 @@ class BaseScyllaCluster(object):
             self.log.info('io.conf right after reboot')
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
+        # FIXME: shall need to run start services instead of only waiting for it?
         node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
 
@@ -2595,9 +2659,15 @@ class BaseLoaderSet(object):
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
             logger.debug('Gemini version {}'.format(self.gemini_version))
 
+    def clean_loader(self, node):
+        node.remoter.run('sudo kill -9 $(ps -fe | grep cassandra-stress | awk \'{print $2}\')', ignore_status=True)
+
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
+
+        if Setup.CLEANUP_CLUSTER:
+            self.clean_loader(node=node)
 
         if Setup.REUSE_CLUSTER:
             self.kill_stress_thread()
@@ -3132,9 +3202,23 @@ class BaseMonitorSet(object):
     def is_enterprise(self):
         return self.targets["db_cluster"].nodes[0].is_enterprise
 
+    def clean_monitor(self, node):
+        self.stop_scylla_monitoring(node=node)
+        cleanup_cmd = dedent('''
+            cd {0.monitor_install_path_base}
+            rm -rf *{0.monitor_branch}*
+            '''.format(self))
+        node.remoter.run('bash -cxe {}'.format(cleanup_cmd), ignore_status=True)
+
     def node_setup(self, node, **kwargs):
         self.log.info('Setup in BaseMonitorSet')
         node.wait_ssh_up()
+
+        scyla_monitor_ports = (3000, 9103, 9090)
+        for port in scyla_monitor_ports:
+            node.open_firewall_port(port_number=port)
+        if Setup.CLEANUP_CLUSTER:
+            self.clean_monitor(node)
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
@@ -3247,14 +3331,15 @@ class BaseMonitorSet(object):
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
-            mkdir -p {0.monitor_install_path_base}
-            cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{0.monitor_branch}.zip
-            unzip {0.monitor_branch}.zip
-        """.format(self))
+            mkdir -p {self.monitor_install_path_base}
+            cd {self.monitor_install_path_base}
+            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{self.monitor_branch}.zip
+            unzip -o {self.monitor_branch}.zip
+        """.format(self=self))
         node.remoter.run("bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
+        self.stop_scylla_monitoring(node)
         db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()

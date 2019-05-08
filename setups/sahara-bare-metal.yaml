@@ -1,0 +1,13 @@
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+ip_ssh_connections: 'private'
+
+db_nodes_public_ip: [10.0.4.131, 10.0.4.132, 10.0.4.133]
+db_nodes_private_ip: [10.0.4.131, 10.0.4.132, 10.0.4.133]
+loaders_public_ip: [10.0.4.151, 10.0.4.152, 10.0.4.153]
+loaders_private_ip: [10.0.4.151, 10.0.4.152, 10.0.4.153]
+monitor_nodes_public_ip: [10.0.4.154]
+monitor_nodes_private_ip: [10.0.4.154]
+
+enable_scylla_developer_mode: True

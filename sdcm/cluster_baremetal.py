@@ -42,19 +42,16 @@ class PhysicalMachineNode(cluster.BaseNode):
         # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
         pass
 
-    def detect_disks(self):
-        """
-        Detect local disks
-        """
-        min_size = 50 * 1024 * 1024 * 1024  # 50gb
-        result = self.remoter.run('lsblk -nbo KNAME,SIZE,MOUNTPOINT -s -d')
-        lines = [line.split() for line in result.stdout.splitlines()]
-        disks = ['/dev/{}'.format(l[0]) for l in lines if l and int(l[1]) > min_size and len(l) == 2]
-        assert disks, 'Failed to find disks!'
-        return disks
-
     def restart(self):
-        self.remoter.run('sudo reboot -h now', ignore_status=True)
+        self.remoter.run('sudo shutdown -r now', ignore_status=True)
+
+    def reboot(self, hard=True, verify_ssh=True):
+        if hard:
+            self.remoter.run('sudo shutdown -f', ignore_status=True)
+        else:
+            self.remoter.run('sudo shutdown -r now', ignore_status=True)
+        if verify_ssh:
+            self.wait_ssh_up()
 
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
@@ -73,6 +70,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
         super(PhysicalMachineCluster, self).__init__(node_prefix=kwargs.get('node_prefix'),
+                                                     cluster_prefix=kwargs.get('cluster_prefix'),
                                                      n_nodes=n_nodes,
                                                      params=params)
 
@@ -100,12 +98,17 @@ class PhysicalMachineCluster(cluster.BaseCluster):
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
-        self._user_prefix = kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX)
-        self._node_prefix = '%s-%s' % (self._user_prefix, BASE_NAME)
-        super(ScyllaPhysicalCluster, self).__init__(node_prefix=kwargs.get('node_prefix', self._node_prefix),
+        user_prefix = kwargs.get('user_prefix', None)
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
+
+        super(ScyllaPhysicalCluster, self).__init__(cluster_prefix=cluster_prefix, node_prefix=node_prefix,
                                                     **kwargs)
 
-    def node_setup(self, node, verbose=False):
+
+class ScyllaCloudPhysicalCluster(ScyllaPhysicalCluster):
+
+    def node_setup(self, node, verbose=False, timeout=3600):
         """
         Configure scylla.yaml on cluster nodes.
         We have to modify scylla.yaml on our own because we are not on AWS,
@@ -114,11 +117,16 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         pass  # self._node_setup(node, verbose)
 
 
-class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
+class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
-        self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
-        super(LoaderSetPhysical, self).__init__(node_prefix=self._node_prefix, **kwargs)
+        user_prefix = kwargs.get('user_prefix', None)
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
+
+        cluster.BaseLoaderSet.__init__(self, params=kwargs.get('params', None))
+
+        PhysicalMachineCluster.__init__(self, cluster_prefix=cluster_prefix, node_prefix=node_prefix, **kwargs)
 
     @classmethod
     def _get_node_ips_param(cls, ip_type='public'):
@@ -128,8 +136,11 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
-        self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), MONITOR_NAME)
+        user_prefix = kwargs.get('user_prefix', None)
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
+
         cluster.BaseMonitorSet.__init__(self,
                                         targets=kwargs["targets"],
                                         params=kwargs["params"])
-        PhysicalMachineCluster.__init__(self, node_prefix=self._node_prefix, **kwargs)
+        PhysicalMachineCluster.__init__(self, cluster_prefix=cluster_prefix, node_prefix=node_prefix, **kwargs)

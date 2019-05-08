@@ -1,0 +1,16 @@
+test_duration: 43300
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=43200m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=43200m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress counter_write cl=QUORUM duration=43200m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=5 -pop seq=1..20971520"
+             ]
+
+scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-2019.1.repo'
+
+nemesis_class_name: 'ScyllaCloudLimitedChaosMonkey'
+nemesis_interval: 60
+
+user_prefix: 'longevity-bare-metal'
+space_node_threshold: 64424

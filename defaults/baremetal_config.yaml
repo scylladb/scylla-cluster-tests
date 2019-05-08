@@ -1,1 +1,4 @@
 user_credentials_path: '~/.ssh/scylla-test'
+baremetal_username: scylla-test
+cleanup_cluster: True
+reuse_cluster: False
