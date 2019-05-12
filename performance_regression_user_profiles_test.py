@@ -34,8 +34,8 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
             ks = [line.split(':')[-1].strip() for line in fdr.readlines() if line.startswith('keyspace:')]
         if ks:
             self.log.debug('Drop keyspace {}'.format(ks[0]))
-            session = self.cql_connection_patient(self.db_cluster.nodes[0])
-            session.execute('DROP KEYSPACE IF EXISTS {};'.format(ks[0]))
+            with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                session.execute('DROP KEYSPACE IF EXISTS {};'.format(ks[0]))
 
     def test_user_profiles(self):
         """

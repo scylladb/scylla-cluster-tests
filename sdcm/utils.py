@@ -311,8 +311,8 @@ def restore_monitoring_stack(test_id):
                 """.format(workdir=monitor_stack_workdir, archive=monitoring_stack_archive_file))
             result = lr.run(cmd, ignore_status=True)
         if not result.ok:
-                logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
-                return False
+            logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
+            return False
         logger.info("Extracting data finished")
 
     logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
@@ -699,3 +699,15 @@ def _fromtimestamp(t, tz=None):
     else:
         result = tz.fromutc(result)
     return result
+
+
+class ScyllaCQLSession(object):
+    def __init__(self, session, cluster):
+        self.session = session
+        self.cluster = cluster
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cluster.shutdown()

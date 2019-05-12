@@ -50,7 +50,7 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances
+from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -235,8 +235,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if system_auth_rf:
             self.log.info('change RF of system_auth to %s' % system_auth_rf)
             node = self.db_cluster.nodes[0]
-            session = self.cql_connection_patient(node)
-            session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
+            with self.cql_connection_patient(node) as session:
+                session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
             node.remoter.run('nodetool repair -- system_auth')
 
@@ -938,8 +938,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # override driver default consistency level of LOCAL_QUORUM
         session.default_consistency_level = ConsistencyLevel.ONE
 
-        self.connections.append(session)
-        return session
+        return ScyllaCQLSession(session, cluster)
 
     def cql_connection(self, node, keyspace=None, user=None,
                        password=None, compression=True, protocol_version=None,

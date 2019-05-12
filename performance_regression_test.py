@@ -209,23 +209,23 @@ class PerformanceRegressionTest(ClusterTester):
         self.check_regression()
 
     def prepare_mv(self, on_populated=False):
-        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
+        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
 
-        ks_name = 'keyspace1'
-        base_table_name = 'standard1'
-        if not on_populated:
-            # Truncate base table before materialized view creation
-            self.log.debug('Truncate base table: {0}.{1}'.format(ks_name, base_table_name))
-            self.truncate_cf(ks_name, base_table_name, session)
+            ks_name = 'keyspace1'
+            base_table_name = 'standard1'
+            if not on_populated:
+                # Truncate base table before materialized view creation
+                self.log.debug('Truncate base table: {0}.{1}'.format(ks_name, base_table_name))
+                self.truncate_cf(ks_name, base_table_name, session)
 
-        # Create materialized view
-        view_name = base_table_name + '_mv'
-        self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-        self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
-                                      mv_columns=['"C0"', 'key'])
+            # Create materialized view
+            view_name = base_table_name + '_mv'
+            self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
+            self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
+                                          mv_columns=['"C0"', 'key'])
 
-        # Wait for the materialized view is built
-        self._wait_for_view(self.db_cluster, session, ks_name, view_name)
+            # Wait for the materialized view is built
+            self._wait_for_view(self.db_cluster, session, ks_name, view_name)
 
     def _write_with_mv(self, on_populated):
         """
@@ -338,34 +338,34 @@ class PerformanceRegressionTest(ClusterTester):
 
     def _scylla_bench_prepare_table(self):
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
-        session.execute("""
-            CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
-            AND durable_writes = true;
-        """)
-        session.execute("""
-            CREATE TABLE scylla_bench.test (
-                pk bigint,
-                ck bigint,
-                v blob,
-                PRIMARY KEY (pk, ck)
-            ) WITH CLUSTERING ORDER BY (ck ASC)
-                AND bloom_filter_fp_chance = 0.01
-                AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
-                AND comment = ''
-                AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60',
-                'compaction_window_unit': 'MINUTES'}
-                AND compression = {}
-                AND crc_check_chance = 1.0
-                AND dclocal_read_repair_chance = 0.1
-                AND default_time_to_live = 86400
-                AND gc_grace_seconds = 0
-                AND max_index_interval = 2048
-                AND memtable_flush_period_in_ms = 0
-                AND min_index_interval = 128
-                AND read_repair_chance = 0.0
-                AND speculative_retry = 'NONE';
-        """)
+        with self.cql_connection_patient(node) as session:
+            session.execute("""
+                CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
+                AND durable_writes = true;
+            """)
+            session.execute("""
+                CREATE TABLE scylla_bench.test (
+                    pk bigint,
+                    ck bigint,
+                    v blob,
+                    PRIMARY KEY (pk, ck)
+                ) WITH CLUSTERING ORDER BY (ck ASC)
+                    AND bloom_filter_fp_chance = 0.01
+                    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+                    AND comment = ''
+                    AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60',
+                    'compaction_window_unit': 'MINUTES'}
+                    AND compression = {}
+                    AND crc_check_chance = 1.0
+                    AND dclocal_read_repair_chance = 0.1
+                    AND default_time_to_live = 86400
+                    AND gc_grace_seconds = 0
+                    AND max_index_interval = 2048
+                    AND memtable_flush_period_in_ms = 0
+                    AND min_index_interval = 128
+                    AND read_repair_chance = 0.0
+                    AND speculative_retry = 'NONE';
+            """)
 
     # Base Tests
     def test_write(self):
@@ -509,9 +509,9 @@ class PerformanceRegressionTest(ClusterTester):
             query = 'drop materialized view {}'.format(mv_name)
 
             try:
-                session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
-                self.log.debug('Run query: {}'.format(query))
-                session.execute(query)
+                with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+                    self.log.debug('Run query: {}'.format(query))
+                    session.execute(query)
             except Exception as e:
                 self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, e.message))
                 raise Exception
