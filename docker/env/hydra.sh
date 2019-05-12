@@ -64,7 +64,7 @@ BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 # export all AWS_* env vars into the docker run
 AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
-docker run --rm ${TTY_STDIN} --privileged \
+container=$(docker run ${TTY_STDIN} --detach=true --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \
     -v ${SCT_DIR}:${WORK_DIR} \
@@ -83,4 +83,33 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${AWS_OPTIONS} \
     --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
+    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}")
+
+
+kill_it() {
+    if [[ -n "$container" ]]; then
+        docker rm -f "$container" > /dev/null
+        container=
+    fi
+}
+
+trap kill_it SIGTERM SIGINT SIGHUP EXIT
+
+docker logs "$container" -f
+
+if [[ -n "$container" ]]; then
+    exitcode="$(docker wait "$container")"
+else
+    exitcode=99
+fi
+
+echo "Docker exitcode: $exitcode"
+
+kill_it
+
+trap - SIGTERM SIGINT SIGHUP EXIT
+
+# after "docker kill", docker wait will not print anything
+[[ -z "$exitcode" ]] && exitcode=1
+
+exit "$exitcode"
