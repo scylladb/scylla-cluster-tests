@@ -171,7 +171,7 @@ class CassandraStressThread(object):
         results = []
 
         LOGGER.debug('Wait for %s stress threads results', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures):
+        for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
         for node, result in results:
@@ -189,7 +189,7 @@ class CassandraStressThread(object):
         errors = []
 
         LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures):
+        for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
         for node, result in results:
