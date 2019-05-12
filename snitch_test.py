@@ -32,10 +32,11 @@ class SnitchTest(ClusterTester):
         result = self.db_cluster.nodes[0].remoter.run('nodetool describecluster')
         assert 'GoogleCloudSnitch' in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 
-        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
-        result = list(session.execute('select * from system.peers'))
-        self.log.debug(result)
-        assert result, 'ERROR: system.peers should be not empty.'
+        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+            result = list(session.execute('select * from system.peers'))
+            self.log.debug(result)
+            assert result, 'ERROR: system.peers should be not empty.'
+
         self.log.info("PASS: system.peers isn't empty as expected")
 
         result = self.db_cluster.nodes[0].remoter.run('nodetool status', verbose=True)

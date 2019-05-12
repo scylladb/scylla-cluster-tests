@@ -581,12 +581,12 @@ class Nemesis(object):
         # get the count of the truncate table
         test_keyspaces = self.cluster.get_test_keyspaces()
         cql = "SELECT COUNT(*) FROM {}.{}".format(keyspace_truncate, table)
-        session = self.tester.cql_connection_patient(self.target_node)
-        try:
-            data = session.execute(cql)
-            table_truncate_count = data[0].count
-        except InvalidRequest:
-            self.log.warning("Keyspace ks_truncate does not exist")
+        with self.tester.cql_connection_patient(self.target_node) as session:
+            try:
+                data = session.execute(cql)
+                table_truncate_count = data[0].count
+            except InvalidRequest:
+                self.log.warning("Keyspace ks_truncate does not exist")
         self.log.debug("table_truncate_count=%d", table_truncate_count)
 
         # if key space doesn't exist or the table is empty, create it using c-s
@@ -846,7 +846,7 @@ class Nemesis(object):
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
         with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception"), \
-             DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'):
+                DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'):
             self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)
 
