@@ -1,0 +1,22 @@
+test_duration: 60
+
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_loader: 'c5.2xlarge'
+
+user_prefix: 'system-sla'
+failure_post_behavior: keep
+space_node_threshold: 644
+
+# We want to run each user load on its own loader
+round_robin: 'true'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'ScyllaAuthorizer'
+
+use_mgmt: true
