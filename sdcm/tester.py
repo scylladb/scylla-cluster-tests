@@ -22,6 +22,7 @@ import boto3.session
 import libvirt
 import shutil
 import random
+
 import unittest
 import zipfile
 
@@ -79,6 +80,7 @@ try:
 except ImportError:
     pass
 
+
 TEST_LOG = logging.getLogger(__name__)
 
 
@@ -115,7 +117,8 @@ class FlakyRetryPolicy(RetryPolicy):
 
 def teardown_on_exception(method):
     """
-    Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
+    Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs
+    are uploaded
 
     :param method: ScyllaClusterTester method to wrap.
     :return: Wrapped method.
@@ -135,7 +138,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def __init__(self, methodName='test'):
         super(ClusterTester, self).__init__(methodName=methodName)
-
         self.status = "RUNNING"
         self.params = SCTConfiguration()
         self.params.verify_configuration()
@@ -235,7 +237,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info('change RF of system_auth to %s' % system_auth_rf)
             node = self.db_cluster.nodes[0]
             with self.cql_connection_patient(node) as session:
-                session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
+                session.execute("ALTER KEYSPACE system_auth WITH replication = "
+                                "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
+                                "'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
@@ -788,7 +792,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds)
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
+                                           aggregate=stats_aggregate_cmds)
 
         return CassandraStressThread(loader_set=self.loaders,
                                      stress_cmd=stress_cmd,
@@ -1115,8 +1120,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cl_clause = ', '.join(cl for cl in mv_clustering_key)
 
         query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
-            'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
-                                                                                            table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
+            'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name,
+                                                                                            mv_columns=mv_columns_str,
+                                                                                            table_name=base_table_name,
+                                                                                            where_clause=' and '.join
+                                                                                            (wc for wc in where_clause),
                                                                                             pk=pk_clause, cl=cl_clause)
         if compression is not None:
             query = ('%s AND compression = { \'sstable_compression\': '
@@ -1140,7 +1148,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.debug("Waiting for view {}.{} to finish building...".format(ks, view))
 
         def _view_build_finished(live_nodes_amount):
-            result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE keyspace_name='{0}' "
+            result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE "
+                                                       "keyspace_name='{0}' "
                                                        "AND view_name='{1}'".format(ks, view)))
             self.log.debug('View build status result: {}'.format(result))
             return len([status for status in result if status[0] == 'SUCCESS']) >= live_nodes_amount
@@ -1440,8 +1449,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         num_shards = self.get_num_shards(node)
         hints_after_send_completed = num_shards * num_dest_nodes
         # after hints were sent to all nodes, the number of files should be 1 per shard per destination
-        assert self.get_num_of_hint_files(node) <= hints_after_send_completed, "Waiting until the number of hint files " \
-            "will be %s." % hints_after_send_completed
+        assert self.get_num_of_hint_files(node) <= hints_after_send_completed, "Waiting until the number of hint files"\
+            " will be %s." % hints_after_send_completed
         assert self.hints_sending_in_progress() is False, "Waiting until Prometheus hints counter will not change"
 
     def verify_no_drops_and_errors(self, starting_from):
@@ -1529,7 +1538,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.create_stats:
             self.update({'test_details': {'log_files': logs_dict}})
 
-        self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".format(cluster.Setup.test_id()))
+        self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
+                      format(cluster.Setup.test_id()))
 
     def archive_logs(self, path):
         self.log.info('Creating archive....')

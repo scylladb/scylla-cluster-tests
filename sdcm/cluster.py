@@ -2998,7 +2998,7 @@ class BaseLoaderSet(object):
         enable_parse = False
 
         for line in lines:
-            line.strip()
+            line = line.strip()
             if not line:
                 continue
             # Parse loader & cpu info
@@ -3007,7 +3007,8 @@ class BaseLoaderSet(object):
                 results['loader_idx'] = ret[0][0]
                 results['cpu_idx'] = ret[0][1]
                 results['keyspace_idx'] = ret[0][2]
-
+            if line.startswith('Username:'):
+                results['username'] = line.split('Username:')[1].strip()
             if line.startswith('Results:'):
                 enable_parse = True
                 continue
