@@ -3329,31 +3329,40 @@ class BaseMonitorSet(object):
         start_time = str(test_start_time).split('.')[0] + '000'
 
         screenshot_names = [
-            'per-server-metrics-nemesis',
-            'overview-metrics'
+            {
+                'name': 'per-server-metrics-nemesis',
+                'path': 'dashboard/db/scylla-{scr_name}-{version}',
+                'size': '1920px*7000px'
+            },
+            {
+                'name': 'overview-metrics',
+                'path': 'd/overview-{version}/scylla-{scr_name}',
+                'size': '1920px*4000px'
+            }
         ]
 
-        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/dashboard/db/{scylla_pkg}-{scr_name}-{version}?from={st}&to=now"
+        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
+
         try:
             self.install_phantom_js()
-            scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 screenshots = []
                 snapshots = []
-                for i, name in enumerate(screenshot_names):
+                for i, screenshot in enumerate(screenshot_names):
                     version = self.monitoring_version.replace('.', '-')
+                    path = screenshot['path'].format(
+                        version=version,
+                        scr_name=screenshot['name'])
                     grafana_url = screenshot_url_tmpl.format(
                         node_ip=node.public_ip_address,
                         grafana_port=self.grafana_port,
-                        scylla_pkg=scylla_pkg,
-                        scr_name=name,
-                        version=version,
+                        path=path,
                         st=start_time)
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
-                                                 "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
+                                                 "grafana-screenshot-%s-%s-%s.png" % (screenshot['name'], datetime_now, n))
 
-                    screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path))
+                    screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path, screenshot['size']))
                     snapshots.append(self._get_shared_snapshot_link(grafana_url))
 
                 return {'screenshots': screenshots, 'snapshots': snapshots}
@@ -3363,9 +3372,9 @@ class BaseMonitorSet(object):
                            str(details))
         return {}
 
-    def _get_screenshot_link(self, grafana_url, snapshot_path):
-        localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
-                        grafana_url, snapshot_path))
+    def _get_screenshot_link(self, grafana_url, snapshot_path, size):
+        localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" %s" % (
+                        grafana_url, snapshot_path, size))
         return S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id())
 
     def _get_shared_snapshot_link(self, grafana_url):
