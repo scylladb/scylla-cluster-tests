@@ -18,14 +18,19 @@ from sdcm.utils import FileFollowerThread
 
 
 class CassandraStressExporter(FileFollowerThread):
+    METRICS = {}
+
     def __init__(self, instance_name, metrics, cs_operation, cs_log_filename, loader_idx, cpu_idx):
         super(CassandraStressExporter, self).__init__()
         self.metrics = metrics
         self.cs_operation = cs_operation
         self.cs_log_filename = cs_log_filename
-        self.cs_metric = self.metrics.create_gauge('collectd_cassandra_stress_%s_gauge' % self.cs_operation,
-                                                   'Gauge for cassandra stress metrics',
-                                                   ['cassandra_stress_%s' % self.cs_operation, 'instance', 'loader_idx', 'cpu_idx', 'type'])
+        gauge_name = 'collectd_cassandra_stress_%s_gauge' % self.cs_operation
+        if gauge_name not in self.METRICS:
+            self.METRICS[gauge_name] = self.metrics.create_gauge('collectd_cassandra_stress_%s_gauge' % self.cs_operation,
+                                                                 'Gauge for cassandra stress metrics',
+                                                                 ['cassandra_stress_%s' % self.cs_operation, 'instance', 'loader_idx', 'cpu_idx', 'type'])
+        self.cs_metric = self.METRICS[gauge_name]
         self.instance_name = instance_name
         self.loader_idx = loader_idx
         self.cpu_idx = cpu_idx
