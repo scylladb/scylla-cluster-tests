@@ -46,6 +46,12 @@ def str_or_list(value):
 
 
 def int_or_list(value):
+    try:
+        value = int(value)
+        return value
+    except Exception:
+        pass
+
     if isinstance(value, basestring):
         try:
             values = value.split()
@@ -53,8 +59,6 @@ def int_or_list(value):
             return value
         except Exception:  # pylint: disable=broad-except
             pass
-    elif isinstance(value, int):
-        return value
 
     raise ValueError("{} isn't int or list".format(value))
 
