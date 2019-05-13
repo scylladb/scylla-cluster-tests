@@ -384,6 +384,8 @@ class BaseNode(object):
                 distro = Distro.UBUNTU14
             elif 'Ubuntu 16.04' in result.stdout:
                 distro = Distro.UBUNTU16
+            elif 'Ubuntu 18.04' in result.stdout:
+                distro = Distro.UBUNTU18
             elif 'Debian GNU/Linux 8' in result.stdout:
                 distro = Distro.DEBIAN8
             elif 'Debian GNU/Linux 9' in result.stdout:
@@ -419,8 +421,11 @@ class BaseNode(object):
     def is_ubuntu16(self):
         return self.distro == Distro.UBUNTU16
 
+    def is_ubuntu18(self):
+        return self.distro == Distro.UBUNTU18
+
     def is_ubuntu(self):
-        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14
+        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14 or self.distro == Distro.UBUNTU18
 
     def is_debian8(self):
         return self.distro == Distro.DEBIAN8
@@ -445,6 +450,9 @@ class BaseNode(object):
             return
         if self.is_ubuntu16() and ubuntu16_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
+            return
+        if self.is_ubuntu18() and ubuntu18_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu18_pkgs)
             return
         if self.is_ubuntu14() and ubuntu14_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
@@ -1259,6 +1267,17 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_ubuntu18() or self.is_ubuntu16():
+                install_prereqs = dedent("""
+                    apt-get install software-properties-common -y
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    add-apt-repository -y ppa:scylladb/ppa
+                    apt-get update
+                    apt-get install -y openjdk-8-jre-headless
+                    update-java-alternatives -s java-1.8.0-openjdk-amd64
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
                 self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
@@ -2423,7 +2442,10 @@ class BaseLoaderSet(object):
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
-        node.download_scylla_repo(self.params.get('scylla_repo'))
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')

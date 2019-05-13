@@ -132,8 +132,9 @@ class Distro(Enum):
     RHEL7 = 2
     UBUNTU14 = 3
     UBUNTU16 = 4
-    DEBIAN8 = 5
-    DEBIAN9 = 6
+    UBUNTU18 = 5
+    DEBIAN8 = 6
+    DEBIAN9 = 7
 
 
 def get_data_dir_path(*args):
