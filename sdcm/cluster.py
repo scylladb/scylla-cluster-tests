@@ -838,8 +838,8 @@ class BaseNode(object):
     def start_task_threads(self):
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
             self.start_journal_thread()
-        self.start_backtrace_thread()
-        self.start_db_log_reader_thread()
+            self.start_backtrace_thread()
+            self.start_db_log_reader_thread()
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
