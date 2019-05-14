@@ -1,0 +1,36 @@
+# TODO: need to qualify on GCE and AWS
+
+test_duration: 65
+
+# workloads
+write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=60000000 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..60000000 -log interval=5
+verify_stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=60000000 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..60000000 -log interval=5
+prepare_write_stress: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_cl_quorum: cassandra-stress read no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3) compression=DeflateCompressor' -port jmx=6868 -mode cql3 native compression=none -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3) compression=SnappyCompressor' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_read_20m: cassandra-stress read no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd_complex_prepare: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(insert=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
+stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1)' cl=ONE n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
+stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
+stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(delete_row=1)' cl=ALL n=500000 -mode cql3 native -rate threads=200 -pop seq=1..500000
+
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+
+user_prefix: 'rolling-upgrade'
+failure_post_behavior: destroy
+
+experimental: 'true'
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+authorization_in_upgrade: 'CassandraAuthorizer'
+remove_authorization_in_rollback: true
+
+# those are needed to be give by the job, via environment variable
+# for the base version
+# SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
+# for the upgrading version you need:
+# SCT_NEW_SCYLLA_REPO=https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/e438e3e3ce41f6c878b111f5c19bf2b28aa51098-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-e616363bdc0e7a0d193a157851d7c15d952a0aad-a6b2b2355c666b1893f702a587287da978aeec22/53/scylla.repo

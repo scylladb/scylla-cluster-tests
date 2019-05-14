@@ -1,0 +1,10 @@
+test_duration: 70
+
+n_db_nodes: 2
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+
+user_prefix: 'janusgraph-integration'
+failure_post_behavior: destroy

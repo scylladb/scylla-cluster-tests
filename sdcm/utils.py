@@ -516,7 +516,7 @@ def list_instances_gce(tags_dict, region_name=None):
     return instances
 
 
-_scylla_ami_cache = None
+_scylla_ami_cache = defaultdict(dict)
 
 
 def get_scylla_ami_versions(region):
@@ -527,10 +527,9 @@ def get_scylla_ami_versions(region):
     :return: list of ami data
     :rtype: list
     """
-    global _scylla_ami_cache
 
-    if _scylla_ami_cache:
-        return _scylla_ami_cache
+    if _scylla_ami_cache[region]:
+        return _scylla_ami_cache[region]
 
     EC2 = boto3.client('ec2', region_name=region)
     response = EC2.describe_images(
@@ -540,11 +539,11 @@ def get_scylla_ami_versions(region):
         ],
     )
 
-    _scylla_ami_cache = sorted(response['Images'],
-                               key=lambda x: x['CreationDate'],
-                               reverse=True)
+    _scylla_ami_cache[region] = sorted(response['Images'],
+                                       key=lambda x: x['CreationDate'],
+                                       reverse=True)
 
-    return _scylla_ami_cache
+    return _scylla_ami_cache[region]
 
 
 _s3_scylla_repos_cache = defaultdict(dict)

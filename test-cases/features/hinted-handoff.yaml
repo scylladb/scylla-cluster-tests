@@ -1,0 +1,21 @@
+# TODO: need to qualify
+test_duration: 300
+
+# cluster definition
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+
+# Options
+user_prefix: 'hinted-handoff'
+
+hinted_handoff_disabled: false
+space_node_threshold: 644245094
+server_encrypt: 'true'
+
+# Nemesis
+nemesis_class_name: 'ValidateHintedHandoffShortDowntime'
+nemesis_interval: 20
+nemesis_during_prepare: 'true'
