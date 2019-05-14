@@ -3297,28 +3297,33 @@ class BaseMonitorSet(object):
         start_time = str(test_start_time).split('.')[0] + '000'
 
         screenshot_names = [
-            'per-server-metrics-nemesis',
-            'overview-metrics'
+            {
+                'name': 'per-server-metrics-nemesis',
+                'path': 'dashboard/db/scylla-{scr_name}-{version}'},
+            {
+                'name': 'overview-metrics',
+                'path': 'd/overview-{version}/scylla-{scr_name}'
+            }
         ]
 
-        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/dashboard/db/{scylla_pkg}-{scr_name}-{version}?from={st}&to=now"
+        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
         try:
             self.install_phantom_js()
-            scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 screenshots = []
-                for i, name in enumerate(screenshot_names):
+                for i, screen in enumerate(screenshot_names):
                     version = self.monitoring_version.replace('.', '-')
+                    path = screen['path'].format(
+                        version=version,
+                        scr_name=screen['name'])
                     grafana_url = screenshot_url_tmpl.format(
                         node_ip=node.public_ip_address,
                         grafana_port=self.grafana_port,
-                        scylla_pkg=scylla_pkg,
-                        scr_name=name,
-                        version=version,
+                        path=path,
                         st=start_time)
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
-                                                 "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
+                                                 "grafana-screenshot-%s-%s-%s.png" % (screen['name'], datetime_now, n))
                     process.run("cd phantomjs-2.1.1-linux-x86_64 && "
                                 "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
                                     grafana_url, snapshot_path), shell=True)
