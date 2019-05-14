@@ -1385,6 +1385,8 @@ server_encryption_options:
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
+            # hack cause of broken caused by EPEL
+            self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:

@@ -20,6 +20,10 @@ class ConfigurationTests(unittest.TestCase):
 
         cls.conf = SCTConfiguration()
 
+        for k, _ in os.environ.items():
+            if k.startswith('SCT_'):
+                del os.environ[k]
+
     def tearDown(self):
         for k, _ in os.environ.items():
             if k.startswith('SCT_'):
@@ -41,15 +45,15 @@ class ConfigurationTests(unittest.TestCase):
     def test_04_check_env_parse(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
-        os.environ['SCT_N_DB_NODES'] = '2 2 2'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
         conf.dump_config()
 
-        self.assertEqual(conf.get('security_group_ids'), 'sg-059a7f66a947d4b5c sg-c5e1f7a0 sg-c5e1f7a0 sg-059a7f66a947d4b5c')
+        self.assertEqual(conf.get('security_group_ids'), 'sg-059a7f66a947d4b5c sg-c5e1f7a0')
 
     def test_05_docker(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -109,8 +113,9 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(conf.get('user_prefix'), 'longevity-50gb-4d-not-jenkins-master')
 
     def test_10_mananger_regression(self):
+
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
@@ -131,10 +136,12 @@ class ConfigurationTests(unittest.TestCase):
         conf = SCTConfiguration()
         conf.verify_configuration()
 
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0f1aa8afb878fed2b ami-027c1337dcb46da50')
+
     def test_12_scylla_version_ami_case1(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
@@ -150,7 +157,6 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
 
@@ -159,21 +165,19 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
 
     def test_12_scylla_version_repo_case2(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+
         self.assertRaisesRegexp(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
     def test_12_scylla_version_repo_ubuntu(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
 

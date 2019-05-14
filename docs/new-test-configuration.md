@@ -16,21 +16,47 @@
 |-- libvirt_config.yaml
 
 # test case files which are taken from command line
-/tests
+/tests-cases
 |-- testcase_logevity_1TB-7days.yaml
 |-- testcase_logevity_50Gb-4days.yaml
 
 ```
 
 ## Example of usage
+
+### with Avocado
 ```bash
-export SCT_NEW_CONFIG=yes # temporary, so we can still work with the old config yamls
+# with avocado directly
+export SCT_NEW_CONFIG=yes
 
-export SCT_TEST_DURATION=600 # overwrite from environment variables
-export SCT_CLUSTER_BACKEND=aws # including backend selection, we can decide on the default backend, for example docker one
-export SCT_CONFIG_FILES='["tests/longevity-50GB-4days.yaml","overwrites.ini"]'
-
+export SCT_CLUSTER_BACKEND=aws
+export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'
+export SCT_NGROK_NAME=`whoami` # if using ngrok
 avocado --show test run longevity_test.py:LongevityTest.test_custom_time
+```
+
+### with hydra
+```bash
+# with hydra
+export SCT_NEW_CONFIG=yes
+
+export SCT_CLUSTER_BACKEND=aws
+export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'
+export SCT_NGROK_NAME=`whoami` # if using ngrok
+hydra run longevity_test.py:LongevityTest.test_custom_time
+```
+
+### with unittest
+```bash
+# Future: once avocado would be removed:
+# with hydra
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-10gb-3h.yaml
+
+# directly with unittest
+export SCT_CLUSTER_BACKEND=aws
+export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'
+python -m unittest longevity_test.LongevityTest.test_custom_time
+
 ```
 
 ## Validation
@@ -38,8 +64,8 @@ Having one place we define all the available configs, their help test and defaul
 (similar to argparse api, https://docs.python.org/3/library/argparse.html)
 ````python
 config_option = [
-    dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", help="", default="docker", type=str, required=True),
-    dict(name="test_duration", end="SCT_TEST_DURATION", help="", default=600, type=int, requried=True),
+    dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", help="", type=str),
+    dict(name="test_duration", end="SCT_TEST_DURATION", help="", type=int),
     ...
 ]
 

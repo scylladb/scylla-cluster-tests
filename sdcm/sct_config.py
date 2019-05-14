@@ -395,6 +395,12 @@ class SCTConfiguration(dict):
         dict(name="gce_image", env="SCT_GCE_IMAGE",  type=str,
              help=""),
 
+        dict(name="gce_image_db", env="SCT_GCE_IMAGE_DB", type=str,
+             help=""),
+
+        dict(name="gce_image_monitor", env="SCT_GCE_IMAGE_MONITOR", type=str,
+             help=""),
+
         dict(name="gce_image_username", env="SCT_GCE_IMAGE_USERNAME",  type=str,
              help=""),
 
@@ -738,10 +744,10 @@ class SCTConfiguration(dict):
                 multiple commands can passed as a list"""),
 
         dict(name="write_stress_during_entire_test", env="SCT_WRITE_STRESS_DURING_ENTIRE_TEST",  type=str_or_list,
-
              help="""cassandra-stress commands.
-                You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure."""),
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
 
         dict(name="verify_data_after_entire_test", env="SCT_VERIFY_DATA_AFTER_ENTIRE_TEST",  type=str_or_list,
 
@@ -792,7 +798,7 @@ class SCTConfiguration(dict):
     }
 
     multi_region_params = [
-        'region_name'
+        'region_name', 'n_db_nodes', 'security_group_ids', 'subnet_id', 'ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor'
     ]
 
     def __init__(self):
@@ -853,14 +859,16 @@ class SCTConfiguration(dict):
             # Look for the version, and return it's info ami + repo
             # According to backend, populate 'scylla_repo' or 'ami_id_db_scylla'
             if 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
-                amis = get_scylla_ami_versions(self.get('region_name'))
-                for ami in amis:
-                    if scylla_version in ami['Name']:
-                        self['ami_id_db_scylla'] = ami['ImageId']
-                        break
-                else:
-                    raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
-
+                ami_list = []
+                for region in self.get('region_name').split():
+                    amis = get_scylla_ami_versions(region)
+                    for ami in amis:
+                        if scylla_version in ami['Name']:
+                            ami_list.append(ami['ImageId'])
+                            break
+                    else:
+                        raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
+                self['ami_id_db_scylla'] = " ".join(ami_list)
             elif 'scylla_repo' not in self:
                 repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
@@ -992,6 +1000,20 @@ class SCTConfiguration(dict):
             _check_backend_defaults(backend, self.backend_required_params[backend])
         else:
             raise ValueError("Unsupported backend [{}]".format(backend))
+
+        # verify multi-region aws params
+        if backend in ['aws', 'aws-siren']:
+            region_count = {}
+            for opt in self.multi_region_params:
+                val = self.get(opt)
+                if isinstance(val, basestring):
+                    region_count[opt] = len(self.get(opt).split())
+                elif isinstance(val, list):
+                    region_count[opt] = len(val)
+                else:
+                    region_count[opt] = 1
+            if not all(region_count['region_name'] == x for x in region_count.values()):
+                raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
     def dump_config(self):
         """
