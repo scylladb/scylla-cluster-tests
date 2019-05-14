@@ -830,26 +830,32 @@ class SCTConfiguration(dict):
         # 2.2) load the region data
         region_names = self.get('region_name', '').split()
         region_names = env.get('region_name', region_names)
-        for region in region_names:
-            for k, v in regions_data[region].items():
-                if k not in self.keys():
-                    self[k] = v
-                else:
-                    self[k] += " {}".format(v)
 
-        # 3) overwrite with environment variables
-        anyconfig.merge(self, env)
+        cluster_backend = self.get('cluster_backend')
+        cluster_backend = env.get('cluster_backend', cluster_backend)
 
-        # 4) assume multi dc by n_db_nodes set size
-        num_of_regions = len(self.get('region_name', '').split())
-        num_of_db_nodes_sets = len(str(self.get('n_db_nodes', '')).split(' '))
-        if num_of_db_nodes_sets > num_of_regions:
-            for region in regions_data.keys()[:num_of_db_nodes_sets]:
+        if 'aws' in cluster_backend:
+            for region in region_names:
                 for k, v in regions_data[region].items():
                     if k not in self.keys():
                         self[k] = v
                     else:
                         self[k] += " {}".format(v)
+
+        # 3) overwrite with environment variables
+        anyconfig.merge(self, env)
+
+        # 4) assume multi dc by n_db_nodes set size
+        if 'aws' in cluster_backend:
+            num_of_regions = len(self.get('region_name', '').split())
+            num_of_db_nodes_sets = len(str(self.get('n_db_nodes', '')).split(' '))
+            if num_of_db_nodes_sets > num_of_regions:
+                for region in regions_data.keys()[:num_of_db_nodes_sets]:
+                    for k, v in regions_data[region].items():
+                        if k not in self.keys():
+                            self[k] = v
+                        else:
+                            self[k] += " {}".format(v)
 
         # 5) handle scylla_version if exists
         scylla_version = self.get('scylla_version', None)
@@ -887,7 +893,7 @@ class SCTConfiguration(dict):
         # 6) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version', None)
         if new_scylla_version:
-            if 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
+            if 'ami_id_db_scylla' not in self and cluster_backend == 'aws':
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif 'new_scylla_repo' not in self:
