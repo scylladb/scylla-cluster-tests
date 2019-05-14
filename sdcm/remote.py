@@ -229,7 +229,8 @@ class RemoteCmdRunner(CommandRunner):
                     raise
 
         self._print_command_results(result, verbose)
-
+        result.stdout = result.stdout.encode(encoding='utf-8')
+        result.stderr = result.stderr.encode(encoding='utf-8')
         return result
 
     def is_up(self, timeout=30):
