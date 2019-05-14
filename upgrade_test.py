@@ -291,12 +291,12 @@ class UpgradeTest(FillDatabaseData):
         # wait for the prepare write workload to finish
         self.verify_stress_thread(prepare_write_cs_thread_pool)
 
-        # read workload (cl=ONE)
-        self.log.info('Starting c-s read workload (cl=ONE n=10000000)')
-        stress_cmd_read_cl_one = self.params.get('stress_cmd_read_cl_one')
-        read_cl_one_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_one)
-        # wait for the cl=ONE read workload to finish
-        self.verify_stress_thread(read_cl_one_stress_queue)
+        # read workload (cl=QUORUM)
+        self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
+        stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
+        read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
+        # wait for the read workload to finish
+        self.verify_stress_thread(read_stress_queue)
 
         # read workload
         self.log.info('Starting c-s read workload for 10m')
@@ -339,8 +339,8 @@ class UpgradeTest(FillDatabaseData):
 
         self.verify_stress_thread(entire_write_cs_thread_pool)
 
-        verify_data_after_entire_test = self.params.get('verify_data_after_entire_test')
-        verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_data_after_entire_test)
+        verify_stress_after_cluster_upgrade = self.params.get('verify_stress_after_cluster_upgrade')
+        verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
