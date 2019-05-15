@@ -3031,12 +3031,26 @@ class BaseMonitorSet(object):
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
         self.monitor_branch = self.params.get('monitor_branch', default='branch-2.3')
-        self.monitor_install_path_base = "/home/{}".format(self.params.get('ami_monitor_user'), default='centos')
-        self.monitor_install_path = os.path.join(self.monitor_install_path_base,
-                                                 "scylla-grafana-monitoring-{}".format(self.monitor_branch))
-        self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
-        self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
+        self._monitor_install_path_base = None
         self.phantomjs_installed = False
+
+    @property
+    def monitor_install_path_base(self):
+        if not self._monitor_install_path_base:
+            self._monitor_install_path_base = self.nodes[0].remoter.run("echo $HOME").stdout.strip()
+        return self._monitor_install_path_base
+
+    @property
+    def monitor_install_path(self):
+        return os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-{}".format(self.monitor_branch))
+
+    @property
+    def monitoring_conf_dir(self):
+        return os.path.join(self.monitor_install_path, "config")
+
+    @property
+    def monitoring_data_dir(self):
+        return os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
