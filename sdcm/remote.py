@@ -19,10 +19,11 @@ import shutil
 import tempfile
 import time
 import getpass
+import socket
 
-from socket import gethostname
 from fabric import Connection, Config
-from invoke.exceptions import UnexpectedExit, Failure
+from fabric.connection import opens
+from invoke.exceptions import UnexpectedExit, Failure, ThreadException
 from invoke.watchers import StreamWatcher, Responder
 
 from avocado.utils import astring
@@ -41,6 +42,34 @@ class OutputCheckError(Exception):
     Remote command output check failed.
     """
     pass
+
+
+class CmdExecTimeoutExceeded(socket.timeout):
+
+    """Exception which should be raised if
+    command execution time exceeds predefined timeout
+
+    """
+    pass
+
+
+class ConnectionCmdTimeout(Connection):
+
+    def __init__(self, host, user=None, port=None, config=None, gateway=None, forward_agent=None, connect_timeout=None, connect_kwargs=None):
+        super(ConnectionCmdTimeout, self).__init__(host, user, port, config, gateway, forward_agent, connect_timeout, connect_kwargs)
+        self.cmd_timeout = None
+
+    def run(self, command, **kwargs):
+        self.cmd_timeout = kwargs.pop('cmd_timeout', None)
+        runner = self.config.runners.remote(self)
+        return self._run(runner, command, **kwargs)
+
+    @opens
+    def create_session(self):
+        channel = super(ConnectionCmdTimeout, self).create_session()
+        if self.cmd_timeout:
+            channel.settimeout(self.cmd_timeout)
+        return channel
 
 
 def _scp_remote_escape(filename):
@@ -101,7 +130,7 @@ class CommandRunner(object):
 
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
-            self.connection = Connection(*args, **kwargs)
+            self.connection = ConnectionCmdTimeout(*args, **kwargs)
 
     def _print_command_results(self, result, verbose=True):
 
@@ -124,7 +153,7 @@ class CommandRunner(object):
 class LocalCmdRunner(CommandRunner):
 
     def __init__(self, password=''):
-        hostname = gethostname()
+        hostname = socket.gethostname()
         user = getpass.getuser()
         super(LocalCmdRunner, self).__init__(hostname, user=user, password=password)
         self._create_connection(hostname, user=user)
@@ -211,21 +240,28 @@ class RemoteCmdRunner(CommandRunner):
                 if verbose:
                     self.log.debug('Running command "{}"...'.format(cmd))
                 watchers.append(OutputWatcher(self, verbose))
+
                 start_time = time.time()
                 if log_file:
                     watchers.append(LogWriteWatcher(log_file))
+
                 result = self.connection.run(cmd, warn=ignore_status,
                                              encoding='utf-8', hide=True,
-                                             watchers=watchers)
+                                             watchers=watchers, cmd_timeout=timeout)
 
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
                 break
-
             except Exception as details:
                 if i == retry:
+                    if isinstance(details, ThreadException):
+                        for exc in details.exceptions:
+                            if issubclass(exc.type, socket.timeout):
+                                error_msg = 'Time of command "{}" execution exceeded timeout {}'.format(cmd, timeout)
+                                raise CmdExecTimeoutExceeded(error_msg)
                     if hasattr(details, "result"):
                         self._print_command_results(details.result, verbose)
+
                     raise
 
         self._print_command_results(result, verbose)
