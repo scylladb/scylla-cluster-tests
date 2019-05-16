@@ -1145,6 +1145,17 @@ class ChaosMonkey(Nemesis):
         self.call_random_disrupt_method()
 
 
+class GeminiChaosMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        # Limit the nemesis scope to use with gemini
+        # - StopStartMonkey
+        # - RestartThenRepairMonkey
+        self.call_random_disrupt_method(disrupt_methods=['disrupt_stop_start_scylla_server',
+                                                         'disrupt_restart_then_repair_node'])
+
+
 class LimitedChaosMonkey(Nemesis):
 
     @log_time_elapsed_and_status

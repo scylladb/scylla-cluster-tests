@@ -2910,7 +2910,7 @@ class BaseLoaderSet(object):
             result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} --outfile {}".format(
                                       cmd.strip(), test_node, oracle_node, gemini_log),
                                       timeout=timeout,
-                                      ignore_status=True,
+                                      ignore_status=False,
                                       log_file=log_file_name)
             queue[RES_QUEUE].put((node, result, gemini_log))
             queue[TASK_QUEUE].task_done()

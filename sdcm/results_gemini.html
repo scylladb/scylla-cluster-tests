@@ -10,6 +10,21 @@
             <li>Gemini version: {{ gemini_version }}</li>
         </ul>
     </div>
+    <h3>Nemesis Details</h3>
+    <h4>Running nemesis: {{ nemesis_name }}</h4>
+    {% if nemesis_details %}
+        <div>
+            <table id='results_table'>
+                <tr><th>Nemesis name</th><th>Count</th></tr>
+            {% for name, detail in nemesis_details.items() %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ detail['cnt'] }}</td>
+                </tr>
+            {% endfor %}
+            </table>
+        </div>
+    {% endif %}
     <h3>
         <span>System under test </span>
     </h3>
@@ -27,7 +42,7 @@
         <ul>
             <li>Scylla v{{ oracle_db_version }} ({{ oracle_ami_id }})</li>
             <li>Instance type: {{ oracle_instance_type }}</li>
-            <li>Number of test oracle db nodes: {{ number_of_db_nodes }}</li>
+            <li>Number of test oracle db nodes: {{ number_of_oracle_nodes }}</li>
         </ul>
     </div>
     <h3>
