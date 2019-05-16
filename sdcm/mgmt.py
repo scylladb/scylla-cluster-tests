@@ -1,4 +1,6 @@
 # coding: utf-8
+import os
+
 from enum import Enum
 from textwrap import dedent
 
@@ -16,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
-MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
+MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
+MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
+MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR,MANAGER_IDENTITY_FILE_NAME)
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
@@ -33,8 +37,28 @@ class HostSsl(Enum):
     ON = "ON"
     OFF = "OFF"
 
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError:
+            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 class HostStatus(Enum):
+    UP = "UP"
+    DOWN = "DOWN"
+
+    @classmethod
+    def from_str(cls, output_str):
+        try:
+            output_str = output_str.upper()
+            return getattr(cls, output_str)
+        except AttributeError:
+            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+
+
+class HostRestStatus(Enum):
     UP = "UP"
     DOWN = "DOWN"
 
@@ -154,20 +178,30 @@ class ManagerTask(ScyllaManagerBase):
         """
         Gets the repair task's progress
         """
-        if self.status == TaskStatus.NEW:
-            return "0%"
+        if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
+            return " 0%"
         cmd = "task progress {} -c {}".format(self.id, self.cluster_id)
         res = self.sctool.run(cmd=cmd)
         # expecting output of:
-        # ╭─────────────┬─────────────────────╮
-        # │ Status      │ DONE                │
-        # │ Start time  │ 28 Oct 18 15:02 UTC │
-        # │ End time    │ 28 Oct 18 16:14 UTC │
-        # │ Duration    │ 1h12m23s            │
-        # │ Progress    │ 100%                │
-        # │ Datacenters │ [datacenter1]       │
-        # ├─────────────┼─────────────────────┤
-        return self.sctool.get_table_value(parsed_table=res, identifier="Progress")
+        #  Status:           RUNNING
+        #  Start time:       26 Mar 19 19:40:21 UTC
+        #  Duration: 6s
+        #  Progress: 0.12%
+        #  Datacenters:
+        #    - us-eastscylla_node_east
+        #  ╭────────────────────┬───────╮
+        #  │ system_auth        │ 0.47% │
+        #  │ system_distributed │ 0.00% │
+        #  │ system_traces      │ 0.00% │
+        #  │ keyspace1          │ 0.00% │
+        #  ╰────────────────────┴───────╯
+        # [['Status: RUNNING'], ['Start time: 26 Mar 19 19:40:21 UTC'], ['Duration: 6s'], ['Progress: 0.12%'], ... ]
+        progress = "N/A"
+        for task_property in res:
+            if task_property[0].startswith("Progress"):
+                progress = task_property[0].split(':')[1]
+                break
+        return progress
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
@@ -358,19 +392,20 @@ class ManagerCluster(ScyllaManagerBase):
         """
         Gets the Manager's Cluster Nodes status
         """
-        # Datacenter: us-eastscylla_node_east
-        # ╭──────────┬─────┬──────────────╮
-        # │ CQL      │ SSL │ Host         │
-        # ├──────────┼─────┼──────────────┤
-        # │ DOWN     │ OFF │ 3.83.201.124 │
-        # │ UP (1ms) │ OFF │ 3.91.49.252  │
-        # ╰──────────┴─────┴──────────────╯
-        # Datacenter: us-west-2scylla_node_west
-        # ╭────────────┬─────┬────────────────╮
-        # │ CQL        │ SSL │ Host           │
-        # ├────────────┼─────┼────────────────┤
-        # │ UP (154ms) │ OFF │ 35.166.186.129 │
-        # ╰────────────┴─────┴────────────────╯
+        # $ sctool status -c bla
+        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-eastscylla_node_east
+        # 19:43:56 [107.23.100.82] [stdout] ╭──────────┬─────┬──────────┬────────────────╮
+        # 19:43:56 [107.23.100.82] [stdout] │ CQL      │ SSL │ REST     │ Host           │
+        # 19:43:56 [107.23.100.82] [stdout] ├──────────┼─────┼──────────┼────────────────┤
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 34.205.64.58   │
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 54.159.184.253 │
+        # 19:43:56 [107.23.100.82] [stdout] ╰──────────┴─────┴──────────┴────────────────╯
+        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-west-2scylla_node_west
+        # 19:43:56 [107.23.100.82] [stdout] ╭────────────┬─────┬───────────┬──────────────╮
+        # 19:43:56 [107.23.100.82] [stdout] │ CQL        │ SSL │ REST      │ Host         │
+        # 19:43:56 [107.23.100.82] [stdout] ├────────────┼─────┼───────────┼──────────────┤
+        # 19:43:56 [107.23.100.82] [stdout] │ UP (151ms) │ OFF │ UP (80ms) │ 34.219.6.187 │
+        # 19:43:56 [107.23.100.82] [stdout] ╰────────────┴─────┴───────────┴──────────────╯
         cmd = "status -c {}".format(self.id)
         dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
@@ -379,22 +414,35 @@ class ManagerCluster(ScyllaManagerBase):
             if len(hosts_table) < 2:
                 logger.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
             else:
+                list_titles_row = hosts_table[0]
+                host_col_idx = list_titles_row.index("Host")
+                cql_status_col_idx = list_titles_row.index("CQL")
+                ssl_col_idx = list_titles_row.index("SSL")
+                rest_col_idx = list_titles_row.index("REST")
+
                 for line in hosts_table[1:]:
-                    host = line[2]
-                    list_cql = line[0].split()
+                    host = line[host_col_idx]
+                    list_cql = line[cql_status_col_idx].split()
                     status = list_cql[0]
                     rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
-                    ssl = line[1]
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, ssl=ssl)
+
+                    list_rest = line[rest_col_idx].split()
+                    rest_status = list_rest[0]
+                    rest_rtt = list_rest[1].strip("()") if len(list_rest) == 2 else "N/A"
+
+                    ssl = line[ssl_col_idx]
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt, rest_status=HostRestStatus.from_str(rest_status), rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl))
             logger.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
-                logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.ssl))
+                logger.debug("{}: {},{},{}".format(ip, health.status, health.rtt, health.rest_status, health.rest_rtt, health.ssl))
         return dict_hosts_health
 
     class _HostHealth():
-        def __init__(self, status, rtt, ssl):
+        def __init__(self, status, rtt, ssl, rest_status, rest_rtt):
             self.status = status
             self.rtt = rtt
+            self.rest_status = rest_status
+            self.rest_rtt = rest_rtt
             self.ssl = ssl
 
 
@@ -428,8 +476,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         LIST_SUPPORTED_DISTROS = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16]
         self.DEFAULT_USER = "centos"
         if manager_node.distro not in LIST_SUPPORTED_DISTROS:
-            raise ScyllaManagerError(
-                "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
+            raise ScyllaManagerError("Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
 
     @property
     def version(self):
@@ -577,6 +624,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
         self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+
 
     def rollback_upgrade(self, scylla_mgmt_repo):
 
