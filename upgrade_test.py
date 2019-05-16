@@ -113,6 +113,9 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run('sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
         if self.params.get('test_sst3', default=None):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
+        authorization_in_upgrade = self.params.get('authorization_in_upgrade', default=None)
+        if authorization_in_upgrade:
+            node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" % authorization_in_upgrade)
         node.start_scylla_server()
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
@@ -183,6 +186,8 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
         if self.params.get('test_sst3', default=None):
             node.remoter.run('sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
+        if self.params.get('remove_authorization_in_rollback', default=None):
+            node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         node.start_scylla_server()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
