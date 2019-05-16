@@ -31,7 +31,7 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37'
             ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
+            ami_id_loader: 'ami-059dd02510b5f5841' # Loader dedicated AMI
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-ada2b6c4'
             ami_db_cassandra_user: 'ubuntu'
