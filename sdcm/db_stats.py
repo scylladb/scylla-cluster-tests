@@ -269,6 +269,8 @@ class TestStatsMixin(Stats):
     KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
+    STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
+    STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
     def __init__(self, *args, **kwargs):
         super(TestStatsMixin, self).__init__(*args, **kwargs)
@@ -429,40 +431,54 @@ class TestStatsMixin(Stats):
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
-    def update_stress_results(self, results, calculate_average=True):
+    def update_stress_results(self, results, calculate_stats=True):
         if 'stats' not in self._stats['results']:
             self._stats['results']['stats'] = results
         else:
             self._stats['results']['stats'].extend(results)
-        if calculate_average:
+        if calculate_stats:
             self.calculate_stats_average()
+            self.calculate_stats_total()
         self.update(dict(results=self._stats['results']))
 
-    def calculate_stats_average(self):
-        average_stats = {}
-        total_stats = {}
+    def _convert_stat(self, stat, stress_result):
+        if stat not in stress_result or stress_result[stat] == 'NaN':
+            self.log.warning("Stress stat not found: '%s'", stat)
+            return 0
+        try:
+            return float(stress_result[stat])
+        except Exception as details:
+            self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
+                             "Discarding stat." % (stress_result[stat], stat, details))
+        return 0
 
-        for key in self._stats['results']['stats'][0].keys():
-            # exclude loader info from statistics
-            if key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
-                continue
-            summary = 0
-            for stat in self._stats['results']['stats']:
-                if key not in stat or stat[key] == 'NaN':
-                    continue
-                try:
-                    summary += float(stat[key])
-                except Exception as details:
-                    self.log.debug('Catch upon calculating stat everage Exception: %s', details)
-                    average_stats[key] = stat[key]
-            if key not in average_stats:
-                average_stats[key] = round(summary / len(self._stats['results']['stats']), 1)
-                if key in ['op rate', 'Total errors']:
-                    total_stats.update({key: summary})
-        if average_stats:
-            self._stats['results']['stats_average'] = average_stats
-        if total_stats:
-            self._stats['results']['stats_total'] = total_stats
+    def _calc_stat_total(self, stat):
+        total = 0
+        for stress_result in self._stats['results']['stats']:
+            stat_val = self._convert_stat(stat=stat, stress_result=stress_result)
+            if not stat_val:
+                return 0  # discarding all stat results completely if one of the results is bad
+            total += stat_val
+        return total
+
+    def calculate_stats_average(self):
+        # calculate average stats
+        average_stats = {}
+        for stat in self.STRESS_STATS:
+            average_stats[stat] = ''  # default
+            total = self._calc_stat_total(stat=stat)
+            if total:
+                average_stats[stat] = round(total / len(self._stats['results']['stats']), 1)
+        self._stats['results']['stats_average'] = average_stats
+
+    def calculate_stats_total(self):
+        total_stats = {}
+        for stat in self.STRESS_STATS_TOTAL:
+            total_stats[stat] = ''  # default
+            total = self._calc_stat_total(stat=stat)
+            if total:
+                total_stats[stat] = total
+        self._stats['results']['stats_total'] = total_stats
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         if self.create_stats:

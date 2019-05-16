@@ -872,7 +872,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if not stats['status']:
             stats['status'] = "PASSED"
         if self.create_stats:
-            self.update_stress_results(results, calculate_average=False)
+            self.update_stress_results(results, calculate_stats=False)
             self.update({'status': stats['status'], 'test_details': {'status': stats['status']}})
         return stats
 
