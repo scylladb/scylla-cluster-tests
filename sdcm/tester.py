@@ -862,22 +862,26 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         return result
 
     def verify_gemini_results(self, results):
-        stats = {'status': None, 'results': []}
+        stats = {'status': None, 'results': [], 'errors': {}}
         if not results:
             self.log.error('Gemini results are not found')
             stats['status'] = 'FAILED'
         else:
+
             for res in results:
                 stats['results'].append(res)
                 for err_type in ['write_errors', 'read_errors', 'errors']:
                     if err_type in res.keys() and res[err_type]:
                         self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
                         stats['status'] = 'FAILED'
+                        stats['errors'][err_type] = res[err_type]
         if not stats['status']:
             stats['status'] = "PASSED"
         if self.create_stats:
             self.update_stress_results(results, calculate_stats=False)
-            self.update({'status': stats['status'], 'test_details': {'status': stats['status']}})
+            self.update({'status': stats['status'],
+                         'test_details': {'status': stats['status']},
+                         'errors': stats['errors']})
         return stats
 
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
