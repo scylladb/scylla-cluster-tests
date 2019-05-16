@@ -132,7 +132,7 @@ class ManagerTask(ScyllaManagerBase):
         Gets the task's history table
         """
         # ╭──────────────────────────────────────┬────────────────────────┬────────────────────────┬──────────┬───────╮
-        # │ id                                   │ start time             │ end time               │ duration │ status│                                                                                                                                                                  │
+        # │ id                                   │ start time             │ end time               │ duration │ status│
         # ├──────────────────────────────────────┼────────────────────────┼────────────────────────┼──────────┼───────┤
         # │ e4f70414-ebe7-11e8-82c4-12c0dad619c2 │ 19 Nov 18 10:43:04 UTC │ 19 Nov 18 10:43:04 UTC │ 0s       │ NEW   │
         # │ 7f564891-ebe6-11e8-82c3-12c0dad619c2 │ 19 Nov 18 10:33:04 UTC │ 19 Nov 18 10:33:04 UTC │ 0s       │ NEW   │
@@ -206,6 +206,22 @@ class ManagerTask(ScyllaManagerBase):
                 progress = task_property[0].split(':')[1]
                 break
         return progress
+
+    @property
+    def detailed_progress(self):
+        if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
+            return " 0%"
+        cmd = "task progress {} -c {}".format(self.id, self.cluster_id)
+        parsed_progress_table = self.sctool.run(cmd=cmd, parse_table_res=True, is_multiple_tables=True)
+        # expecting output of:
+        # ...
+        #  ╭────────────────────┬───────╮
+        #  │ system_auth        │ 0.47% │
+        #  │ system_distributed │ 0.00% │
+        #  │ system_traces      │ 0.00% │
+        #  ╰────────────────────┴───────╯
+        relevant_key = [key for key in parsed_progress_table.keys() if parsed_progress_table[key]][0]
+        return parsed_progress_table[relevant_key]
 
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
