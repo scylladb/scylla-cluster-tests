@@ -19,7 +19,7 @@ import time
 from avocado import main
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus
+from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
 from sdcm.nemesis import MgmtRepair
 from sdcm.tester import ClusterTester
 from sdcm.cluster import Setup
@@ -32,6 +32,8 @@ class MgmtCliTest(ClusterTester):
     :avocado: enable
     """
     CLUSTER_NAME = "mgr_cluster1"
+    LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
+    SIMPLESTRATEGY_KEYSPACE_NAME = "simplestrategy_keyspace"
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -83,7 +85,20 @@ class MgmtCliTest(ClusterTester):
     def _get_cluster_hosts_with_ips(self):
         ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
             Setup.MULTI_REGION else 'private_ip_address'
-        return [[n, getattr(n, ip_addr_attr)] for n in self.db_cluster.nodes]
+        return [[node, getattr(node, ip_addr_attr)] for node in self.db_cluster.nodes]
+
+    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):
+        self.log.info("creating keyspace {}".format(keyspace_name))
+        keyspace_existence = self.create_keyspace(keyspace_name, 1, strategy)
+        assert keyspace_existence, "keyspace creation failed"
+
+        # Keyspaces without tables won't appear in the repair, so the must have one
+        self.log.info("createing the table {} in the keyspace {}".format(table_name, keyspace_name))
+        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            session.execute("use {}".format(keyspace_name))
+            result = self.create_cf(session, table_name)
+            if result:
+                self.log.info(result.response_future)
 
     def test_manager_sanity(self):
         """
@@ -94,8 +109,7 @@ class MgmtCliTest(ClusterTester):
         4) test_client_encryption
         :return:
         """
-
-        self.test_mgmt_repair_nemesis()
+        self.test_repair_multiple_keyspace_types()
         self.test_mgmt_cluster_crud()
         self.test_mgmt_cluster_healthcheck()
         self.test_client_encryption()
@@ -226,6 +240,50 @@ class MgmtCliTest(ClusterTester):
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
+
+    def test_repair_multiple_keyspace_types(self):
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        hosts = self._get_cluster_hosts_ip()
+        selected_host = hosts[0]
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host)
+        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy")
+        self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
+
+        repair_task = mgr_cluster.create_repair_task()
+        task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
+        assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
+                                                                                            str(repair_task.status))
+        self.log.info('Task: {} is done.'.format(repair_task.id))
+        self.log.debug("sctool version is : {}".format(manager_tool.version))
+
+        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",
+                                             self.SIMPLESTRATEGY_KEYSPACE_NAME]
+        repair_progress_table = repair_task.detailed_progress
+        self.log.info("Looking in the repair output for all of the required keyspaces")
+        for keyspace_name in expected_keyspaces_to_be_repaired:
+            keyspace_repair_percentage = self._keyspace_value_in_progress_table(
+                repair_task, repair_progress_table, keyspace_name)
+            assert keyspace_repair_percentage is not None, \
+                "The keyspace {} was not included in the repair!".format(keyspace_name)
+            assert keyspace_repair_percentage == 100, \
+                "The repair of the keyspace {} stopped at {}%".format(
+                    keyspace_name, keyspace_repair_percentage)
+
+        localstrategy_keyspace_percentage = self._keyspace_value_in_progress_table(
+            repair_task, repair_progress_table, self.LOCALSTRATEGY_KEYSPACE_NAME)
+        assert localstrategy_keyspace_percentage is None, \
+            "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
+        self.log.info("the sctool repair commend was completed successfully")
+
+    def _keyspace_value_in_progress_table(self, repair_task, repair_progress_table, keyspace_name):
+        try:
+            table_repair_progress = repair_task.sctool.get_table_value(repair_progress_table, keyspace_name)
+            table_repair_percentage = float(table_repair_progress.replace('%', ''))
+            return table_repair_percentage
+        except ScyllaManagerError as err:
+            assert "not found in" in err.message, "Unexpected error: {}".format(err.message)
+            return None
 
 
 if __name__ == '__main__':

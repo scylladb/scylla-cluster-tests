@@ -59,6 +59,7 @@ from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
 from sdcm.stress_thread import CassandraStressThread
+from sdcm import wait
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -1021,6 +1022,55 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                      "'class':'NetworkTopologyStrategy', %s" %
                                      options))
         session.execute('USE %s' % name)
+
+    def is_keyspace_in_cluster(self, session, keyspace_name):
+        query_result = session.execute("SELECT * FROM system_schema.keyspaces;")
+        keyspace_list = [row.keyspace_name.lower() for row in query_result.current_rows]
+        return keyspace_name.lower() in keyspace_list
+
+    def wait_validate_keyspace_existence(self, session, keyspace_name, timeout=180, step=5):
+        text = 'waiting for the keyspace "{}" to be created in the cluster'.format(keyspace_name)
+        does_keyspace_exist = wait.wait_for(func=self.is_keyspace_in_cluster, step=step, text=text, timeout=timeout,
+                                            session=session, keyspace_name=keyspace_name)
+        return does_keyspace_exist
+
+    def create_keyspace(self, keyspace_name, replication_factor, replication_strategy=None):
+        """
+        The default of replication_strategy depends on the type of the replication_factor:
+            If it's int, the default of replication_strategy will be 'SimpleStrategy'
+            If it's dict, the default of replication_strategy will be 'NetworkTopologyStrategy'
+
+        In the case of NetworkTopologyStrategy, replication_strategy should be a dict that contains the name of
+        every dc that the keyspace should be replicated to as keys, and the replication factor of each of those dc
+        as values, like so:
+        {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
+        """
+
+        query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
+        execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
+        with self.cql_connection_patient(execution_node) as session:
+
+            if isinstance(replication_factor, types.IntType):
+                execution_result = session.execute(
+                    query % (keyspace_name, "'class':'{}', 'replication_factor':{}".format(
+                        replication_strategy if replication_strategy else "SimpleStrategy",
+                        replication_factor)))
+
+            else:
+                assert len(replication_factor) != 0, "At least one datacenter/replication_factor pair is needed"
+                options = ', '.join(["'{}':{}".format(dc_name, dc_specific_replication_factor) for
+                                     dc_name, dc_specific_replication_factor in replication_factor.iteritems()])
+                execution_result = session.execute(
+                    query % (keyspace_name, "'class':'{}', {}".format(
+                        replication_strategy if replication_strategy else "NetworkTopologyStrategy",
+                        options)))
+
+        if execution_result:
+            self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
+
+        with self.cql_connection_patient(validation_node) as session:
+            does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
+        return does_keyspace_exist
 
     def create_cf(self, session, name, key_type="varchar",
                   speculative_retry=None, read_repair=None, compression=None,
