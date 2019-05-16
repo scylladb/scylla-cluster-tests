@@ -180,7 +180,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     Get performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    PARAMS = ['op rate', 'latency mean', 'latency 99th percentile']
+    PARAMS = TestStatsMixin.STRESS_STATS
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
         super(PerformanceResultsAnalyzer, self).__init__(
