@@ -20,7 +20,7 @@ MANAGER_IDENTITY_FILE = '/tmp/scylla_manager_pem'
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
-
+REPAIR_TIMEOUT_SEC = 7200 # 2 hours
 
 class ScyllaManagerError(Exception):
     """
@@ -193,7 +193,7 @@ class ManagerTask(ScyllaManagerBase):
                                           timeout=timeout)
         return is_status_reached
 
-    def wait_and_get_final_status(self, timeout=3600, step=120):
+    def wait_and_get_final_status(self, timeout=REPAIR_TIMEOUT_SEC, step=120):
         """
         1) Wait for task to reach a 'final' status. meaning one of: done/error/stopped
         2) return the final status.
