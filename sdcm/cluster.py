@@ -38,7 +38,7 @@ from datetime import datetime
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
@@ -2601,6 +2601,8 @@ class BaseLoaderSet(object):
 
         # gemini tool
         gemini_version = self.params.get('gemini_version', default='0.9.2')
+        if gemini_version.lower() == 'latest':
+            gemini_version = get_latest_gemini_version()
         gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
         # TODO: currently schema is not used by gemini tool need to store the schema
         #       in data_dir for each test

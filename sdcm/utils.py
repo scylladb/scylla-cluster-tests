@@ -192,7 +192,9 @@ class S3Storage(object):
 
     bucket_name = 'cloudius-jenkins-test'
 
-    def __init__(self):
+    def __init__(self, bucket=None):
+        if bucket:
+            self.bucket_name = bucket
         self._bucket = boto3.resource('s3').Bucket(name=self.bucket_name)
 
     def search_by_path(self, path=''):
@@ -238,6 +240,17 @@ class S3Storage(object):
                 return os.path.join(os.path.abspath(dst), os.path.basename(link))
         except Exception as details:
             logger.warning("File {} is not downloaded by reason: {}".format(file_path), details)
+
+
+def get_latest_gemini_version():
+    bucket_name = 'downloads.scylladb.com'
+
+    results = S3Storage(bucket_name).search_by_path(path='gemini')
+    versions = set()
+    for f in results:
+        versions.add(f.split('/')[1])
+
+    return str(sorted(versions)[-1])
 
 
 def list_logs_by_test_id(test_id):
