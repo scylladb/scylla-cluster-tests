@@ -364,21 +364,21 @@ class UpgradeTest(FillDatabaseData):
         #
         # TODO: retest commented workloads and decide to enable or delete them.
         #
-        ## complex workload: verify data by multiple ops
+        # complex workload: verify data by multiple ops
         #self.log.info('Starting c-s complex workload to verify data by multiple ops')
         #stress_cmd_complex_verify_more = self.params.get('stress_cmd_complex_verify_more')
         #complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_more, profile='data_dir/complex_schema.yaml')
 
-        ## wait for the complex workload to finish
-        #self.verify_stress_thread(complex_cs_thread_pool)
+        # wait for the complex workload to finish
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
-        ## complex workload: verify data by delete 1/10 data
+        # complex workload: verify data by delete 1/10 data
         #self.log.info('Starting c-s complex workload to verify data by delete')
         #stress_cmd_complex_verify_delete = self.params.get('stress_cmd_complex_verify_delete')
         #complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_delete, profile='data_dir/complex_schema.yaml')
 
-        ## wait for the complex workload to finish
-        #self.verify_stress_thread(complex_cs_thread_pool)
+        # wait for the complex workload to finish
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
         error_factor = 2
         schema_load_error_num = 0

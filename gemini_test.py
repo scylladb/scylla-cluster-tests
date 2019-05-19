@@ -26,6 +26,7 @@ class GeminiTest(ClusterTester):
 
     :avocado: enable
     """
+
     def test_random_load(self):
         """
         Run gemini tool

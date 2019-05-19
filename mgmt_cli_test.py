@@ -141,7 +141,6 @@ class MgmtCliTest(ClusterTester):
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
             assert host_health.rest_status == HostRestStatus.UP, "Not all hosts REST status is 'UP'"
 
-
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
         self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
@@ -156,7 +155,7 @@ class MgmtCliTest(ClusterTester):
 
     def test_ssh_setup_script(self):
         new_user = "qa_user"
-        new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR,new_user)+".pem"
+        new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(node_ip=selected_host_ip, single_node=True, create_user=new_user)
@@ -176,8 +175,6 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             self.log.debug("host_health is: {}".format(host_health))
-
-
 
     def test_manager_upgrade(self):
         """
@@ -208,7 +205,6 @@ class MgmtCliTest(ClusterTester):
         self.log.info('Running a new repair task after upgrade')
         repair_task = mgr_cluster.create_repair_task()
         self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
-
 
     def test_manager_rollback_upgrade(self):
         """

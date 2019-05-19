@@ -21,11 +21,12 @@ STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
 MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
-MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR,MANAGER_IDENTITY_FILE_NAME)
+MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
-REPAIR_TIMEOUT_SEC = 7200 # 2 hours
+REPAIR_TIMEOUT_SEC = 7200  # 2 hours
+
 
 class ScyllaManagerError(Exception):
     """
@@ -45,6 +46,7 @@ class HostSsl(Enum):
             return getattr(cls, output_str)
         except AttributeError:
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+
 
 class HostStatus(Enum):
     UP = "UP"
@@ -543,7 +545,6 @@ class ScyllaManagerTool(ScyllaManagerBase):
         except Exception as e:
             raise ScyllaManagerError("Failed to parse scyllamgr_ssh_setup output: {}".format(e))
 
-
         return res, ssh_identity_file
 
     def _get_cluster_hosts_ip(self, db_cluster):
@@ -627,7 +628,6 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
         self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
 
-
     def rollback_upgrade(self, scylla_mgmt_repo):
 
         manager_from_version = self.version
@@ -671,7 +671,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
                         sudo apt-get remove scylla-manager-client -y
                         sudo rm -rf {}
                         sudo apt-get clean
-                    """.format(self.manager_repo_path)) # +" /var/lib/scylla-manager/*"))
+                    """.format(self.manager_repo_path))  # +" /var/lib/scylla-manager/*"))
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
         self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
 
