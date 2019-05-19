@@ -18,7 +18,7 @@ nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 15
 nemesis_during_prepare: 'false'
 
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 use_mgmt: true
 mgmt_port: 10090
@@ -39,9 +39,9 @@ backends: !mux
             subnet_id: 'subnet-ec4a72c4 subnet-5207ee37 subnet-088fddaf520e4c7a8'
             ami_id_db_scylla: 'AMI_ID_EAST AMI_ID_WEST AMI_ID_EU_WEST'
             ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
             ami_loader_user: 'centos'
-            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
             aws_root_disk_size_monitor: 20  # GB
 

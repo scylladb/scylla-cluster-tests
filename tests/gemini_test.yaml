@@ -13,9 +13,9 @@ store_results_in_elasticsearch: False
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
 # the below cmd runs about 3 hours
-gemini_cmd: "gemini -d -n 500000 -c 20 -p 100 -m mixed -f"
-gemini_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/gemini-latest'
-gemini_static_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
+gemini_cmd: "gemini -d --duration 10800s -c 20 -p 100 -m mixed -f"
+gemini_version: '0.9.2'
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
 
 reuse_cluster: False
 db_nodes_public_ip: []
@@ -39,9 +39,9 @@ backends: !mux
             subnet_id: 'subnet-c327759a'
             ami_db_scylla_user: 'centos'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'AMI-ID'
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
             ami_loader_user: 'centos'
-            ami_id_monitor: 'AMI-ID'
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_monitor_user: 'centos'
 
 databases: !mux
@@ -51,3 +51,6 @@ databases: !mux
         instance_type_db_oracle: 'i3.8xlarge'
         ami_id_db_oracle: 'AMI-ID-ORACLE'
         append_scylla_args_oracle: '--enable-cache false'
+
+send_email: true
+email_recipients: ['rnd-internal@scylladb.com']

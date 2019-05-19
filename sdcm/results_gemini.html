@@ -1,0 +1,63 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>Test: {{ test_name }}</h3>
+    <h3>Test details</h3>
+    <div>
+        <ul>
+            <li>Start time: {{ start_time }}</li>
+            <li>End time: {{ end_time }}</li>
+            <li>Gemini command: {{ gemini_cmd }}</li>
+            <li>Gemini version: {{ gemini_version }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>System under test </span>        
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla v{{ scylla_version }} ({{ scylla_ami_id }})</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>Test oracle</span>        
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla v{{ oracle_db_version }} ({{ oracle_ami_id }})</li>
+            <li>Instance type: {{ oracle_instance_type }}</li>
+            <li>Number of test oracle db nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>Test results </span>
+    </h3>
+    <table class='gemini_result_table'>
+        <tr>    
+            <td class='gemini_field'> Status </td>
+            <td>
+                {% if status == "PASSED" %}
+                    <span class='green'>{{ status }}</span>
+                {% elif status == 'FAILED' %}
+                    <span class='red'>{{ status }}</span>
+                {% else %}
+                    <span>{{ status }}</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% for res in results %}
+            {% for key, value in res.items() %}
+            <tr>
+                <td class='gemini_field'>
+                    <span>{{ key }}</span>
+                </td>
+                <td>  
+                    <span>{{ value }}</span>
+                </td>
+                
+            </tr>
+            {% endfor %}
+        {% endfor %}
+    </table>
+{% endblock %}

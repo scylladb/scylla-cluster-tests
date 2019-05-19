@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import sys
 
 import click
 import click_completion
@@ -7,7 +8,9 @@ from prettytable import PrettyTable
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils import list_instances_aws, list_instances_gce, clean_cloud_instances, aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping
+from sdcm.utils import (list_instances_aws, list_instances_gce, clean_cloud_instances,
+                        aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
+                        list_logs_by_test_id, restore_monitoring_stack)
 
 click_completion.init()
 
@@ -15,7 +18,7 @@ click_completion.init()
 def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
     sct_opt.update(kwargs)
-    return click.option(name, type=sct_opt['type'], default=sct_opt['default'], help=sct_opt['help'])
+    return click.option(name, type=sct_opt['type'], help=sct_opt['help'])
 
 
 def install_callback(ctx, _, value):
@@ -211,6 +214,59 @@ def perf_regression_report(es_id, emails, debug_log):
     click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
     ra.check_regression(es_id)
     click.secho(message="Done." % email_list, fg="yellow")
+
+
+@click.group(help="Group of commands for investigating testrun")
+def investigate():
+    pass
+
+
+@investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
+@click.argument('test_id')
+def show_log(test_id):
+    x = PrettyTable(["Log type", "Link"])
+    x.align = "l"
+    files = list_logs_by_test_id(test_id)
+    for log in files:
+        x.add_row([log["type"], log["link"]])
+    click.echo(x.get_string(title="Log links for testrun with test id {}".format(test_id)))
+
+
+@investigate.command('show-monitor', help="Show link to prometheus data snapshot")
+@click.argument('test_id')
+@click.option("-l", "--debug-log", required=False, default=False, is_flag=True, help="Print debug logs")
+def show_monitor(test_id, debug_log):
+    click.echo('Search monitor stack archive files for test id {} and restoring...'.format(test_id))
+    rootLogger = None
+    if debug_log:
+        import sys
+        import logging
+        rootLogger = logging.getLogger()
+        rootLogger.setLevel(logging.INFO)
+        rootLogger.addHandler(logging.StreamHandler(sys.stdout))
+    status = restore_monitoring_stack(test_id)
+    x = PrettyTable(['Name', 'container', 'Link'])
+    x.align = 'l'
+    if status:
+        click.echo('Monitoring stack restored')
+
+        x.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
+        x.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
+        click.echo(x.get_string(title='Grafana monitoring stack'))
+    else:
+        click.echo('Docker containers were not started. Please rerun comand with flag -l')
+
+
+cli.add_command(investigate)
+
+
+@cli.command('unit-tests', help="Run all the SCT internal unit-tests")
+def unit_tests():
+    import unittest
+
+    test_suite = unittest.TestLoader().discover('unit_tests', top_level_dir='.')
+    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
+    sys.exit(not result.wasSuccessful())
 
 
 if __name__ == '__main__':

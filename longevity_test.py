@@ -143,7 +143,7 @@ class LongevityTest(ClusterTester):
             # Wait on the queue till all threads come back.
             # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
             for stress in write_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
             # Run nodetool flush on all nodes to make sure nothing left in memory
             # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
@@ -159,7 +159,7 @@ class LongevityTest(ClusterTester):
                                                                 'keyspace_num': keyspace_num})
 
                 for stress in verify_queue:
-                    self.verify_stress_thread(queue=stress)
+                    self.verify_stress_thread(cs_thread_pool=stress)
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions', default=None)
@@ -220,7 +220,7 @@ class LongevityTest(ClusterTester):
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
-            self.verify_stress_thread(queue=stress)
+            self.verify_stress_thread(cs_thread_pool=stress)
 
         if (stress_read_cmd or stress_cmd) and validate_partitions:
             self.log.debug('Save partitons info after reads')
@@ -229,7 +229,6 @@ class LongevityTest(ClusterTester):
                                                                  save_into_file_name='partitions_rows_after.log')
             self.assertEqual(partitions_dict_before, partitions_dict_after,
                              msg='Row amount in partitions is not same before and after running of nemesis')
-
 
     def test_batch_custom_time(self):
         """
@@ -272,7 +271,7 @@ class LongevityTest(ClusterTester):
                 self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
             for stress in stress_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
     def _create_counter_table(self):
         """
@@ -280,34 +279,34 @@ class LongevityTest(ClusterTester):
         remove when resolved
         """
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
-        session.execute("""
-            CREATE KEYSPACE IF NOT EXISTS keyspace1
-            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
-        """)
-        session.execute("""
-            CREATE TABLE IF NOT EXISTS keyspace1.counter1 (
-                key blob PRIMARY KEY,
-                "C0" counter,
-                "C1" counter,
-                "C2" counter,
-                "C3" counter,
-                "C4" counter
-            ) WITH COMPACT STORAGE
-                AND bloom_filter_fp_chance = 0.01
-                AND caching = '{"keys":"ALL","rows_per_partition":"ALL"}'
-                AND comment = ''
-                AND compaction = {'class': 'SizeTieredCompactionStrategy'}
-                AND compression = {}
-                AND dclocal_read_repair_chance = 0.1
-                AND default_time_to_live = 0
-                AND gc_grace_seconds = 864000
-                AND max_index_interval = 2048
-                AND memtable_flush_period_in_ms = 0
-                AND min_index_interval = 128
-                AND read_repair_chance = 0.0
-                AND speculative_retry = '99.0PERCENTILE';
-        """)
+        with self.cql_connection_patient(node) as session:
+            session.execute("""
+                CREATE KEYSPACE IF NOT EXISTS keyspace1
+                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+            """)
+            session.execute("""
+                CREATE TABLE IF NOT EXISTS keyspace1.counter1 (
+                    key blob PRIMARY KEY,
+                    "C0" counter,
+                    "C1" counter,
+                    "C2" counter,
+                    "C3" counter,
+                    "C4" counter
+                ) WITH COMPACT STORAGE
+                    AND bloom_filter_fp_chance = 0.01
+                    AND caching = '{"keys":"ALL","rows_per_partition":"ALL"}'
+                    AND comment = ''
+                    AND compaction = {'class': 'SizeTieredCompactionStrategy'}
+                    AND compression = {}
+                    AND dclocal_read_repair_chance = 0.1
+                    AND default_time_to_live = 0
+                    AND gc_grace_seconds = 864000
+                    AND max_index_interval = 2048
+                    AND memtable_flush_period_in_ms = 0
+                    AND min_index_interval = 128
+                    AND read_repair_chance = 0.0
+                    AND speculative_retry = '99.0PERCENTILE';
+            """)
 
     def _pre_create_schema(self, keyspace_num=1, in_memory=False):
         """
@@ -315,17 +314,17 @@ class LongevityTest(ClusterTester):
         cassandra-stress.
         """
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
+        with self.cql_connection_patient(node) as session:
 
-        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
+            self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
 
-        for i in xrange(1, keyspace_num+1):
-            keyspace_name = 'keyspace{}'.format(i)
-            self.create_ks(session, keyspace_name, rf=3)
-            self.log.debug('{} Created'.format(keyspace_name))
-            self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
-                           columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
-                           in_memory=in_memory)
+            for i in xrange(1, keyspace_num+1):
+                keyspace_name = 'keyspace{}'.format(i)
+                self.create_ks(session, keyspace_name, rf=3)
+                self.log.debug('{} Created'.format(keyspace_name))
+                self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
+                               columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
+                               in_memory=in_memory)
 
     def _flush_all_nodes(self):
         """

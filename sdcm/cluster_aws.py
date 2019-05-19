@@ -15,7 +15,7 @@ from threading import Thread
 import cluster
 import ec2_client
 from sdcm.utils import retrying, list_instances_aws
-
+from sdcm.sct_events import SpotTerminationEvent
 from . import wait
 
 logger = logging.getLogger(__name__)
@@ -26,12 +26,6 @@ INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
-
-
-def _prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = cluster.DEFAULT_USER_PREFIX
-    return '%s-%s' % (user_prefix, base_name)
 
 
 def clean_aws_credential(region_name, credential_key_name, credential_key_file):
@@ -473,7 +467,7 @@ class AWSNode(cluster.BaseNode):
             if '404 - Not Found' not in status:
                 return status
         except Exception as details:
-            self.log.error('Error during getting aws termination notification %s' % details)
+            self.log.warning('Error during getting aws termination notification %s' % details)
         return None
 
     def monitor_aws_termination_thread(self):
@@ -481,9 +475,10 @@ class AWSNode(cluster.BaseNode):
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
-            result = self.get_aws_termination_notification()
-            if result:
-                self.log.warning('Got spot termination notification from AWS %s' % result)
+            aws_message = self.get_aws_termination_notification()
+            if aws_message:
+                self.log.warning('Got spot termination notification from AWS %s' % aws_message)
+                SpotTerminationEvent(node=self, aws_message=aws_message)
             time.sleep(5)
 
     def start_aws_termination_monitoring(self):
@@ -527,8 +522,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = cluster.Setup.test_id()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         node_type = 'syclla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
@@ -561,11 +556,11 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
         if self.nodes:
-            node_ips = [node.ip_address() for node in self.nodes if node.is_seed]
+            node_ips = [node.ip_address for node in self.nodes if node.is_seed]
             seeds = ",".join(node_ips)
 
             if not seeds:
-                seeds = self.nodes[0].ip_address()
+                seeds = self.nodes[0].ip_address
 
             ec2_user_data += ' --seeds %s ' % seeds
 
@@ -584,6 +579,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             server_encrypt=self._param_enabled('server_encrypt'),
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
+            authorizer=self.params.get('authorizer'),
         )
         if cluster.Setup.MULTI_REGION:
             setup_params.update(dict(
@@ -595,10 +591,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if cluster.Setup.MULTI_REGION:
-            seed_address = self.get_seed_nodes_by_flag(private_ip=False)
-        else:
-            seed_address = self.get_seed_nodes_by_flag(private_ip=True)
+        seed_address = self.get_seed_nodes_by_flag()
 
         def scylla_ami_setup_done():
             """
@@ -660,9 +653,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix,
-                                              'cs-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'cs-db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix,
+                                                     'cs-db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'cs-db-node')
         node_type = 'cs-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
@@ -739,9 +732,9 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         node_type = 'loader'
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseLoaderSet.__init__(self,
@@ -771,9 +764,9 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseMonitorSet.__init__(self,

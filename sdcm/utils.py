@@ -16,9 +16,21 @@ import logging
 import time
 import datetime
 import requests
+import tempfile
+import re
+import errno
+import threading
+import concurrent.futures
+import select
+import sys
+import math
+import json
+
+from textwrap import dedent
 from functools import wraps
-from enum import Enum
 from collections import defaultdict
+from datetime import timedelta
+from enum import Enum
 
 import boto3
 from libcloud.compute.providers import get_driver
@@ -132,8 +144,9 @@ class Distro(Enum):
     RHEL7 = 2
     UBUNTU14 = 3
     UBUNTU16 = 4
-    DEBIAN8 = 5
-    DEBIAN9 = 6
+    UBUNTU18 = 5
+    DEBIAN8 = 6
+    DEBIAN9 = 7
 
 
 def get_data_dir_path(*args):
@@ -150,10 +163,10 @@ def get_job_name():
 def verify_scylla_repo_file(content, is_rhel_like=True):
     logger.info('Verifying Scylla repo file')
     if is_rhel_like:
-        body_prefix = ['[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
+        body_prefix = ['#', '[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
                        'skip_if_unavailable=', 'gpgkey=', 'repo_gpgcheck=', 'enabled_metadata=']
     else:
-        body_prefix = ['deb']
+        body_prefix = ['#', 'deb']
     for line in content.split('\n'):
         valid_prefix = False
         for prefix in body_prefix:
@@ -176,15 +189,28 @@ def remove_comments(data):
 
 
 class S3Storage(object):
-    @staticmethod
-    def generate_url(file_path, prefix=''):
-        file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://cloudius-jenkins-test.s3.amazonaws.com/{prefix}/{file_name}".format(**locals())
 
-    @classmethod
-    def upload_file(cls, file_path, prefix=''):
+    bucket_name = 'cloudius-jenkins-test'
+
+    def __init__(self, bucket=None):
+        if bucket:
+            self.bucket_name = bucket
+        self._bucket = boto3.resource('s3').Bucket(name=self.bucket_name)
+
+    def search_by_path(self, path=''):
+        files = []
+        for obj in self._bucket.objects.filter(Prefix=path):
+            files.append(obj.key)
+        return files
+
+    def generate_url(self, file_path, dest_dir=''):
+        bucket_name = self.bucket_name
+        file_name = os.path.basename(os.path.normpath(file_path))
+        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(**locals())
+
+    def upload_file(self, file_path, dest_dir=''):
         try:
-            s3_url = cls.generate_url(file_path, prefix)
+            s3_url = self.generate_url(file_path, dest_dir)
             with open(file_path) as fh:
                 mydata = fh.read()
                 logger.info("Uploading '{file_path}' to {s3_url}".format(**locals()))
@@ -195,6 +221,172 @@ class S3Storage(object):
             logger.debug("Unable to upload to S3: %s" % e)
             return ""
 
+    def download_file(self, link, dst_dir=""):
+        resp = requests.get(link)
+        try:
+            if resp.status_code == 200:
+
+                file_path = os.path.basename(os.path.dirname(link))
+
+                if dst_dir:
+                    dst = os.path.join(dst_dir, file_path)
+                else:
+                    dst = file_path
+
+                if not os.path.exists(dst):
+                    os.mkdir(dst)
+                with open(os.path.join(dst, os.path.basename(link)), 'wb') as fh:
+                    fh.write(resp.content)
+                return os.path.join(os.path.abspath(dst), os.path.basename(link))
+        except Exception as details:
+            logger.warning("File {} is not downloaded by reason: {}".format(file_path), details)
+
+
+def get_latest_gemini_version():
+    bucket_name = 'downloads.scylladb.com'
+
+    results = S3Storage(bucket_name).search_by_path(path='gemini')
+    versions = set()
+    for f in results:
+        versions.add(f.split('/')[1])
+
+    return str(sorted(versions)[-1])
+
+
+def list_logs_by_test_id(test_id):
+    log_types = ['db-cluster', 'monitor-set',
+                 'prometheus', 'grafana',
+                 'job', 'monitoring_data_stack', 'events']
+    results = []
+
+    if not test_id:
+        return results
+
+    log_files = S3Storage().search_by_path(path=test_id)
+    for log_file in log_files:
+        for log_type in log_types:
+            if log_type in log_file:
+                results.append({"file_path": log_file,
+                                "type": log_type,
+                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file)})
+                break
+
+    return results
+
+
+def restore_monitoring_stack(test_id):
+    from .remote import LocalCmdRunner
+
+    lr = LocalCmdRunner()
+    logger.info("Checking that docker is available...")
+    result = lr.run('docker ps', ignore_status=True, verbose=False)
+    if result.ok:
+        logger.info('Docker is available')
+    else:
+        logger.warning('Docker is not available on your computer. Please install docker software before continue')
+        return False
+
+    monitor_stack_base_dir = tempfile.mkdtemp()
+    stored_files_by_test_id = list_logs_by_test_id(test_id)
+    monitor_stack_archives = []
+    for f in stored_files_by_test_id:
+        if f['type'] in ['monitoring_data_stack', 'prometheus']:
+            monitor_stack_archives.append(f)
+    if not monitor_stack_archives or len(monitor_stack_archives) < 2:
+        logger.warning('There is no available archive files for monitoring data stack restoring for test id : {}'.format(test_id))
+        return False
+
+    for arch in monitor_stack_archives:
+        logger.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
+        local_path_monitor_stack = S3Storage().download_file(arch['link'], dst_dir=monitor_stack_base_dir)
+        monitor_stack_workdir = os.path.dirname(local_path_monitor_stack)
+        monitoring_stack_archive_file = os.path.basename(local_path_monitor_stack)
+        logger.info('Extracting data from archive {}'.format(arch['file_path']))
+        if arch['type'] == 'prometheus':
+            monitoring_stack_data_dir = os.path.join(monitor_stack_workdir, 'monitor_data_dir')
+            cmd = dedent("""
+                mkdir -p {data_dir}
+                cd {data_dir}
+                cp ../{archive} ./
+                tar -xvf {archive}
+                chmod -R 777 {data_dir}
+                """.format(data_dir=monitoring_stack_data_dir,
+                           archive=monitoring_stack_archive_file))
+            result = lr.run(cmd, ignore_status=True)
+        else:
+            branches = re.search('(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>[\d]+\.[\d]+?)',
+                                 monitoring_stack_archive_file)
+            monitoring_branch = branches.group('monitoring_branch')
+            scylla_version = branches.group('scylla_version')
+            cmd = dedent("""
+                cd {workdir}
+                tar -xvf {archive}
+                """.format(workdir=monitor_stack_workdir, archive=monitoring_stack_archive_file))
+            result = lr.run(cmd, ignore_status=True)
+        if not result.ok:
+            logger.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
+            return False
+        logger.info("Extracting data finished")
+
+    logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
+
+    monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-grafana-monitoring-{}'.format(monitoring_branch))
+
+    def upload_sct_dashboards():
+        sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
+        sct_dashboard_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', sct_dashboard_file_name)
+        if not os.path.exists(sct_dashboard_file):
+            logger.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
+            return False
+
+        dashboard_url = 'http://localhost:3000/api/dashboards/db'
+        with open(sct_dashboard_file, "r") as f:
+            dashboard_config = json.load(f)
+
+        res = requests.post(dashboard_url, data=json.dumps(dashboard_config), headers={'Content-Type': 'application/json'})
+        if res.status_code != 200:
+            logger.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
+            return False
+        logger.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
+
+    def upload_annotations():
+        annotations_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', 'annotations.json')
+        if not os.path.exists(annotations_file):
+            logger.info('There is no annotations file.Skip loading annotations')
+            return False
+
+        with open(annotations_file, "r") as f:
+            annotations = json.load(f)
+
+        annotations_url = "http://localhost:3000/api/annotations"
+        for an in annotations:
+            res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
+            if res.status_code != 200:
+                logger.info('Error during uploading annotation {}. Error message {}'.format(an, res.text))
+                return False
+        logger.info('Annotations loaded successfully')
+
+    @retrying(n=3, sleep_time=1, message='Start docker containers')
+    def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
+        lr.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
+        cmd = dedent("""cd {monitoring_dockers_dir};
+                ./start-all.sh \
+                -s {monitoring_dockers_dir}/config/scylla_servers.yml \
+                -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
+                -d {monitoring_stack_data_dir} -v {scylla_version}""".format(**locals()))
+        res = lr.run(cmd, ignore_status=True)
+        if res.ok:
+            r = lr.run('docker ps')
+            logger.info(r.stdout.encode('utf-8'))
+            return True
+        else:
+            raise Exception('dockers start failed. {}'.format(res))
+
+    status = False
+    status = start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version)
+    upload_sct_dashboards()
+    upload_annotations()
+    return status
 
 
 aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
@@ -398,3 +590,137 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
     return _s3_scylla_repos_cache[(dist_type, dist_version)]
+
+
+def pid_exists(pid):
+    """
+    Return True if a given PID exists.
+
+    :param pid: Process ID number.
+    """
+    try:
+        os.kill(pid, 0)
+    except OSError as detail:
+        if detail.errno == errno.ESRCH:
+            return False
+    return True
+
+
+def safe_kill(pid, signal):
+    """
+    Attempt to send a signal to a given process that may or may not exist.
+
+    :param signal: Signal number.
+    """
+    try:
+        os.kill(pid, signal)
+        return True
+    except Exception:
+        return False
+
+
+class FileFollowerIterator(object):
+    def __init__(self, filename, thread_obj):
+        self.filename = filename
+        self.thread_obj = thread_obj
+
+    def __iter__(self):
+        with open(self.filename, 'r') as input:
+            line = ''
+            while not self.thread_obj.stopped():
+                poller = select.poll()
+                poller.register(input, select.POLLIN)
+                if poller.poll(100):
+                    line += input.readline()
+                if not line or not line.endswith('\n'):
+                    time.sleep(0.1)
+                    continue
+
+                yield line
+                line = ''
+            yield line
+
+
+class FileFollowerThread(object):
+    def __init__(self):
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)
+        self._stop_event = threading.Event()
+        self.future = None
+
+    def __enter__(self):
+        self.start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+    def run(self):
+        raise NotImplementedError()
+
+    def start(self):
+        self.future = self.executor.submit(self.run)
+        return self.future
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+    def follow_file(self, filename):
+        return FileFollowerIterator(filename, self)
+
+
+def _fromtimestamp(t, tz=None):
+    """Construct a datetime from a POSIX timestamp (like time.time()).
+    A timezone info object may be passed in as well.
+    backported from python 3.3
+    """
+    frac, t = math.modf(t)
+    us = int(round(frac * 1e6))
+    if us >= 1000000:
+        t += 1
+        us -= 1000000
+    elif us < 0:
+        t -= 1
+        us += 1000000
+
+    converter = time.gmtime
+    y, m, d, hh, mm, ss, weekday, jday, dst = converter(t)
+    ss = min(ss, 59)    # clamp out leap seconds if the platform has them
+    result = datetime.datetime(y, m, d, hh, mm, ss, us, tz)
+    if tz is None:
+        # As of version 2015f max fold in IANA database is
+        # 23 hours at 1969-09-30 13:00:00 in Kwajalein.
+        # Let's probe 24 hours in the past to detect a transition:
+        max_fold_seconds = 24 * 3600
+
+        # On Windows localtime_s throws an OSError for negative values,
+        # thus we can't perform fold detection for values of time less
+        # than the max time fold. See comments in _datetimemodule's
+        # version of this method for more details.
+        if t < max_fold_seconds and sys.platform.startswith("win"):
+            return result
+
+        y, m, d, hh, mm, ss = converter(t - max_fold_seconds)[:6]
+        probe1 = datetime.datetime(y, m, d, hh, mm, ss, us, tz)
+        trans = result - probe1 - timedelta(0, max_fold_seconds)
+        if trans.days < 0:
+            y, m, d, hh, mm, ss = converter(t + trans // timedelta(0, 1))[:6]
+            probe2 = datetime.datetime(y, m, d, hh, mm, ss, us, tz)
+            if probe2 == result:
+                result._fold = 1
+    else:
+        result = tz.fromutc(result)
+    return result
+
+
+class ScyllaCQLSession(object):
+    def __init__(self, session, cluster):
+        self.session = session
+        self.cluster = cluster
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cluster.shutdown()

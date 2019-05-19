@@ -1,12 +1,12 @@
 test_duration: 6550
-prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=500 -pop seq=1..100000000"
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=20 -pop seq=1..100000000 -log interval=5",
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..100000000"
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..100000000 -log interval=5",
              "cassandra-stress counter_write cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1 -pop seq=1..1000000",
              "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10",
              "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=50 -pop seq=1..100000000 -log interval=5",
              "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=SnappyCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=50 -pop seq=1..100000000 -log interval=5",
              "cassandra-stress write cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=DeflateCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=none -rate threads=50 -pop seq=1..100000000 -log interval=5"]
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=50 -pop seq=1..100000000 -log interval=5",
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=50 -pop seq=1..100000000 -log interval=5",
                   "cassandra-stress counter_read cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..1000000",
                   "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=20 -pop seq=1..100000000 -log interval=5",
                   "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(factor=3) compression=SnappyCompressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=20 -pop seq=1..100000000 -log interval=5",
@@ -25,8 +25,12 @@ experimental: 'true'
 server_encrypt: 'true'
 # Setting client encryption to false for now, till we will find the way to make c-s work with that
 client_encrypt: 'false'
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'ScyllaAuthorizer'
 # append_conf: 'enable_sstable_data_integrity_check: true'
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration|mixed
 instance_provision: 'mixed'
@@ -69,8 +73,8 @@ backends: !mux
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-d934e980'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
-            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_id_db_cassandra: 'ami-3eff0028'
@@ -82,8 +86,8 @@ backends: !mux
             security_group_ids: 'sg-059a7f66a947d4b5c'
             subnet_id: 'subnet-088fddaf520e4c7a8'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'ami-0006222380fb72d8d' # Loader dedicated AMI
-            ami_id_monitor: 'ami-0f478f18d613e3662' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
+            ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'

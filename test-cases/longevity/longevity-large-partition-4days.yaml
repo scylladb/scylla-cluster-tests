@@ -1,0 +1,29 @@
+test_duration: 6480
+
+bench_run: 'true'
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10",
+                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=5760m"
+                    ]
+n_db_nodes: 4
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+
+user_prefix: 'longevity-large-partitions-4d'
+
+failure_post_behavior: keep
+space_node_threshold: 644245094
+
+# To validate rows in partitions: collect data about partitions and their rows amount
+# before and after running nemesis and compare it
+validate_partitions: true
+table_name: "scylla_bench.test"
+primary_key_column: "pk"
+
+# scylla-manager configuration
+# if running on aws and use_mgmt is true, the monitor image should not contain scylla
+use_mgmt: true

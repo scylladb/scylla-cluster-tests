@@ -97,19 +97,27 @@
     <ul>
         <li><a href={{ dashboard_master }}>Kibana</a></li>
         <li><a href="{{ job_url }}">Jenkins job</a></li>
-        {% if grafana_snapshot %}
-        {% if grafana_snapshot[0] %}
-        <li><a href={{ grafana_snapshot[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+        {% if grafana_screenshots %}
+            {% if grafana_screenshots[0] %}
+                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+            {% endif %}
         {% endif %}
-        {% if grafana_snapshot[1] %}
-        <li><a href={{ grafana_snapshot[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
-        {% endif %}
+        {% if grafana_snapshots %}
+            {% if grafana_snapshots[0] %}
+                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
         {% endif %}
     </ul>
-    {% if grafana_snapshot %}
-    <h3>Grafana Screenshot:</h3>
-    {% for snapshot in grafana_snapshot %}
-    <img src="{{ snapshot }}"  height="50%" width="50%">
-    {% endfor %}
+    {% if grafana_screenshots %}
+        <h3>Grafana Screenshot:</h3>
+        {% for screenshot in grafana_screenshots %}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {% endfor %}
     {% endif %}
 {% endblock %}

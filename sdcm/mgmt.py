@@ -4,7 +4,8 @@ import os
 from enum import Enum
 from textwrap import dedent
 
-from avocado.utils import process
+from invoke.exceptions import UnexpectedExit, Failure
+
 import requests
 import logging
 import json
@@ -670,13 +671,13 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
                         sudo apt-get remove scylla-manager-client -y
                         sudo rm -rf {}
                         sudo apt-get clean
-                        sudo apt-get update
-                    """.format(self.manager_repo_path))  # +" /var/lib/scylla-manager/*"))
+                    """.format(self.manager_repo_path)) # +" /var/lib/scylla-manager/*"))
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
+        self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
 
         # Downgrade to pre-upgrade scylla-manager repository
         self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
-        res = self.manager_node.remoter.run('sudo apt-get update')
+        res = self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
         res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
         rollback_to_version = res.stdout.split()[1]
         logger.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
@@ -707,7 +708,7 @@ class SCTool(object):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
-        except process.CmdError as e:
+        except (UnexpectedExit, Failure) as e:
             raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, e))
 
         if is_verify_errorless_result:

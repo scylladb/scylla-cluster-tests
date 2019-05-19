@@ -23,6 +23,7 @@ from uuid import UUID
 from avocado import main
 from cassandra import InvalidRequest
 from cassandra.util import sortedset
+from cassandra import ConsistencyLevel
 
 from sdcm.tester import ClusterTester
 
@@ -2906,36 +2907,40 @@ class FillDatabaseData(ClusterTester):
         """
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
+        with self.cql_connection_patient(node) as session:
+            # override driver consistency level
+            session.default_consistency_level = ConsistencyLevel.QUORUM
 
-        session.execute("""
-            CREATE KEYSPACE IF NOT EXISTS keyspace1
-            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
-            """)
-        session.execute("USE keyspace1;")
+            session.execute("""
+                CREATE KEYSPACE IF NOT EXISTS keyspace1
+                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+                """)
+            session.execute("USE keyspace1;")
 
-        # Create all tables according the above list
-        self.cql_create_tables(session)
+            # Create all tables according the above list
+            self.cql_create_tables(session)
 
-        # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
-        self.cql_insert_data_to_tables(session, session.default_fetch_size)
+            # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
+            self.cql_insert_data_to_tables(session, session.default_fetch_size)
 
     def verify_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
+        with self.cql_connection_patient(node) as session:
+            # override driver consistency level
+            session.default_consistency_level = ConsistencyLevel.QUORUM
 
-        session.execute("USE keyspace1;")
+            session.execute("USE keyspace1;")
 
-        self.run_db_queries(session, session.default_fetch_size)
+            self.run_db_queries(session, session.default_fetch_size)
 
     def clean_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
+        with self.cql_connection_patient(node) as session:
 
-        session.execute("DROP KEYSPACE keyspace1;")
-        session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
+            session.execute("DROP KEYSPACE keyspace1;")
+            session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
 
 
 if __name__ == '__main__':

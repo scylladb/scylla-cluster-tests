@@ -1,8 +1,8 @@
 test_duration: 2880
-prepare_write_cmd: "cassandra-stress write cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
-prepare_verify_cmd: "cassandra-stress read cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=2000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=400200300..600200300 -log interval=15"]
-stress_read_cmd: ["cassandra-stress read cl=ONE duration=2860m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native user=cassandra password=cassandra -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=5"]
+prepare_write_cmd: "cassandra-stress write cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
+prepare_verify_cmd: "cassandra-stress read cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=2000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=400200300..600200300 -log interval=15"]
+stress_read_cmd: ["cassandra-stress read cl=ONE duration=2860m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=5"]
 run_fullscan: 'keyspace1.standard1, 5' # 'ks.cf|random, interval(min)''
 n_db_nodes: 4
 n_loaders: 1
@@ -16,8 +16,12 @@ space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 experimental: 'true'
 server_encrypt: 'true'
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'ScyllaAuthorizer'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'mixed'
@@ -61,8 +65,8 @@ backends: !mux
             security_group_ids: 'sg-5e79983a'
             subnet_id: 'subnet-c327759a'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
-            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
@@ -71,8 +75,8 @@ backends: !mux
             security_group_ids: 'sg-059a7f66a947d4b5c'
             subnet_id: 'subnet-088fddaf520e4c7a8'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_loader: 'ami-0006222380fb72d8d' # Loader dedicated AMI
-            ami_id_monitor: 'ami-0f478f18d613e3662' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
+            ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'

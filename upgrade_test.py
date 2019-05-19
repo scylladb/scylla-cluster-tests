@@ -256,10 +256,10 @@ class UpgradeTest(FillDatabaseData):
         # sst3 workload (20m): prepare write
         self.log.info('Starting c-s sst3 workload for 20m to prepare data')
         stress_cmd_sst3_prepare = self.params.get('stress_cmd_sst3_prepare')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_prepare, profile='data_dir/sst3_schema.yaml')
+        sst3_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_sst3_prepare, profile='data_dir/sst3_schema.yaml')
 
         # wait for the 20m sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        self.verify_stress_thread(sst3_cs_thread_pool)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -272,7 +272,7 @@ class UpgradeTest(FillDatabaseData):
         # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
-        prepare_write_stress_queue = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
@@ -289,12 +289,12 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
 
         # wait for the prepare write workload to finish
-        self.verify_stress_thread(prepare_write_stress_queue)
+        self.verify_stress_thread(prepare_write_cs_thread_pool)
 
         # read workload
         self.log.info('Starting c-s read workload for 10m')
         stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
-        read_10m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+        read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
@@ -307,7 +307,7 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
 
         # wait for the 10m read workload to finish
-        self.verify_stress_thread(read_10m_stress_queue)
+        self.verify_stress_thread(read_10m_cs_thread_pool)
 
         # read workload (cl=ALL)
         self.log.info('Starting c-s read workload (cl=ALL n=10000000)')
@@ -319,7 +319,7 @@ class UpgradeTest(FillDatabaseData):
         # read workload (20m)
         self.log.info('Starting c-s read workload for 20m')
         stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
-        read_20m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+        read_20m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
 
         # rollback second node
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
@@ -335,7 +335,7 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
 
         # wait for the 20m read workload to finish
-        self.verify_stress_thread(read_20m_stress_queue)
+        self.verify_stress_thread(read_20m_cs_thread_pool)
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
@@ -343,26 +343,26 @@ class UpgradeTest(FillDatabaseData):
         # sst3 workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s sst3 workload to verify data by simple read')
         stress_cmd_sst3_verify_read = self.params.get('stress_cmd_sst3_verify_read')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_read, profile='data_dir/sst3_schema.yaml')
+        sst3_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_read, profile='data_dir/sst3_schema.yaml')
 
         # wait for the read sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        self.verify_stress_thread(sst3_cs_thread_pool)
 
         # sst3 workload: verify data by multiple ops
         self.log.info('Starting c-s sst3 workload to verify data by multiple ops')
         stress_cmd_sst3_verify_more = self.params.get('stress_cmd_sst3_verify_more')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_more, profile='data_dir/sst3_schema.yaml')
+        sst3_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_more, profile='data_dir/sst3_schema.yaml')
 
         # wait for the sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        self.verify_stress_thread(sst3_cs_thread_pool)
 
         # sst3 workload: verify data by delete 1/10 data
         self.log.info('Starting c-s sst3 workload to verify data by delete')
         stress_cmd_sst3_verify_delete = self.params.get('stress_cmd_sst3_verify_delete')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_delete, profile='data_dir/sst3_schema.yaml')
+        sst3_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_delete, profile='data_dir/sst3_schema.yaml')
 
         # wait for the sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        self.verify_stress_thread(sst3_cs_thread_pool)
 
         self.log.debug('start sstabledump verify')
         self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f |grep -v manifest.json |grep -v snapshots`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)

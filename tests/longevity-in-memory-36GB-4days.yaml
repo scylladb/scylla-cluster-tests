@@ -20,7 +20,7 @@ server_encrypt: 'true'
 client_encrypt: 'false'
 
 # 80GB in-memory storage - 36GB table is 45% of total in-memory store as recommended
-append_scylla_args: '--blocked-reactor-notify-ms 500 --in-memory-storage-size-mb 80000'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --in-memory-storage-size-mb 80000'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'mixed'
@@ -65,8 +65,8 @@ backends: !mux
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_loader: 'ami-050c06c3e20036edc' # Loader dedicated AMI
-            ami_id_monitor: 'ami-01d6b0d7e0d98969b' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
@@ -76,8 +76,8 @@ backends: !mux
             security_group_ids: 'sg-059a7f66a947d4b5c'
             subnet_id: 'subnet-088fddaf520e4c7a8'
             ami_id_db_scylla: 'AMI_ID'
-            ami_id_loader: 'ami-0006222380fb72d8d' # Loader dedicated AMI
-            ami_id_monitor: 'ami-0f478f18d613e3662' # Monitor dedicated AMI
+            ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
+            ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'

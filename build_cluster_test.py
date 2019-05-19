@@ -91,8 +91,8 @@ class BuildClusterTest(ClusterTester):
         base_cmd_w = self.params.get('stress_cmd')
 
         # run a workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w)
-        self.verify_stress_thread(queue=stress_queue)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=base_cmd_w)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
 
 if __name__ == '__main__':

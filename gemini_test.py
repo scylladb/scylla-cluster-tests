@@ -13,9 +13,9 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
-
-from avocado import main
+import datetime
 from sdcm.tester import ClusterTester
+from sdcm.results_analyze import BaseResultsAnalyzer
 
 
 class GeminiTest(ClusterTester):
@@ -26,16 +26,51 @@ class GeminiTest(ClusterTester):
 
     :avocado: enable
     """
-
     def test_random_load(self):
         """
         Run gemini tool
         """
+        prepared_results = self._prepare_test_results()
+
         cmd = self.params.get('gemini_cmd')
+        prepared_results['gemini_cmd'] = cmd
 
         self.log.debug('Start gemini benchmark')
+        prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
-        results = self.get_gemini_results(queue=test_queue)
-        self.log.debug(results)
-        assert results, "Gemini results are not found."
-        assert results[0]['read errors'] == 0, "Gemini read errors."
+        result = self.get_gemini_results(queue=test_queue)
+
+        prepared_results.update(result)
+
+        prepared_results['end_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._send_email(prepared_results)
+
+    def _prepare_test_results(self):
+        return {
+            "test_name": self.avocado_params.id.name.split('.')[0],
+            "start_time": "",
+            "end_time": "",
+            "gemini_cmd": "",
+            "gemini_version": self.params.get('gemini_version', default='latest'),
+            "scylla_version": self.db_cluster.nodes[0].scylla_version,
+            "scylla_ami_id": self.params.get('ami_id_db_scylla'),
+            "scylla_instance_type": self.params.get('instance_type_db'),
+            "number_of_db_nodes": self.params.get('n_db_nodes'),
+            "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version,
+            "oracle_ami_id": self.params.get('ami_id_db_oracle'),
+            "oracle_instance_type": self.params.get('instance_type_db_oracle'),
+            "results": [],
+            'status': None
+        }
+
+    def _send_email(self, results):
+        email_recipients = self.params.get('email_recipients', default=None)
+        self.log.info('Send email with results to {}'.format(email_recipients))
+        em = BaseResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                                 email_template_fp="results_gemini.html",
+                                 send_email=self.params.get('send_email', default=True),
+                                 email_recipients=email_recipients)
+
+        html = em.render_to_html(results)
+
+        em.send_email(subject='Gemini - test results: {}'.format(results['start_time']), content=html)

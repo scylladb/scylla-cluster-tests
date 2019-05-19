@@ -15,7 +15,7 @@ ip_ssh_connections: 'private'
 #When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across the loaders (round_robin)
 round_robin: 'false'
 experimental: 'true'
-append_scylla_args: '--blocked-reactor-notify-ms 500'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
 instance_provision: 'spot_low_price'
@@ -62,8 +62,8 @@ backends: !mux
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'AMI-ID'
-            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'

@@ -1,0 +1,57 @@
+@startuml
+database "DB Nodes" {
+    [scylladb]
+}
+
+package "Loader" {
+    [cassandra-stress]
+    [cassandra-bench]
+}
+
+package "Test Worker" {
+  [Test] <<producer>>
+  [Stress commands] <<producer>>
+  [Nemesis Threads] <<producer>>
+  [Events Queue]
+  [Coredump Watcher] <<producer>>
+  [DB Logs Watcher] <<producer>>
+  [Spot Termination Watcher] <<producer>>
+  package "subscribers" {
+    [Log Dumper] <<subscriber>>
+    [Metrics Dumper] <<subscriber>>
+    [Analyser] <<subscriber>>
+  }
+}
+package "Monitor" {
+    [prometheus]
+}
+
+skinparam component {
+	backgroundColor<<producer>> Peru
+	backgroundColor<<subscriber>> Gold
+}
+
+[Test] -[hidden]> [Stress commands]
+[Stress commands] -[hidden]> [Nemesis Threads]
+[Nemesis Threads] -[hidden]> [Coredump Watcher]
+[Coredump Watcher] -[hidden]>  [DB Logs Watcher]
+[DB Logs Watcher] -[hidden]>   [Spot Termination Watcher]
+
+[cassandra-stress] -->> [scylladb]
+[cassandra-bench] -->> [scylladb]
+[Nemesis Threads] ->>  [scylladb]
+[Stress commands] -->> [cassandra-bench]
+[Stress commands] -->> [cassandra-stress]
+[Stress commands] ==> [Events Queue]: start/\nfinish/\nerrors
+[Coredump Watcher] ==> [Events Queue]: coredumps\nwith backtrace
+[Spot Termination Watcher] ==> [Events Queue]: Spot Node\nterminated
+[DB Logs Watcher] ==> [Events Queue]: Backtrace /\nStalls /\n Exceptions
+[Test] ==> [Events Queue]: Test start/ended
+[Nemesis Threads] ==> [Events Queue]: Nemesis\nStarted/Ended
+[Events Queue] ==> [Log Dumper]
+[Events Queue] ==> [Metrics Dumper]
+[Events Queue] ==> [Analyser]
+[Metrics Dumper] <-- [prometheus]
+[Stress commands] <-- [prometheus]
+[scylladb] <-- [prometheus]
+@enduml

@@ -8,14 +8,13 @@ import logging
 import requests
 import json
 import yaml
-import shutil
 from textwrap import dedent
 from math import sqrt
 
 from requests import ConnectionError
 
 from es import ES
-from utils import get_job_name, retrying, remove_comments, S3Storage
+from utils import get_job_name, retrying, remove_comments
 
 
 logger = logging.getLogger(__name__)
@@ -113,6 +112,14 @@ def get_stress_bench_cmd_params(cmd):
         match = re.search('(-' + key + '\s+([^-| ]+))', cmd)
         if match:
             cmd_params[key] = match.group(2).strip()
+    return cmd_params
+
+
+def get_gemini_cmd_params(cmd):
+    cmd = cmd.strip()
+    cmd_params = {
+        'raw_cmd': cmd
+    }
     return cmd_params
 
 
@@ -238,6 +245,9 @@ class Stats(object):
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
 
+    def get_doc_id(self):
+        return self._test_id
+
     def create(self):
         self.es.create_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=self._stats)
 
@@ -333,7 +343,9 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
-        test_details['grafana_snapshot'] = ""
+        test_details['grafana_snapshots'] = []
+        test_details['grafana_screenshots'] = []
+        test_details['grafana_annotations'] = []
         test_details['prometheus_data'] = ""
         test_details['test_id'] = Setup.test_id()
         test_details['log_files'] = {}
@@ -375,6 +387,8 @@ class TestStatsMixin(Stats):
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
+        elif stresser == 'gemini':
+            cmd_params = get_gemini_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
@@ -415,12 +429,13 @@ class TestStatsMixin(Stats):
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
-    def update_stress_results(self, results):
+    def update_stress_results(self, results, calculate_average=True):
         if 'stats' not in self._stats['results']:
             self._stats['results']['stats'] = results
         else:
             self._stats['results']['stats'].extend(results)
-        self.calculate_stats_average()
+        if calculate_average:
+            self.calculate_stats_average()
         self.update(dict(results=self._stats['results']))
 
     def calculate_stats_average(self):
@@ -456,7 +471,10 @@ class TestStatsMixin(Stats):
             if self.monitors and self.monitors.nodes:
                 test_start_time = self._stats['test_details']['start_time']
                 update_data['results'] = self.get_prometheus_stats()
-                self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
+                grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
+                self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
+                self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
+                self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
                 self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
 
             if self.db_cluster:
