@@ -2622,7 +2622,6 @@ class BaseLoaderSet(object):
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
-
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass

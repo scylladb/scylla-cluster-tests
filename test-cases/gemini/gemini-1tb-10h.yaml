@@ -22,5 +22,3 @@ append_scylla_args_oracle: '--enable-cache false'
 
 send_email: true
 email_recipients: ['roy@scylladb.com', 'alex.bykov@scylladb.com', 'penberg@scylladb.com', 'shlomi@scylladb.com', 'bentsi@@scylladb.com']
-
-

@@ -11,7 +11,7 @@
         </ul>
     </div>
     <h3>
-        <span>System under test </span>        
+        <span>System under test </span>
     </h3>
     <div>
         <ul>
@@ -21,7 +21,7 @@
         </ul>
     </div>
     <h3>
-        <span>Test oracle</span>        
+        <span>Test oracle</span>
     </h3>
     <div>
         <ul>
@@ -34,7 +34,7 @@
         <span>Test results </span>
     </h3>
     <table class='gemini_result_table'>
-        <tr>    
+        <tr>
             <td class='gemini_field'> Status </td>
             <td>
                 {% if status == "PASSED" %}
@@ -52,10 +52,10 @@
                 <td class='gemini_field'>
                     <span>{{ key }}</span>
                 </td>
-                <td>  
+                <td>
                     <span>{{ value }}</span>
                 </td>
-                
+
             </tr>
             {% endfor %}
         {% endfor %}
