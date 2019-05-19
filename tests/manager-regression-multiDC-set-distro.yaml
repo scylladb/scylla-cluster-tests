@@ -15,6 +15,7 @@ mgmt_port: 10090
 scylla_repo_m: SCYLLA_ENTERPRISE_REPO
 scylla_mgmt_repo: SCYLLA_MGR_REPO
 scylla_mgmt_upgrade_to_repo: SCYLLA_MGR_UPGRADE_TO_REPO
+instance_provision: 'spot_low_price'
 
 backends: !mux
     aws: !mux
