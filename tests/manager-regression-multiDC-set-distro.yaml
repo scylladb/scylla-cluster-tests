@@ -2,7 +2,6 @@ stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(str
 n_db_nodes: '2 1'
 n_loaders: 1
 n_monitor_nodes: 1
-monitor_branch: 'branch-2.1'
 user_prefix: manager-regression-DISTRO-VERSION
 failure_post_behavior: keep
 space_node_threshold: 6442
