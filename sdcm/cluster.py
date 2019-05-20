@@ -41,7 +41,7 @@ from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
-from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent
+from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent
 
 from avocado.utils import runtime as avocado_runtime
 from sdcm.sct_events import EVENTS_PROCESSES
@@ -2979,10 +2979,17 @@ class BaseLoaderSet(object):
         if 'random' in ks_cf.lower():
             ks_cf = random.choice(ks_cf_list)
 
+        FullScanEvent(type='start', loader_node=loader_node, db_node_ip=db_node_ip, ks_cf=ks_cf)
+
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
         cmd = 'select count(*) from {}'.format(ks_cf)
         result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
 
+        FullScanEvent(type='finish', loader_node=loader_node,
+                      db_node_ip=db_node_ip, ks_cf=ks_cf,
+                      result={'exit_code': result.exited,
+                              'stdout': result.stdout,
+                              'stderr': result.stderr})
         return result
 
     def run_fullscan_thread(self, ks_cf, db_nodes, interval=60, duration=60):
