@@ -683,7 +683,7 @@ class SCTConfiguration(dict):
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_sst3_prepare", env="SCT_STRESS_CMD_SST3_PREPARE",  type=str_or_list,
+        dict(name="stress_cmd_complex_prepare", env="SCT_STRESS_CMD_COMPLEX_PREPARE",  type=str_or_list,
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
@@ -703,12 +703,11 @@ class SCTConfiguration(dict):
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_read_clall", env="SCT_STRESS_CMD_READ_CLALL",  type=str_or_list,
+        dict(name="stress_cmd_read_cl_one", env="SCT_STRESS_CMD_READ_CL_ONE",  type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure.
-                multiple commands can passed as a list"""),
+                be provided by the test suite infrastructure."""),
 
         dict(name="stress_cmd_read_20m", env="SCT_STRESS_CMD_READ_20M",  type=str_or_list,
 
@@ -717,26 +716,31 @@ class SCTConfiguration(dict):
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_sst3_verify_read", env="SCT_STRESS_CMD_SST3_VERIFY_READ",  type=str_or_list,
+        dict(name="stress_cmd_complex_verify_read", env="SCT_STRESS_CMD_COMPLEX_VERIFY_READ",  type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_sst3_verify_more", env="SCT_STRESS_CMD_SST3_VERIFY_MORE",  type=str_or_list,
+        dict(name="stress_cmd_complex_verify_more", env="SCT_STRESS_CMD_COMPLEX_VERIFY_MORE",  type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="disable_read_repair_chance", env="SCT_DISABLE_READ_REPAIR_CHANCE",  type=str_or_list,
+        dict(name="write_stress_during_entire_test", env="SCT_WRITE_STRESS_DURING_ENTIRE_TEST",  type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
-                be provided by the test suite infrastructure.
-                multiple commands can passed as a list"""),
+                be provided by the test suite infrastructure."""),
+
+        dict(name="verify_data_after_entire_test", env="SCT_VERIFY_DATA_AFTER_ENTIRE_TEST",  type=str_or_list,
+
+             help="""cassandra-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure."""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
