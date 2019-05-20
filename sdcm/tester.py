@@ -538,8 +538,10 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     **cl_params)
             elif db_type == 'mixed_scylla':
                 cluster.Setup.mixed_cluster(True)
+                n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes', 1)
                 cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
-                                      user_prefix=user_prefix + '-oracle'))
+                                      user_prefix=user_prefix + '-oracle',
+                                      n_nodes=[n_test_oracle_db_nodes]))
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_oracle').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
