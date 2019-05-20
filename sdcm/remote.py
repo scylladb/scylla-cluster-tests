@@ -57,7 +57,7 @@ class ConnectionCmdTimeout(Connection):
 
     def __init__(self, host, user=None, port=None, config=None, gateway=None, forward_agent=None, connect_timeout=None, connect_kwargs=None):
         super(ConnectionCmdTimeout, self).__init__(host, user, port, config, gateway, forward_agent, connect_timeout, connect_kwargs)
-        self.cmd_timeout = None
+        self.config._set(cmd_timeout=None)
 
     def run(self, command, **kwargs):
         self.cmd_timeout = kwargs.pop('cmd_timeout', None)
@@ -216,8 +216,6 @@ class RemoteCmdRunner(CommandRunner):
     def reconnect(self):
         self.log.debug('Reconnecting to host ...')
         self.connection.close()
-        self.connection.open()
-        self.log.debug('SSH reconnected')
 
     def ssh_debug_cmd(self):
         if self.key_file:
