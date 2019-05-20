@@ -16,26 +16,26 @@ page.open(address, function(status) {
 	}
 	window.setTimeout(function () {
 		page.evaluate(function() {
-			l = document.getElementsByClassName("fa-share-square-o");
-			var ev = document.createEvent("MouseEvents");
-        	ev.initEvent("click", true, true);
-        	l[0].parentElement.dispatchEvent(ev);
+			var ev = document.createEvent('MouseEvent');
+			ev.initMouseEvent('click', true, true);
+			var l = document.getElementsByClassName("navbar-button--share");
+        	l[0].dispatchEvent(ev)
 		});
     }, 15000);
 	window.setTimeout(function() {
 		page.evaluate(function() {
-			l = document.getElementsByClassName("icon-gf-snapshot");
-			var ev = document.createEvent("MouseEvents");
-        	ev.initEvent("click", true, true);
-        	l[0].parentElement.dispatchEvent(ev);
+			var ev = document.createEvent('MouseEvent');
+			ev.initMouseEvent('click', true, true);
+			l = document.getElementsByClassName("gf-tabs-item");
+        	l[1].firstElementChild.dispatchEvent(ev);
 		});
 	}, 20000);
 	window.setTimeout(function() {
 		page.evaluate(function() {
+			var ev = document.createEvent('MouseEvent');
+			ev.initMouseEvent('click', true, true);
 			l = document.getElementsByClassName("fa-cloud-upload");
-			var ev = document.createEvent("MouseEvents");
-        	ev.initEvent("click", true, true);
-        	l[1].dispatchEvent(ev);
+        	l[0].dispatchEvent(ev);
 		});
 	}, 25000);
 	window.setTimeout(function() {
