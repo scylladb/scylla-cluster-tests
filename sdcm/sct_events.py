@@ -234,6 +234,25 @@ class DisruptionEvent(SctEvent):
                 super(DisruptionEvent, self).__str__(), self)
 
 
+class FullScanEvent(SctEvent):
+    def __init__(self, type, loader_node, ks_cf, db_node_ip, result=None):
+        super(FullScanEvent, self).__init__()
+        self.type = type
+        self.loader_node = str(loader_node)
+        self.ks_cf = ks_cf
+        self.db_node_ip = db_node_ip
+        self.msg = "{0}: type={1.type} loader_node={1.loader_node} select_from={1.ks_cf} on db_node={1.db_node_ip}"
+        self.result = result
+        if result:
+            if result['exit_code'] != 0 or result['stderr']:
+                self.severity = Severity.ERROR
+            self.msg += " {1.result}"
+        self.publish()
+
+    def __str__(self):
+        return self.msg.format(super(FullScanEvent, self).__str__(), self)
+
+
 class CassandraStressEvent(SctEvent):
     def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
         super(CassandraStressEvent, self).__init__()
