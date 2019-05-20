@@ -218,6 +218,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.connections = []
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
+        logging.getLogger('invoke').setLevel(logging.CRITICAL)
         if self.create_stats:
             self.create_test_stats()
         self.init_resources()

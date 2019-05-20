@@ -112,23 +112,15 @@ class Nemesis(object):
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
-    def set_termination_event(self, termination_event):
-        self.termination_event = termination_event
-
     def run(self, interval=30):
         interval *= 60
         self.log.info('Interval: %s s', interval)
         self.interval = interval
-        while True:
+        while not self.termination_event.isSet():
             self._set_current_disruption(report=False)
             self.disrupt()
-            if self.termination_event is not None:
-                if self.termination_event.isSet():
-                    self.termination_event = None
-                    self.log.info('Asked to stop running nemesis')
-                    break
             self.target_node.running_nemesis = None
-            time.sleep(interval)
+            self.termination_event.wait(timeout=interval)
             self.set_target_node(is_running=True)
 
     def report(self):
