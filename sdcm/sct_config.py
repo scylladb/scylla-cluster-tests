@@ -95,6 +95,9 @@ class SCTConfiguration(dict):
         dict(name="n_db_nodes", env="SCT_N_DB_NODES",  type=int_or_list,
              help="Number list of database nodes in multiple data centers."),
 
+        dict(name="n_test_oracle_db_nodes", env="SCT_N_TEST_ORACLE_DB_NODES",  type=int_or_list,
+             help="Number list of oracle test nodes in multiple data centers."),
+
         dict(name="n_loaders", env="SCT_N_LOADERS",  type=int_or_list,
              help="Number list of loader nodes in multiple data centers"),
 
