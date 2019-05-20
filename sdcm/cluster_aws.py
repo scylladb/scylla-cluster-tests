@@ -394,8 +394,16 @@ class AWSNode(cluster.BaseNode):
                 retries += 1
 
         if not ok:
-            raise cluster.NodeError('AWS instance %s waiter error after '
-                                    'exponencial backoff wait' % self._instance.id)
+            try:
+                self._instance.reload()
+            except Exception as e:
+                self.log.exception("Error while reloading instance metadata: %s", e)
+            finally:
+                method_name = instance_method.__name__
+                instance_id = self._instance.id
+                self.log.debug(self._instance.meta.data)
+                msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(**locals())
+                raise cluster.NodeError(msg)
 
     @retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
               message="Waiting for instance to get public ip")
