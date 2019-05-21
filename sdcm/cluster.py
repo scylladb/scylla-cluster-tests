@@ -1152,7 +1152,7 @@ class BaseNode(object):
             p = re.compile('[# ]*authenticator:.*')
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
                                          scylla_yaml_contents)
-        if authorizer in ['AllowAllAuthorizer', 'ScyllaAuthorizer']:
+        if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
             p = re.compile('[# ]*authorizer:.*')
             scylla_yaml_contents = p.sub('authorizer: {0}'.format(authorizer),
                                          scylla_yaml_contents)
