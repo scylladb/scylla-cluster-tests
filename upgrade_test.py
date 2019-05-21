@@ -365,7 +365,7 @@ class UpgradeTest(FillDatabaseData):
         self.verify_stress_thread(sst3_stress_queue)
 
         self.log.debug('start sstabledump verify')
-        self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f |grep -v manifest.json |grep -v snapshots`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
+        self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f |grep -v manifest.json |grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
