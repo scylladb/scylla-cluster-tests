@@ -1,0 +1,31 @@
+test_duration: 380
+prepare_write_cmd: "cassandra-stress write cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
+# prepare_verify_cmd: "cassandra-stress read cl=ALL n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=2000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=360m  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=400200300..600200300 -log interval=15"]
+stress_read_cmd: ["cassandra-stress read cl=ONE duration=360m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=5"]
+run_fullscan: 'keyspace1.standard1, 5' # 'ks.cf|random, interval(min)''
+
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+
+nemesis_class_name: 'LimitedChaosMonkey'
+nemesis_interval: 30
+# nemesis_during_prepare: 'false'
+
+user_prefix: 'longevity-encrypt-at-rest-200gb-6h-tls'
+
+failure_post_behavior: keep
+space_node_threshold: 644245094
+
+use_mgmt: true
+
+server_encrypt: 'true'
+authenticator_user: cassandra
+authenticator_password: cassandra
+
+pre_create_schema: True
+scylla_encryption_options: "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'LocalFileSystemKeyProviderFactory', 'secret_key_file': '/tmp/secret_key'}"
