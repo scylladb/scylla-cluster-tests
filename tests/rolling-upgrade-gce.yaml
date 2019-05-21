@@ -25,7 +25,7 @@ ip_ssh_connections: 'private'
 authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
-authorization_in_upgrade: 'ScyllaAuthorizer'
+authorization_in_upgrade: 'CassandraAuthorizer'
 remove_authorization_in_rollback: true
 
 backends: !mux
