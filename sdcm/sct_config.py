@@ -748,6 +748,8 @@ class SCTConfiguration(dict):
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure."""),
+        dict(name="scylla_encryption_options", env="SCT_SCYLLA_ENCRYPTION_OPTIONS",  type=str_or_list,
+             help="options will be used for enable encryption at-rest for tables"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
