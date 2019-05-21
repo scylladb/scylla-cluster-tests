@@ -2600,6 +2600,14 @@ class BaseLoaderSet(object):
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
+        self.install_gemini_tool(node)
+
+    def install_gemini_tool(self, node):
+        result = node.remoter.run('test -e ~/gemini', ignore_status=True)
+        if result.exit_status == 0:
+            self.log.debug('Skip gemini tool installation')
+            return
+        self.log.debug('Install gemini tool')
         # gemini tool
         gemini_version = self.params.get('gemini_version', default='0.9.2')
         if gemini_version.lower() == 'latest':
@@ -2900,6 +2908,7 @@ class BaseLoaderSet(object):
             queue[TASK_QUEUE].task_done()
 
         for loader_idx, loader in enumerate(self.nodes):
+            self.install_gemini_tool(loader)
             setup_thread = threading.Thread(target=_run_gemini,
                                             args=(loader, loader_idx,
                                                   cmd, test_node, oracle_node))
