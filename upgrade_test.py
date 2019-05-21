@@ -358,6 +358,12 @@ class UpgradeTest(FillDatabaseData):
         # wait for the read complex workload to finish
         self.verify_stress_thread(complex_cs_thread_pool)
 
+        # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching the data lose.
+        # But the execute time of workloads are not exact, so let only use basic prepare write & read verify for complex workloads,
+        # and comment two complex workloads.
+        #
+        # TODO: retest commented workloads and decide to enable or delete them.
+        #
         ## complex workload: verify data by multiple ops
         #self.log.info('Starting c-s complex workload to verify data by multiple ops')
         #stress_cmd_complex_verify_more = self.params.get('stress_cmd_complex_verify_more')
