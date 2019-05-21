@@ -2528,6 +2528,28 @@ class BaseLoaderSet(object):
         self._loader_cycle = None
         self.params = params
 
+    def install_gemini(self, node):
+        gemini_version = self.params.get('gemini_version', default='0.9.2')
+        if gemini_version.lower() == 'latest':
+            gemini_version = get_latest_gemini_version()
+        gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
+        # TODO: currently schema is not used by gemini tool need to store the schema
+        #       in data_dir for each test
+        gemini_schema_url = self.params.get('gemini_schema_url')
+        if not gemini_url or not gemini_schema_url:
+            logger.warning('Gemini URLs should be defined to run the gemini tool')
+        else:
+            gemini_tar = os.path.basename(gemini_url)
+            install_gemini_script = dedent("""
+                cd $HOME
+                rm -rf gemini*
+                curl -LO {gemini_url}
+                tar -xvf {gemini_tar}
+                chmod a+x gemini
+                curl -LO  {gemini_schema_url}
+            """.format(**locals()))
+            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
+
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
@@ -2538,7 +2560,7 @@ class BaseLoaderSet(object):
 
         collectd_setup = ScyllaCollectdSetup()
         collectd_setup.install(node)
-
+        self.install_gemini(node=node)
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
@@ -2600,26 +2622,6 @@ class BaseLoaderSet(object):
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
-        # gemini tool
-        gemini_version = self.params.get('gemini_version', default='0.9.2')
-        if gemini_version.lower() == 'latest':
-            gemini_version = get_latest_gemini_version()
-        gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
-        # TODO: currently schema is not used by gemini tool need to store the schema
-        #       in data_dir for each test
-        gemini_schema_url = self.params.get('gemini_schema_url')
-        if not gemini_url or not gemini_schema_url:
-            logger.warning('Gemini URLs should be defined to run the gemini tool')
-        else:
-            gemini_tar = os.path.basename(gemini_url)
-            install_gemini_script = dedent("""
-                cd $HOME
-                curl -LO {gemini_url}
-                tar -xvf {gemini_tar}
-                chmod a+x gemini
-                curl -LO  {gemini_schema_url}
-            """.format(**locals()))
-            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
