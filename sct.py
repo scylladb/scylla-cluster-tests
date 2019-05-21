@@ -261,10 +261,12 @@ cli.add_command(investigate)
 
 
 @cli.command('unit-tests', help="Run all the SCT internal unit-tests")
-def unit_tests():
+@click.option("-t", "--test", required=False, default="test*.py",
+              help="Run specific test file from unit-tests directory")
+def unit_tests(test):
     import unittest
 
-    test_suite = unittest.TestLoader().discover('unit_tests', top_level_dir='.')
+    test_suite = unittest.TestLoader().discover('unit_tests', pattern=test, top_level_dir='.')
     result = unittest.TextTestRunner(verbosity=2).run(test_suite)
     sys.exit(not result.wasSuccessful())
 

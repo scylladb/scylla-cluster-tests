@@ -723,3 +723,57 @@ class ScyllaCQLSession(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cluster.shutdown()
+
+
+class MethodVersionNotFound(Exception):
+    pass
+
+
+class version(object):
+    VERSIONS = {}
+    """
+        Runs a method according to the version attribute of the class method
+        Limitations: currently, can't work if the same method name in the same file used in different
+                     classes
+        Example:
+                In [3]: class VersionedClass(object):
+                   ...:     def __init__(self, current_version):
+                   ...:         self.version = current_version
+                   ...:
+                   ...:     @version("1.2")
+                   ...:     def setup(self):
+                   ...:         return "1.2"
+                   ...:
+                   ...:     @version("2")
+                   ...:     def setup(self):
+                   ...:         return "2"
+
+                In [4]: vc = VersionedClass("2")
+
+                In [5]: vc.setup()
+                Out[5]: '2'
+
+                In [6]: vc = VersionedClass("1.2")
+
+                In [7]: vc.setup()
+                Out[7]: '1.2'
+    """
+
+    def __init__(self, ver):
+        self.version = ver
+
+    def __call__(self, func):
+        self.VERSIONS[(self.version, func.func_name, func.func_code.co_filename)] = func
+
+        @wraps(func)
+        def inner(*args, **kwargs):
+            cls_self = args[0]
+            func_to_run = self.VERSIONS.get((cls_self.version, func.func_name, func.func_code.co_filename))
+            if func_to_run:
+                return func_to_run(*args, **kwargs)
+            else:
+                raise MethodVersionNotFound("Method '{}' with version '{}' not defined in '{}'!".format(
+                    func.func_name,
+                    cls_self.version,
+                    cls_self.__class__.__name__))
+        return inner
