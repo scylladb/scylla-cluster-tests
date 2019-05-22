@@ -42,21 +42,22 @@ class IncrementalCompactionTest(ClusterTester):
             return int((datetime.datetime.now() - self.start_time).seconds)
         # Util functions ===============================================================================================
 
-        stress_cmd = self.params.get('prepare_write_cmd')
+        # stress_cmd = self.params.get('prepare_write_cmd')
 
         self.log.info('Starting c-s write workload')
         stress_cmd = self.params.get('stress_cmd')
-        cs_limit = self.params.get('cs_limit')
+        cs_throughput_limit_mb = self.params.get('cs_throughput_limit_mb')
         cs_col_size_kb = self.params.get('cs_col_size_kb')
-        throughput_kb_sec = cs_limit * cs_col_size_kb
-        self.log.debug("throughput_kb_sec: {} cs_limit: {} cs_col_size_kb: {}".format(throughput_kb_sec, cs_limit, cs_col_size_kb))
+        throughput_kb_sec = cs_throughput_limit_mb * cs_col_size_kb
+        self.log.debug("throughput_kb_sec: {} cs_throughput_limit_mb: {} cs_col_size_kb: {}".format(throughput_kb_sec, cs_throughput_limit_mb, cs_col_size_kb))
         stress_cmd_queue = self.run_stress_thread(stress_cmd=stress_cmd, duration=10000)
         self.start_time = datetime.datetime.now()
         node = self.db_cluster.nodes[0]
         cycles = 2000
-        sleep_time = 1.5
+        sleep_time = 5
         for idx in range(cycles):
             self.log.debug("==================>  Cycle #{}  <================".format(idx))
+            time.sleep(sleep_time)
             used_size_mb = int(self.get_used_capacity(node=node))
             used_size_kb = used_size_mb * 1024
             self.log.debug("Filesystem used capacity is: {}KB ({}MB)".format(used_size_kb, used_size_mb))
@@ -67,7 +68,6 @@ class IncrementalCompactionTest(ClusterTester):
             self.log.debug("Delta used capacity is: {}KB ({}MB)".format(delta_capacity_kb, delta_capacity_kb/1024))
             self.log.debug("Space amplification percentage is: {}".format(used_size_kb/neto_expected_capacity_kb*100))
 
-            time.sleep(sleep_time)
 
 
             # try:
