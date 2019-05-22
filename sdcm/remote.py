@@ -59,7 +59,6 @@ class ConnectionCmdTimeout(Connection):
         super(ConnectionCmdTimeout, self).__init__(host, user, port, config, gateway, forward_agent, connect_timeout, connect_kwargs)
         self.cmd_timeout = None
 
-    @opens
     def run(self, command, **kwargs):
         self.cmd_timeout = kwargs.pop('cmd_timeout', None)
         return super(ConnectionCmdTimeout, self).run(command, **kwargs)
