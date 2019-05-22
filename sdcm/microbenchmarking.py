@@ -99,7 +99,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # }
         allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
         higher_better = ('frag/s',)
-        lower_better = ('aio',)
+        lower_better = ('avg aio',)
         submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
         metrics = higher_better + lower_better
 
@@ -108,7 +108,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                                                                   self._run_date_pattern))
 
             def get_metrica_val(x):
-                return float(x["_source"]["results"]["stats"][metrica])
+                metrica_val = x["_source"]["results"]["stats"].get(metrica, None)
+                return float(metrica_val) if metrica_val else None
 
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
@@ -126,7 +127,11 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
                 return best_result
 
-            def get_diffs():
+            def get_diffs(cur_val, best_result_val, last_val):
+                # if last result doesn't contain the metric
+                # assign 0 to last value to count formula of changes
+                if last_val is None:
+                    last_val = 0
                 diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else cur_val * 100
                 diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else cur_val * 100
 
@@ -153,7 +158,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             best_result_commit = get_commit_id(best_result)
             best_commit_date = get_commit_date(best_result)
 
-            diff_last, diff_best = get_diffs()
+            diff_last, diff_best = get_diffs(cur_val, best_result_val, last_val)
 
             stats = {
                 "Current": cur_val,
@@ -284,6 +289,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             return
 
         for res in testrun_results['hits']['hits']:
+            self.log.info(res['_id'])
+            self.log.info(res['_source']['test_run_date'])
             self._es.update_doc(index=self._es_index,
                                 doc_type=self._es_doc_type,
                                 doc_id=res['_id'],
@@ -362,6 +369,37 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                 doc_id=res['_id'],
                                 body={'excluded': True})
 
+    def exclude_testrun_by_commit_id(self, commit_id=None):
+        if not commit_id and not self.db_version:
+            self.log.info('Nothing to exclude')
+            return
+
+        filter_path = (
+            "hits.hits._id",
+            "hits.hits._source.hostname",
+            "hits.hits._source.versions.scylla-server.commit_id",
+            "hits.hits._source.test_run_date"
+        )
+
+        self.log.info('Exclude tests by commit id #{}'.format(commit_id))
+
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q="hostname:'{}' \
+                                  AND versions.scylla-server.version:{}*\
+                                  AND versions.scylla-server.commit_id:'{}'".format(self.hostname, self.db_version[:3], commit_id))
+        if not results:
+            self.log.info('There is no testrun results for commit id #{}'.format(commit_id))
+            return
+
+        for doc in results['hits']['hits']:
+            self.log.info("Exlcude test: {}\nCommit: #{}\nRun Date time: {}\n".format(doc['_id'],
+                                                                                      doc['_source']['versions']['scylla-server']['commit_id'],
+                                                                                      doc['_source']['test_run_date']))
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=doc['_id'],
+                                body={'excluded': True})
+
 
 def main(args):
     if args.mode == 'exclude':
@@ -372,6 +410,8 @@ def main(args):
             mbra.exclude_by_test_id(args.test_id)
         if args.before_date:
             mbra.exclude_before_date(args.before_date)
+        if args.commit_id:
+            mbra.exclude_testrun_by_commit_id(args.commit_id)
     if args.mode == 'check':
         mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
         results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
@@ -400,6 +440,8 @@ def parse_args():
     exclude_group.add_argument('--before-date', action='store', default='',
                                help='Exclude all test results before date of run stored in field versions.scylla-server.run_date_time.\
                                Value in format YYYY-MM-DD or YYYY-MM-DD hh:mm:ss')
+    exclude_group.add_argument('--commit-id', action='store', default='',
+                               help='Exclude test run for specific commit id')
     exclude.add_argument('--db-version', action='store', default='',
                          help='Exclude test results for scylla version',
                          required=True)
