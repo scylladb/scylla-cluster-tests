@@ -3121,13 +3121,12 @@ class BaseMonitorSet(object):
             "addr": port,
             "proto": "http",
             "name": "sct",
-            "subdomain": ngrok_name,
             "bind_tls": False
         }
         res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
         assert res.ok, "failed to add a ngrok tunnel [%s, %s]".format(res, res.text)
-
-        return "{}.ngrok.io:80".format(ngrok_name)
+        ngrok_address = res.json()['public_url'].replace('http://', '')
+        return "{}:80".format(ngrok_address)
 
     def set_local_sct_ip(self):
 
