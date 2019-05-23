@@ -67,5 +67,43 @@ pipeline {
             }
         }
     }
+    stage("lint test-cases") {
+        steps {
+            script {
+                try {
+                    sh '''
+
+                    for f in `find ./test-cases/ \\( -iname "*.yaml" ! -iname "*multi-dc.yaml" ! -iname *multiDC*.yaml \\)` ; do
+                        echo "---- testing: $f -----"
+                        RES=$( script --flush --quiet --return /tmp/test-case.txt --command "SCT_INSTANCE_TYPE_DB=abc SCT_AMI_ID_DB_SCYLLA=abc ./sct.py conf $f" )
+                        if [[ "$?" == "1" ]]; then
+                            cat /tmp/test-case.txt
+                        fi
+                    done
+
+                    for f in `find ./test-cases/ \\( -iname *multi-dc.yaml -or -iname *multiDC*.yaml \\)`; do
+                        echo "---- testing: $f -----"
+                        RES=$( script --flush --quiet --return /tmp/test-case.txt --command "SCT_SCYLLA_REPO=abc ./sct.py conf --backend gce $f" )
+                        if [[ "$?" == "1" ]]; then
+                            cat /tmp/test-case.txt
+                        fi
+                    done
+
+                    '''
+                    pullRequest.createStatus(status: 'success',
+                                     context: 'jenkins/lint_test_cases',
+                                     description: 'all test cases are checked',
+                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                } catch(Exception ex) {
+                    pullRequest.createStatus(status: 'failure',
+                                     context: 'jenkins/lint_test_cases',
+                                     description: 'some test cases failed to check',
+                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    currentBuild.result = 'UNSTABLE'
+                }
+            }
+        }
+    }
+
   }
 }

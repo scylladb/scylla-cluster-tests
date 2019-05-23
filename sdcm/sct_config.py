@@ -658,6 +658,18 @@ class SCTConfiguration(dict):
         dict(name="cs_duration", env="SCT_CS_DURATION",  type=str,
              help=""),
 
+        dict(name="stress_cmd_mv", env="SCT_STRESS_CMD_MV", type=str_or_list,
+             help="""cassandra-stress commands.
+            You can specify everything but the -node parameter, which is going to
+            be provided by the test suite infrastructure.
+            multiple commands can passed as a list"""),
+
+        dict(name="prepare_stress_cmd", env="SCT_PREPARE_STRESS_CMD", type=str_or_list,
+             help="""cassandra-stress commands.
+            You can specify everything but the -node parameter, which is going to
+            be provided by the test suite infrastructure.
+            multiple commands can passed as a list"""),
+
         # RefreshTest
         dict(name="skip_download", env="SCT_SKIP_DOWNLOAD",  type=str,
              help=""),
@@ -681,10 +693,12 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="test_sst3", env="SCT_TEST_SST3",  type=boolean,
              help=""),
-        dict(name="authorization_in_upgrade", env="SCT_AUTHORIZATION_IN_UPGRADE",  type=boolean,
-             help="Enable Authorization after upgrade"),
+        dict(name="authorization_in_upgrade", env="SCT_AUTHORIZATION_IN_UPGRADE",  type=str,
+             help="Which Authorization to enable after upgrade"),
+
         dict(name="remove_authorization_in_rollback", env="SCT_REMOVE_AUTHORIZATION_IN_ROLLBACK",  type=boolean,
              help="Disable Authorization after rollback to old Scylla"),
+
         dict(name="new_introduced_pkgs", env="SCT_NEW_INTRODUCED_PKGS",  type=str,
              help=""),
         dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES",  type=boolean,
@@ -737,7 +751,6 @@ class SCTConfiguration(dict):
                 multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_complex_verify_more", env="SCT_STRESS_CMD_COMPLEX_VERIFY_MORE",  type=str_or_list,
-
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
@@ -750,10 +763,29 @@ class SCTConfiguration(dict):
                     multiple commands can passed as a list"""),
 
         dict(name="verify_data_after_entire_test", env="SCT_VERIFY_DATA_AFTER_ENTIRE_TEST",  type=str_or_list,
-
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure."""),
+
+        dict(name="stress_cmd_read_cl_quorum", env="SCT_STRESS_CMD_READ_CL_QUORUM", type=str_or_list,
+             help="""cassandra-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
+
+        dict(name="verify_stress_after_cluster_upgrade", env="SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE", type=str_or_list,
+             help="""cassandra-stress commands.
+            You can specify everything but the -node parameter, which is going to
+            be provided by the test suite infrastructure.
+            multiple commands can passed as a list"""),
+
+        dict(name="stress_cmd_complex_verify_delete", env="SCT_STRESS_CMD_COMPLEX_VERIFY_DELETE",
+             type=str_or_list,
+             help="""cassandra-stress commands.
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
         dict(name="scylla_encryption_options", env="SCT_SCYLLA_ENCRYPTION_OPTIONS",  type=str_or_list,
              help="options will be used for enable encryption at-rest for tables"),
     ]

@@ -8,6 +8,10 @@ def call(Map pipelineParams) {
             }
         }
          parameters {
+            string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
+               description: 'aws|gce',
+               name: 'backend')
+
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
 
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
@@ -37,9 +41,7 @@ def call(Map pipelineParams) {
 
                                     wrap([$class: 'BuildUser']) {
                                         dir('scylla-cluster-tests') {
-                                            git(url: "${pipelineParams.sct_repo}",
-                                              credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
-                                              branch: "${pipelineParams.sct_branch}")
+                                            checkout scm
 
                                             sh """
                                             #!/bin/bash
@@ -59,6 +61,7 @@ def call(Map pipelineParams) {
 
                                             export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
+                                            export SCT_AMI_ID_DB_SCYLLA_DESC="$SCT_AMI_ID_DB_SCYLLA_DESC-$SCT_SCYLLA_LINUX_DISTRO"
 
                                             echo "start avocado ......."
                                             ./docker/env/hydra.sh run ${pipelineParams.test_name} --xunit /sct/results.xml --job-results-dir /sct --show-job-log

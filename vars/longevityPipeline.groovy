@@ -5,13 +5,18 @@ def call(Map pipelineParams) {
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, pipelineParams.aws_region)
+                label getJenkinsLabels(params.backend, params.aws_region)
             }
         }
          parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
+
+            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+               description: 'us-east-1|eu-west-1',
+               name: 'aws_region')
+
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -48,7 +53,7 @@ def call(Map pipelineParams) {
                             env
                             export SCT_NEW_CONFIG=yes
                             export SCT_CLUSTER_BACKEND=${params.backend}
-                            export SCT_REGION_NAME=${pipelineParams.aws_region}
+                            export SCT_REGION_NAME=${params.aws_region}
                             export SCT_CONFIG_FILES=${pipelineParams.test_config}
 
                             if [[ ! -z "${params.scylla_ami_id}" ]] ; then
