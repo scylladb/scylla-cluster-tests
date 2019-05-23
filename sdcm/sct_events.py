@@ -476,13 +476,13 @@ def start_events_device(log_dir, timeout=5):
 
 
 def stop_events_device():
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].terminate()
-    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].terminate()
-    EVENTS_PROCESSES['MainDevice'].terminate()
-
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].join()
-    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].join()
-    EVENTS_PROCESSES['MainDevice'].join()
+    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR', 'MainDevice']
+    for proc_name in processes:
+        if proc_name in EVENTS_PROCESSES:
+            EVENTS_PROCESSES[proc_name].terminate()
+    for proc_name in processes:
+        if proc_name in EVENTS_PROCESSES:
+            EVENTS_PROCESSES[proc_name].join(timeout=60)
 
 
 atexit.register(stop_events_device)

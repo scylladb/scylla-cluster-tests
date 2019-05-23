@@ -7,7 +7,7 @@ longevityPipeline(
     params: params,
 
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    aws_region: 'us-east-1',
     test_name: 'janus_graph_test.py:JanusGraphTest.test_janus_graph_regression',
     test_config: 'test-cases/features/janus-graph.yaml',
 

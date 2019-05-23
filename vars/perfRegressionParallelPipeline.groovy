@@ -5,13 +5,17 @@ def call(Map pipelineParams) {
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, pipelineParams.aws_region)
+                label getJenkinsLabels(params.backend, params.aws_region)
             }
         }
          parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
+
+            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+               description: 'us-east-1|eu-west-1',
+               name: 'aws_region')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -31,21 +35,17 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage('Checkout') {
-               steps {
-                  dir('scylla-cluster-tests') {
-                      checkout scm
-                  }
-               }
-            }
             stage('Run SCT Test') {
                 steps {
                     for (sub_test in pipelineParams.sub_tests) {
                         def current_sub_test = sub_test;
                         tasks["sub_test=${current_sub_test}"] = {
-                            node(getJenkinsLabels(params.backend, pipelineParams.aws_region)) {
+                            node(getJenkinsLabels(params.backend, params.aws_region)) {
+
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
+                                        checkout scm
+
                                         sh """
                                         #!/bin/bash
                                         set -xe
