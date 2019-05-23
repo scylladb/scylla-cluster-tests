@@ -1,5 +1,6 @@
 ## PR pre-checks (self review)
-<!--- Put an `x` in all the boxes that apply: -->
+<!--- PR should be created as Draft, when CI finished and relevant checkboxes selected, add reviewers and then click on "Ready for review" button.-->
+<!--- Put an `x` in all the boxes that apply or create PR and then click on all relevant checkboxes: -->
 - [ ] I followed [KISS principle](https://en.wikipedia.org/wiki/KISS_principle)
 - [ ] I gave variables/functions meaningful self-explanatory names
 - [ ] I didn't leave commented-out/debugging code
