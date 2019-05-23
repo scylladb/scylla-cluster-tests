@@ -2346,6 +2346,13 @@ class BaseScyllaCluster(object):
         out = self.run_cqlsh(node=self.nodes[0], cql_cmd='select keyspace_name from system_schema.keyspaces')
         return [ks.strip() for ks in out.split('\n')[3:-3] if 'system' not in ks]
 
+    def get_test_tables(self, keyspace=None):
+        query = 'select keyspace_name,table_name from system_schema.tables'
+        if keyspace:
+            query += ' where keyspace_name=%s' % keyspace
+        out = self.run_cqlsh(node=self.nodes[0], cql_cmd='select keyspace_name,table_name from system_schema.tables')
+        return [line.strip().replace(' ', '').replace('|', '.') for line in out.split('\n')[3:-3] if not line.strip().startswith('system')]
+
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
         Find whether a certain cfstat key in all nodes reached a certain value.
