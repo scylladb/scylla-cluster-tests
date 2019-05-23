@@ -3292,7 +3292,7 @@ class BaseMonitorSet(object):
             ./start-all.sh \
             -s {0.monitoring_conf_dir}/scylla_servers.yml \
             -n {0.monitoring_conf_dir}/node_exporter_servers.yml \
-            -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
+            -d {0.monitoring_data_dir} -l -v master,{0.monitoring_version} -b "-web.enable-admin-api"
         """.format(self))
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
