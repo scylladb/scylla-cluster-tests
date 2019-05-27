@@ -77,6 +77,8 @@
                         {% else %}
                             {% if (stat.startswith("Diff") and cur_stat > 0) %}
                                 <span class="notice green fbold">
+                            {% elif stat.startswith("Diff") and not cur_stat %}
+                                <span class="fnormal black">
                             {% elif stat.startswith("Diff") and cur_stat < -10 %}
                                 <span class="notice red fbold">
                             {% elif stat.startswith("Diff") and cur_stat < -5 %}
@@ -95,13 +97,13 @@
                                 {% if cur_stat %}
                                     {{ '%.1f' % cur_stat }}
                                 {% else %}
-                                    <span>-</span>
+                                    <div style='text-align: center'>-</div>
                                 {% endif %}
                             {% else %}
                                 {% if cur_stat %}
                                     {{ '%g' % cur_stat }}
                                 {% else %}
-                                    <span>-</span>
+                                    <div style='text-align: center'>-</div>
                                 {% endif %}
                             {% endif %}
                                 </span>
