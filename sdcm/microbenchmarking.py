@@ -127,20 +127,26 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
                 return best_result
 
+            def count_diff(cur_val, dif_val):
+                if dif_val is None:
+                    return None
+
+                ret_dif = ((cur_val - dif_val) / dif_val) * 100 if dif_val > 0 else cur_val * 100
+
+                if metrica in higher_better:
+                    ret_dif = -ret_dif
+
+                ret_dif = -ret_dif if ret_dif != 0 else 0
+
+                return ret_dif
+
             def get_diffs(cur_val, best_result_val, last_val):
                 # if last result doesn't contain the metric
                 # assign 0 to last value to count formula of changes
-                if last_val is None:
-                    last_val = 0
-                diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else cur_val * 100
-                diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else cur_val * 100
 
-                if metrica in higher_better:
-                    diff_best = -diff_best
-                    diff_last = -diff_last
+                diff_best = count_diff(cur_val, best_result_val)
+                diff_last = count_diff(cur_val, last_val)
 
-                diff_last = -diff_last if diff_last != 0 else 0
-                diff_best = -diff_best if diff_best != 0 else 0
                 return (diff_last, diff_best)
 
             if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
