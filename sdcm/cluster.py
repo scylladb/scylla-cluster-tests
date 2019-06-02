@@ -3090,7 +3090,12 @@ class BaseMonitorSet(object):
         node.wait_ssh_up()
 
         if Setup.REUSE_CLUSTER:
+            self.configure_scylla_monitoring(node)
+            self.restart_scylla_monitoring(sct_metrics=True)
+            EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
+                "http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
             return
+
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
         try:
@@ -3124,7 +3129,7 @@ class BaseMonitorSet(object):
             "bind_tls": False
         }
         res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
-        assert res.ok, "failed to add a ngrok tunnel [%s, %s]".format(res, res.text)
+        assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
         ngrok_address = res.json()['public_url'].replace('http://', '')
         return "{}:80".format(ngrok_address)
 
@@ -3216,6 +3221,12 @@ class BaseMonitorSet(object):
                 templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)
             loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
+
+            # remove those jobs if exists, for support of 'reuse_cluster: true'
+            def remove_sct_metrics(x):
+                return x['job_name'] not in ['stress_metrics', 'sct_metrics']
+            templ_yaml["scrape_configs"] = filter(remove_sct_metrics, templ_yaml["scrape_configs"])
+
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
@@ -3265,11 +3276,11 @@ class BaseMonitorSet(object):
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for restarting scylla monitoring")
-    def restart_scylla_monitoring(self):
+    def restart_scylla_monitoring(self, sct_metrics=False):
         for node in self.nodes:
             self.stop_scylla_monitoring(node)
             # We use sct_metrics=False, alert_manager=False since they should be configured once
-            self.configure_scylla_monitoring(node, sct_metrics=False, alert_manager=False)
+            self.configure_scylla_monitoring(node, sct_metrics=sct_metrics, alert_manager=False)
             self.start_scylla_monitoring(node)
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
