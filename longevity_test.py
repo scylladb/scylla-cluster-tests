@@ -320,7 +320,7 @@ class LongevityTest(ClusterTester):
 
             for i in xrange(1, keyspace_num+1):
                 keyspace_name = 'keyspace{}'.format(i)
-                self.create_ks(session, keyspace_name, rf=3)
+                self.create_keyspace(session, keyspace_name, rf=3)
                 self.log.debug('{} Created'.format(keyspace_name))
                 self.create_cf(session,  'standard1', key_type='blob', read_repair=0.0, compact_storage=True,
                                columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},

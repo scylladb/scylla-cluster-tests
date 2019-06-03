@@ -34,7 +34,7 @@ class CQLExampleTest(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            self.create_ks(session, 'ks', 1)
+            self.create_keyspace(session, 'ks', 1)
             session.execute("""
                 CREATE TABLE test1 (
                     k int,
