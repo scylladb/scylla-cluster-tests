@@ -869,7 +869,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             for res in results:
                 stats['results'].append(res)
                 for err_type in ['write_errors', 'read_errors', 'errors']:
-                    if res[err_type]:
+                    if err_type in res.keys() and res[err_type]:
                         self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
                         stats['status'] = 'FAILED'
         if not stats['status']:
