@@ -52,7 +52,7 @@ class GeminiTest(ClusterTester):
             "start_time": "",
             "end_time": "",
             "gemini_cmd": "",
-            "gemini_version": self.params.get('gemini_version', default='latest'),
+            "gemini_version": self.loaders.gemini_version,
             "scylla_version": self.db_cluster.nodes[0].scylla_version,
             "scylla_ami_id": self.params.get('ami_id_db_scylla'),
             "scylla_instance_type": self.params.get('instance_type_db'),

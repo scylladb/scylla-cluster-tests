@@ -2527,11 +2527,21 @@ class BaseLoaderSet(object):
     def __init__(self, params):
         self._loader_cycle = None
         self.params = params
+        self._gemini_version = None
+
+    @property
+    def gemini_version(self):
+        result = self.nodes[0].run('cd $HOME; ./gemini --version')
+        # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
+        # take only version number - 1.0.1
+        self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
+        return self._gemini_version
 
     def install_gemini(self, node):
         gemini_version = self.params.get('gemini_version', default='0.9.2')
         if gemini_version.lower() == 'latest':
             gemini_version = get_latest_gemini_version()
+
         gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
         # TODO: currently schema is not used by gemini tool need to store the schema
         #       in data_dir for each test
@@ -2549,6 +2559,7 @@ class BaseLoaderSet(object):
                 curl -LO  {gemini_schema_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
+        logger.debug('Gemini version {}'.format(self.gemini_version))
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -2796,6 +2807,7 @@ class BaseLoaderSet(object):
 
         return results.get('result')
 
+    @staticmethod
     def _parse_gemini_summary(lines):
         results = {}
         enable_parse = False
