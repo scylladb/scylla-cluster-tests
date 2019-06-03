@@ -1006,23 +1006,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                   ssl_opts=ssl_opts,
                                   bypassed_exception=NoHostAvailable)
 
-    def create_ks(self, session, name, rf):
-        query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
-        if isinstance(rf, types.IntType):
-            # we assume simpleStrategy
-            session.execute(query % (name,
-                                     "'class':'SimpleStrategy', "
-                                     "'replication_factor':%d" % rf))
-        else:
-            assert len(rf) != 0, "At least one datacenter/rf pair is needed"
-            # we assume networkTopologyStrategy
-            options = ', '.join(['\'%s\':%d' % (d, r) for
-                                 d, r in rf.iteritems()])
-            session.execute(query % (name,
-                                     "'class':'NetworkTopologyStrategy', %s" %
-                                     options))
-        session.execute('USE %s' % name)
-
     def is_keyspace_in_cluster(self, session, keyspace_name):
         query_result = session.execute("SELECT * FROM system_schema.keyspaces;")
         keyspace_list = [row.keyspace_name.lower() for row in query_result.current_rows]
