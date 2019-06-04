@@ -19,6 +19,7 @@ import time
 import yaml
 from avocado import main
 
+from sdcm.nemesis import Nemesis
 from sdcm.tester import ClusterTester
 
 
@@ -42,6 +43,16 @@ class LongevityTest(ClusterTester):
             params.update({'stress_cmd': stress_cmd})
             self._parse_stress_cmd(stress_cmd, params)
 
+            # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
+            ics_arg = 'IncrementalCompactionStrategy'
+            lcs_arg = 'LeveledCompactionStrategy'
+            use_ics = False
+            if ics_arg in stress_cmd:
+                use_ics = True
+                self.log.debug('stress cmd to workaround ics: {}'.format(stress_cmd))
+                stress_cmd.replace(ics_arg, lcs_arg)
+            # ------------------------------------------------------------------------------------------------------
+
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             if stress_cmd.startswith('cassandra-stress'):
@@ -49,6 +60,13 @@ class LongevityTest(ClusterTester):
             else:
                 stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False))
             time.sleep(10)
+
+            # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
+            if use_ics:
+                nemesis = Nemesis(tester_obj=self, termination_event=self.db_cluster.termination_event)
+                prop_val = {"class": ics_arg}
+                nemesis._modify_table_property(name="compaction", val=str(prop_val))
+            # ------------------------------------------------------------------------------------------------------
 
             # Remove "user profile" param for the next command
             if 'profile' in params:
