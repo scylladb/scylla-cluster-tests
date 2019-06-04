@@ -568,12 +568,31 @@ class Nemesis(object):
 
         node.remoter.run('cqlsh {} -e "{}" {}'.format(cql_auth, cmd, node.private_ip_address), verbose=True)
 
+    def _get_non_system_ks_cf_list(self, node, request_timeout=300):
+        """Get all not system keyspace.tables pairs
+
+        Arguments:
+            db_node_ip {str} -- ip of db_node
+        """
+
+        cql_auth = self.cluster.get_cql_auth()
+        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
+
+        cmd = 'cqlsh {} -e "SELECT keyspace_name, table_name from system_schema.tables" {}'.format(cql_auth, node.private_ip_address)
+        result = node.remoter.run(cmd=cmd, verbose=False, request_timeout=request_timeout)
+
+        avaialable_ks_cf = []
+        for row in result.stdout.split('\n'):
+            if '|' not in row:
+                continue
+            avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
+        return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
+
     def _modify_table_property(self, name, val):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
-        ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                                        db_node_ip=self.target_node.ip_address)
+        ks_cfs = self._get_non_system_ks_cf_list(node=self.target_node)
         keyspace_table = ks_cfs[0] if ks_cfs else ks_cfs
         if not keyspace_table:
             self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
