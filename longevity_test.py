@@ -19,7 +19,7 @@ import time
 import yaml
 from avocado import main
 
-from sdcm.nemesis import Nemesis
+from sdcm.nemesis import ModifyTableMonkey
 from sdcm.tester import ClusterTester
 
 
@@ -63,7 +63,7 @@ class LongevityTest(ClusterTester):
 
             # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
             if use_ics:
-                nemesis = Nemesis(tester_obj=self, termination_event=self.db_cluster.termination_event)
+                nemesis = ModifyTableMonkey(tester_obj=self, termination_event=self.db_cluster.termination_event)
                 prop_val = {"class": ics_arg}
                 nemesis._modify_table_property(name="compaction", val=str(prop_val))
             # ------------------------------------------------------------------------------------------------------
