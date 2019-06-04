@@ -627,7 +627,7 @@ class Nemesis(object):
         """
         # TODO: Sub-properties for each of compaction strategies should also be tested
         strategies = ("SizeTieredCompactionStrategy", "DateTieredCompactionStrategy",
-                      "TimeWindowCompactionStrategy", "LeveledCompactionStrategy")
+                      "TimeWindowCompactionStrategy", "LeveledCompactionStrategy", "IncrementalCompactionStrategy")
         prop_val = {"class": random.choice(strategies)}
         self._modify_table_property(name="compaction", val=str(prop_val))
 
