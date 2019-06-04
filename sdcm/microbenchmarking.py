@@ -50,6 +50,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.test_run_date",
             "hits.hits._source.test_group_properties.name",  # large-partition-skips
             "hits.hits._source.results.stats.aio",
+            "hits.hits._source.results.stats.avg aio",
             "hits.hits._source.results.stats.cpu",
             "hits.hits._source.results.stats.time (s)",
             "hits.hits._source.results.stats.frag/s",
@@ -153,7 +154,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
-            cur_val = float(current_result["results"]["stats"][metrica])
+
+            cur_val = current_result["results"]["stats"].get(metrica, None)
+            if cur_val:
+                cur_val = float(cur_val)
 
             last_val = get_metrica_val(list_of_results_from_db[last_idx])
             last_commit = get_commit_id(list_of_results_from_db[last_idx])
@@ -177,7 +181,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
             }
 
-            if (diff_last < -5 or diff_best < -5):
+            if ((diff_last and diff_last < -5) or (diff_best and diff_best < -5)):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
 
