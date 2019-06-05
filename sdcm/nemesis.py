@@ -579,7 +579,7 @@ class Nemesis(object):
         cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
 
         cmd = 'cqlsh {} -e "SELECT keyspace_name, table_name from system_schema.tables" {}'.format(cql_auth, node.private_ip_address)
-        result = node.remoter.run(cmd=cmd, verbose=False, request_timeout=request_timeout)
+        result = node.remoter.run(cmd=cmd)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
