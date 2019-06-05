@@ -40,9 +40,9 @@ class UpgradeTest(FillDatabaseData):
     upgrade_rollback_mode = None
 
     def upgrade_node(self, node):
-        new_scylla_repo = self.params.get('new_scylla_repo', None,  None)
-        new_version = self.params.get('new_version', None,  '')
-        upgrade_node_packages = self.params.get('upgrade_node_packages')
+        new_scylla_repo = self.params.get('new_scylla_repo', default=None)
+        new_version = self.params.get('new_version', default='')
+        upgrade_node_packages = self.params.get('upgrade_node_packages', default=None)
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
