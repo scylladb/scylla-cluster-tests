@@ -61,7 +61,7 @@ def call(Map pipelineParams) {
 
                                             export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
-                                            export SCT_AMI_ID_DB_SCYLLA_DESC="$SCT_AMI_ID_DB_SCYLLA_DESC-$SCT_SCYLLA_LINUX_DISTRO"
+                                            export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
                                             echo "start avocado ......."
                                             ./docker/env/hydra.sh run ${pipelineParams.test_name} --xunit /sct/results.xml --job-results-dir /sct --show-job-log
