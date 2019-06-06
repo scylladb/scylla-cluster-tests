@@ -475,6 +475,20 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
+        if db_info['disk_size'] is None:
+            db_info['disk_size'] = self.params.get('aws_root_disk_size_db', default=None)
+        if db_info['device_mappings'] is None:
+            if db_info['disk_size']:
+                db_info['device_mappings'] = [{
+                    "DeviceName": self.params.get("aws_root_disk_name_db", default="/dev/sda1"),
+                    "Ebs": {
+                        "VolumeSize": db_info['disk_size'],
+                        "VolumeType": "gp2"
+                    }
+                }]
+            else:
+                db_info['device_mappings'] = []
+
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
