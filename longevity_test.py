@@ -47,7 +47,7 @@ class LongevityTest(ClusterTester):
             ics_arg = 'IncrementalCompactionStrategy'
             lcs_arg = 'LeveledCompactionStrategy'
             use_ics = False
-            if ics_arg in stress_cmd:
+            if ics_arg in stress_cmd and ('write' in stress_cmd or 'mixed' in stress_cmd):
                 use_ics = True
                 self.log.debug('stress cmd to workaround ics: {}'.format(stress_cmd))
                 stress_cmd.replace(ics_arg, lcs_arg)
@@ -63,9 +63,10 @@ class LongevityTest(ClusterTester):
 
             # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
             if use_ics:
+                time.sleep(30)
                 nemesis = ModifyTableMonkey(tester_obj=self, termination_event=self.db_cluster.termination_event)
                 prop_val = {"class": ics_arg}
-                nemesis._modify_table_property(name="compaction", val=str(prop_val))
+                nemesis._modify_table_property(name="compaction", val=str(prop_val), modify_all_tables=True)
             # ------------------------------------------------------------------------------------------------------
 
             # Remove "user profile" param for the next command
@@ -156,6 +157,7 @@ class LongevityTest(ClusterTester):
                 # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
                 # pay attention to the fact it checks only on keyspace1
                 self.db_cluster.wait_total_space_used_per_node(keyspace=None)
+
                 self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
             # Wait on the queue till all threads come back.
