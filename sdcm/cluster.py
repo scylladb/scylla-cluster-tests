@@ -2155,6 +2155,7 @@ class BaseScyllaCluster(object):
 
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB packages')
+            node.remoter.run('mkdir /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
             node.remoter.run('sudo yum update -y --skip-broken')
             node.remoter.run('sudo yum install python34-PyYAML -y')
