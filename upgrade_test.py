@@ -123,6 +123,8 @@ class UpgradeTest(FillDatabaseData):
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
 
+        self.upgradesstables_if_command_available(node)
+
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
         # fixme: auto identify new_introduced_pkgs, remove this parameter
@@ -193,6 +195,15 @@ class UpgradeTest(FillDatabaseData):
         new_ver = result.stdout
         self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
         assert orig_ver != new_ver, "scylla-server version isn't changed"
+
+        self.upgradesstables_if_command_available(node)
+
+    def upgradesstables_if_command_available(self, node):
+        upgradesstables_supported = node.remoter.run(
+            'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
+        if "yes" in upgradesstables_supported.stdout:
+            self.log.debug("calling upgradesstables")
+            node.remoter.run('nodetool upgradesstables -a')
 
     default_params = {'timeout': 650000}
 
