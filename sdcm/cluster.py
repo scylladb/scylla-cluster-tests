@@ -2155,12 +2155,8 @@ class BaseScyllaCluster(object):
             node.remoter.run('mkdir /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
             node.remoter.run('sudo yum update -y --skip-broken')
-            node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
-            # update *developmen* packages
-            node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development* | true')
-            # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('yum list installed | grep scylla')
             queue.put(node)

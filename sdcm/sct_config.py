@@ -360,6 +360,9 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_oracle", env="SCT_AMI_ID_DB_ORACLE",  type=str,
              help="AMS AMI id to use for oracle node"),
 
+        dict(name="aws_root_disk_size_db", env="SCT_AWS_ROOT_DISK_SIZE_DB", type=str,
+             help=""),
+
         dict(name="aws_root_disk_size_monitor", env="SCT_AWS_ROOT_DISK_SIZE_MONITOR",  type=str,
              help=""),
 
