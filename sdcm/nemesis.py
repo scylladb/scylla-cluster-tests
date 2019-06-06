@@ -579,6 +579,7 @@ class Nemesis(object):
         cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
 
         cmd = 'cqlsh {} -e "SELECT keyspace_name, table_name from system_schema.tables" {}'.format(cql_auth, node.private_ip_address)
+        self.log.debug("cqlsh system ks & tables query is:".format(cmd))
         result = node.remoter.run(cmd=cmd)
 
         avaialable_ks_cf = []
@@ -588,18 +589,25 @@ class Nemesis(object):
             avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
         return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
 
-    def _modify_table_property(self, name, val):
+    def _modify_table_property(self, name, val, modify_all_tables=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
         ks_cfs = self._get_non_system_ks_cf_list(node=self.target_node)
-        keyspace_table = ks_cfs[0] if ks_cfs else ks_cfs
-        if not keyspace_table:
-            self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
-            return
+        if not modify_all_tables: # Alter only 1 table
+            keyspace_table = ks_cfs[0] if ks_cfs else None
+            if not keyspace_table:
+                self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
+                return
 
-        cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
-        self._run_in_cqlsh(cmd)
+            cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
+            self._run_in_cqlsh(cmd)
+        else: # Alter ALL found (non-system) tables
+            for keyspace_table in ks_cfs:
+                cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
+                self._run_in_cqlsh(cmd)
+
+
 
     def modify_table_comment(self):
         # default: comment = ''
