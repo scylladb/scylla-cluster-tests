@@ -120,16 +120,18 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                                   "%Y%m%d").date()
 
             def get_best_result_for_metrica():
+                # build new list with results where analyzing metrica is not None
+                list_for_searching = [el for el in list_of_results_from_db if get_metrica_val(el)]
 
                 if metrica in higher_better:
-                    best_result = max(list_of_results_from_db, key=get_metrica_val)
+                    best_result = max(list_for_searching, key=get_metrica_val)
                 elif metrica in lower_better:
-                    best_result = min(list_of_results_from_db, key=get_metrica_val)
+                    best_result = min(list_for_searching, key=get_metrica_val)
 
                 return best_result
 
             def count_diff(cur_val, dif_val):
-                if dif_val is None:
+                if cur_val is None or dif_val is None:
                     return None
 
                 ret_dif = ((cur_val - dif_val) / dif_val) * 100 if dif_val > 0 else cur_val * 100
