@@ -2559,7 +2559,7 @@ class BaseLoaderSet(object):
                 curl -LO  {gemini_schema_url}
             """.format(**locals()))
             node.remoter.run("bash -cxe '%s'" % install_gemini_script)
-        logger.debug('Gemini version {}'.format(self.gemini_version))
+            logger.debug('Gemini version {}'.format(self.gemini_version))
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
