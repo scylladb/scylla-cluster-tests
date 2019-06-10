@@ -177,15 +177,28 @@ class ConfigurationTests(unittest.TestCase):
     def test_12_scylla_version_repo_ubuntu(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         conf = SCTConfiguration()
         conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+        self.assertEqual(conf.get('scylla_repo_loader'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+
+    def test_12_scylla_version_repo_ubuntu_loader_centos(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
+        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertIn('scylla_repo', conf.dump_config())
+        self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+        self.assertEqual(conf.get('scylla_repo_loader'), "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.0.repo")
 
     def test_config_dupes(self):
-
         def get_dupes(c):
             '''sort/tee/izip'''
             a, b = itertools.tee(sorted(c))

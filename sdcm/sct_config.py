@@ -150,9 +150,10 @@ class SCTConfiguration(dict):
         dict(name="scylla_linux_distro", env="SCT_SCYLLA_LINUX_DISTRO", type=str,
              help="""The distro name and family name to use [centos/ubuntu-xenial/debien-jessie]"""),
 
-        dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M",
-             type=str,
+        dict(name="scylla_linux_distro_loader", env="SCT_SCYLLA_LINUX_DISTRO_LOADER", type=str,
+             help="""The distro name and family name to use [centos/ubuntu-xenial/debien-jessie]"""),
 
+        dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
 
         dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
@@ -918,9 +919,22 @@ class SCTConfiguration(dict):
                         break
                 else:
                     raise ValueError("repo for scylla version {} wasn't found".format(scylla_version))
-
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
+
+            if 'scylla_repo_loader' not in self:
+                scylla_linux_distro_loader = self.get('scylla_linux_distro_loader', '')
+                dist_type_loader = scylla_linux_distro_loader.split('-')[0]
+                dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
+
+                repo_map = get_s3_scylla_repos_mapping(dist_type_loader, dist_version_loader)
+
+                for key in repo_map.keys():
+                    if scylla_version.startswith(key):
+                        self['scylla_repo_loader'] = repo_map[key]
+                        break
+                else:
+                    raise ValueError("repo for scylla version {} wasn't found".format(scylla_version))
 
         # 6) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version', None)
