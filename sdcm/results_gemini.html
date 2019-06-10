@@ -8,6 +8,7 @@
             <li>End time: {{ end_time }}</li>
             <li>Gemini command: {{ gemini_cmd }}</li>
             <li>Gemini version: {{ gemini_version }}</li>
+            <li>Build URL: <a href="{{ build_url }}">link</a></li>
         </ul>
     </div>
     <h3>Nemesis Details</h3>
@@ -63,15 +64,31 @@
         </tr>
         {% for res in results %}
             {% for key, value in res.items() %}
-            <tr>
-                <td class='gemini_field'>
-                    <span>{{ key }}</span>
-                </td>
-                <td>
-                    <span>{{ value }}</span>
-                </td>
-
-            </tr>
+                {% if key == "errors" %}
+                    <td class='gemini_field'>
+                        <span>{{ key }}</span>
+                    </td>
+                    <td>
+                        <ul>
+                        {% for error in value %}
+                            <li>{{ error.message }} </li>
+                            {% if loop.index > 10 %}
+                                <div>... {{ loop.length - loop.index }} more error messages. For more details see <a href="{{ build_url }}">Job log</a></div>
+                                {% break %}
+                            {% endif %}
+                        {% endfor%}
+                        </ul>
+                    </td>
+                {% else %}
+                    <tr>
+                        <td class='gemini_field'>
+                            <span>{{ key }}</span>
+                        </td>
+                        <td>
+                            <span>{{ value }}</span>
+                        </td>
+                    </tr>
+                {% endif %}
             {% endfor %}
         {% endfor %}
     </table>
