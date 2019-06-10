@@ -110,7 +110,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_AMI_ID_DB_SCYLLA_DESC'] = 'master'
         conf = SCTConfiguration()
         conf.verify_configuration()
-        self.assertEqual(conf.get('user_prefix'), 'longevity-50gb-4d-not-jenkins-master')
+        self.assertEqual(conf.get('user_prefix'), 'longevity-50gb-4d-not-jenkins-maste')
 
     def test_10_mananger_regression(self):
 
