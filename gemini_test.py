@@ -15,6 +15,7 @@
 
 import datetime
 import time
+import os
 from sdcm.tester import ClusterTester
 from sdcm.results_analyze import BaseResultsAnalyzer
 
@@ -58,6 +59,7 @@ class GeminiTest(ClusterTester):
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
+        prepared_results['nemesis_name'] = self.params.get('nemesis_class_name')
 
         self.log.debug('Start gemini benchmark')
         prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -87,6 +89,7 @@ class GeminiTest(ClusterTester):
     def _prepare_test_results(self):
         return {
             "test_name": self.avocado_params.id.name.split('.')[0],
+            "build_url": os.getenv('BUILD_URL', "#"),
             "start_time": "",
             "end_time": "",
             "gemini_cmd": "",
@@ -99,7 +102,7 @@ class GeminiTest(ClusterTester):
             "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version,
             "oracle_ami_id": self.params.get('ami_id_db_oracle'),
             "oracle_instance_type": self.params.get('instance_type_db_oracle'),
-            "nemesis_name": self.params.get('nemesis_class_name', '-'),
+            "nemesis_name": '-',
             "nemesis_details": {},
             "results": [],
             'status': None
