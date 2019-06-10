@@ -62,7 +62,7 @@ class LongevityTest(ClusterTester):
             time.sleep(10)
 
             # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
-            if use_ics:
+            if "read" not in stress_cmd:
                 time.sleep(30)
                 nemesis = ModifyTableMonkey(tester_obj=self, termination_event=self.db_cluster.termination_event)
                 prop_val = {"class": ics_arg}
