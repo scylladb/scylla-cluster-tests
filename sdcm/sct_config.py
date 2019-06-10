@@ -959,7 +959,7 @@ class SCTConfiguration(dict):
             if not version_tag:
                 version_tag = getpass.getuser()
 
-            self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)
+            self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
         LOGGER.info(self.dump_config())
 
