@@ -47,6 +47,7 @@ from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 class Nemesis(object):
 
     disruptive = False
+    run_with_gemini = False
 
     def __init__(self, tester_obj, termination_event):
         self.tester = tester_obj  # ClusterTester object
@@ -142,7 +143,14 @@ class Nemesis(object):
         for operation in self.operation_log:
             self.log.info(operation)
 
-    def get_subclasses_disrupt_methods(self, subclasses_list):
+    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None):
+        if disruptive is not None:
+            return self._get_subclasses_disrupt_methods(disruptive=disruptive)
+        if run_with_gemini is not None:
+            return self._get_subclasses_disrupt_methods(run_with_gemini=run_with_gemini)
+
+    def _get_subclasses_disrupt_methods(self, **kwargs):
+        subclasses_list = self._get_subclasses(**kwargs)
         disrupt_methods_list = []
         for subclass in subclasses_list:
             method_name = re.search('self\.(?P<method_name>disrupt_[A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
@@ -150,6 +158,18 @@ class Nemesis(object):
                 disrupt_methods_list.append(method_name.group('method_name'))
         self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
         return disrupt_methods_list
+
+    def _get_subclasses(self, **kwargs):
+        filter_by_attribute, value = list(kwargs.items())[0]
+
+        nemesis_subclasses = [nemesis for nemesis in Nemesis.__subclasses__()
+                              if getattr(nemesis, filter_by_attribute) == value and
+                              (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)]
+        for inherit_nemesis_class in RELATIVE_NEMESIS_SUBCLASS_LIST:
+            nemesis_subclasses.extend([nemesis for nemesis in inherit_nemesis_class.__subclasses__()
+                                       if getattr(nemesis, filter_by_attribute) == value and
+                                       (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)])
+        return nemesis_subclasses
 
     def __str__(self):
         try:
@@ -987,6 +1007,7 @@ class StopWaitStartMonkey(Nemesis):
 
 class StopStartMonkey(Nemesis):
 
+    run_with_gemini = True
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -997,6 +1018,7 @@ class StopStartMonkey(Nemesis):
 class RestartThenRepairNodeMonkey(NotSpotNemesis):
 
     disruptive = True
+    run_with_gemini = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1399,10 +1421,7 @@ class DisruptiveMonkey(Nemesis):
         #  - DrainerMonkey
     @log_time_elapsed_and_status
     def disrupt(self):
-        disruptive_nemesis_classes = [nemesis for nemesis in Nemesis.__subclasses__()
-                                      if nemesis.disruptive and
-                                      (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)]
-        disrupt_methods_list = self.get_subclasses_disrupt_methods(disruptive_nemesis_classes)
+        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=True)
         self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
 
 
@@ -1417,12 +1436,23 @@ class NonDisruptiveMonkey(Nemesis):
         #  - AbortRepairMonkey
     @log_time_elapsed_and_status
     def disrupt(self):
-        nondisruptive_nemesis_classes = [nemesis for nemesis in Nemesis.__subclasses__()
-                                         if not nemesis.disruptive and
-                                         (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)]
-        disrupt_methods_list = self.get_subclasses_disrupt_methods(nondisruptive_nemesis_classes)
+        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False)
         self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
 
+
+class GeminiChaosMonkey(Nemesis):
+    # Limit the nemesis scope to use with gemini
+        # - StopStartMonkey
+        # - RestartThenRepairNodeMonkey
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True)
+        self.log.info(disrupt_methods_list)
+        self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
+
+
+RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
 
 DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
 
