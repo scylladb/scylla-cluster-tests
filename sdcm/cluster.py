@@ -1324,7 +1324,10 @@ server_encryption_options:
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
         if append_scylla_args:
-            self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+            if self.is_rhel_like():
+                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+            elif self.is_debian() or self.is_ubuntu():
+                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /'  /etc/default/scylla-server" % append_scylla_args)
 
         if debug_install and self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
