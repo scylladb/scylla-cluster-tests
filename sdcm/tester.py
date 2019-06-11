@@ -1203,6 +1203,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         return partitions
 
+    def get_tables_id_of_keyspace(self, session, keyspace_name):
+        query = "SELECT id FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        table_id = self.rows_to_list(session.execute(query))
+        return table_id[0]
+
+    def get_tables_name_of_keyspace(self, session, keyspace_name):
+        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        table_id = self.rows_to_list(session.execute(query))
+        return table_id[0]
+
+    def get_truncated_time_from_system_local(self, session):
+        query = "SELECT truncated_at FROM system.local"
+        truncated_time = self.rows_to_list(session.execute(query))
+        return truncated_time
+
+    def get_truncated_time_from_system_truncated(self, session, table_id):
+        query = "SELECT truncated_at FROM system.truncated WHERE table_uuid={}".format(table_id)
+        truncated_time = self.rows_to_list(session.execute(query))
+        return truncated_time[0]
+
     def finalize_test(self):
         self.stop_resources()
         self.collect_logs()
