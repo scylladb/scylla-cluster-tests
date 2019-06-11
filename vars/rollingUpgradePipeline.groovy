@@ -59,6 +59,8 @@ def call(Map pipelineParams) {
                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
+                                            export SCT_TAGRET_UPGRADE_VERSION=\$(echo "${GIT_BRANCH/origin\/branch-/''}")
+
                                             export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"

@@ -2835,6 +2835,41 @@ class FillDatabaseData(ClusterTester):
 
     ]
 
+    def cql_create_simple_tables(self, session, rows):
+        """ Create tables for truncate test """
+        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int)"
+        for i in xrange(rows):
+            session.execute(create_query % i)
+
+    def cql_insert_data_to_simple_tables(self, session, rows):
+        insert_query = 'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
+        for i in xrange(rows):
+            for k in xrange(100):
+                session.execute(insert_query.format(**locals()))
+
+    def cql_truncate_simple_tables(self, session, rows):
+        truncate_query = 'TRUNCATE TABLE truncate_table%d'
+        for i in xrange(rows):
+            session.execute(truncate_query % i)
+
+    def fill_db_data_for_truncate_test(self, insert_rows):
+        # Prepare connection and keyspace
+        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            # override driver consistency level
+            session.default_consistency_level = ConsistencyLevel.QUORUM
+
+            session.execute("""
+                CREATE KEYSPACE IF NOT EXISTS truncate_ks
+                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+                """)
+            session.execute("USE truncate_ks")
+
+            # Create all tables according the above list
+            self.cql_create_simple_tables(session, rows=insert_rows)
+
+            # Insert data to the tables
+            self.cql_insert_data_to_simple_tables(session, rows=insert_rows)
+
     def cql_create_tables(self, session):
         # Run through the list of items and create all tables
         for a in self.all_verification_items:
