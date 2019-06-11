@@ -121,8 +121,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
             def get_best_result_for_metrica():
                 # build new list with results where analyzing metrica is not None
-                list_for_searching = [el for el in list_of_results_from_db if get_metrica_val(el)]
+                # metrica s with result 0, will be included
 
+                list_for_searching = [el for el in list_of_results_from_db if get_metrica_val(el) is not None]
+
+                # if list is empty ( which could be happened for new metric),
+                # then return first element in list, because result will be None
+                if not list_for_searching:
+                    return list_of_results_from_db[0]
                 if metrica in higher_better:
                     best_result = max(list_for_searching, key=get_metrica_val)
                 elif metrica in lower_better:
