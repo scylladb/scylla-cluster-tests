@@ -47,9 +47,7 @@ class LongevityTest(ClusterTester):
             # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
             ics_arg = 'IncrementalCompactionStrategy'
             lcs_arg = 'LeveledCompactionStrategy'
-            use_ics = False
             if ics_arg in stress_cmd and ('write' in stress_cmd or 'mixed' in stress_cmd):
-                use_ics = True
                 self.log.debug('stress cmd to workaround ics: {}'.format(stress_cmd))
                 stress_cmd.replace(ics_arg, lcs_arg)
             # ------------------------------------------------------------------------------------------------------
