@@ -3056,7 +3056,7 @@ class BaseMonitorSet(object):
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.3')
+        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.4')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
 
