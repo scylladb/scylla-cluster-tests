@@ -39,7 +39,7 @@ class LongevityTest(ClusterTester):
         if stress_multiplier > 1:
             stress_cmds *= stress_multiplier
         use_ics = self.params.get('use_ics', default=False)
-
+        self.log.debug('use_ics is: {}'.format(use_ics))
         for stress_cmd in stress_cmds:
             params.update({'stress_cmd': stress_cmd})
             self._parse_stress_cmd(stress_cmd, params)
@@ -61,9 +61,10 @@ class LongevityTest(ClusterTester):
             time.sleep(10)
 
             # A workaround for https://github.com/scylladb/scylla-enterprise-tools-java/issues/11 ------------------
-            if use_ics:
-                if "read" not in stress_cmd:
-                    time.sleep(30)
+            if use_ics != False:
+                if "cassandra-stress read" not in stress_cmd:
+
+                    time.sleep(20)
                     nemesis = ModifyTableMonkey(tester_obj=self, termination_event=self.db_cluster.termination_event)
                     prop_val = {"class": ics_arg}
                     nemesis._modify_table_property(name="compaction", val=str(prop_val), modify_all_tables=True)
