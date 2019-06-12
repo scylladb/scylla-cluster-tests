@@ -17,12 +17,14 @@
 import random
 import time
 import re
+import os
 
 from avocado import main
 
 from sdcm.nemesis import RollbackNemesis
 from sdcm.nemesis import UpgradeNemesis
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm import wait
 
 
 class UpgradeTest(FillDatabaseData):
@@ -38,6 +40,10 @@ class UpgradeTest(FillDatabaseData):
     # `reinstall` (opensource <-> enterprise, enterprise <-> opensource)
     # `minor_release` (eg: 2.2.1 <-> 2.2.5, 2018.1.0 <-> 2018.1.1)
     upgrade_rollback_mode = None
+
+    # expected format version after upgrade and nodetool upgradesstables called
+    # would be recalculated after all the cluster finish upgrade
+    expected_sstable_format_version = 'mc'
 
     def upgrade_node(self, node):
         new_scylla_repo = self.params.get('new_scylla_repo', default=None)
@@ -198,12 +204,69 @@ class UpgradeTest(FillDatabaseData):
 
         self.upgradesstables_if_command_available(node)
 
-    def upgradesstables_if_command_available(self, node):
+    def upgradesstables_if_command_available(self, node, queue=None):
+        upgradesstables_available = False
         upgradesstables_supported = node.remoter.run(
             'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
         if "yes" in upgradesstables_supported.stdout:
+            upgradesstables_available = True
             self.log.debug("calling upgradesstables")
             node.remoter.run('nodetool upgradesstables -a')
+        if queue:
+            queue.put(upgradesstables_available)
+            queue.task_done()
+
+    def get_highest_supported_sstable_version(self):
+        """
+        find the highest sstable format version supported in the cluster
+
+        :return:
+        """
+        sstable_format_regex = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
+
+        versions_set = set()
+
+        for node in self.db_cluster.nodes:
+            if os.path.exists(node.database_log):
+                for line in open(node.database_log).readlines():
+                    match = sstable_format_regex.search(line)
+                    if match:
+                        versions_set.add(match.group(1).lower())
+
+        return max(versions_set)
+
+    def wait_for_sstable_upgrade(self, node, queue=None):
+        all_tables_upgraded = True
+
+        def wait_for_node_to_finish():
+            try:
+                result = node.remoter.run("sudo find /var/lib/scylla/data/system -type f ! -path '*snapshots*' | xargs -I{} basename {}")
+                all_sstable_files = result.stdout.splitlines()
+
+                sstable_version_regex = re.compile(r'(\w+)-\d+-(.+)\.(db|txt|sha1|crc32)')
+
+                sstable_versions = list(
+                    set([sstable_version_regex.search(f).group(1) for f in all_sstable_files if sstable_version_regex.search(f)]))
+
+                assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(sstable_versions)
+                assert sstable_versions[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
+                    self.expected_sstable_format_version, sstable_versions[0])
+            except Exception as ex:
+                self.log.warning(ex)
+                return False
+            else:
+                return True
+
+        try:
+            self.log.debug("Starting to wait for upgardesstables to finish")
+            wait.wait_for(func=wait_for_node_to_finish, step=30, timeout=900, throw_exc=True,
+                          text="Waiting until upgardesstables is finished")
+        except Exception:
+            all_tables_upgraded = False
+        finally:
+            if queue:
+                queue.put(all_tables_upgraded)
+                queue.task_done()
 
     default_params = {'timeout': 650000}
 
@@ -354,6 +417,17 @@ class UpgradeTest(FillDatabaseData):
         self.verify_stress_thread(read_20m_cs_thread_pool)
 
         self.verify_stress_thread(entire_write_cs_thread_pool)
+
+        # figure out what is the last supported sstable version
+        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
+
+        # run 'nodetool upgradesstables' on all nodes and check/wait for all file to be upgraded
+        upgradesstables_available = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+
+        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+        if all(upgradesstables_available):
+            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
+            assert all(tables_upgraded), "Some nodes failed to upgrade the sstable format {}".format(tables_upgraded)
 
         verify_stress_after_cluster_upgrade = self.params.get('verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)

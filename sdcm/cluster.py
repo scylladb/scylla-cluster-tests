@@ -1932,6 +1932,7 @@ class BaseCluster(object):
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
                 pass
+        return results
 
     def get_backtraces(self):
         for node in self.nodes:
