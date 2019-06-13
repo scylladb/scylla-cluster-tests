@@ -656,8 +656,8 @@ class SCTConfiguration(dict):
         # UpgradeTest
         dict(name="new_scylla_repo", env="SCT_NEW_SCYLLA_REPO",  type=str,
              help=""),
-        dict(name="new_version", env="new_version",  type=str,
-             help=""),
+        dict(name="new_version", env="SCT_NEW_VERSION",  type=str,
+             help="Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0.1"),
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES",  type=int,
              help=""),
         dict(name="test_sst3", env="SCT_TEST_SST3",  type=boolean,
