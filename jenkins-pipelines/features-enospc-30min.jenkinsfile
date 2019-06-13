@@ -8,7 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'enospc_test.py:EnospcTest.test_enospc_nodes',
+    test_name: 'enospc_test.EnospcTest.test_enospc_nodes',
     test_config: 'test-cases/features/enospc-30min.yaml',
 
     timeout: [time: 60, unit: 'MINUTES'],

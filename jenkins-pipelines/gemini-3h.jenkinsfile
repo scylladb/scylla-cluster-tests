@@ -8,7 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'gemini_test.py:GeminiTest.test_random_load',
+    test_name: 'gemini_test.GeminiTest.test_random_load',
     test_config: 'test-cases/gemini/gemini-basic-3h.yaml',
 
     timeout: [time: 530, unit: 'MINUTES'],
