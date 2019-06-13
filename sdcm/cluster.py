@@ -330,6 +330,7 @@ class BaseNode(object):
         self.last_log_position = 0
         self._backtrace_thread = None
         self._db_log_reader_thread = None
+        self._scylla_manager_journal_thread = None
         self._sct_log_formatter_installed = False
         self._init_system = None
 
@@ -858,6 +859,8 @@ class BaseNode(object):
             # hence to stop the thread we need to kill the process first
             self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
             self._journal_thread.join(timeout)
+        if self._scylla_manager_journal_thread:
+            self.stop_scylla_manager_log_capture(timeout)
 
     def get_cpumodel(self):
         """Get cpu model from /proc/cpuinfo
@@ -1595,6 +1598,27 @@ server_encryption_options:
 
         if not res or "Active: failed" in res.stdout:
             raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
+
+        self.start_scylla_manager_log_capture()
+
+    def retrieve_scylla_manager_log(self):
+        mgmt_log_name = os.path.join(self.logdir, 'scylla_manager.log')
+        cmd = "sudo journalctl -u scylla-manager -f".format(mgmt_log_name)
+        self.remoter.run(cmd, ignore_status=True, verbose=True, log_file=mgmt_log_name)
+
+    def scylla_manager_log_thread(self):
+        while not self.termination_event.isSet():
+            self.retrieve_scylla_manager_log()
+
+    def start_scylla_manager_log_capture(self):
+        self._scylla_manager_journal_thread = threading.Thread(target=self.scylla_manager_log_thread)
+        self._scylla_manager_journal_thread.start()
+
+    def stop_scylla_manager_log_capture(self, timeout=10):
+        cmd = "sudo pkill -f \"sudo journalctl -u scylla-manager -f\""
+        self.remoter.run(cmd, ignore_status=True, verbose=True)
+        self._scylla_manager_journal_thread.join(timeout)
+        self._scylla_manager_journal_thread = None
 
     def collect_mgmt_log(self):
         self.log.debug("Collect scylla manager log ...")
