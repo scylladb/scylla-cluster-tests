@@ -63,9 +63,9 @@ def call(Map pipelineParams) {
                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
-                                            echo "start avocado ......."
-                                            ./docker/env/hydra.sh run ${pipelineParams.test_name} --xunit /sct/results.xml --job-results-dir /sct --show-job-log
-                                            echo "end avocado ....."
+                                            echo "start test ......."
+                                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
+                                            echo "end test ....."
                                             """
                                         }
                                     }

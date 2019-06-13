@@ -143,6 +143,9 @@ def configure_logging():
             },
             'cassandra.connection': {
                 'level': 'INFO'
+            },
+            'invoke': {
+                'level': 'CRITICAL'
             }
         }
     })

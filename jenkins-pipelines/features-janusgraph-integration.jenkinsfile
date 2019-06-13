@@ -8,7 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'us-east-1',
-    test_name: 'janus_graph_test.py:JanusGraphTest.test_janus_graph_regression',
+    test_name: 'janus_graph_test.JanusGraphTest.test_janus_graph_regression',
     test_config: 'test-cases/features/janus-graph.yaml',
 
     timeout: [time: 100, unit: 'MINUTES'],

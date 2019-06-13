@@ -11,7 +11,7 @@ rollingUpgradePipeline(
     linux_distro: 'debian-stretch',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-9',
 
-    test_name: 'upgrade_test.py:UpgradeTest.test_rolling_upgrade',
+    test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
 
     timeout: [time: 200, unit: 'MINUTES'],

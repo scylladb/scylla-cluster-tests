@@ -51,7 +51,7 @@ def call(Map pipelineParams) {
                             #!/bin/bash
                             set -xe
                             env
-                            export SCT_NEW_CONFIG=yes
+
                             export SCT_CLUSTER_BACKEND=${params.backend}
                             export SCT_REGION_NAME=${params.aws_region}
                             export SCT_CONFIG_FILES=${pipelineParams.test_config}
@@ -72,9 +72,9 @@ def call(Map pipelineParams) {
                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
-                            echo "start avocado ......."
-                            ./docker/env/hydra.sh run ${pipelineParams.test_name} --xunit /sct/results.xml --job-results-dir /sct --show-job-log
-                            echo "end avocado ....."
+                            echo "start test ......."
+                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
+                            echo "end test ....."
                             """
                         }
                     }
