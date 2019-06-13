@@ -578,16 +578,16 @@ class Nemesis(object):
         # do the actual truncation
         self.target_node.run_cqlsh('TRUNCATE {}.{}'.format(keyspace_truncate, table))
 
-    def _modify_table_property(self, name, val):
+    def _modify_table_property(self, name, val, filter_out_table_with_counter=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
         ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                                        db_node=self.target_node)
-        keyspace_table = ks_cfs[0] if ks_cfs else ks_cfs
+                                                        db_node=self.target_node,
+                                                        filter_out_table_with_counter=filter_out_table_with_counter)
+        keyspace_table = random.choice(ks_cfs[0]) if ks_cfs else ks_cfs
         if not keyspace_table:
-            self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
-            return
+            raise ValueError('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
         self.target_node.run_cqlsh(cmd)
@@ -679,7 +679,11 @@ class Nemesis(object):
             is exceeded, Cassandra tombstones the table.
             default: default_time_to_live = 0
         """
-        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 630720000))  # max allowed TTL - 20 years (630720000)
+        # Select table without columns with "counter" type for this nemesis - issue #1037:
+        #    Modify_table nemesis chooses first non-system table, and modify default_time_to_live of it.
+        #    But table with counters doesn't support this
+        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 630720000),
+                                    filter_out_table_with_counter=True)  # max allowed TTL - 20 years (630720000)
 
     def modify_table_max_index_interval(self):
         """
