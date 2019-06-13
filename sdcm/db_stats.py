@@ -331,7 +331,7 @@ class TestStatsMixin(Stats):
         if is_gce and self.db_cluster:
             setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get('cpuPlatform', 'UNKNOWN')
 
-        setup_details['db_cluster_details'] = {}
+        setup_details['db_cluster_node_details'] = {}
         return setup_details
 
     def get_test_details(self):
@@ -353,18 +353,10 @@ class TestStatsMixin(Stats):
         test_details['log_files'] = {}
         return test_details
 
-    def get_db_cluster_details(self):
+    def get_db_cluster_node_details(self):
 
-        db_cluster_details = {}
-        for node in self.db_cluster.nodes:
-            node_system_info = {}
-            node_system_info[node.name] = {
-                'cpu_model': node.get_cpumodel(),
-                'sys_info': node.get_system_info(),
-            }
-            db_cluster_details.update(node_system_info)
-
-        return db_cluster_details
+        return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
+                'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
     def create_test_stats(self, sub_type=None):
         self._test_index = self.__class__.__name__.lower()
@@ -494,7 +486,7 @@ class TestStatsMixin(Stats):
                 self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
 
             if self.db_cluster:
-                self._stats['setup_details']['db_cluster_details'] = self.get_db_cluster_details()
+                self._stats['setup_details']['db_cluster_node_details'] = self.get_db_cluster_node_details()
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
