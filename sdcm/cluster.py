@@ -31,7 +31,10 @@ import io
 from base64 import decodestring
 
 import requests
+
 from invoke.exceptions import UnexpectedExit, Failure
+
+from collections import defaultdict
 
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
@@ -3055,22 +3058,34 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
-    def get_non_system_ks_cf_list(self, loader_node, db_node, request_timeout=300):
+    def get_non_system_ks_cf_list(self, loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False):
         """Get all not system keyspace.tables pairs
 
         Arguments:
             loader_node {BaseNode} -- LoaderNoder to send request
             db_node_ip {str} -- ip of db_node
         """
+        cmd = "paging off; SELECT keyspace_name, table_name, type FROM system_schema.columns"
+        result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
+                                       split=True, connect_timeout=request_timeout)
 
-        result = loader_node.run_cqlsh(cmd='SELECT keyspace_name, table_name from system_schema.tables',
-                                       timeout=request_timeout, verbose=False, target_db_node=db_node, split=True)
-        avaialable_ks_cf = []
-        for row in result:
+        avaialable_ks_cf = defaultdict(list)
+        for row in result[4:]:
             if '|' not in row:
                 continue
-            avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
-        return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
+            row_splitted = row.split('|')
+            ks_cf_name = '.'.join([name.strip() for name in row_splitted[:2]])
+            if ks_cf_name.startswith('system'):
+                continue
+            column_type = row_splitted[2].strip()
+            avaialable_ks_cf[ks_cf_name].append(column_type)
+
+        if filter_out_table_with_counter:
+            for ks_cf, column_types in avaialable_ks_cf.items():
+                if 'counter' in column_types:
+                    avaialable_ks_cf.pop(ks_cf)
+
+        return avaialable_ks_cf.keys()
 
     def run_fullscan(self, ks_cf, loader_node, db_node):
         """Run cql select count(*) request
