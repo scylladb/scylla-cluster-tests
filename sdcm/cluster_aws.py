@@ -403,6 +403,7 @@ class AWSNode(cluster.BaseNode):
             if 'replace_address_first_boot:' not in output.stdout:
                 self.remoter.run('sudo echo replace_address_first_boot: %s >> /etc/scylla/scylla.yaml' %
                                  self._instance.private_ip_address)
+            self.remoter.run('sudo systemctl disable scylla-server')
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
         self._instance.start()
@@ -414,8 +415,9 @@ class AWSNode(cluster.BaseNode):
         self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
             self.stop_scylla_server(verify_down=False)
+            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+            self.remoter.run('sudo systemctl enable scylla-server')
             self.start_scylla_server(verify_up=False)
 
     def reboot(self, hard=True, verify_ssh=True):
