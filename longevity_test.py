@@ -76,7 +76,8 @@ class LongevityTest(ClusterTester):
 
         if 'compression' in stress_cmd:
             if 'keyspace_name' not in params:
-                keyspace_name = "keyspace_{}".format(re.search('compression=(.*)Compressor', stress_cmd).group(1))
+                compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
+                keyspace_name = "keyspace_{}".format(compression_prefix.lower())
                 params.update({'keyspace_name': keyspace_name})
 
         return params
