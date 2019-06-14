@@ -123,10 +123,19 @@ def list_resources(ctx, user, test_id):
                 tags = instance.extra['metadata'].get('items', [])
                 test_id = [t['value'] for t in tags if t['key'] == 'TestId']
                 test_id = test_id[0] if test_id else 'N/A'
+                if not instance.public_ips:
+                    ips = ""
+                else:
+                    # instance.public_ips of stopped instance might be [None]
+                    ips = []
+                    for i in instance.public_ips:
+                        ips.append(i if i else '')
+                    ips = ", ".join(ips)
+
                 x.add_row([instance.name,
                            test_id,
                            instance.extra['creationTimestamp'],
-                           ", ".join(instance.public_ips),
+                           ips,
                            instance.extra['status']])
             click.echo(x.get_string(title="Resources used by '{}' in GCE".format(user)))
         else:

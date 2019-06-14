@@ -511,8 +511,7 @@ def list_instances_gce(tags_dict, region_name=None):
             # we go over all the expected tags, and check if they exist in on the node/instance
             # if all of them exists we delete that node
             if all([any([t['key'] == key and t['value'] == value for t in tags]) for key, value in tags_dict.items()]):
-                if not node.state == 'STOPPED':
-                    instances += [node]
+                instances += [node]
     return instances
 
 
