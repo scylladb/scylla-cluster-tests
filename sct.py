@@ -96,7 +96,7 @@ def list_resources(ctx, user, test_id):
         instances = list_instances_aws(params)
         instances = [i for i in instances if not i['State']['Name'] == 'terminated']
         if instances:
-            x = PrettyTable(["InstanceId", "Name", "PublicIpAddress", "TestId", "LaunchTime"])
+            x = PrettyTable(["InstanceId", "Name", "PublicIpAddress", "TestId", "LaunchTime", "State"])
             x.align = "l"
             x.sortby = 'TestId'
 
@@ -107,7 +107,7 @@ def list_resources(ctx, user, test_id):
                            name[0] if name else 'N/A',
                            instance['PublicDnsName'],
                            test_id[0] if test_id else 'N/A',
-                           instance['LaunchTime'].ctime()])
+                           instance['LaunchTime'].ctime(), instance['State']['Name']])
             click.echo(x.get_string(title="Resources used by '{}' in AWS".format(user)))
         else:
             click.secho("No resources found on AWS", fg='green')
@@ -116,7 +116,7 @@ def list_resources(ctx, user, test_id):
 
         if instances:
 
-            x = PrettyTable(["Name", "TestId", "LaunchTime", "PublicIps"])
+            x = PrettyTable(["Name", "TestId", "LaunchTime", "PublicIps", "Status"])
             x.align = "l"
             x.sortby = 'TestId'
             for instance in instances:
@@ -126,7 +126,8 @@ def list_resources(ctx, user, test_id):
                 x.add_row([instance.name,
                            test_id,
                            instance.extra['creationTimestamp'],
-                           ", ".join(instance.public_ips)])
+                           ", ".join(instance.public_ips),
+                           instance.extra['status']])
             click.echo(x.get_string(title="Resources used by '{}' in GCE".format(user)))
         else:
             click.secho("No resources found on GCE", fg='green')
