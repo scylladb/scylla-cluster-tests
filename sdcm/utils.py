@@ -390,7 +390,7 @@ def restore_monitoring_stack(test_id):
 
 
 aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
-gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
+gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b', 'asia-northeast1-b']
 
 
 def clean_cloud_instances(tags_dict):
