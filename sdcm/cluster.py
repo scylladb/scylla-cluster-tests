@@ -1396,6 +1396,7 @@ server_encryption_options:
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
+            self.remoter.run('sudo yum install -y scylla-debuginfo', ignore_status=True)
         else:
             if self.is_ubuntu14():
                 self.remoter.run('sudo apt-get install software-properties-common -y')
@@ -1443,7 +1444,7 @@ server_encryption_options:
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}'.format(self.scylla_pkg()))
+            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0} {0}-server-dbg'.format(self.scylla_pkg()))
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
