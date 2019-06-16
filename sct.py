@@ -290,10 +290,13 @@ class OutputLogger(object):
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 @click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
 @click.option('-l', '--logdir', help="Directory to use for logs")
-def run(argv, backend, config, logdir):
+def run_test(argv, backend, config, logdir):
 
-    os.environ['SCT_CONFIG_FILES'] = str(list(config))
-    os.environ['SCT_CLUSTER_BACKEND'] = backend
+    if config:
+        os.environ['SCT_CONFIG_FILES'] = str(list(config))
+    if backend:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
     logfile = os.path.join(Setup.logdir(), 'output.log')
