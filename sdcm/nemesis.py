@@ -87,6 +87,9 @@ class Nemesis(object):
         data['node'] = self.target_node
         DisruptionEvent(name=disrupt, status=status, **data)
 
+    def set_current_running_nemesis(self, node):
+        node.running_nemesis = self.__class__.__name__
+
     def set_target_node(self, is_running=False):
         """Set node to run nemesis on
 
@@ -108,7 +111,7 @@ class Nemesis(object):
 
         if is_running:
             # Set name of nemesis, which is going to run on target node
-            self.target_node.running_nemesis = self.__class__.__name__
+            self.set_current_running_nemesis(node=self.target_node)
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
@@ -326,6 +329,7 @@ class Nemesis(object):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
+        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
         try:
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
@@ -371,17 +375,21 @@ class Nemesis(object):
                 self.log.info('Decommission %s PASS', self.target_node)
                 self._terminate_cluster_node(self.target_node)
                 # Replace the node that was terminated.
+                new_node = None
                 if add_node:
                     # When adding node after decommission the node is declared as up only after it completed bootstrapping,
                     # increasing the timeout for now
-                    self._add_and_init_new_cluster_node()
+                    new_node = self._add_and_init_new_cluster_node()
                 # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
                 # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
                 # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
                 test_keyspaces = self.cluster.get_test_keyspaces()
                 for node in self.cluster.nodes:
                     for keyspace in test_keyspaces:
-                        node.remoter.run('nodetool --host localhost cleanup {}'.format(keyspace), verbose=True)
+                        cmd = 'nodetool --host localhost cleanup {}'.format(keyspace)
+                        self._run_nodetool(cmd, node)
+                if new_node:
+                    new_node.running_nemesis = None
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
