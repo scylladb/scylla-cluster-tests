@@ -491,6 +491,7 @@ class AWSNode(cluster.BaseNode):
 
     def start_aws_termination_monitoring(self):
         self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
+        self._spot_aws_termination_task.daemon = True
         self._spot_aws_termination_task.start()
 
     def get_console_output(self):
