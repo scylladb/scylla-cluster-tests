@@ -1225,9 +1225,13 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if self.loaders is not None:
             self.loaders.get_backtraces()
+            for node in self.loaders.nodes:
+                node.stop_task_threads(timeout=60)
 
         if self.monitors is not None:
             self.monitors.get_backtraces()
+            for node in self.monitors.nodes:
+                node.stop_task_threads(timeout=60)
 
         if self.create_stats:
             self.update_test_details(errors=db_cluster_errors,
