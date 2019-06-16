@@ -1167,13 +1167,44 @@ class BaseNode(object):
             for backtrace in backtraces:
                 if backtrace['event'].raw_backtrace:
                     try:
-                        output = self.remoter.run('addr2line -Cpife /usr/lib/debug/bin/scylla.debug %s' % " ".join(backtrace['event'].raw_backtrace.split('\n')), verbose=False)
+                        scylla_debug_info = self.get_scylla_debuginfo_file()
+                        output = self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
                         backtrace['event'].add_backtrace_info(backtrace=output.stdout)
                     except Exception:
                         self.log.exception("failed to decode backtrace")
                 backtrace['event'].publish()
 
         return matches
+
+    def get_scylla_debuginfo_file(self):
+        """
+        Lookup the scylla debug information, in various places it can be.
+
+        :return the path to the scylla debug information
+        :rtype str
+        """
+        # first try default location
+        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
+        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        if results.exit_status == 0:
+            return scylla_debug_info
+
+        # then try the relocatable location
+        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla.bin*.debug')
+        if results.stdout.strip():
+            return results.stdout.strip()
+
+        # then look it up base on the build id
+        results = self.remoter.run('file /usr/bin/scylla')
+        build_id_regex = re.compile(r'BuildID\[.*\]=(.*),')
+        build_id = build_id_regex.search(results.stdout).group(1)
+
+        scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
+        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        if results.exit_status == 0:
+            return scylla_debug_info
+
+        raise Exception("Couldn't find scylla debug information")
 
     def datacenter_setup(self, datacenters):
         cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
