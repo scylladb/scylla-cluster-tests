@@ -1335,9 +1335,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def zip_and_upload_job_log(self):
         job_log_dir = os.path.dirname(self.logdir)
-        archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
+        event_log_dir_tmp = os.path.join(job_log_dir, 'job_log')
+        if not os.path.exists(event_log_dir_tmp):
+            os.mkdir(event_log_dir_tmp)
+        for f in ['sct.log', 'output.log']:
+            f_path = os.path.join(job_log_dir, f)
+            if os.path.isfile(f_path):
+                shutil.copy(f_path, event_log_dir_tmp)
+
+        archive_name = os.path.basename(event_log_dir_tmp)
+
         try:
-            joblog_archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'sct.log')
+            joblog_archive = shutil.make_archive(archive_name, 'zip', event_log_dir_tmp)
             s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
