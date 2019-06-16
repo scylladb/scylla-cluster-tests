@@ -184,7 +184,7 @@ class Setup(object):
     @classmethod
     def logdir(cls):
         if not cls._logdir:
-            sct_base = os.path.expanduser(os.environ.get('SCT_LOGDIR', '~/sct-results'))
+            sct_base = os.path.expanduser(os.environ.get('_SCT_LOGDIR', '~/sct-results'))
             cls._logdir = os.path.join(sct_base, str(cls.test_id()))
             os.makedirs(cls._logdir)
 
