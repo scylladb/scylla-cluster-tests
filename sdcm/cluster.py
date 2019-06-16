@@ -1302,7 +1302,7 @@ server_encryption_options:
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
 
-            self.remoter.run('sudo apt-get upgrade -y')
+            self.remoter.run('sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
