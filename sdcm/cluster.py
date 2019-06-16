@@ -660,6 +660,7 @@ class BaseNode(object):
 
     def start_journal_thread(self):
         self._journal_thread = threading.Thread(target=self.journal_thread)
+        self._journal_thread.daemon = True
         self._journal_thread.start()
 
     def _get_coredump_backtraces(self, last=True):
@@ -816,10 +817,12 @@ class BaseNode(object):
 
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
+        self._backtrace_thread.daemon = True
         self._backtrace_thread.start()
 
     def start_db_log_reader_thread(self):
         self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread)
+        self._db_log_reader_thread.daemon = True
         self._db_log_reader_thread.start()
 
     def __str__(self):
@@ -991,6 +994,7 @@ class BaseNode(object):
             self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
             tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
                                               kwargs={'tcpdump_id': tcpdump_id})
+            tcpdump_thread.daemon = True
             tcpdump_thread.start()
         wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
@@ -2401,6 +2405,7 @@ class BaseScyllaCluster(object):
             nemesis.set_target_node(is_running=True)
             nemesis_thread = threading.Thread(target=nemesis.run,
                                               args=(interval, ), verbose=True)
+            nemesis_thread.daemon = True
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
@@ -3026,6 +3031,7 @@ class BaseLoaderSet(object):
                 current = time.time()
 
         th = threading.Thread(target=run_in_thread)
+        th.daemon = True
         th.start()
 
     def kill_fullscan_thread(self):
