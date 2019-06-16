@@ -295,7 +295,7 @@ def run(argv, backend, config, logdir):
     os.environ['SCT_CONFIG_FILES'] = str(list(config))
     os.environ['SCT_CLUSTER_BACKEND'] = backend
     if logdir:
-        os.environ['SCT_LOGDIR'] = logdir
+        os.environ['_SCT_LOGDIR'] = logdir
     logfile = os.path.join(Setup.logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
