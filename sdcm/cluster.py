@@ -1090,7 +1090,7 @@ class BaseNode(object):
             f.seek(0, os.SEEK_END)
             return f.tell()
 
-    def search_database_log(self, start_from_beginning=False, publish_events=True):
+    def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True):
         """
         Search for all known patterns listed in  `_database_error_events`
 
@@ -1105,8 +1105,12 @@ class BaseNode(object):
 
         index = 0
         # prepare/compile all regexes
-        for expression in self._database_error_events:
+        if search_pattern:
+            expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=Severity.CRITICAL)
             patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+        else:
+            for expression in self._database_error_events:
+                patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
 
         backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
@@ -1132,7 +1136,7 @@ class BaseNode(object):
                     if data['scylla_bt']:
                         backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
 
-                if index not in self._database_log_errors_index:
+                if index not in self._database_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in patterns:
                         m = pattern.search(line)

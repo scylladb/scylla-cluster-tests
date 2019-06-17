@@ -395,7 +395,9 @@ class UpgradeTest(FillDatabaseData):
         schema_load_error_num = 0
 
         for node in self.db_cluster.nodes:
-            errors = node.search_database_log('Failed to load schema version')
+            errors = node.search_database_log(search_pattern='Failed to load schema version',
+                                              start_from_beginning=True,
+                                              publish_events=False)
             schema_load_error_num += len(errors)
         self.log.debug('schema_load_error_num: %d' % schema_load_error_num)
         assert schema_load_error_num <= error_factor * 8 * len(self.db_cluster.nodes), 'Only allowing shards_num * %s schema load errors per host during the entire test' % error_factor
