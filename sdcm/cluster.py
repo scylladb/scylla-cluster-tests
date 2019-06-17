@@ -189,8 +189,9 @@ class Setup(object):
             os.makedirs(cls._logdir)
 
             latest_symlink = os.path.join(sct_base, 'latest')
-            remove_if_exists(latest_symlink)
-            os.symlink(cls._logdir, latest_symlink)
+            if os.path.islink(latest_symlink):
+                os.remove(latest_symlink)
+            os.symlink(os.path.relpath(cls._logdir, sct_base), latest_symlink)
             os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
         return cls._logdir
 
