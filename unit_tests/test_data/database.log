@@ -478,6 +478,8 @@
 [10.0.73.70] [stdout] Apr 02 11:24:38 info   | Starting the JMX server
 [10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] gossip - InetAddress 10.0.222.111 is now UP, status = NORMAL
 [10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] migration_manager - Requesting schema pull from 10.0.222.111:0
+[10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] Failed to load schema version
+[10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] Failed to load schema version
 [10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] migration_manager - Pulling schema from 10.0.222.111:0
 [10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] migration_manager - Requesting schema pull from 10.0.222.111:0
 [10.0.73.70] [stdout] Apr 02 11:24:39 info   |  [shard 0] migration_manager - Pulling schema from 10.0.222.111:0

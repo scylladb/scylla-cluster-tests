@@ -55,14 +55,21 @@ class TestBaseNode(unittest.TestCase):
 
     def test_search_database_log(self):
         critical_errors = self.node.search_database_log()
-        self.assertEqual(len(critical_errors), 2)
+        self.assertEqual(len(critical_errors), 4)
 
         for line_number, line in critical_errors:
             print line
 
     def test_search_database_log_teardown(self):
         critical_errors = self.node.search_database_log(start_from_beginning=True, publish_events=False)
-        self.assertEqual(len(critical_errors), 2)
+        self.assertEqual(len(critical_errors), 4)
 
         for line_number, line in critical_errors:
             print line
+
+    def test_search_database_log_specific_log(self):
+        errors = self.node.search_database_log(search_pattern='Failed to load schema version', start_from_beginning=True, publish_events=False)
+        self.assertEqual(len(errors), 2)
+
+        for line_number, line in errors:
+            print line_number, line
