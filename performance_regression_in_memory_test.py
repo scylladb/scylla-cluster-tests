@@ -8,8 +8,6 @@ class InMemoryPerformanceRegressionTest(PerformanceRegressionTest):
 
     """
     Test Scylla performance regression with cassandra-stress.
-
-    :avocado: enable
     """
 
     def __init__(self, *args, **kwargs):

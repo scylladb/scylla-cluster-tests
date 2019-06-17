@@ -14,9 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 import os
-import re
 import time
-from avocado import main
 
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
@@ -284,7 +282,3 @@ class MgmtCliTest(ClusterTester):
         except ScyllaManagerError as err:
             assert "not found in" in err.message, "Unexpected error: {}".format(err.message)
             return None
-
-
-if __name__ == '__main__':
-    main()

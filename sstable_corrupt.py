@@ -14,7 +14,6 @@
 # Copyright (c) 2017 ScyllaDB
 
 import logging
-from avocado import main
 
 from sdcm.tester import ClusterTester
 from sdcm.utils import get_data_dir_path
@@ -26,8 +25,6 @@ class SstableCorruptTest(ClusterTester):
 
     """
     Testing that scylla cluster can get over an sstable corruption
-
-    :avocado: enable
     """
 
     def _run_stress(self, cmd, population_size):
@@ -68,7 +65,3 @@ class SstableCorruptTest(ClusterTester):
         logger.debug('Restart node')
         self.db_cluster.nodes[0].remoter.run('sudo systemctl restart scylla-server.service')
         self._run_stress('read', population_size)
-
-
-if __name__ == '__main__':
-    main()

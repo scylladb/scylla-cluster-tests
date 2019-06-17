@@ -2,11 +2,6 @@ from longevity_test import LongevityTest
 
 
 class InMemoryLongevetyTest(LongevityTest):
-
-    """
-    :avocado: enable
-    """
-
     def __init__(self, *args, **kwargs):
         super(InMemoryLongevetyTest, self).__init__(*args, **kwargs)
 

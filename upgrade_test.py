@@ -18,18 +18,12 @@ import random
 import time
 import re
 
-from avocado import main
-
-from sdcm.nemesis import RollbackNemesis
-from sdcm.nemesis import UpgradeNemesis
 from sdcm.fill_db_data import FillDatabaseData
 
 
 class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
-
-    :avocado: enable
     """
     orig_ver = None
     new_ver = None
@@ -404,7 +398,3 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
-
-
-if __name__ == '__main__':
-    main()

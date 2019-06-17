@@ -14,16 +14,12 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 
 
 class BuildClusterTest(ClusterTester):
     """
     Build a Scylla cluster with the appropriate parameters.
-
-    :avocado: enable
     """
 
     default_params = {'timeout': 650000}
@@ -93,7 +89,3 @@ class BuildClusterTest(ClusterTester):
         # run a workload
         cs_thread_pool = self.run_stress_thread(stress_cmd=base_cmd_w)
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
-
-
-if __name__ == '__main__':
-    main()

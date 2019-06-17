@@ -1,12 +1,8 @@
 import time
-from avocado import main
 from sdcm.tester import ClusterTester
 
 
 class HintedHandoffTest(ClusterTester):
-    """
-       :avocado: enable
-    """
 
     def __init__(self, *args, **kwargs):
         super(HintedHandoffTest, self).__init__(*args, **kwargs)
@@ -60,7 +56,3 @@ class HintedHandoffTest(ClusterTester):
         stress_queue = self.run_stress_thread(stress_cmd=self.stress_read_cmd, stress_num=1)
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.verify_no_drops_and_errors(starting_from=self.start_time)
-
-
-if __name__ == '__main__':
-    main()

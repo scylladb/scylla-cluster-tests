@@ -14,7 +14,7 @@
 # Copyright (c) 2017 ScyllaDB
 
 import os
-from avocado import main
+
 from sdcm.tester import ClusterTester
 
 
@@ -59,7 +59,3 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
                     self.update_test_details(scylla_conf=True)
                     self.check_regression()
                     self._clean_keyspace(cs_profile)
-
-
-if __name__ == '__main__':
-    main()
