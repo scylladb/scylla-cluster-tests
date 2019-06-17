@@ -83,4 +83,4 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${AWS_OPTIONS} \
     --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
+    /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"
