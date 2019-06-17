@@ -25,8 +25,6 @@ class GeminiTest(ClusterTester):
     """
     Test Scylla with gemini - tool for testing data integrity
     https://github.com/scylladb/gemini
-
-    :avocado: enable
     """
 
     def test_random_load(self):

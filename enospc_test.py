@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-from avocado import main
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import EnospcAllNodesMonkey
 
@@ -22,7 +21,6 @@ class EnospcTest(ClusterTester):
     """
     Cost rest space to trigger ENOSPC error for scylla,
     and then release space to recover scylla service.
-    :avocado: enable
     """
 
     def test_enospc_nodes(self):
@@ -37,7 +35,3 @@ class EnospcTest(ClusterTester):
         self.db_cluster.stop_nemesis(timeout=1000)
 
         self.get_stress_results(queue=stress_queue)
-
-
-if __name__ == '__main__':
-    main()

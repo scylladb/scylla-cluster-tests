@@ -17,8 +17,6 @@ import time
 import datetime
 import random
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.utils import get_data_dir_path
 from sdcm import nemesis
@@ -29,7 +27,6 @@ class GrowClusterTest(ClusterTester):
 
     """
     Test scylla cluster growth (adding nodes after an initial cluster size).
-    :avocado: enable
     """
 
     def __init__(self, *args, **kwargs):
@@ -214,7 +211,3 @@ class GrowClusterTest(ClusterTester):
 
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
-
-
-if __name__ == '__main__':
-    main()

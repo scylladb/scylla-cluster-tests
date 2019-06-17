@@ -15,11 +15,10 @@
 
 
 import os
-
-from avocado import main
-from sdcm.tester import ClusterTester
 import time
 import yaml
+
+from sdcm.tester import ClusterTester
 
 KB = 1024
 
@@ -28,8 +27,6 @@ class PerformanceRegressionTest(ClusterTester):
 
     """
     Test Scylla performance regression with cassandra-stress.
-
-    :avocado: enable
     """
 
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
@@ -604,7 +601,3 @@ class PerformanceRegressionTest(ClusterTester):
         self.display_results(results, test_name='test_timeseries_read_bench')
         self.check_regression()
         self.kill_stress_thread()
-
-
-if __name__ == '__main__':
-    main()

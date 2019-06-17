@@ -14,8 +14,6 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.utils import get_data_dir_path
 
@@ -24,8 +22,6 @@ class CustomCsTest(ClusterTester):
 
     """
     Run a custom c-s workload (yaml) on a cluster.
-
-    :avocado: enable
     """
 
     default_params = {'timeout': 650000}
@@ -47,7 +43,3 @@ class CustomCsTest(ClusterTester):
                       'profile=/tmp/cassandra-stress-custom.yaml '
                       'ops\(insert=1\) -node %s' % ip)
         self.run_stress(stress_cmd=cs_command)
-
-
-if __name__ == '__main__':
-    main()

@@ -2,11 +2,6 @@ from longevity_test import LongevityTest
 
 
 class LargePartitionLongevetyTest(LongevityTest):
-
-    """
-    :avocado: enable
-    """
-
     def __init__(self, *args, **kwargs):
         super(LargePartitionLongevetyTest, self).__init__(*args, **kwargs)
 

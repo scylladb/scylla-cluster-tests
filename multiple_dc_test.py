@@ -13,8 +13,6 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 
 
@@ -84,7 +82,3 @@ class MultipleDcTest(ClusterTester):
 
         # restart the services in parallel
         self.run_func_parallel(self.start_scylla, node_list=nodes_2nd_dc)
-
-
-if __name__ == '__main__':
-    main()

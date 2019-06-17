@@ -16,8 +16,6 @@
 import logging
 import datetime
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.tester import teardown_on_exception
 from sdcm.nemesis import Nemesis
@@ -36,8 +34,6 @@ class DecommissionNoAddMonkey(Nemesis):
 class ReduceClusterTest(ClusterTester):
     """
     Test scylla cluster reduction (removing nodes to shrink cluster from initial cluster size to target cluster size).
-
-    :avocado: enable
     """
 
     @teardown_on_exception
@@ -171,7 +167,3 @@ class ReduceClusterTest(ClusterTester):
         4) Keep repeating 3) until we get to the target number of 3 nodes
         """
         self.reduce_cluster(cluster_starting_size=30, cluster_target_size=3)
-
-
-if __name__ == '__main__':
-    main()

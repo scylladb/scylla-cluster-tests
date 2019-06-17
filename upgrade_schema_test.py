@@ -241,8 +241,6 @@ class TestThriftTableConvertedFromDenseToSparse(Test):
 class UpgradeSchemaTest(ClusterTester):
     """
     Test a Scylla cluster upgrade.
-
-    :avocado: enable
     """
 
     default_params = {'timeout': 650000}

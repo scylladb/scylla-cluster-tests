@@ -13,16 +13,12 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 
 
 class SnitchTest(ClusterTester):
     """
     Endpoint Snitch Test
-
-    :avocado: enable
     """
 
     def test_google_cloud_snitch(self):

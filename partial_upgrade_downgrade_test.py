@@ -14,8 +14,6 @@
 # Copyright (c) 2016 ScyllaDB
 
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.utils import get_data_dir_path
 from sdcm.nemesis import UpgradeNemesis
@@ -69,7 +67,3 @@ class PartialUpgradeDowngradeTest(ClusterTester):
                                     tester_obj=self)
         self.db_cluster.start_nemesis(interval=10)
         self.run_stress(duration=20)
-
-
-if __name__ == '__main__':
-    main()

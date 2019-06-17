@@ -15,8 +15,6 @@
 
 import time
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import DrainerMonkey
 from sdcm.nemesis import CorruptThenRepairMonkey
@@ -27,8 +25,6 @@ class MaintainanceTest(ClusterTester):
 
     """
     Test a Scylla cluster maintenance operations.
-
-    :avocado: enable
     """
 
     def _base_procedure(self, nemesis_class):
@@ -62,7 +58,3 @@ class MaintainanceTest(ClusterTester):
         Rebuild all nodes
         """
         self._base_procedure(CorruptThenRebuildMonkey)
-
-
-if __name__ == '__main__':
-    main()

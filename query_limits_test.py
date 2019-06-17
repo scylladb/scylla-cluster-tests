@@ -15,8 +15,6 @@
 
 import logging
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 from sdcm.tester import teardown_on_exception
 
@@ -25,8 +23,6 @@ class QueryLimitsTest(ClusterTester):
 
     """
     Test scylla cluster growth (adding nodes after an initial cluster size).
-
-    :avocado: enable
     """
 
     @teardown_on_exception
@@ -89,7 +85,3 @@ class QueryLimitsTest(ClusterTester):
         result = self.loaders.nodes[0].remoter.run(cmd, ignore_status=True)
         if result.exit_status != 0:
             self.fail('Payload failed:\n%s' % result)
-
-
-if __name__ == '__main__':
-    main()
