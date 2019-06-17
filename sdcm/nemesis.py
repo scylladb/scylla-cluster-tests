@@ -308,14 +308,16 @@ class Nemesis(object):
     def get_class_name(self):
         return self.__class__.__name__.replace('Monkey', '')
 
-    def _set_current_disruption(self, label=None, report=True):
+    def _set_current_disruption(self, label=None, report=True, node=None):
+        current_node = node if node else self.target_node
+
         if not label:
-            label = "%s on target node %s" % (self.__class__.__name__, self.target_node)
+            label = "%s on target node %s" % (self.__class__.__name__, current_node)
         self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
         self.log.info(label)
         if report:
-            DisruptionEvent(type='start', name=self.get_disrupt_name(), status=True, node=str(self.target_node))
+            DisruptionEvent(type='start', name=self.get_disrupt_name(), status=True, node=str(current_node))
 
     def disrupt_destroy_data_then_repair(self):
         self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
@@ -586,7 +588,7 @@ class Nemesis(object):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
         test_keyspaces = self.cluster.get_test_keyspaces()
         for node in self.cluster.nodes:
-            self._set_current_disruption('NodetoolCleanupMonkey %s' % node)
+            self._set_current_disruption('NodetoolCleanupMonkey %s' % node, node=node)
             for keyspace in test_keyspaces:
                 cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
                 self._run_nodetool(cmd, node)
