@@ -438,8 +438,12 @@ class GrafanaAnnotator(threading.Thread):
                     "isRegion": False,
                     "text": str(message_data)
                 }
-                res = requests.post(self.grafana_base_url + '/api/annotations', json=annotate_data, auth=self.auth)
-                LOGGER.info(res.text)
+                try:
+                    res = requests.post(self.grafana_base_url + '/api/annotations', json=annotate_data, auth=self.auth)
+                    res.raise_for_status()
+                    LOGGER.info(res.text)
+                except requests.exceptions.RequestException as ex:
+                    LOGGER.warning("Failed to annotate an event in grafana [%s]", str(ex))
 
     def terminate(self):
         self.url_set.set()
