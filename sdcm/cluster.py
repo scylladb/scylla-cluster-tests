@@ -2707,7 +2707,10 @@ class BaseLoaderSet(object):
 
     def kill_stress_thread(self):
         for loader in self.nodes:
-            loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
+            try:
+                loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
+            except Exception as ex:
+                self.log.warning("failed to kill stress-command on [%s]: [%s]", str(loader), str(ex))
 
     @staticmethod
     def _parse_cs_summary(lines):
