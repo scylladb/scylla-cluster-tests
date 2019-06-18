@@ -1329,6 +1329,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def tearDown(self):
         self.log.info('TearDown is starting...')
+        InfoEvent('TEST_END')
         try:
             self.finalize_test()
         except Exception as details:
@@ -1337,7 +1338,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         finally:
             if self._failure_post_behavior == 'destroy':
                 clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
-            InfoEvent('TEST_END')
             stop_events_device()
             self.collect_events_log()
             self.zip_and_upload_job_log()
