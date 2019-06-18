@@ -759,7 +759,7 @@ class Nemesis(object):
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                Setup.MULTI_REGION else 'private_ip_address'
+                Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
 
@@ -783,7 +783,7 @@ class Nemesis(object):
             cluster_id = mgmt_client.get_cluster(cluster_name)
             if not cluster_id:
                 ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                    Setup.MULTI_REGION else 'private_ip_address'
+                    Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
                 targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
                 cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
             repair_timeout = 36 * 60 * 60  # 36 hours
