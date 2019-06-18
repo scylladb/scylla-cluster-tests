@@ -82,7 +82,7 @@ class MgmtCliTest(ClusterTester):
 
     def _get_cluster_hosts_with_ips(self):
         ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
-            Setup.MULTI_REGION else 'private_ip_address'
+            Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
         return [[node, getattr(node, ip_addr_attr)] for node in self.db_cluster.nodes]
 
     def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):

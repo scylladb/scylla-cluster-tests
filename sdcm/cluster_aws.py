@@ -567,7 +567,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             append_scylla_args=self.get_scylla_args(),
             authorizer=self.params.get('authorizer'),
         )
-        if cluster.Setup.MULTI_REGION:
+        if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,

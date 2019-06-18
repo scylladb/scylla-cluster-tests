@@ -116,6 +116,10 @@ class SCTConfiguration(dict):
                 'stop' - Stop instances and leave credentials alone
              """),
 
+        dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
+             help="If True, all communication between nodes are via public addresses"),
+
+
         dict(name="endpoint_snitch", env="SCT_ENDPOINT_SNITCH",  type=str,
              help="""
                 The snitch class scylla would use

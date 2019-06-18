@@ -165,6 +165,7 @@ class Setup(object):
     MIXED_CLUSTER = False
     MULTI_REGION = False
     BACKTRACE_DECODING = False
+    INTRA_NODE_COMM_PUBLIC = False
 
     _test_id = None
     _test_name = None
@@ -207,6 +208,10 @@ class Setup(object):
     @classmethod
     def set_multi_region(cls, multi_region):
         cls.MULTI_REGION = multi_region
+
+    @classmethod
+    def set_intra_node_comm_public(cls, intra_node_comm_public):
+        cls.INTRA_NODE_COMM_PUBLIC = intra_node_comm_public
 
     @classmethod
     def reuse_cluster(cls, val=False):
@@ -523,7 +528,7 @@ class BaseNode(object):
 
     @property
     def ip_address(self):
-        if Setup.MULTI_REGION:
+        if Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address

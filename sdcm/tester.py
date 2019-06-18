@@ -165,6 +165,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
         cluster.Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        cluster.Setup.set_intra_node_comm_public(self.params.get('intra_node_comm_public') or cluster.Setup.MULTI_REGION)
 
         version_tag = self.params.get('ami_id_db_scylla_desc')
         if version_tag:
@@ -761,7 +762,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            if cluster.Setup.MULTI_REGION:
+            if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
                 ips = [ip for ip in self.db_cluster.get_node_public_ips()]
                 ip = ','.join(ips)
             else:
