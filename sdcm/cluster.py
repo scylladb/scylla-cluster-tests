@@ -26,6 +26,7 @@ import yaml
 import shutil
 import itertools
 import json
+import io
 
 from base64 import decodestring
 import requests
@@ -3655,7 +3656,7 @@ class BaseMonitorSet(object):
 
         annotations_json = self.get_grafana_annotations(node)
         tmp_dir = tempfile.mkdtemp()
-        with open(os.path.join(tmp_dir, 'annotations.json'), 'w') as f:
+        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
             f.write(annotations_json)
         node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
 
