@@ -490,7 +490,7 @@ class PerformanceRegressionTest(ClusterTester):
 
         def get_mv_name(user_profile):
             # Get materialized view name from user profile
-            up = yaml.load(open(user_profile))
+            up = yaml.load(open(user_profile), Loader=yaml.SafeLoader)
             mv_name = ''
 
             for k in up:

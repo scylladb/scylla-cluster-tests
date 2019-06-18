@@ -699,7 +699,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.receive_files(src='/etc/cassandra/cassandra.yaml',
                                    dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
-            conf_dict = yaml.load(yaml_stream)
+            conf_dict = yaml.load(yaml_stream, Loader=yaml.SafeLoader)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
             except:

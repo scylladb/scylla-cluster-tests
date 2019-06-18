@@ -1,8 +1,6 @@
 # avocado-framework requirements
 stevedore==1.11.0
-# cause of awscli PyYAML can't be upgraded yet
-# waiting for: https://github.com/aws/aws-cli/pull/4015
-PyYAML==3.13
+PyYAML==5.1
 pystache==0.5.4
 libvirt-python==4.9.0
 fabric==2.4.0
@@ -10,7 +8,7 @@ fabric==2.4.0
 avocado-framework==36.4
 boto3==1.6.5
 botocore==1.9.5
-awscli==1.14.52
+awscli==1.16.180
 aexpect==1.2.0
 cassandra-driver==3.13
 apache-libcloud==2.3.0
