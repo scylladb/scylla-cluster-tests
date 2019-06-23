@@ -223,8 +223,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.monitors = None
         self.connections = []
 
-        if self.create_stats:
-            self.create_test_stats()
         self.init_resources()
         if self.params.get('seeds_first', default='false') == 'true':
             seeds_num = self.params.get('seeds_num', default=1)
@@ -234,6 +232,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.db_cluster.wait_for_init()
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
+
+        if self.create_stats:
+            self.create_test_stats()
 
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf', default=3)
