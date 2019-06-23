@@ -1858,9 +1858,10 @@ server_encryption_options:
         options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout}".format(**locals())
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(**locals())
 
-    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False):
+    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None):
         """Runs CQL command using cqlsh utility"""
-        cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout, host=self.ip_address,
+        cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
+                                  host=self.ip_address if not target_db_node else target_db_node.ip_address,
                                   port=port if port else self.CQL_PORT)
         cqlsh_out = self.remoter.run(cmd, timeout=timeout + 1, verbose=verbose)
         # stdout of cqlsh example:
@@ -3021,9 +3022,9 @@ class BaseLoaderSet(object):
             loader_node {BaseNode} -- LoaderNoder to send request
             db_node_ip {str} -- ip of db_node
         """
-        cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
-        result = loader_node.remoter.run('cqlsh --request-timeout={} --no-color --execute "{}" {}'
-                                         .format(request_timeout, cmd, db_node_ip), verbose=False)
+
+        result = loader_node.run_cqlsh(cmd='SELECT keyspace_name, table_name from system_schema.tables',
+                                       timeout=request_timeout, verbose=False, target_db_node=db_node_ip)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
@@ -3057,8 +3058,9 @@ class BaseLoaderSet(object):
         FullScanEvent(type='start', loader_node=loader_node, db_node_ip=db_node_ip, ks_cf=ks_cf)
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
-        cmd = 'select count(*) from {}'.format(ks_cf)
-        result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+
+        result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
+                                       timeout=3600, verbose=False, target_db_node=db_node_ip)
 
         FullScanEvent(type='finish', loader_node=loader_node,
                       db_node_ip=db_node_ip, ks_cf=ks_cf,
