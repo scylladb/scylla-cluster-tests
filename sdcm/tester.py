@@ -107,22 +107,6 @@ class FlakyRetryPolicy(RetryPolicy):
             return self.RETHROW, None
 
 
-def retry_till_success(fun, *args, **kwargs):
-    timeout = kwargs.pop('timeout', 60)
-    bypassed_exception = kwargs.pop('bypassed_exception', Exception)
-
-    deadline = time.time() + timeout
-    while True:
-        try:
-            return fun(*args, **kwargs)
-        except bypassed_exception:
-            if time.time() > deadline:
-                raise
-            else:
-                # brief pause before next attempt
-                time.sleep(0.25)
-
-
 def teardown_on_exception(method):
     """
     Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
@@ -211,6 +195,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         return duration * 60 + 600
 
     @teardown_on_exception
+    @log_run_info
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
@@ -979,8 +964,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-                               user=None, password=None, timeout=30,
+                               user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_opts=None):
         """
@@ -988,18 +974,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection(**kwargs)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,
                                          user=None, password=None, timeout=30,
                                          compression=True,
@@ -1010,17 +989,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection_exclusive,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection_exclusive(**kwargs)
 
     def create_ks(self, session, name, rf):
         query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
