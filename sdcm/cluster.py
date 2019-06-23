@@ -2557,6 +2557,7 @@ class BaseScyllaCluster(object):
         self.get_seed_nodes()
         self.get_scylla_version()
         self.set_traffic_control()
+        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].run_nodetool("status"))
 
     def restart_scylla(self, nodes=None):
         if nodes:
