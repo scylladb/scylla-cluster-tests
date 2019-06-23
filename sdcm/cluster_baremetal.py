@@ -16,13 +16,14 @@ class NodeIpsNotConfiguredError(Exception):
 
 class PhysicalMachineNode(cluster.BaseNode):
 
-    def __init__(self, name, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
+    def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
                           'user': credentials.name,
                           'key_file': credentials.key_file}
         self._public_ip = public_ip
         self._private_ip = private_ip
         super(PhysicalMachineNode, self).__init__(name=name,
+                                                  parent_cluster=parent_cluster,
                                                   base_logdir=base_logdir,
                                                   ssh_login_info=ssh_login_info,
                                                   node_prefix=node_prefix)
@@ -78,8 +79,9 @@ class PhysicalMachineCluster(cluster.BaseCluster):
 
     def _create_node(self, name, public_ip, private_ip):
         return PhysicalMachineNode(name,
-                                   public_ip,
-                                   private_ip,
+                                   parent_cluster=self,
+                                   public_ip=public_ip,
+                                   private_ip=private_ip,
                                    credentials=self.credentials[0],
                                    base_logdir=self.logdir,
                                    node_prefix=self.node_prefix)

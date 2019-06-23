@@ -22,7 +22,7 @@ class LibvirtNode(cluster.BaseNode):
     Wraps a domain object, so that we can also control the it through SSH.
     """
 
-    def __init__(self, domain, hypervisor, node_prefix='node', node_index=1,
+    def __init__(self, domain, hypervisor, parent_cluster, node_prefix='node', node_index=1,
                  domain_username='root', domain_password='', base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._backing_image = None
@@ -34,6 +34,7 @@ class LibvirtNode(cluster.BaseNode):
                           'user': domain_username,
                           'password': domain_password}
         super(LibvirtNode, self).__init__(name=name,
+                                          parent_cluster=parent_cluster,
                                           ssh_login_info=ssh_login_info,
                                           base_logdir=base_logdir,
                                           node_prefix=node_prefix)
@@ -69,16 +70,6 @@ class LibvirtNode(cluster.BaseNode):
     def _wait_public_ip(self):
         while self._get_public_ip_address() is None:
             time.sleep(1)
-
-    # Remove after node setup is finished
-    def db_up(self):
-        try:
-            result = self.remoter.run('netstat -l | grep :9042',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Error checking for DB status: %s', details)
-            return False
 
     # Remove after node setup is finished
     def cs_installed(self, cassandra_stress_bin=None):
@@ -172,6 +163,7 @@ class LibvirtCluster(cluster.BaseCluster):
                 if domain.name() == name:
                     node = LibvirtNode(hypervisor=self._hypervisor,
                                        domain=domain,
+                                       parent_cluster=self,
                                        node_prefix=self.node_prefix,
                                        node_index=index,
                                        domain_username=self._domain_info[

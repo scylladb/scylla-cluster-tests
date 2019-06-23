@@ -68,15 +68,14 @@ class RefreshTest(ClusterTester):
         Load newly placed SSTables to the system
         """
         self.log.debug('Make sure keyspace1.standard1 exists')
-        result = node.remoter.run('nodetool --host localhost cfstats keyspace1.standard1')
+        result = node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
         assert result.exit_status == 0
 
-        node.remoter.run('nodetool --host localhost refresh -- keyspace1 standard1')
-        cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-        node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+        node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+        node.run_cqlsh("select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30")
         for i in range(int(self.params.get('flush_times', default=1))):
             time.sleep(int(self.params.get('flush_period', default=60)))
-            node.remoter.run('nodetool --host localhost flush')
+            node.run_nodetool("flush")
 
     def check_timeout(self):
         assert self.monitors.nodes, 'Monitor node should be set, we will try to get metrics from Prometheus server'

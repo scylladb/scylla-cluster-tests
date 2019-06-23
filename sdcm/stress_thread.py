@@ -83,10 +83,10 @@ class CassandraStressThread(object):
         elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
 
-        cql_auth = self.loader_set.get_cql_auth()
-        if cql_auth and 'user=' not in stress_cmd:
+        credentials = self.loader_set.get_db_auth()
+        if credentials and 'user=' not in stress_cmd:
             # put the credentials into the right place into -mode section
-            stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
+            stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
 
         if self.node_list and '-node' not in stress_cmd:
             first_node = [n for n in self.node_list if n.dc_idx == loader_idx % 3]  # make sure each loader is targeting on datacenter/region
@@ -227,7 +227,7 @@ if __name__ == '__main__':
         dc_idx = 1
 
     class LoaderSetDummy(object):
-        def get_cql_auth(self):
+        def get_db_auth(self):
             return None
 
         name = 'LoaderSetDummy'

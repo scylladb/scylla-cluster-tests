@@ -179,28 +179,6 @@ class Nemesis(object):
         except:
             return str(self.__class__)
 
-    def _run_nodetool(self, cmd, node):
-        try:
-            cql_auth = self.cluster.get_cql_auth()
-            if cql_auth:
-                cmd = re.sub(r'(nodetool.*?)', r'\1 -u {} -pw {}'.format(*cql_auth), cmd)
-
-            result = node.remoter.run(cmd)
-            self.log.debug("Command '%s' duration -> %s s", result.command,
-                           result.duration)
-            return result
-        except (UnexpectedExit, Failure) as details:
-            err = ("nodetool command '%s' failed on node %s: %s" %
-                   (cmd, node, details.result))
-            self.error_list.append(err)
-            self.log.error(err)
-            return None
-        except Exception:
-            err = 'Unexpected exception running nodetool'
-            self.error_list.append(err)
-            self.log.error(err, exc_info=True)
-            return None
-
     def _kill_scylla_daemon(self):
         self.log.info('Kill all scylla processes in %s', self.target_node)
         kill_cmd = "sudo pkill -9 scylla"
@@ -332,15 +310,14 @@ class Nemesis(object):
 
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
-        drain_cmd = 'nodetool -h localhost drain'
-        result = self._run_nodetool(drain_cmd, self.target_node)
+        result = self.target_node.run_nodetool("drain")
         for node in self.cluster.nodes:
             if node == self.target_node:
                 self.log.info('Status for target %s: %s', node,
-                              self._run_nodetool('nodetool status', node))
+                              node.run_nodetool('status'))
             else:
                 self.log.info('Status for regular %s: %s', node,
-                              self._run_nodetool('nodetool status', node))
+                              node.run_nodetool('status'))
         if result is not None:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -376,41 +353,38 @@ class Nemesis(object):
                 return None
         self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.ip_address
-        decommission_cmd = 'nodetool --host localhost decommission'
-        result = self._run_nodetool(decommission_cmd, self.target_node)
-        if result is not None:
+        self.target_node.run_nodetool("decommission")
+        verification_node = random.choice(self.cluster.nodes)
+        node_info_list = get_node_info_list(verification_node)
+        while verification_node == self.target_node or node_info_list is None:
             verification_node = random.choice(self.cluster.nodes)
             node_info_list = get_node_info_list(verification_node)
-            while verification_node == self.target_node or node_info_list is None:
-                verification_node = random.choice(self.cluster.nodes)
-                node_info_list = get_node_info_list(verification_node)
 
-            nodetool_ips = [node_info['ip'] for node_info in node_info_list]
-            error_msg = ('Node that was decommissioned %s still in the cluster. '
-                         'Cluster status info: %s' % (self.target_node,
-                                                      node_info_list))
-            if target_node_ip in nodetool_ips:
-                self.log.info('Decommission %s FAIL', self.target_node)
-                self.log.error(error_msg)
-            else:
-                self.log.info('Decommission %s PASS', self.target_node)
-                self._terminate_cluster_node(self.target_node)
-                # Replace the node that was terminated.
-                new_node = None
-                if add_node:
-                    # When adding node after decommission the node is declared as up only after it completed bootstrapping,
-                    # increasing the timeout for now
-                    new_node = self._add_and_init_new_cluster_node()
-                # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
-                # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-                # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-                test_keyspaces = self.cluster.get_test_keyspaces()
-                for node in self.cluster.nodes:
-                    for keyspace in test_keyspaces:
-                        cmd = 'nodetool --host localhost cleanup {}'.format(keyspace)
-                        self._run_nodetool(cmd, node)
-                if new_node:
-                    new_node.running_nemesis = None
+        nodetool_ips = [node_info['ip'] for node_info in node_info_list]
+        error_msg = ('Node that was decommissioned %s still in the cluster. '
+                     'Cluster status info: %s' % (self.target_node,
+                                                  node_info_list))
+        if target_node_ip in nodetool_ips:
+            self.log.info('Decommission %s FAIL', self.target_node)
+            self.log.error(error_msg)
+        else:
+            self.log.info('Decommission %s PASS', self.target_node)
+            self._terminate_cluster_node(self.target_node)
+            # Replace the node that was terminated.
+            new_node = None
+            if add_node:
+                # When adding node after decommission the node is declared as up only after it completed bootstrapping,
+                # increasing the timeout for now
+                new_node = self._add_and_init_new_cluster_node()
+            # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
+            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+            test_keyspaces = self.cluster.get_test_keyspaces()
+            for node in self.cluster.nodes:
+                for keyspace in test_keyspaces:
+                    node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+            if new_node:
+                new_node.running_nemesis = None
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
@@ -426,12 +400,10 @@ class Nemesis(object):
 
     def disrupt_major_compaction(self):
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
-        cmd = 'nodetool -h localhost compact'
-        self._run_nodetool(cmd, self.target_node)
+        self.target_node.run_nodetool("compact")
 
     def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
-        node = self.target_node
-        self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(node.name))
+        self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
         if big_sstable:
             # 100G, the big file will be saved to GCE image
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.tar.gz'
@@ -445,22 +417,20 @@ class Nemesis(object):
         if not skip_download:
             ks = KeyStore()
             creds = ks.get_scylladb_upload_credentials()
-            remote_get_file(node.remoter, sstable_url, sstable_file,
+            remote_get_file(self.target_node.remoter, sstable_url, sstable_file,
                             hash_expected=sstable_md5, retries=2,
                             user_agent=creds['user_agent'])
 
         self.log.debug('Make sure keyspace1.standard1 exists')
-        result = self._run_nodetool('nodetool --host localhost cfstats keyspace1.standard1',
-                                    node)
+        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
         if result is not None and result.exit_status == 0:
-            result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+            result = self.target_node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
-            node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(sstable_file, upload_dir))
-
-            refresh_cmd = 'nodetool --host localhost refresh -- keyspace1 standard1'
-            self._run_nodetool(refresh_cmd, node)
+            self.target_node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
+                sstable_file, upload_dir))
+            self.target_node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
             cmd = "select * from keyspace1.standard1 where key=0x314e344b4d504d4b4b30"
-            self._run_in_cqlsh(cmd, node)
+            self.target_node.run_cqlsh(cmd)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
@@ -561,27 +531,23 @@ class Nemesis(object):
         disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
         self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method_name)
         self.metrics_srv.event_start(disrupt_method_name)
-        exc = None
         try:
             disrupt_method()
         except Exception as exc:
-            self.log.error("Exception in random_disrupt_method %s: %s", disrupt_method_name, exc)
+            error_msg = "Exception in random_disrupt_method %s: %s", disrupt_method_name, exc
+            self.log.error(error_msg)
+            self.error_list.append(error_msg)
         else:
             self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
-            if exc:
-                # propagate exception to the wrapper - to have the same handling as via-class call
-                raise
 
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
-        repair_cmd = 'nodetool -h localhost repair'
-        self._run_nodetool(repair_cmd, node)
+        node.run_nodetool("repair")
 
     def repair_nodetool_rebuild(self):
-        rebuild_cmd = 'nodetool -h localhost rebuild'
-        self._run_nodetool(rebuild_cmd, self.target_node)
+        self.target_node.run_nodetool('rebuild')
 
     def disrupt_nodetool_cleanup(self):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -589,8 +555,7 @@ class Nemesis(object):
         for node in self.cluster.nodes:
             self._set_current_disruption('NodetoolCleanupMonkey %s' % node, node=node)
             for keyspace in test_keyspaces:
-                cmd = 'nodetool -h localhost cleanup {}'.format(keyspace)
-                self._run_nodetool(cmd, node)
+                node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
     def disrupt_truncate(self):
         self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
@@ -614,7 +579,7 @@ class Nemesis(object):
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
             stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
             # create with stress tool
-            cql_auth = self.cluster.get_cql_auth()
+            cql_auth = self.cluster.get_db_auth()
             if cql_auth and 'user=' not in stress_cmd:
                 # put the credentials into the right place into -mode section
                 stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
@@ -622,17 +587,7 @@ class Nemesis(object):
             self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
 
         # do the actual truncation
-        cql = 'TRUNCATE {}.{}'.format(keyspace_truncate, table)
-        self._run_in_cqlsh(cql)
-
-    def _run_in_cqlsh(self, cmd, node=None):
-        if not node:
-            node = self.target_node
-
-        cql_auth = self.cluster.get_cql_auth()
-        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
-
-        node.remoter.run('cqlsh {} -e "{}" {}'.format(cql_auth, cmd, node.private_ip_address), verbose=True)
+        self.target_node.run_cqlsh('TRUNCATE {}.{}'.format(keyspace_truncate, table))
 
     def _modify_table_property(self, name, val):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
@@ -646,7 +601,7 @@ class Nemesis(object):
             return
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
-        self._run_in_cqlsh(cmd)
+        self.target_node.run_cqlsh(cmd)
 
     def modify_table_comment(self):
         # default: comment = ''
@@ -891,19 +846,19 @@ class Nemesis(object):
 
     def disrupt_snapshot_operations(self):
         self._set_current_disruption('SnapshotOperations')
-        result = self._run_nodetool('nodetool snapshot', self.target_node)
+        result = self.target_node.run_nodetool('snapshot')
         self.log.debug(result)
         if result.stderr:
             self.tester.fail(result.stderr)
         snapshot_name = re.findall('(\d+)', result.stdout, re.MULTILINE)[0]
-        result = self._run_nodetool('nodetool listsnapshots', self.target_node)
+        result = self.target_node.run_nodetool('listsnapshots')
         self.log.debug(result)
         if snapshot_name in result.stdout and not result.stderr:
             self.log.info('Snapshot %s created' % snapshot_name)
         else:
             self.tester.fail('Snapshot %s creating failed %s' % (snapshot_name, result.stderr))
 
-        result = self._run_nodetool('nodetool clearsnapshot', self.target_node)
+        result = self.target_node.run_nodetool('clearsnapshot')
         self.log.debug(result)
         if result.stderr:
             self.tester.fail(result.stderr)
@@ -939,12 +894,12 @@ def log_time_elapsed_and_status(method):
             try:
                 if node == self.target_node:
                     self.log.info('Status for target %s: %s', node,
-                                  self._run_nodetool('nodetool status', node))
+                                  node.run_nodetool('status'))
                 else:
                     self.log.info('Status for regular %s: %s', node,
-                                  self._run_nodetool('nodetool status', node))
-            except:
-                self.log.info('unable to get nodetool status from: %s' % node)
+                                  node.run_nodetool('status'))
+            except Exception as ex:
+                self.log.info("Unable to get nodetool status from '{node}': {ex}".format(**locals()))
 
     def wrapper(*args, **kwargs):
         print_nodetool_status(args[0])
@@ -1248,7 +1203,7 @@ class UpgradeNemesis(Nemesis):
     #         node.remoter.run('sudo yum install python34-PyYAML -y')
     #         # replace the packages
     #         node.remoter.run('rpm -qa scylla\*')
-    #         node.remoter.run('sudo nodetool snapshot')
+    #         node.run_nodetool("snapshot")
     #         # update *development* packages
     #         node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
     #         # and all the rest
@@ -1261,7 +1216,7 @@ class UpgradeNemesis(Nemesis):
     #         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
     #         # backup the data
     #         node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
-    #         node.remoter.run('sudo nodetool snapshot')
+    #         node.run_nodetool("snapshot")
     #         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
     #         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
     #         node.remoter.run('sudo yum clean all')
@@ -1269,7 +1224,7 @@ class UpgradeNemesis(Nemesis):
     #         node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
     #                          ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
     #     # flush all memtables to SSTables
-    #     node.remoter.run('sudo nodetool drain')
+    #     node.run_nodetool("drain")
     #     node.remoter.run('sudo systemctl restart scylla-server.service')
     #     node.wait_db_up(verbose=True)
     #     new_ver = node.remoter.run('rpm -qa scylla-server')
@@ -1313,13 +1268,13 @@ class RollbackNemesis(Nemesis):
         orig_ver = node.remoter.run('rpm -qa scylla-server')
         node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
         # backup the data
-        node.remoter.run('nodetool snapshot')
+        node.run_nodetool("snapshot")
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo yum clean all')
         node.remoter.run('sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
-        node.remoter.run('nodetool drain')
+        node.run_nodetool("drain")
         node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)

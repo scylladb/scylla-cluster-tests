@@ -282,7 +282,7 @@ class AWSCluster(cluster.BaseCluster):
     def _create_node(self, instance, ami_username, node_prefix, node_index,
                      base_logdir, dc_idx):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
-                       credentials=self._credentials[dc_idx], ami_username=ami_username,
+                       credentials=self._credentials[dc_idx], parent_cluster=self, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
                        base_logdir=base_logdir, dc_idx=dc_idx, node_type=self.node_type)
 
@@ -293,7 +293,7 @@ class AWSNode(cluster.BaseNode):
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, ec2_instance, ec2_service, credentials,
+    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, ami_username='root',
                  base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s' % (node_prefix, node_index)
@@ -307,6 +307,7 @@ class AWSNode(cluster.BaseNode):
                           'key_file': credentials.key_file}
         self._spot_aws_termination_task = None
         super(AWSNode, self).__init__(name=name,
+                                      parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
@@ -611,7 +612,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             if node.is_rhel_like():
                 node.remoter.run('sudo yum install -y scylla-debuginfo', ignore_status=True)
             elif node.is_debian() or node.is_ubuntu():
-                self.remoter.run(
+                node.remoter.run(
                     'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated scylla-debuginfo')
             if cluster.Setup.MULTI_REGION:
                 if not endpoint_snitch:
@@ -623,7 +624,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.remoter.run('nodetool status', verbose=True, retry=5)
+        node.run_nodetool('status')
 
     def destroy(self):
         self.stop_nemesis()

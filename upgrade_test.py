@@ -52,8 +52,8 @@ class UpgradeTest(FillDatabaseData):
             # replace the packages
             node.remoter.run('rpm -qa scylla\*')
             # flush all memtables to SSTables
-            node.remoter.run('sudo nodetool drain')
-            node.remoter.run('sudo nodetool snapshot')
+            node.run_nodetool("drain")
+            node.run_nodetool("snapshot")
             node.stop_scylla_server()
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
@@ -72,8 +72,8 @@ class UpgradeTest(FillDatabaseData):
             assert new_scylla_repo.startswith('http')
             node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
-            node.remoter.run('sudo nodetool drain')
-            node.remoter.run('sudo nodetool snapshot')
+            node.run_nodetool("drain")
+            node.run_nodetool("snapshot")
             node.stop_scylla_server(verify_down=False)
 
             orig_is_enterprise = node.is_enterprise
@@ -126,9 +126,9 @@ class UpgradeTest(FillDatabaseData):
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         # flush all memtables to SSTables
-        node.remoter.run('nodetool drain')
+        node.run_nodetool("drain")
         # backup the data
-        node.remoter.run('nodetool snapshot')
+        node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
 
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
@@ -197,7 +197,7 @@ class UpgradeTest(FillDatabaseData):
             'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
         if "yes" in upgradesstables_supported.stdout:
             self.log.debug("calling upgradesstables")
-            node.remoter.run('nodetool upgradesstables -a')
+            node.run_nodetool(sub_cmd="upgradesstables", args="-a")
 
     default_params = {'timeout': 650000}
 
@@ -296,7 +296,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+        self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the prepare write workload to finish
         self.verify_stress_thread(prepare_write_cs_thread_pool)
@@ -321,7 +321,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+        self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the 10m read workload to finish
         self.verify_stress_thread(read_10m_cs_thread_pool)
@@ -335,14 +335,14 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
         self.rollback_node(self.db_cluster.nodes[indexes[1]])
         self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
-        self.db_cluster.nodes[indexes[1]].remoter.run("nodetool status")
+        self.db_cluster.nodes[indexes[1]].run_nodetool("status")
 
         for i in indexes[1:]:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
             self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+            self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the 20m read workload to finish
         self.verify_stress_thread(read_20m_cs_thread_pool)

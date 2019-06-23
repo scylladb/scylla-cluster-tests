@@ -678,8 +678,8 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
 
     def rollback_upgrade(self, scylla_mgmt_repo):
         manager_from_version = self.version[0]
+        self.manager_node.run_cqlsh("DROP KEYSPACE scylla_manager")
         remove_post_upgrade_repo = dedent("""
-                        cqlsh -e 'DROP KEYSPACE scylla_manager'
                         sudo systemctl stop scylla-manager
                         sudo systemctl stop scylla-server.service
                         sudo apt-get remove scylla-manager -y

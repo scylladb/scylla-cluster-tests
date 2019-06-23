@@ -43,7 +43,8 @@ class TestBaseNode(unittest.TestCase):
         cls.temp_dir = tempfile.mkdtemp()
         start_events_device(cls.temp_dir, timeout=5)
 
-        cls.node = DummyNode(name='test_node', base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node = DummyNode(name='test_node', parent_cluster=None,
+                             base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
         cls.node.remoter = DummyRemote()
 
         cls.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database.log')

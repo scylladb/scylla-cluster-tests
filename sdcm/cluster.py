@@ -277,12 +277,13 @@ class UserRemoteCredentials(object):
 
 
 class BaseNode(object):
+    CQL_PORT = 9042
 
-    def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         self.name = name
         self.is_seed = False
         self.dc_idx = dc_idx
-
+        self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
         self.logdir = os.path.join(base_logdir, self.name)
         os.makedirs(self.logdir)
 
@@ -595,10 +596,6 @@ class BaseNode(object):
                                 args=args, log_file=log_file,
                                 watch_stdout_pattern=watch_stdout_pattern)
 
-    def run_nodetool(self, subcmd="status"):
-        result = self.remoter.run(cmd="nodetool %s" % subcmd, timeout=60, verbose=True)
-        return result.stdout
-
     def send_files(self, src, dst, delete_dst=False,
                    preserve_symlinks=False, verbose=False):
         """
@@ -910,7 +907,7 @@ class BaseNode(object):
             return False
 
     def db_up(self):
-        return self.is_port_used(port=9042, service_name="scylla-server")
+        return self.is_port_used(port=self.CQL_PORT, service_name="scylla-server")
 
     def jmx_up(self):
         return self.is_port_used(port=7199, service_name="scylla-jmx")
@@ -961,8 +958,8 @@ class BaseNode(object):
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
-            self.remoter.run('nodetool flush', ignore_status=True)
-            res = self.remoter.run('nodetool cfstats {}'.format(keyspace), ignore_status=True)
+            self.run_nodetool("flush", ignore_status=True)
+            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
         if tcpdump:
@@ -973,7 +970,7 @@ class BaseNode(object):
             tcpdump_thread.start()
         wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
-            result = self.remoter.run('nodetool cfstats {}'.format(keyspace))
+            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace)
         except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
@@ -1825,10 +1822,55 @@ server_encryption_options:
             logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
                          format(murmur3_partitioner_ignore_msb_bits))
 
-    def get_cql_auth(self):
-        user = self.params.get('authenticator_user', default=None)
-        password = self.params.get('authenticator_password', default=None)
-        return (user, password) if user and password else None
+    def _gen_nodetool_cmd(self, sub_cmd, args, options):
+        credentials = self.parent_cluster.get_db_auth()
+        if credentials:
+            options += '-u {} -pw {} '.format(*credentials)
+        return "nodetool {options} {sub_cmd} {args}".format(**locals())
+
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False):
+        """
+            Wrapper for nodetool command.
+            Command format: nodetool [options] command [args]
+
+        :param sub_cmd: subcommand like status
+        :param args: arguments for the subcommand
+        :param options: nodetool options:
+            -h	--host	Hostname or IP address.
+            -p	--port	Port number.
+            -pwf	--password-file	Password file path.
+            -pw	--password	Password.
+            -u	--username	Username.
+        :param ignore_status: don't throw exception if the command fails
+        :return: Remoter result object
+        """
+        cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
+        result = self.remoter.run(cmd, ignore_status=ignore_status)
+        self.log.debug("Command '%s' duration -> %s s", result.command,
+                       result.duration)
+        return result
+
+    def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port):
+        """cqlsh [options] [host [port]]"""
+        credentials = self.parent_cluster.get_db_auth()
+        auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
+        use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
+        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout}".format(**locals())
+        return 'cqlsh {options} -e "{command}" {host} {port}'.format(**locals())
+
+    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False):
+        """Runs CQL command using cqlsh utility"""
+        cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout, host=self.ip_address,
+                                  port=port if port else self.CQL_PORT)
+        cqlsh_out = self.remoter.run(cmd, timeout=timeout + 1, verbose=verbose)
+        # stdout of cqlsh example:
+        #      pk
+        #      ----
+        #       2
+        #       3
+        #
+        #      (10 rows)
+        return cqlsh_out.stdout if not split else [line.strip() for line in cqlsh_out.stdout.split('\n')]
 
 
 class BaseCluster(object):
@@ -1976,7 +2018,7 @@ class BaseCluster(object):
         self.nodes.remove(node)
         node.destroy()
 
-    def get_cql_auth(self):
+    def get_db_auth(self):
         user = self.params.get('authenticator_user', default=None)
         password = self.params.get('authenticator_password', default=None)
         return (user, password) if user and password else None
@@ -2255,7 +2297,7 @@ class BaseScyllaCluster(object):
             use self.get_nodetool_status instead
         """
         assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status')
+        cmd_result = verification_node.run_nodetool('status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
             line = line.strip()
@@ -2363,22 +2405,8 @@ class BaseScyllaCluster(object):
                     else:
                         self.log.error("Unknown ScyllaDB version")
 
-    def run_cqlsh(self, node, cql_cmd, timeout=60, verbose=True, split=False):
-        cql_auth = self.get_cql_auth()
-        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
-        cmd = 'cqlsh --no-color {} -e "{}" {} --request-timeout={}'.format(cql_auth, cql_cmd, node.private_ip_address, timeout)
-        cqlsh_out = node.remoter.run(cmd, timeout=timeout, verbose=verbose)
-        # stdout of cqlsh example:
-        #      pk
-        #      ----
-        #       2
-        #       3
-        #
-        #      (10 rows)
-        return cqlsh_out.stdout if not split else [line.strip() for line in cqlsh_out.stdout.split('\n')]
-
     def get_test_keyspaces(self):
-        out = self.run_cqlsh(node=self.nodes[0], cql_cmd='select keyspace_name from system_schema.keyspaces')
+        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces')
         return [ks.strip() for ks in out.split('\n')[3:-3] if 'system' not in ks]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):

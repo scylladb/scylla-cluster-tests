@@ -53,7 +53,7 @@ class OpenStackNode(cluster.BaseNode):
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, openstack_instance, openstack_service, credentials,
+    def __init__(self, openstack_instance, openstack_service, parent_cluster, credentials,
                  node_prefix='node', node_index=1, openstack_image_username='root',
                  base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
@@ -66,6 +66,7 @@ class OpenStackNode(cluster.BaseNode):
                           'wait_key_installed': 30,
                           'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
+                                            parent_cluster=parent_cluster,
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir,
                                             node_prefix=node_prefix)
@@ -178,7 +179,7 @@ class OpenStackCluster(cluster.BaseCluster):
                                                            ex_keyname=self._credentials.name)
             cluster.OPENSTACK_INSTANCES.append(instance)
             nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
-                                       credentials=self._credentials,
+                                       credentials=self._credentials, parent_cluster=self,
                                        openstack_image_username=self._openstack_image_username,
                                        node_prefix=self.node_prefix, node_index=node_index,
                                        base_logdir=self.logdir))

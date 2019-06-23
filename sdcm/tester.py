@@ -243,7 +243,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             with self.cql_connection_patient(node) as session:
                 session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
-            node.remoter.run('nodetool repair -- system_auth')
+            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
@@ -918,7 +918,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                         port=None, ssl_opts=None):
         node_ips = [node.public_ip_address]
         if not port:
-            port = 9042
+            port = node.CQL_PORT
 
         if protocol_version is None:
             protocol_version = 3
@@ -1066,10 +1066,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
-    def create_cf(self, session, name, key_type="varchar",
-                  speculative_retry=None, read_repair=None, compression=None,
-                  gc_grace=None, columns=None,
-                  compact_storage=False, in_memory=False, scylla_encryption_options=None):
+    def create_table(self, name, key_type="varchar",
+                     speculative_retry=None, read_repair=None, compression=None,
+                     gc_grace=None, columns=None,
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None):
 
         additional_columns = ""
         if columns is not None:
@@ -1106,8 +1106,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-
-        session.execute(query)
+        with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            session.execute(query)
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name, table_name, session):
@@ -1205,11 +1205,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
             return {}
 
-        # Get distinct partition keys
-        out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                                        cql_cmd='select distinct {pk} from {table}'.format(pk=primary_key_column,
-                                                                                           table=table_name),
-                                        timeout=600, split=True)
+        get_distinct_partition_keys_cmd = 'select distinct {pk} from {table}'.format(pk=primary_key_column,
+                                                                                     table=table_name)
+        out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True)
         pk_list = sorted([int(pk) for pk in out[3:-3]])
 
         # Collect data about partitions' rows amount.
@@ -1218,10 +1216,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with open(self.partitions_stats_file, 'a') as f:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
-                out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                                                cql_cmd='select count(*) from {table} where {pk} = {i}'.format(table=table_name,
-                                                                                                               pk=primary_key_column, i=i),
-                                                timeout=600, split=True)
+                count_partition_keys_cmd = 'select count(*) from {table_name} where {pk} = {i}'.format(**locals())
+                out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
                 f.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
@@ -1413,7 +1409,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
         cql_cmd = "ALTER table {key_space_name}.{table_name} " \
                   "WITH in_memory=true AND compaction={compaction_strategy}".format(**locals())
-        node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), verbose=True)
+        node.run_cqlsh(cql_cmd)
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),
