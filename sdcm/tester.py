@@ -221,8 +221,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         logging.getLogger('invoke').setLevel(logging.CRITICAL)
-        if self.create_stats:
-            self.create_test_stats()
         self.init_resources()
         if self.params.get('seeds_first', default='false') == 'true':
             seeds_num = self.params.get('seeds_num', default=1)
@@ -232,6 +230,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.db_cluster.wait_for_init()
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
+
+        if self.create_stats:
+            self.create_test_stats()
 
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf', default=3)
