@@ -837,8 +837,14 @@ class Nemesis(object):
         thread1.start()
 
         def repair_streaming_exists():
-            result = self.target_node.remoter.run('curl -X GET --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/stream_manager/"')
-            return 'repair-' in result.stdout
+            active_repair_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
+                                '"Accept: application/json" "http://127.0.0.1:10000/storage_service/active_repair/"'
+            result = self.target_node.remoter.run(active_repair_cmd)
+            active_repairs = re.match(".*\[(\d)\].*", result.stdout)
+            if active_repairs:
+                self.log.debug("Found '%s' active repairs", active_repairs.group(1))
+                return True
+            return False
 
         wait_wrap.wait_for(func=repair_streaming_exists,
                            timeout=300,
