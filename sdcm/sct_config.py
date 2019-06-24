@@ -201,6 +201,10 @@ class SCTConfiguration(dict):
             using ngrok server, see readme for more instructions
          """),
 
+        dict(name="backtrace_decoding", env="SCT_BACKTRACE_DECODING", type=boolean,
+             help="""If True, all backtraces found in db nodes would be decoded automatically"""),
+
+
         dict(name="reuse_cluster", env="SCT_REUSE_CLUSTER", type=str,
              help="""
             If true `test_id` would be used to run a test with existing cluster.
