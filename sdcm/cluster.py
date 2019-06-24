@@ -164,6 +164,7 @@ class Setup(object):
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
     MULTI_REGION = False
+    BACKTRACE_DECODING = False
 
     _test_id = None
     _test_name = None
@@ -1143,13 +1144,14 @@ class BaseNode(object):
             backtraces = filter(filter_backtraces, backtraces)
 
             for backtrace in backtraces:
-                if backtrace['event'].raw_backtrace:
-                    try:
-                        scylla_debug_info = self.get_scylla_debuginfo_file()
-                        output = self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
-                        backtrace['event'].add_backtrace_info(backtrace=output.stdout)
-                    except Exception:
-                        self.log.exception("failed to decode backtrace")
+                if Setup.BACKTRACE_DECODING:
+                    if backtrace['event'].raw_backtrace:
+                        try:
+                            scylla_debug_info = self.get_scylla_debuginfo_file()
+                            output = self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
+                            backtrace['event'].add_backtrace_info(backtrace=output.stdout)
+                        except Exception:
+                            self.log.exception("failed to decode backtrace")
                 backtrace['event'].publish()
 
         return matches

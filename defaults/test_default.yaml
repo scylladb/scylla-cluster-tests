@@ -30,3 +30,5 @@ spot_max_price: 0.60
 failure_post_behavior: destroy
 
 cloud_credentials_path: '~/.ssh/support'
+
+backtrace_decoding: false
