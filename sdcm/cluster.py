@@ -252,6 +252,10 @@ class NodeError(Exception):
             return self.msg
 
 
+class PrometheusSnapshotErrorException(Exception):
+    pass
+
+
 def prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
@@ -3614,18 +3618,24 @@ class BaseMonitorSet(object):
 
         return storing_dir
 
-    def get_prometheus_snapshot(self, node):
-        # avoid cyclic-decencies between cluster and db_stats
-
+    @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, ), message='Create prometheus snapshot')
+    def create_prometheus_snapshot(self, node):
         ps = PrometheusDBStats(host=node.public_ip_address)
         result = ps.create_snapshot()
-        self.log.debug(result)
         if "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
                                         "snapshots",
                                         result['data']['name'])
+            return snapshot_dir
         else:
-            return ""
+            raise PrometheusSnapshotErrorException(result)
+
+    def get_prometheus_snapshot(self, node):
+        try:
+            snapshot_dir = self.create_prometheus_snapshot(node)
+        except PrometheusSnapshotErrorException as details:
+            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(details))
+            snapshot_dir = self.monitoring_data_dir
 
         archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)
         result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
