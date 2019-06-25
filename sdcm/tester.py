@@ -109,22 +109,6 @@ class FlakyRetryPolicy(RetryPolicy):
             return self.RETHROW, None
 
 
-def retry_till_success(fun, *args, **kwargs):
-    timeout = kwargs.pop('timeout', 60)
-    bypassed_exception = kwargs.pop('bypassed_exception', Exception)
-
-    deadline = time.time() + timeout
-    while True:
-        try:
-            return fun(*args, **kwargs)
-        except bypassed_exception:
-            if time.time() > deadline:
-                raise
-            else:
-                # brief pause before next attempt
-                time.sleep(0.25)
-
-
 def teardown_on_exception(method):
     """
     Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
@@ -215,6 +199,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return duration * 60 + 600
 
     @teardown_on_exception
+    @log_run_info
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
@@ -223,8 +208,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.monitors = None
         self.connections = []
 
-        if self.create_stats:
-            self.create_test_stats()
         self.init_resources()
         if self.params.get('seeds_first', default='false') == 'true':
             seeds_num = self.params.get('seeds_num', default=1)
@@ -235,6 +218,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
 
+        if self.create_stats:
+            self.create_test_stats()
+
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf', default=3)
         if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
@@ -243,7 +229,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             with self.cql_connection_patient(node) as session:
                 session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
-            node.remoter.run('nodetool repair -- system_auth')
+            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
@@ -918,7 +904,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                         port=None, ssl_opts=None):
         node_ips = [node.public_ip_address]
         if not port:
-            port = 9042
+            port = node.CQL_PORT
 
         if protocol_version is None:
             protocol_version = 3
@@ -974,8 +960,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-                               user=None, password=None, timeout=30,
+                               user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_opts=None):
         """
@@ -983,18 +970,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection(**kwargs)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,
                                          user=None, password=None, timeout=30,
                                          compression=True,
@@ -1005,17 +985,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection_exclusive,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection_exclusive(**kwargs)
 
     def is_keyspace_in_cluster(self, session, keyspace_name):
         query_result = session.execute("SELECT * FROM system_schema.keyspaces;")
@@ -1066,10 +1038,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
-    def create_cf(self, session, name, key_type="varchar",
-                  speculative_retry=None, read_repair=None, compression=None,
-                  gc_grace=None, columns=None,
-                  compact_storage=False, in_memory=False, scylla_encryption_options=None):
+    def create_table(self, name, key_type="varchar",
+                     speculative_retry=None, read_repair=None, compression=None,
+                     gc_grace=None, columns=None,
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None):
 
         additional_columns = ""
         if columns is not None:
@@ -1106,8 +1078,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-
-        session.execute(query)
+        with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            session.execute(query)
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name, table_name, session):
@@ -1205,11 +1177,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
             return {}
 
-        # Get distinct partition keys
-        out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                                        cql_cmd='select distinct {pk} from {table}'.format(pk=primary_key_column,
-                                                                                           table=table_name),
-                                        timeout=600, split=True)
+        get_distinct_partition_keys_cmd = 'select distinct {pk} from {table}'.format(pk=primary_key_column,
+                                                                                     table=table_name)
+        out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True)
         pk_list = sorted([int(pk) for pk in out[3:-3]])
 
         # Collect data about partitions' rows amount.
@@ -1218,10 +1188,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with open(self.partitions_stats_file, 'a') as f:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
-                out = self.db_cluster.run_cqlsh(node=self.db_cluster.nodes[0],
-                                                cql_cmd='select count(*) from {table} where {pk} = {i}'.format(table=table_name,
-                                                                                                               pk=primary_key_column, i=i),
-                                                timeout=600, split=True)
+                count_partition_keys_cmd = 'select count(*) from {table_name} where {pk} = {i}'.format(**locals())
+                out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
                 f.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
@@ -1413,7 +1381,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
         cql_cmd = "ALTER table {key_space_name}.{table_name} " \
                   "WITH in_memory=true AND compaction={compaction_strategy}".format(**locals())
-        node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), verbose=True)
+        node.run_cqlsh(cql_cmd)
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),

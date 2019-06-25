@@ -57,7 +57,7 @@ class SstableCorruptTest(ClusterTester):
         self._run_stress('write', population_size)
 
         logger.debug('Flush sstables')
-        self.db_cluster.nodes[0].run('nodetool flush')
+        self.db_cluster.nodes[0].run_nodetool('flush')
 
         self.corrupt_sstables()
         self._run_stress('read', population_size)

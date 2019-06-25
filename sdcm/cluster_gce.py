@@ -16,7 +16,7 @@ class GCENode(cluster.BaseNode):
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, gce_instance, gce_service, credentials,
+    def __init__(self, gce_instance, gce_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
@@ -28,6 +28,7 @@ class GCENode(cluster.BaseNode):
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
+                                      parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
@@ -285,6 +286,7 @@ class GCECluster(cluster.BaseCluster):
             return GCENode(gce_instance=instance,
                            gce_service=self._gce_services[dc_idx],
                            credentials=self._credentials[0],
+                           parent_cluster=self,
                            gce_image_username=self._gce_image_username,
                            node_prefix=self.node_prefix,
                            node_index=node_index,

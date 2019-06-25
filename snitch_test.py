@@ -25,7 +25,7 @@ class SnitchTest(ClusterTester):
         """
         Verify the snitch setup, and check if system.peers is empty.
         """
-        result = self.db_cluster.nodes[0].remoter.run('nodetool describecluster')
+        result = self.db_cluster.nodes[0].run_nodetool("describecluster")
         assert 'GoogleCloudSnitch' in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 
         with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
@@ -35,7 +35,7 @@ class SnitchTest(ClusterTester):
 
         self.log.info("PASS: system.peers isn't empty as expected")
 
-        result = self.db_cluster.nodes[0].remoter.run('nodetool status', verbose=True)
+        result = self.db_cluster.nodes[0].run_nodetool("status")
         assert 'Datacenter: us-east1scylla_node_east' in result.stdout
         assert 'Datacenter: us-west1scylla_node_west' in result.stdout
 
