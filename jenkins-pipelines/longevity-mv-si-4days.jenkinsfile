@@ -9,7 +9,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.py:LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-multi-keyspaces.yaml',
+    test_config: 'test-cases/longevity/longevity-mv-si-4days.yaml',
 
     timeout: [time: 6610, unit: 'MINUTES'],
     post_behaviour: 'keep'
