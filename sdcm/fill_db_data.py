@@ -20,7 +20,6 @@ import random
 from collections import OrderedDict
 from uuid import UUID
 
-from avocado import main
 from cassandra import InvalidRequest
 from cassandra.util import sortedset
 from cassandra import ConsistencyLevel
@@ -2941,7 +2940,3 @@ class FillDatabaseData(ClusterTester):
 
             session.execute("DROP KEYSPACE keyspace1;")
             session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
-
-
-if __name__ == '__main__':
-    main()
