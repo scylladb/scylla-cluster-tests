@@ -16,9 +16,7 @@
 import random
 import time
 import json
-
-from avocado import main
-from avocado.utils import process
+import subprocess
 
 from sdcm.tester import ClusterTester
 from sdcm.utils import remote_get_file
@@ -81,9 +79,9 @@ class RefreshTest(ClusterTester):
         assert self.monitors.nodes, 'Monitor node should be set, we will try to get metrics from Prometheus server'
         cmd = 'curl http://%s:9090/api/v1/query_range?query=scylla_storage_proxy_coordinator_read_timeouts&start=%s&end=%s&step=60s' % (self.monitors.nodes[0].public_ip_address, self.start, self.end)
         self.log.debug('Get read timeout per minute by Prometheus API, cmd: %s', cmd)
-        result = process.run(cmd)
+        result = subprocess.check_output(cmd.split(), shell=True)
 
-        orig_data = json.loads(result.stdout)
+        orig_data = json.loads(result)
         read_timeout_msg = 'Read timeout of whole datacenter per minute should be less than 5000'
         self.log.debug('Check if we have significant read timeout, %s', read_timeout_msg)
 
@@ -142,7 +140,3 @@ class RefreshTest(ClusterTester):
         self.end = self.get_current_timestamp()
 
         self.check_timeout()
-
-
-if __name__ == '__main__':
-    main()
