@@ -15,15 +15,19 @@ pipeline {
             script {
                 try {
                     sh './docker/env/hydra.sh bash -c "cd /sct; pre-commit run -a"'
-                    pullRequest.createStatus(status: 'success',
-                                     context: 'jenkins/precommit',
-                                     description: 'Precommit passed',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'success',
+                                         context: 'jenkins/precommit',
+                                         description: 'Precommit passed',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                 } catch(Exception ex) {
-                    pullRequest.createStatus(status: 'failure',
-                                     context: 'jenkins/precommit',
-                                     description: 'Precommit failed',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'failure',
+                                         context: 'jenkins/precommit',
+                                         description: 'Precommit failed',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                     currentBuild.result = 'UNSTABLE'
                 }
             }
@@ -34,15 +38,19 @@ pipeline {
             script {
                 try {
                     sh './docker/env/hydra.sh unit-tests'
-                    pullRequest.createStatus(status: 'success',
-                                     context: 'jenkins/unittests',
-                                     description: 'All unit tests passed',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'success',
+                                         context: 'jenkins/unittests',
+                                         description: 'All unit tests passed',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                 } catch(Exception ex) {
-                    pullRequest.createStatus(status: 'failure',
-                                 context: 'jenkins/unittests',
-                                 description: 'unit tests failed',
-                                 targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'failure',
+                                     context: 'jenkins/unittests',
+                                     description: 'unit tests failed',
+                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                     currentBuild.result = 'UNSTABLE'
                 }
             }
@@ -53,15 +61,19 @@ pipeline {
             script {
                 try {
                     sh './docker/env/hydra.sh python sdcm/microbenchmarking.py --help'
-                    pullRequest.createStatus(status: 'success',
-                                     context: 'jenkins/microbenchmarking',
-                                     description: 'microbenchmarking.py is runnable',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'success',
+                                         context: 'jenkins/microbenchmarking',
+                                         description: 'microbenchmarking.py is runnable',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                 } catch(Exception ex) {
-                    pullRequest.createStatus(status: 'failure',
-                                     context: 'jenkins/microbenchmarking',
-                                     description: 'microbenchmarking.py failed to run',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'failure',
+                                         context: 'jenkins/microbenchmarking',
+                                         description: 'microbenchmarking.py failed to run',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                     currentBuild.result = 'UNSTABLE'
                 }
             }
@@ -92,16 +104,33 @@ pipeline {
                     done
 
                     '''
-                    pullRequest.createStatus(status: 'success',
-                                     context: 'jenkins/lint_test_cases',
-                                     description: 'all test cases are checked',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'success',
+                                         context: 'jenkins/lint_test_cases',
+                                         description: 'all test cases are checked',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                 } catch(Exception ex) {
-                    pullRequest.createStatus(status: 'failure',
-                                     context: 'jenkins/lint_test_cases',
-                                     description: 'some test cases failed to check',
-                                     targetUrl: "${env.JOB_URL}/workflow-stage")
+                    if (env.CHANGE_ID) {
+                        pullRequest.createStatus(status: 'failure',
+                                         context: 'jenkins/lint_test_cases',
+                                         description: 'some test cases failed to check',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                    }
                     currentBuild.result = 'UNSTABLE'
+                }
+            }
+        }
+    }
+    stage("provision test") {
+        when { changeRequest() }
+        steps {
+            script {
+                sh "env"
+                echo "Current Pull Request ID: ${env.CHANGE_ID}"
+                pullRequest.labels.each {
+                    echo "${it}"
                 }
             }
         }
