@@ -308,7 +308,6 @@ class BaseNode(object):
         self._backtrace_thread = None
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
-        self._sct_log_formatter_installed = False
         self._init_system = None
 
         self.database_log = os.path.join(self.logdir, 'database.log')
@@ -560,8 +559,7 @@ class BaseNode(object):
                                        '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
-                                       '-u scylla-jmx.service '
-                                       '-o json | /var/tmp/sct_log_formatter')
+                                       '-u scylla-jmx.service')
             elif self.file_exists('/usr/bin/scylla'):
                 db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
             else:
@@ -576,14 +574,6 @@ class BaseNode(object):
         except Exception as details:
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
-
-    def install_sct_log_formatter(self):
-        result = self.remoter.run('test -e /var/tmp/sct_log_formatter', verbose=False, ignore_status=True)
-        if result.exit_status != 0:
-            sct_log_formatter = get_data_dir_path('sct_log_formatter')
-            self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
-            self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
-            self._sct_log_formatter_installed = True
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
@@ -828,9 +818,7 @@ class BaseNode(object):
         if self._db_log_reader_thread:
             self._db_log_reader_thread.join(timeout)
         if self._journal_thread:
-            # current implementation of journal thread uses blocking journalctl cmd with pipe to sct_log_formatter
-            # hence to stop the thread we need to kill the process first
-            self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
+            self.remoter.run(cmd='sudo pkill -f "journalctl.*scylla"', ignore_status=True)
             self._journal_thread.join(timeout)
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
@@ -894,8 +882,6 @@ class BaseNode(object):
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-        if not self._sct_log_formatter_installed:
-            self.install_sct_log_formatter()
         if not self.distro:
             self.distro = self.probe_distro()
 
