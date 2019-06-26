@@ -594,7 +594,7 @@ class Nemesis(object):
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
         ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                                        db_node_ip=self.target_node.ip_address)
+                                                        db_node=self.target_node)
         keyspace_table = ks_cfs[0] if ks_cfs else ks_cfs
         if not keyspace_table:
             self.log.error('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')

@@ -3016,7 +3016,7 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
-    def get_non_system_ks_cf_list(self, loader_node, db_node_ip, request_timeout=300):
+    def get_non_system_ks_cf_list(self, loader_node, db_node, request_timeout=300):
         """Get all not system keyspace.tables pairs
 
         Arguments:
@@ -3025,7 +3025,7 @@ class BaseLoaderSet(object):
         """
 
         result = loader_node.run_cqlsh(cmd='SELECT keyspace_name, table_name from system_schema.tables',
-                                       timeout=request_timeout, verbose=False, target_db_node=db_node_ip)
+                                       timeout=request_timeout, verbose=False, target_db_node=db_node)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
@@ -3034,7 +3034,7 @@ class BaseLoaderSet(object):
             avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
         return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
 
-    def run_fullscan(self, ks_cf, loader_node, db_node_ip):
+    def run_fullscan(self, ks_cf, loader_node, db_node):
         """Run cql select count(*) request
 
         if ks_cf is not random, use value from config
@@ -3048,7 +3048,7 @@ class BaseLoaderSet(object):
             object -- object with result of remoter.run command
         """
 
-        ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node_ip)
+        ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node)
         if ks_cf not in ks_cf_list:
             self.log.warning('Keyspace of column family {} does not exists. Using random.'.format(ks_cf))
             ks_cf = 'random'
@@ -3056,15 +3056,15 @@ class BaseLoaderSet(object):
         if 'random' in ks_cf.lower():
             ks_cf = random.choice(ks_cf_list)
 
-        FullScanEvent(type='start', loader_node=loader_node, db_node_ip=db_node_ip, ks_cf=ks_cf)
+        FullScanEvent(type='start', loader_node=loader_node, db_node_ip=db_node.ip_address, ks_cf=ks_cf)
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
 
         result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
-                                       timeout=3600, verbose=False, target_db_node=db_node_ip)
+                                       timeout=3600, verbose=False, target_db_node=db_node)
 
         FullScanEvent(type='finish', loader_node=loader_node,
-                      db_node_ip=db_node_ip, ks_cf=ks_cf,
+                      db_node_ip=db_node.ip_address, ks_cf=ks_cf,
                       result={'exit_code': result.exited,
                               'stdout': result.stdout,
                               'stderr': result.stderr})
@@ -3098,7 +3098,7 @@ class BaseLoaderSet(object):
                     continue
                 self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
 
-                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address)
+                result = self.run_fullscan(ks_cf, loader_node, db_node)
                 self.log.debug(result)
                 self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
                 time.sleep(interval)
