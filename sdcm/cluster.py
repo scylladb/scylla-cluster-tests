@@ -2576,15 +2576,17 @@ class BaseScyllaCluster(object):
 
         files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
         for node in self.nodes:
+            storing_dir_for_node = os.path.join(storing_dir, node.name)
             src_dir = node.prepare_files_for_archive(files_to_archive)
             node.receive_files(src=src_dir, dst=storing_dir)
-            with open(os.path.join(storing_dir, node.name, 'installed_pkgs'), 'w') as pkg_list_file:
+            with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
                 pkg_list_file.write(node.get_installed_packages())
-            with open(os.path.join(storing_dir, node.name, 'console_output'), 'w') as co:
+            with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as co:
                 co.write(node.get_console_output())
-            with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
+            with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
                 imagedata = node.get_console_screenshot()
                 cscrn.write(decodestring(imagedata))
+            shutil.copy(node.database_log, storing_dir_for_node)
         return storing_dir
 
 
