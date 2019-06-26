@@ -1861,7 +1861,7 @@ server_encryption_options:
         #       3
         #
         #      (10 rows)
-        return cqlsh_out.stdout if not split else [line.strip() for line in cqlsh_out.stdout.split('\n')]
+        return cqlsh_out if not split else map(str.strip, cqlsh_out.stdout.splitlines())
 
 
 class BaseCluster(object):
@@ -2398,8 +2398,8 @@ class BaseScyllaCluster(object):
                         self.log.error("Unknown ScyllaDB version")
 
     def get_test_keyspaces(self):
-        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces')
-        return [ks.strip() for ks in out.split('\n')[3:-3] if 'system' not in ks]
+        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces', split=True)
+        return [ks.strip() for ks in out[3:-3] if 'system' not in ks]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
@@ -3022,10 +3022,9 @@ class BaseLoaderSet(object):
         """
 
         result = loader_node.run_cqlsh(cmd='SELECT keyspace_name, table_name from system_schema.tables',
-                                       timeout=request_timeout, verbose=False, target_db_node=db_node)
-
+                                       timeout=request_timeout, verbose=False, target_db_node=db_node, split=True)
         avaialable_ks_cf = []
-        for row in result.stdout.split('\n'):
+        for row in result:
             if '|' not in row:
                 continue
             avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
