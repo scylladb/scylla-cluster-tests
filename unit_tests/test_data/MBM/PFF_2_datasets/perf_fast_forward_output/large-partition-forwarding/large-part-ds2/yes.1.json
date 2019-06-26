@@ -1,0 +1,51 @@
+{
+	"results" :
+	{
+		"parameters" :
+		{
+			"pk-scan" : "yes",
+			"pk-scan,test_run_count" : "yes,1",
+			"test_run_count" : 1
+		},
+		"stats" :
+		{
+			"(KiB)" : 136,
+			"aio" : 4,
+			"avg aio" : 4.0303030303030303,
+			"blocked" : 3,
+			"c blk" : 1,
+			"c hit" : 0,
+			"c miss" : 1,
+			"cpu" : 62.194747924804688,
+			"dropped" : 1,
+			"frag/s" : 3303.2571767391237,
+			"frags" : 2,
+			"idx blk" : 1,
+			"idx hit" : 0,
+			"idx miss" : 1,
+			"iterations" : 99,
+			"mad f/s" : 317.85171543692741,
+			"max f/s" : 3772.958452181525,
+			"min f/s" : 198.30078044246653,
+			"time (s)" : 0.00060546299999999999
+		}
+	},
+	"test_group_properties" :
+	{
+		"dataset" : "large-part-ds1",
+		"message" : "Testing forwarding with clustering restriction in a large partition",
+		"name" : "large-partition-forwarding",
+		"needs_cache" : false,
+		"partition_type" : "large"
+	},
+	"versions" :
+	{
+		"scylla-server" :
+		{
+			"commit_id" : "7d14514b8",
+			"date" : "20190618",
+			"run_date_time" : "2019-06-21 15:00:26",
+			"version" : "3.1.0.rc2"
+		}
+	}
+}
