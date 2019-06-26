@@ -1,0 +1,571 @@
+(dp0
+S'small-partition-slicing_0-1.1'
+p1
+(dp2
+Vtest_group_properties
+p3
+(dp4
+Vpartition_type
+p5
+Vsmall
+p6
+sVmessage
+p7
+VTesting slicing small partitions
+p8
+sVneeds_cache
+p9
+I00
+sVname
+p10
+Vsmall-partition-slicing
+p11
+sVdataset
+p12
+Vsmall-part
+p13
+ssVversions
+p14
+(dp15
+Vscylla-server
+p16
+(dp17
+Vcommit_id
+p18
+V7d14514b8
+p19
+sVdate
+p20
+V20190618
+p21
+sVversion
+p22
+V3.1.0.rc2
+p23
+sVrun_date_time
+p24
+V2019-06-21 15:00:26
+p25
+sssS'test_args'
+p26
+S'0-1.1'
+p27
+sS'hostname'
+p28
+S'godzilla.cloudius-systems.com'
+p29
+sVresults
+p30
+(dp31
+Vstats
+p32
+(dp33
+Vc hit
+p34
+I0
+sVtime (s)
+p35
+F0.000325821
+sVc miss
+p36
+I1
+sVmax f/s
+p37
+F3549.7875452154185
+sVidx hit
+p38
+I0
+sVfrags
+p39
+I1
+sVmin f/s
+p40
+F76.64641872674356
+sVavg aio
+p41
+F3.193548387096774
+sVidx blk
+p42
+I1
+sVavg cpu
+p43
+F26.0
+sVaio
+p44
+I3
+sVidx miss
+p45
+I1
+sVdropped
+p46
+I1
+sViterations
+p47
+I31
+sVmad f/s
+p48
+F235.9159845086847
+sV(KiB)
+p49
+I68
+sVc blk
+p50
+I1
+sVfrag/s
+p51
+F3069.1698816221174
+sVcpu
+p52
+F26.797494888305664
+sVblocked
+p53
+I2
+ssVparameters
+p54
+(dp55
+Vread
+p56
+V1
+p57
+sVtest_run_count
+p58
+I1
+sVoffset,read,test_run_count
+p59
+V0,1,1
+p60
+sVoffset
+p61
+V0
+p62
+sssS'test_run_date'
+p63
+S'2019-06-27_11:39:40'
+p64
+sS'excluded'
+p65
+I00
+sS'dataset_name'
+p66
+S'small-part'
+p67
+ssS'large-partition-forwarding_no.1'
+p68
+(dp69
+Vtest_group_properties
+p70
+(dp71
+Vpartition_type
+p72
+Vlarge
+p73
+sVmessage
+p74
+VTesting forwarding with clustering restriction in a large partition
+p75
+sVneeds_cache
+p76
+I00
+sVname
+p77
+Vlarge-partition-forwarding
+p78
+sVdataset
+p79
+Vlarge-part-ds1
+p80
+ssVversions
+p81
+(dp82
+Vscylla-server
+p83
+(dp84
+Vcommit_id
+p85
+V7d14514b8
+p86
+sVdate
+p87
+V20190618
+p88
+sVversion
+p89
+V3.1.0.rc2
+p90
+sVrun_date_time
+p91
+V2019-06-21 15:00:26
+p92
+sssg26
+S'no.1'
+p93
+sg28
+g29
+sVresults
+p94
+(dp95
+Vstats
+p96
+(dp97
+Vc hit
+p98
+I0
+sVtime (s)
+p99
+F0.000555811
+sVc miss
+p100
+I0
+sVmax f/s
+p101
+F3886.974553921083
+sVidx hit
+p102
+I0
+sVfrags
+p103
+I2
+sVmin f/s
+p104
+F1238.7452254113718
+sVavg aio
+p105
+F4.006568144499179
+sVidx blk
+p106
+I1
+sVavg cpu
+p107
+F58.0
+sVaio
+p108
+I4
+sVidx miss
+p109
+I1
+sVdropped
+p110
+I1
+sViterations
+p111
+I609
+sVmad f/s
+p112
+F181.68687632902493
+sV(KiB)
+p113
+I136
+sVc blk
+p114
+I1
+sVfrag/s
+p115
+F3598.345480747952
+sVcpu
+p116
+F58.50718688964844
+sVblocked
+p117
+I3
+ssVparameters
+p118
+(dp119
+Vpk-scan
+p120
+Vno
+p121
+sVpk-scan,test_run_count
+p122
+Vno,1
+p123
+sVtest_run_count
+p124
+I1
+sssg63
+g64
+sg65
+I00
+sg66
+S'large-part-ds1'
+p125
+ssS'large-partition-forwarding_yes.1'
+p126
+(dp127
+Vtest_group_properties
+p128
+(dp129
+Vpartition_type
+p130
+Vlarge
+p131
+sVmessage
+p132
+VTesting forwarding with clustering restriction in a large partition
+p133
+sVneeds_cache
+p134
+I00
+sVname
+p135
+Vlarge-partition-forwarding
+p136
+sVdataset
+p137
+Vlarge-part-ds1
+p138
+ssVversions
+p139
+(dp140
+Vscylla-server
+p141
+(dp142
+Vcommit_id
+p143
+V7d14514b8
+p144
+sVdate
+p145
+V20190618
+p146
+sVversion
+p147
+V3.1.0.rc2
+p148
+sVrun_date_time
+p149
+V2019-06-21 15:00:26
+p150
+sssg26
+S'yes.1'
+p151
+sg28
+g29
+sVresults
+p152
+(dp153
+Vstats
+p154
+(dp155
+Vc hit
+p156
+I0
+sVtime (s)
+p157
+F0.000605463
+sVc miss
+p158
+I1
+sVmax f/s
+p159
+F3772.958452181525
+sVidx hit
+p160
+I0
+sVfrags
+p161
+I2
+sVmin f/s
+p162
+F198.30078044246653
+sVavg aio
+p163
+F4.03030303030303
+sVidx blk
+p164
+I1
+sVavg cpu
+p165
+F62.0
+sVaio
+p166
+I4
+sVidx miss
+p167
+I1
+sVdropped
+p168
+I1
+sViterations
+p169
+I99
+sVmad f/s
+p170
+F317.8517154369274
+sV(KiB)
+p171
+I136
+sVc blk
+p172
+I1
+sVfrag/s
+p173
+F3303.2571767391237
+sVcpu
+p174
+F62.19474792480469
+sVblocked
+p175
+I3
+ssVparameters
+p176
+(dp177
+Vpk-scan
+p178
+Vyes
+p179
+sVpk-scan,test_run_count
+p180
+Vyes,1
+p181
+sVtest_run_count
+p182
+I1
+sssg63
+g64
+sg65
+I00
+sg66
+g125
+ssS'small-partition-slicing_500000-4096.1'
+p183
+(dp184
+Vtest_group_properties
+p185
+(dp186
+Vpartition_type
+p187
+Vsmall
+p188
+sVmessage
+p189
+VTesting slicing small partitions
+p190
+sVneeds_cache
+p191
+I00
+sVname
+p192
+Vsmall-partition-slicing
+p193
+sVdataset
+p194
+Vsmall-part
+p195
+ssVversions
+p196
+(dp197
+Vscylla-server
+p198
+(dp199
+Vcommit_id
+p200
+V7d14514b8
+p201
+sVdate
+p202
+V20190618
+p203
+sVversion
+p204
+V3.1.0.rc2
+p205
+sVrun_date_time
+p206
+V2019-06-21 15:00:26
+p207
+sssg26
+S'500000-4096.1'
+p208
+sg28
+g29
+sVresults
+p209
+(dp210
+Vstats
+p211
+(dp212
+Vc hit
+p213
+I0
+sVtime (s)
+p214
+F0.016272068
+sVc miss
+p215
+I4096
+sVmax f/s
+p216
+F263995.1934312633
+sVidx hit
+p217
+I0
+sVfrags
+p218
+I4096
+sVmin f/s
+p219
+F213251.47586577444
+sVavg aio
+p220
+F14.690909090909091
+sVidx blk
+p221
+I2
+sVavg cpu
+p222
+F97.0
+sVaio
+p223
+I13
+sVidx miss
+p224
+I2
+sVdropped
+p225
+I1
+sViterations
+p226
+I55
+sVmad f/s
+p227
+F5305.884887519234
+sV(KiB)
+p228
+I784
+sVc blk
+p229
+I4096
+sVfrag/s
+p230
+F251719.6953700046
+sVcpu
+p231
+F97.92042541503906
+sVblocked
+p232
+I5
+ssVparameters
+p233
+(dp234
+Vread
+p235
+V4096
+p236
+sVtest_run_count
+p237
+I1
+sVoffset,read,test_run_count
+p238
+V500000,4096,1
+p239
+sVoffset
+p240
+V500000
+p241
+sssg63
+g64
+sg65
+I00
+sg66
+g67
+ss.

@@ -23,7 +23,30 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
+class LargeNumberOfDatasetsException(Exception):
+    def __init__(self, msg, *args, **kwargs):
+        super(LargeNumberOfDatasetsException, self).__init__(*args, **kwargs)
+        self.message = msg
+
+    def __str__(self):
+        return "MBM: {0.message}".format(self)
+
+
+class EmptyResultFolder(Exception):
+    def __init__(self, msg, *args, **kwargs):
+        super(EmptyResultFolder, self).__init__(*args, **kwargs)
+        self.message = msg
+
+    def __str__(self):
+        return "MBM: {0.message}".format(self)
+
+
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
+    allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
+    higher_better = ('frag/s',)
+    lower_better = ('avg aio',)
+    submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
+
     def __init__(self, email_recipients, db_version=None):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index="microbenchmarking",
@@ -39,8 +62,12 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)
         self.db_version = db_version
         self.build_url = os.getenv('BUILD_URL', "")
+        self.cur_version_info = None
+        self.metrics = self.higher_better + self.lower_better
 
-    def check_regression(self, current_results, html_report_path):
+    def check_regression(self, current_results):
+        if not current_results:
+            return {}
         START_DATE = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
@@ -58,8 +85,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.excluded"
         )
 
-        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
-        self.db_version = cur_version_info["version"]
+        self.db_version = self.cur_version_info["version"]
         tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                          q="hostname:'%s' \
                                             AND versions.scylla-server.version:%s* \
@@ -98,11 +124,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         #               "Diff best [%]":
         #           },
         # }
-        allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
-        higher_better = ('frag/s',)
-        lower_better = ('avg aio',)
-        submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
-        metrics = higher_better + lower_better
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
@@ -129,12 +150,12 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 # then return first element in list, because result will be None
                 if not list_for_searching:
                     return list_of_results_from_db[0]
-                if metrica in higher_better:
-                    best_result = max(list_for_searching, key=get_metrica_val)
-                elif metrica in lower_better:
-                    best_result = min(list_for_searching, key=get_metrica_val)
-
-                return best_result
+                if metrica in self.higher_better:
+                    return max(list_for_searching, key=get_metrica_val)
+                elif metrica in self.lower_better:
+                    return min(list_for_searching, key=get_metrica_val)
+                else:
+                    return list_of_results_from_db[0]
 
             def count_diff(cur_val, dif_val):
                 if cur_val is None or dif_val is None:
@@ -142,7 +163,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
                 ret_dif = ((cur_val - dif_val) / dif_val) * 100 if dif_val > 0 else cur_val * 100
 
-                if metrica in higher_better:
+                if metrica in self.higher_better:
                     ret_dif = -ret_dif
 
                 ret_dif = -ret_dif if ret_dif != 0 else 0
@@ -158,7 +179,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
                 return (diff_last, diff_best)
 
-            if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
+            if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == self.cur_version_info["commit_id"]:
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
@@ -202,7 +223,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         def set_results_for_sub(metrica):
             report_results[test_type][metrica].update({'Stats': {}})
-            for submetrica in submetrics.get(metrica):
+            for submetrica in self.submetrics.get(metrica):
                 submetrica_cur_val = float(current_result["results"]["stats"][submetrica])
                 report_results[test_type][metrica]['Stats'].update({submetrica: submetrica_cur_val})
 
@@ -211,11 +232,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             if not list_of_results_from_db:
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
-            for metrica in metrics:
+            for metrica in self.metrics:
                 self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
                 set_results_for(metrica)
-                if metrica in submetrics.keys():
+                if metrica in self.submetrics.keys():
                     set_results_for_sub(metrica)
+
+        return report_results
+
+    def send_html_report(self, report_results, html_report_path=None, send=True):
 
         subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
         dashboard_path = "app/kibana#/dashboard/aee9b370-09db-11e9-a976-2fe0f5890cd0?_g=(filters%3A!())"
@@ -224,15 +249,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "subject": subject,
             "testrun_id": self.test_run_date,
             "results": report_results,
-            "stats_names": allowed_stats,
-            "metrics": metrics,
+            "stats_names": self.allowed_stats,
+            "metrics": self.metrics,
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
             "build_url": self.build_url,
             "full_report": True,
             "hostname": self.hostname,
+            "test_version": self.cur_version_info
         }
 
-        for_render.update(dict(test_version=cur_version_info))
         if html_report_path:
             html_file_path = html_report_path
         else:
@@ -240,7 +265,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.render_to_html(for_render, html_file_path=html_file_path)
         for_render["full_report"] = False
         summary_html = self.render_to_html(for_render)
-        self.send_email(subject, summary_html, files=(html_file_path,))
+        if send:
+            self.send_email(subject, summary_html, files=(html_file_path,))
+        else:
+            return html_file_path, summary_html
 
     def get_results(self, results_path, update_db):
         bad_chars = " "
@@ -250,7 +278,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             self.log.info(fullpath)
             if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
                     len(subdirs) > 1):
-                raise Exception('Test set {} has more than one datasets: {}'.format(
+                raise LargeNumberOfDatasetsException('Test set {} has more than one datasets: {}'.format(
                     os.path.basename(fullpath),
                     subdirs))
 
@@ -260,6 +288,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 dirname = os.path.basename(os.path.dirname(fullpath))
                 self.log.info("Test set: {}".format(dirname))
                 for filename in files:
+                    if filename.startswith('.'):
+                        continue
                     new_filename = "".join(c for c in filename if c not in bad_chars)
                     test_args = os.path.splitext(new_filename)[0]
                     test_type = dirname + "_" + test_args
@@ -277,6 +307,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                         self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
                                             doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
                     results[test_type] = datastore
+        if not results:
+            raise EmptyResultFolder("perf_fast_forward_output folder is empty")
+
+        self.cur_version_info = results[results.keys()[0]]['versions']['scylla-server']
         return results
 
     def exclude_test_run(self, testrun_id=''):
@@ -434,7 +468,10 @@ def main(args):
         mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
         results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
         if results:
-            mbra.check_regression(results, html_report_path=args.report_path)
+            if args.hostname:
+                mbra.hostname = args.hostname
+            report_results = mbra.check_regression(results)
+            mbra.send_html_report(report_results, html_report_path=args.report_path)
         else:
             logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
             sys.exit(1)
@@ -473,6 +510,8 @@ def parse_args():
                        help="Comma separated email addresses list that will get the report")
     check.add_argument("--report-path", action="store", default="",
                        help="Save HTML generated results report to the file path before sending by email")
+    check.add_argument("--hostname", action="store", default="",
+                       help="Run check regression for host with hostname")
 
     return parser.parse_args()
 
