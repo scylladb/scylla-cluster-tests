@@ -287,7 +287,7 @@ class OutputLogger(object):
 
 @cli.command('run-test', help="Run SCT test using unittest")
 @click.argument('argv')
-@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
 @click.option('-l', '--logdir', help="Directory to use for logs")
 def run_test(argv, backend, config, logdir):
@@ -304,7 +304,7 @@ def run_test(argv, backend, config, logdir):
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
     unittest.main(module=None, argv=['python -m unittest', argv],
-                  testRunner=xmlrunner.XMLTestRunner(output='test-reports'),
+                  testRunner=xmlrunner.XMLTestRunner(stream=sys.stderr, output=os.path.join(Setup.logdir(), 'test-reports')),
                   failfast=False, buffer=False, catchbreak=True)
 
 

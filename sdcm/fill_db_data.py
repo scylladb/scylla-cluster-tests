@@ -277,8 +277,8 @@ class FillDatabaseData(ClusterTester):
                             ) WITH COMPACT STORAGE;"""],
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
-                "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(id, tld)
-                for id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
+                for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
                 "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],
@@ -298,9 +298,9 @@ class FillDatabaseData(ClusterTester):
                             ) WITH COMPACT STORAGE;"""],
             'truncates': ['TRUNCATE limit_multiget_test'],
             'inserts': [
-                "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(id,
+                "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
                                                                                                               tld)
-                for id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_multiget_test WHERE userid IN (48, 2) LIMIT 1"],
             'results': [
@@ -345,7 +345,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_sparse_test'],
             'inserts': [
                 "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
-                    id, tld) for id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                    _id, tld) for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_sparse_test LIMIT 4"],
             'results': [
