@@ -790,7 +790,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                      keyspace_num=keyspace_num,
                                      profile=profile,
                                      node_list=self.db_cluster.nodes,
-                                     round_robin=round_robin).run()
+                                     round_robin=round_robin,
+                                     keyspace_name=keyspace_name).run()
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
 
@@ -822,7 +823,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 self.loaders.kill_fullscan_thread()
 
     def verify_stress_thread(self, cs_thread_pool):
-        results, errors = cs_thread_pool.verify_results()
+        if isinstance(cs_thread_pool, dict):
+            results = self.get_stress_results_bench(queue=cs_thread_pool)
+            errors = []
+        else:
+            results, errors = cs_thread_pool.verify_results()
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
