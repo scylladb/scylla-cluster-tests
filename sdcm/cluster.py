@@ -2926,10 +2926,12 @@ class BaseLoaderSet(object):
 
             CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
+            logdir = os.path.join(output_dir, self.name)
             try:
-                logdir = path.init_dir(output_dir, self.name)
+                os.makedirs(logdir)
             except OSError:
-                logdir = os.path.join(output_dir, self.name)
+                pass
+
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
@@ -2969,10 +2971,11 @@ class BaseLoaderSet(object):
 
         def _run_gemini(node, loader_idx, cmd, test_node, oracle_node):
             queue[TASK_QUEUE].put(node)
+            logdir = os.path.join(output_dir, self.name)
             try:
-                logdir = path.init_dir(output_dir, self.name)
+                os.makedirs(logdir)
             except OSError:
-                logdir = os.path.join(output_dir, self.name)
+                pass
             log_file_name = os.path.join(logdir,
                                          'gemini-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
