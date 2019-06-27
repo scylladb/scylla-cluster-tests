@@ -894,8 +894,30 @@ class BaseNode(object):
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
 
-    def reboot(self):
-        raise NotImplementedError('Derived classes must implement reboot')
+    def hard_reboot(self):
+        # Need to re-implement this method if the backend supports hard reboot.
+        raise Exception("The backend doesn't support hard_reboot")
+
+    def reboot(self, hard=True, verify_ssh=True):
+        result = self.remoter.run('uptime -s')
+        pre_uptime = result.stdout
+
+        def uptime_changed():
+            result = self.remoter.run('uptime -s', ignore_status=True)
+            return pre_uptime != result.stdout
+
+        if hard:
+            self.log.debug('Hardly rebooting node')
+            self.hard_reboot()
+        else:
+            self.log.debug('Softly rebooting node')
+            self.remoter.run('sudo reboot', ignore_status=True)
+
+        # wait until the reboot is executed
+        wait.wait_for(func=uptime_changed, step=1, timeout=60, throw_exc=True)
+
+        if verify_ssh:
+            self.wait_ssh_up()
 
     @log_run_info
     def start_task_threads(self):
