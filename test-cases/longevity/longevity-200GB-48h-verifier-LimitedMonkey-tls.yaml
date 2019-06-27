@@ -24,7 +24,9 @@ space_node_threshold: 644245094
 use_mgmt: true
 
 server_encrypt: 'true'
-authenticator: 'PasswordAuthenticator'
-authenticator_user: cassandra
-authenticator_password: cassandra
-authorizer: 'CassandraAuthorizer'
+
+#disabling due to issue with running cqlsh/nodetool
+#authenticator: 'PasswordAuthenticator'
+#authenticator_user: cassandra
+#authenticator_password: cassandra
+#authorizer: 'CassandraAuthorizer'
