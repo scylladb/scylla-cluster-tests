@@ -11,6 +11,6 @@ longevityPipeline(
     test_name: 'longevity_test.py:LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
 
-    timeout: [time: 240, unit: 'MINUTES'],
+    timeout: [time: 300, unit: 'MINUTES'],
     post_behaviour: 'destroy'
 )
