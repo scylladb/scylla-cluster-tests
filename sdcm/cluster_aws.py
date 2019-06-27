@@ -609,11 +609,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
             node.wait_ssh_up(verbose=verbose)
             wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
-            if node.is_rhel_like():
-                node.remoter.run('sudo yum install -y scylla-debuginfo', ignore_status=True)
-            elif node.is_debian() or node.is_ubuntu():
-                node.remoter.run(
-                    'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated scylla-debuginfo')
+            node.install_scylla_debuginfo()
+
             if cluster.Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = "Ec2MultiRegionSnitch"

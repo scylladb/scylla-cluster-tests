@@ -1394,7 +1394,6 @@ server_encryption_options:
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
-            self.remoter.run('sudo yum install -y scylla-debuginfo', ignore_status=True)
         else:
             if self.is_ubuntu14():
                 self.remoter.run('sudo apt-get install software-properties-common -y')
@@ -1442,7 +1441,32 @@ server_encryption_options:
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0} {0}-server-dbg'.format(self.scylla_pkg()))
+            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
+
+    def install_scylla_debuginfo(self):
+        if not self.scylla_version:
+            self.get_scylla_version()
+        if self.is_rhel_like():
+            self.remoter.run(r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+        else:
+            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+
+    def get_scylla_version(self):
+        version_commands = ["scylla --version", "rpm -q {}".format(self.scylla_pkg())]
+        for version_cmd in version_commands:
+            try:
+                result = self.remoter.run(version_cmd)
+            except Exception as ex:
+                self.log.error('Failed getting scylla version: %s', ex)
+            else:
+                match = re.match(r"((\d+)\.(\d+)\.([\d\w]+)\.?([\d\w]+)?).*", result.stdout)
+                if match:
+                    scylla_version = match.group(1)
+                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
+                    self.scylla_version = scylla_version
+                    return scylla_version
+                else:
+                    self.log.error("Unknown ScyllaDB version")
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -2380,22 +2404,11 @@ class BaseScyllaCluster(object):
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
-            version_commands = ["scylla --version", "rpm -q {}".format(self.nodes[0].scylla_pkg())]
-            for version_cmd in version_commands:
-                try:
-                    result = self.nodes[0].remoter.run(version_cmd)
-                except Exception as ex:
-                    self.log.error('Failed getting scylla version: %s', ex)
-                else:
-                    match = re.match("(\d+[.]\d+[.]\w+).*", result.stdout)
-                    if match:
-                        scylla_version = match.group(1)
-                        self.log.info("Found ScyllaDB version: %s" % scylla_version)
-                        for node in self.nodes:
-                            node.scylla_version = scylla_version
-                        break
-                    else:
-                        self.log.error("Unknown ScyllaDB version")
+            scylla_version = self.nodes[0].get_scylla_version()
+
+            if scylla_version:
+                for node in self.nodes:
+                    node.scylla_version = scylla_version
 
     def get_test_keyspaces(self):
         out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces', split=True)
@@ -2495,6 +2508,7 @@ class BaseScyllaCluster(object):
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+            node.install_scylla_debuginfo()
 
             if Setup.MULTI_REGION:
                 if not endpoint_snitch:
