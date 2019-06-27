@@ -2336,7 +2336,7 @@ class BaseScyllaCluster(object):
             verification_node = random.choice(self.nodes)
         status = {}
         res = verification_node.run_nodetool('status')
-        data_centers = res.strip().split("Data center: ")
+        data_centers = res.stdout.strip().split("Data center: ")
         for dc in data_centers:
             if dc:
                 lines = dc.splitlines()
