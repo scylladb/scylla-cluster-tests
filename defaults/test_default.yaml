@@ -17,6 +17,7 @@ scylla_linux_distro_loader: 'centos'
 monitor_branch: 'branch-2.4'
 store_results_in_elasticsearch: true
 
+space_node_threshold: 0
 
 reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
