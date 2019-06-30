@@ -408,7 +408,7 @@ class TestStatsMixin(Stats):
 
     def get_prometheus_stats(self):
         self.log.info("Calculating throughput stats from PrometheusDB...")
-        ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        ps = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
         offset = 120  # 2 minutes offset
         start = int(self._stats["test_details"]["start_time"] + offset)
         end = int(time.time() - offset)

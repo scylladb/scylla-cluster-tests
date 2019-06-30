@@ -77,7 +77,7 @@ class RefreshTest(ClusterTester):
 
     def check_timeout(self):
         assert self.monitors.nodes, 'Monitor node should be set, we will try to get metrics from Prometheus server'
-        cmd = 'curl http://%s:9090/api/v1/query_range?query=scylla_storage_proxy_coordinator_read_timeouts&start=%s&end=%s&step=60s' % (self.monitors.nodes[0].public_ip_address, self.start, self.end)
+        cmd = 'curl http://%s:9090/api/v1/query_range?query=scylla_storage_proxy_coordinator_read_timeouts&start=%s&end=%s&step=60s' % (self.monitors.nodes[0].external_address, self.start, self.end)
         self.log.debug('Get read timeout per minute by Prometheus API, cmd: %s', cmd)
         result = subprocess.check_output(cmd.split(), shell=True)
 
