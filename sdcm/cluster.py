@@ -293,7 +293,7 @@ class BaseNode(object):
 
         self._public_ip_address = None
         self._private_ip_address = None
-        ssh_login_info['hostname'] = self.ssh_address
+        ssh_login_info['hostname'] = self.external_address
 
         self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
@@ -529,7 +529,12 @@ class BaseNode(object):
             return self.private_ip_address
 
     @property
-    def ssh_address(self):
+    def external_address(self):
+        """
+        the communication address for usage between the test and the nodes
+        :return:
+        """
+
         if IP_SSH_CONNECTIONS == 'public':
             return self.public_ip_address
         else:
@@ -3171,7 +3176,7 @@ class BaseMonitorSet(object):
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
-                "http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
+                "http://{0.external_address}:{1.grafana_port}".format(node, self))
             return
 
         self.install_scylla_monitoring(node)
@@ -3184,7 +3189,7 @@ class BaseMonitorSet(object):
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url("http://{0.public_ip_address}:{1.grafana_port}".format(node, self))
+        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url("http://{0.external_address}:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
@@ -3390,7 +3395,7 @@ class BaseMonitorSet(object):
         sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         def _register_grafana_json(json_filename):
-            url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
+            url = "http://{0.external_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
             json_path = get_data_dir_path(json_filename)
             result = localrunner.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                      (url, json_path))
@@ -3422,7 +3427,7 @@ class BaseMonitorSet(object):
     def get_grafana_annotations(self, node):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
         try:
-            res = requests.get(annotations_url.format(node_ip=node.public_ip_address, grafana_port=self.grafana_port))
+            res = requests.get(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port))
             if res.ok:
                 return res.text
         except Exception as ex:
@@ -3430,7 +3435,7 @@ class BaseMonitorSet(object):
 
     def set_grafana_annotations(self, node, annotations_data):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
-        res = requests.post(annotations_url.format(node_ip=node.public_ip_address, grafana_port=self.grafana_port),
+        res = requests.post(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port),
                             data=annotations_data, headers={'Content-Type': 'application/json'})
         logger.info("posting annotations result: %s", res)
 
@@ -3489,7 +3494,7 @@ class BaseMonitorSet(object):
                         version=version,
                         scr_name=screenshot['name'])
                     grafana_url = screenshot_url_tmpl.format(
-                        node_ip=node.public_ip_address,
+                        node_ip=node.external_address,
                         grafana_port=self.grafana_port,
                         path=path,
                         st=start_time)
@@ -3610,7 +3615,7 @@ class BaseMonitorSet(object):
 
     @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, ), message='Create prometheus snapshot')
     def create_prometheus_snapshot(self, node):
-        ps = PrometheusDBStats(host=node.public_ip_address)
+        ps = PrometheusDBStats(host=node.external_address)
         result = ps.create_snapshot()
         if "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
