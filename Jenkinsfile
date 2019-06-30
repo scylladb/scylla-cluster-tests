@@ -126,11 +126,45 @@ pipeline {
     stage("provision test") {
         when { changeRequest() }
         steps {
-            script {
-                sh "env"
-                echo "Current Pull Request ID: ${env.CHANGE_ID}"
-                pullRequest.labels.each {
-                    echo "${it}"
+            node('aws-sct-builders-eu-west-1') {
+                script {
+                    def labels = []
+                    pullRequest.labels.each { labels.add("${it}") }
+                    def should_test = labels.find { it == "test-provision" }
+
+                    if (should_test) {
+                        echo "Going to Provision test Pull Request ID: ${env.CHANGE_ID}"
+
+                        checkout scm
+
+                        try {
+                            sh """
+                            #!/bin/bash
+                            set -xe
+                            env
+
+
+                            echo "start test ......."
+                            ./docker/env/hydra.sh run-test longevity_test.LongevityTest.test_custom_time --config test-cases/PR-provision-test.yaml --backend aws --logdir /sct
+                            echo "end test ....."
+                            """
+
+                             pullRequest.createStatus(status: 'success',
+                                         context: 'jenkins/provision_test',
+                                         description: 'provision test succeeded',
+                                         targetUrl: "${env.JOB_URL}/workflow-stage")
+                        }
+                        catch(Exception ex) {
+
+                            pullRequest.createStatus(status: 'failure',
+                                             context: 'jenkins/provision_test',
+                                             description: 'provision test failed',
+                                             targetUrl: "${env.JOB_URL}/workflow-stage")
+
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+
                 }
             }
         }
