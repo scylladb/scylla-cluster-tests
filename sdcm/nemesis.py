@@ -393,6 +393,7 @@ class Nemesis(object):
         self._terminate_cluster_node(self.target_node)
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
         self.repair_nodetool_repair(new_node)
+        new_node.running_nemesis = None
 
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
