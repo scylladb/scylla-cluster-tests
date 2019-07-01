@@ -459,7 +459,7 @@ class UpgradeTest(FillDatabaseData):
         # wait for the complex workload to finish
         # self.verify_stress_thread(complex_cs_thread_pool)
 
-        error_factor = 2
+        error_factor = 3
         schema_load_error_num = 0
 
         for node in self.db_cluster.nodes:
@@ -468,7 +468,7 @@ class UpgradeTest(FillDatabaseData):
                                               publish_events=False)
             schema_load_error_num += len(errors)
         self.log.debug('schema_load_error_num: %d' % schema_load_error_num)
-        assert schema_load_error_num <= error_factor * 8 * len(self.db_cluster.nodes), 'Only allowing shards_num * %s schema load errors per host during the entire test' % error_factor
+        assert schema_load_error_num <= error_factor * 8 * len(self.db_cluster.nodes), 'Only allowing shards_num * %d schema load errors per host during the entire test, actual: %d' % (error_factor, schema_load_error_num)
 
         self.log.debug('start sstabledump verify')
         self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
