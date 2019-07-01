@@ -246,6 +246,7 @@ class FullScanEvent(SctEvent):
         if result:
             if result['exit_code'] != 0 or result['stderr']:
                 self.severity = Severity.ERROR
+                self.type = 'error'
             self.msg += " {1.result}"
         self.publish()
 
