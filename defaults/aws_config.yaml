@@ -15,6 +15,12 @@ regions_data:
     subnet_id: 'subnet-088fddaf520e4c7a8'
     ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
     ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+  us-west-2:
+    security_group_ids: 'sg-81703ae4'
+    subnet_id: 'subnet-5207ee37'
+    ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
+    ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+
 
 aws_root_disk_size_monitor: 20  # GB, remove this field if default disk size should be used
 aws_root_disk_size_db: 15

@@ -545,7 +545,7 @@ class BaseNode(object):
         :return:
         """
 
-        if IP_SSH_CONNECTIONS == 'public':
+        if IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address

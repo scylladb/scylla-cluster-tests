@@ -62,6 +62,10 @@ def int_or_list(value):
             return value
         except Exception:  # pylint: disable=broad-except
             pass
+        try:
+            return ast.literal_eval(value)
+        except Exception:  # pylint: disable=broad-except
+            pass
 
     raise ValueError("{} isn't int or list".format(value))
 
