@@ -1869,19 +1869,20 @@ server_encryption_options:
                        result.duration)
         return result
 
-    def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port):
+    def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
         auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
         use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
-        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout}".format(**locals())
+        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout}".format(**locals())
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(**locals())
 
-    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None):
+    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None, connect_timeout=5):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
                                   host=self.ip_address if not target_db_node else target_db_node.ip_address,
-                                  port=port if port else self.CQL_PORT)
+                                  port=port if port else self.CQL_PORT,
+                                  connect_timeout=connect_timeout)
         cqlsh_out = self.remoter.run(cmd, timeout=timeout + 1, verbose=verbose)
         # stdout of cqlsh example:
         #      pk
@@ -3076,8 +3077,12 @@ class BaseLoaderSet(object):
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
 
-        result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
-                                       timeout=3600, verbose=False, target_db_node=db_node)
+        try:
+            result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
+                                           timeout=3600, verbose=False, target_db_node=db_node, connect_timeout=10)
+        except (UnexpectedExit, Failure) as details:
+            self.log.error('Fullscan command finished with errors: {}'.format(details))
+            result = details.result
 
         FullScanEvent(type='finish', loader_node=loader_node,
                       db_node_ip=db_node.ip_address, ks_cf=ks_cf,
