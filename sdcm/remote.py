@@ -20,6 +20,7 @@ import tempfile
 import time
 import getpass
 import socket
+from threading import Lock
 
 from fabric import Connection, Config
 from fabric.connection import opens
@@ -29,6 +30,9 @@ import six.moves
 
 from .log import SDCMAdapter
 from .utils import retrying
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class OutputCheckError(Exception):
@@ -53,17 +57,27 @@ class ConnectionCmdTimeout(Connection):
     def __init__(self, host, user=None, port=None, config=None, gateway=None, forward_agent=None, connect_timeout=None, connect_kwargs=None):
         super(ConnectionCmdTimeout, self).__init__(host, user, port, config, gateway, forward_agent, connect_timeout, connect_kwargs)
         self.config._set(cmd_timeout=None)
+        self.config._set(timeout_lock=Lock())
 
     def run(self, command, **kwargs):
+        self.timeout_lock.acquire()
         self.cmd_timeout = kwargs.pop('cmd_timeout', None)
-        return super(ConnectionCmdTimeout, self).run(command, **kwargs)
+        try:
+            return super(ConnectionCmdTimeout, self).run(command, **kwargs)
+        except:
+            if not self.timeout_lock.locked():
+                self.timeout_lock.release()
 
     @opens
     def create_session(self):
-        channel = super(ConnectionCmdTimeout, self).create_session()
-        if self.cmd_timeout:
-            channel.settimeout(self.cmd_timeout)
-        return channel
+        try:
+            channel = super(ConnectionCmdTimeout, self).create_session()
+            if self.cmd_timeout:
+                channel.settimeout(self.cmd_timeout)
+            return channel
+        finally:
+            if not self.timeout_lock.locked():
+                self.timeout_lock.release()
 
 
 def _scp_remote_escape(filename):
@@ -113,8 +127,7 @@ class CommandRunner(object):
         self.hostname = hostname
         self.user = user
         self.password = password
-        logger = logging.getLogger(__name__)
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.connection = None
 
     def __str__(self):
