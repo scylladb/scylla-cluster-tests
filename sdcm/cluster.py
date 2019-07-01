@@ -1842,6 +1842,11 @@ class BaseScyllaCluster(object):
         :param verbose:
         """
         node.wait_ssh_up(verbose=verbose)
+        if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
+            node.remoter.run('sudo systemctl disable apt-daily.timer')
+            node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
+            node.remoter.run('sudo systemctl stop apt-daily.timer')
+            node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer')
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = self.get_seed_nodes_by_flag()
 
