@@ -551,15 +551,17 @@ class BaseNode(object):
 
         return self._init_system
 
-    def retrieve_journal(self):
+    def retrieve_journal(self, since):
         try:
+            since = '--since "{}" '.format(since) if since else ""
+            self.log.debug("Reading Scylla logs from {}".format(since[8:] if since else "the beginning"))
             if self.init_system == 'systemd':
                 # Here we're assuming that journalctl systems are Scylla images
-                db_services_log_cmd = ('sudo journalctl -f --no-tail --no-pager '
+                db_services_log_cmd = ('sudo journalctl -f --no-tail --no-pager --utc {since}'
                                        '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
-                                       '-u scylla-jmx.service')
+                                       '-u scylla-jmx.service'.format(**locals()))
             elif self.file_exists('/usr/bin/scylla'):
                 db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
             else:
@@ -616,11 +618,14 @@ class BaseNode(object):
                                    verbose=verbose)
 
     def journal_thread(self):
+        read_from_timestamp = None
         while True:
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
-            self.retrieve_journal()
+            self.retrieve_journal(since=read_from_timestamp)
+            # when rebooting a node we would like to start reading from the timestamp that we stopped receiving logs
+            read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     def start_journal_thread(self):
         self._journal_thread = threading.Thread(target=self.journal_thread)
