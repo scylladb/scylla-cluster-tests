@@ -768,26 +768,22 @@ class BaseNode(object):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
-        while True:
-            if self.termination_event.isSet():
-                break
+        while not self.termination_event.isSet():
+            self.termination_event.wait(15)
             self.get_backtraces()
-            time.sleep(30)
 
     def db_log_reader_thread(self):
         """
         Keep reporting new events from db log, every 30 seconds.
         """
-        while True:
-            if self.termination_event.isSet():
-                break
+        while not self.termination_event.isSet():
+            self.termination_event.wait(15)
             try:
                 self.search_database_log(start_from_beginning=False, publish_events=True)
             except Exception:
                 self.log.exception("failed to read db log")
             except (SystemExit, KeyboardInterrupt) as ex:
                 self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-            time.sleep(30)
 
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
