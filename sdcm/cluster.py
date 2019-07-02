@@ -2577,7 +2577,8 @@ class BaseScyllaCluster(object):
             with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
                 imagedata = node.get_console_screenshot()
                 cscrn.write(decodestring(imagedata))
-            shutil.copy(node.database_log, storing_dir_for_node)
+            if os.path.exists(node.database_log):
+                shutil.copy(node.database_log, storing_dir_for_node)
         return storing_dir
 
 
