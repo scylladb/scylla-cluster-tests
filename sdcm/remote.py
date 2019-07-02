@@ -22,7 +22,6 @@ import getpass
 import socket
 
 from fabric import Connection, Config
-from fabric.connection import opens
 from invoke.exceptions import UnexpectedExit, Failure, ThreadException
 from invoke.watchers import StreamWatcher, Responder
 import six.moves
@@ -46,24 +45,6 @@ class CmdExecTimeoutExceeded(socket.timeout):
 
     """
     pass
-
-
-class ConnectionCmdTimeout(Connection):
-
-    def __init__(self, host, user=None, port=None, config=None, gateway=None, forward_agent=None, connect_timeout=None, connect_kwargs=None):
-        super(ConnectionCmdTimeout, self).__init__(host, user, port, config, gateway, forward_agent, connect_timeout, connect_kwargs)
-        self.config._set(cmd_timeout=None)
-
-    def run(self, command, **kwargs):
-        self.cmd_timeout = kwargs.pop('cmd_timeout', None)
-        return super(ConnectionCmdTimeout, self).run(command, **kwargs)
-
-    @opens
-    def create_session(self):
-        channel = super(ConnectionCmdTimeout, self).create_session()
-        if self.cmd_timeout:
-            channel.settimeout(self.cmd_timeout)
-        return channel
 
 
 def _scp_remote_escape(filename):
@@ -125,7 +106,7 @@ class CommandRunner(object):
 
     def _create_connection(self, *args, **kwargs):
         if not self.connection:
-            self.connection = ConnectionCmdTimeout(*args, **kwargs)
+            self.connection = Connection(*args, **kwargs)
 
     def _print_command_results(self, result, verbose=True):
 
@@ -153,7 +134,7 @@ class LocalCmdRunner(CommandRunner):
         super(LocalCmdRunner, self).__init__(hostname, user=user, password=password)
         self._create_connection(hostname, user=user)
 
-    def run(self, cmd, ignore_status=False, sudo=False, verbose=True, timeout=30):
+    def run(self, cmd, ignore_status=False, sudo=False, verbose=True, timeout=300):
         watchers = []
         start_time = time.time()
         if verbose:
@@ -166,7 +147,8 @@ class LocalCmdRunner(CommandRunner):
             result = self.connection.local(cmd, warn=ignore_status,
                                            encoding='utf-8',
                                            hide=True,
-                                           watchers=watchers)
+                                           watchers=watchers,
+                                           command_timeout=timeout)
 
         except (Failure, UnexpectedExit) as details:
             if hasattr(details, "result"):
@@ -211,6 +193,7 @@ class RemoteCmdRunner(CommandRunner):
     def reconnect(self):
         self.log.debug('Reconnecting to host ...')
         self.connection.close()
+        self.connection.open()
 
     def ssh_debug_cmd(self):
         if self.key_file:
@@ -240,7 +223,7 @@ class RemoteCmdRunner(CommandRunner):
 
                 result = self.connection.run(cmd, warn=ignore_status,
                                              encoding='utf-8', hide=True,
-                                             watchers=watchers, cmd_timeout=timeout)
+                                             watchers=watchers, command_timeout=timeout)
 
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
