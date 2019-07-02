@@ -61,7 +61,7 @@ class ConnectionCmdTimeout(Connection):
     @opens
     def create_session(self):
         channel = super(ConnectionCmdTimeout, self).create_session()
-        if self.cmd_timeout:
+        if getattr(self, 'cmd_timeout', None):
             channel.settimeout(self.cmd_timeout)
         return channel
 
