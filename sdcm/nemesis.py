@@ -54,12 +54,6 @@ class Nemesis(object):
         self.target_node = None
         logger = logging.getLogger(__name__)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
-        self.set_target_node()
-        result = self.target_node.remoter.run('rpm -qa | grep scylla | sort', verbose=False,
-                                              ignore_status=True)
-        self.db_software_version = ['not available (using cassandra)']
-        if result.stdout:
-            self.db_software_version = result.stdout.splitlines()
         self.termination_event = termination_event
         self.operation_log = []
         self.current_disruption = None
@@ -130,9 +124,7 @@ class Nemesis(object):
             avg_duration = 0
 
         self.log.info('Report')
-        self.log.info('DB Version:')
-        for line in self.db_software_version:
-            self.log.info(line)
+        self.log.info('DB Version: %s', getattr(self.cluster.nodes[0], "scylla_version", "n/a"))
         self.log.info('Interval: %s s', self.interval)
         self.log.info('Average duration: %s s', avg_duration)
         self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
