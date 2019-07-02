@@ -1,3 +1,4 @@
+import os
 import time
 import traceback
 import unittest
@@ -30,22 +31,15 @@ class SctEventsTests(unittest.TestCase):
         def callback(x):
             cls.killed.set()
 
-        cls.grafana_annotator = GrafanaAnnotator()
-        cls.grafana_annotator.start()
         cls.test_killer = TestKiller(timeout_before_kill=5, test_callback=callback)
         cls.test_killer.start()
-        cls.prometheus_dumper = PrometheusDumper()
-        cls.prometheus_dumper.start()
-        cls.event_logger = EventsFileLogger()
-        cls.event_logger.start(log_dir=cls.temp_dir)
         time.sleep(5)
 
     @classmethod
     def tearDownClass(cls):
-        cls.grafana_annotator.set_grafana_url(grafana_base_url='')
-        for t in [cls.event_logger, cls.prometheus_dumper, cls.grafana_annotator, cls.test_killer]:
-            t.terminate()
-            t.join()
+        for process in [cls.test_killer]:
+            process.terminate()
+            process.join()
         stop_events_device()
 
     def test_event_info(self):
@@ -110,6 +104,43 @@ class SctEventsTests(unittest.TestCase):
 
     def test_spot_termination(self):
         str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
+
+    def test_default_filters(self):
+        log_file = os.path.join(self.temp_dir, 'events.log')
+
+        log_content_before = ""
+        if os.path.exists(log_file):
+            log_content_before = open(log_file, 'r').read()
+
+        DatabaseLogEvent(type="BACKTRACE",
+                         regex="backtrace").add_info_and_publish(node="A",
+                                                                 line_number=22,
+                                                                 line="Jul 01 03:37:31 ip-10-0-127-151.eu-west-1. \
+                                                                       compute.internal scylla[6026]:\
+                                                                       Rate-limit: supressed 4294967292 \
+                                                                       backtraces on shard 5")
+
+        DatabaseLogEvent(type="BACKTRACE",
+                         regex="backtrace").add_info_and_publish(node="A",
+                                                                 line_number=22,
+                                                                 line="other back trace that should be filtered")
+
+        for _ in range(10):
+            if os.path.exists(log_file):
+                log_content_after = open(log_file, 'r').read()
+            else:
+                log_content_after = ""
+            if log_content_before == log_content_after:
+                logging.debug("logs haven't changed yet")
+                time.sleep(0.05)
+            else:
+                break
+        else:
+            raise AssertionError("log file wasn't update with new events")
+
+        if os.path.exists(log_file):
+            with open(log_file) as f:
+                self.assertNotIn('supressed', f.read())
 
     @unittest.skip("this test need some more work")
     def test_kill_test_event(self):

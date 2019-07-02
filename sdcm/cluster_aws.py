@@ -12,7 +12,7 @@ from threading import Thread
 import cluster
 import ec2_client
 from sdcm.utils import retrying, list_instances_aws
-from sdcm.sct_events import SpotTerminationEvent
+from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from . import wait
 
 logger = logging.getLogger(__name__)
@@ -394,7 +394,13 @@ class AWSNode(cluster.BaseNode):
         if self._instance.spot_instance_request_id:
             logger.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
             return
+
+        event_filters = ()
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
+            event_filters = DbEventsFilter(type="DATABASE_ERROR"), DbEventsFilter(type="SCHEMA_FAILURE"), \
+                DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type="FILESYSTEM_ERROR")
+
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                 sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
@@ -415,9 +421,14 @@ class AWSNode(cluster.BaseNode):
         self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
-            self.stop_scylla_server(verify_down=False)
-            self.start_scylla_server(verify_up=False)
+            try:
+                self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+                self.stop_scylla_server(verify_down=False)
+                self.start_scylla_server(verify_up=False)
+            finally:
+                if event_filters:
+                    for event_filter in event_filters:
+                        event_filter.cancel_filter()
 
     def reboot(self, hard=True, verify_ssh=True):
         if hard:
