@@ -2471,7 +2471,6 @@ class BaseScyllaCluster(object):
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=30):
         for nemesis in self.nemesis:
-            nemesis.set_target_node(is_running=True)
             nemesis_thread = threading.Thread(target=nemesis.run,
                                               args=(interval, ), verbose=True)
             nemesis_thread.daemon = True

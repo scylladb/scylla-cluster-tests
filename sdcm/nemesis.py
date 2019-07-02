@@ -27,8 +27,6 @@ import traceback
 
 from cassandra import InvalidRequest
 
-from invoke.exceptions import UnexpectedExit, Failure
-
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
@@ -90,7 +88,7 @@ class Nemesis(object):
     def set_current_running_nemesis(self, node):
         node.running_nemesis = self.__class__.__name__
 
-    def set_target_node(self, is_running=False):
+    def set_target_node(self):
         """Set node to run nemesis on
 
         Keyword Arguments:
@@ -109,9 +107,8 @@ class Nemesis(object):
             all_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
             self.target_node = random.choice(all_nodes)
 
-        if is_running:
-            # Set name of nemesis, which is going to run on target node
-            self.set_current_running_nemesis(node=self.target_node)
+        # Set name of nemesis, which is going to run on target node
+        self.set_current_running_nemesis(node=self.target_node)
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
@@ -120,11 +117,11 @@ class Nemesis(object):
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while not self.termination_event.isSet():
+            self.set_target_node()
             self._set_current_disruption(report=False)
             self.disrupt()
             self.target_node.running_nemesis = None
             self.termination_event.wait(timeout=interval)
-            self.set_target_node(is_running=True)
 
     def report(self):
         if len(self.duration_list) > 0:
