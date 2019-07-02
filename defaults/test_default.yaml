@@ -42,3 +42,6 @@ logs_transport: "rsyslog"
 
 send_email: true
 email_recipients: ['qa@scylladb.com']
+
+collect_logs: true
+
