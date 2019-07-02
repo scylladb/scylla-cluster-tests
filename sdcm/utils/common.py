@@ -19,14 +19,11 @@ import random
 import socket
 import time
 import datetime
-import tempfile
-import re
 import errno
 import threading
 import select
-import json
 import shutil
-from textwrap import dedent
+
 from functools import wraps
 from enum import Enum
 from collections import defaultdict
@@ -267,7 +264,7 @@ def get_latest_gemini_version():
 
 
 def list_logs_by_test_id(test_id):
-    log_types = ['db-cluster', 'loader-set', 'monitor-set',
+    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct-runner',
                  'prometheus', 'grafana',
                  'job', 'monitoring_data_stack', 'events']
     results = []
@@ -275,139 +272,30 @@ def list_logs_by_test_id(test_id):
     if not test_id:
         return results
 
+    def convert_to_date(date_str):
+        try:
+            t = datetime.datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+        except ValueError:
+            try:
+                t = datetime.datetime.strptime(date_str, "%Y_%m_%d_%H_%M_%S")
+            except ValueError:
+                t = datetime.datetime(1999, 01, 01, 01, 01, 01)
+        finally:
+            return t
+
     log_files = S3Storage().search_by_path(path=test_id)
     for log_file in log_files:
         for log_type in log_types:
             if log_type in log_file:
                 results.append({"file_path": log_file,
                                 "type": log_type,
-                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file)})
+                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file),
+                                "date": convert_to_date(log_file.split('/')[1])
+                                })
                 break
+    results = sorted(results, key=lambda x: x["date"])
 
     return results
-
-
-def restore_monitoring_stack(test_id):
-    # pylint: disable=too-many-locals
-    from sdcm.remote import LocalCmdRunner
-
-    localrunner = LocalCmdRunner()
-    LOGGER.info("Checking that docker is available...")
-    result = localrunner.run('docker ps', ignore_status=True, verbose=False)
-    if result.ok:
-        LOGGER.info('Docker is available')
-    else:
-        LOGGER.warning('Docker is not available on your computer. Please install docker software before continue')
-        return False
-
-    monitor_stack_base_dir = tempfile.mkdtemp()
-    stored_files_by_test_id = list_logs_by_test_id(test_id)
-    monitor_stack_archives = []
-    for stored_file in stored_files_by_test_id:
-        if stored_file['type'] in ['monitoring_data_stack', 'prometheus']:
-            monitor_stack_archives.append(stored_file)
-    if not monitor_stack_archives or len(monitor_stack_archives) < 2:
-        LOGGER.warning(
-            'There is no available archive files for monitoring data stack restoring for test id : {}'.format(test_id))
-        return False
-
-    for arch in monitor_stack_archives:
-        LOGGER.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
-        local_path_monitor_stack = S3Storage().download_file(arch['link'], dst_dir=monitor_stack_base_dir)
-        monitor_stack_workdir = os.path.dirname(local_path_monitor_stack)
-        monitoring_stack_archive_file = os.path.basename(local_path_monitor_stack)
-        LOGGER.info('Extracting data from archive {}'.format(arch['file_path']))
-        if arch['type'] == 'prometheus':
-            monitoring_stack_data_dir = os.path.join(monitor_stack_workdir, 'monitor_data_dir')
-            cmd = dedent("""
-                mkdir -p {data_dir}
-                cd {data_dir}
-                cp ../{archive} ./
-                tar -xvf {archive}
-                chmod -R 777 {data_dir}
-                """.format(data_dir=monitoring_stack_data_dir,
-                           archive=monitoring_stack_archive_file))
-            result = localrunner.run(cmd, ignore_status=True)
-        else:
-            branches = re.search(r'(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>.*)\.tar\.gz',
-                                 monitoring_stack_archive_file)
-            monitoring_branch = branches.group('monitoring_branch')
-            scylla_version = branches.group('scylla_version')
-            cmd = dedent("""
-                cd {workdir}
-                tar -xvf {archive}
-                """.format(workdir=monitor_stack_workdir, archive=monitoring_stack_archive_file))
-            result = localrunner.run(cmd, ignore_status=True)
-        if not result.ok:
-            LOGGER.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
-            return False
-        LOGGER.info("Extracting data finished")
-
-    LOGGER.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
-
-    monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-monitoring-{}'.format(monitoring_branch))
-
-    def upload_sct_dashboards():
-        sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
-        sct_dashboard_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', sct_dashboard_file_name)
-        if not os.path.exists(sct_dashboard_file):
-            LOGGER.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
-            return False
-
-        dashboard_url = 'http://localhost:3000/api/dashboards/db'
-        with open(sct_dashboard_file, "r") as file_handle:
-            dashboard_config = json.load(file_handle)
-
-        res = requests.post(dashboard_url, data=json.dumps(dashboard_config),
-                            headers={'Content-Type': 'application/json'})
-        if res.status_code != 200:
-            LOGGER.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
-            return False
-        LOGGER.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
-        return True
-
-    def upload_annotations():
-        annotations_file = os.path.join(monitoring_dockers_dir, 'sct_monitoring_addons', 'annotations.json')
-        if not os.path.exists(annotations_file):
-            LOGGER.info('There is no annotations file.Skip loading annotations')
-            return False
-
-        with open(annotations_file, "r") as file_handle:
-            annotations = json.load(file_handle)
-
-        annotations_url = "http://localhost:3000/api/annotations"
-        for annotation in annotations:
-            res = requests.post(annotations_url, data=json.dumps(annotation),
-                                headers={'Content-Type': 'application/json'})
-            if res.status_code != 200:
-                LOGGER.info('Error during uploading annotation {}. Error message {}'.format(annotation, res.text))
-                return False
-        LOGGER.info('Annotations loaded successfully')
-        return True
-
-    @retrying(n=3, sleep_time=1, message='Start docker containers')
-    def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
-        localrunner.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
-        cmd = dedent("""cd {monitoring_dockers_dir};
-                ./start-all.sh \
-                -s {monitoring_dockers_dir}/config/scylla_servers.yml \
-                -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
-                -d {monitoring_stack_data_dir} -v {scylla_version}""".format(monitoring_dockers_dir=monitoring_dockers_dir,
-                                                                             monitoring_stack_data_dir=monitoring_stack_data_dir,
-                                                                             scylla_version=scylla_version))
-        res = localrunner.run(cmd, ignore_status=True)
-        if res.ok:
-            result = localrunner.run('docker ps')
-            LOGGER.info(result.stdout.encode('utf-8'))
-            return True
-        else:
-            raise Exception('dockers start failed. {}'.format(res))
-
-    status = False
-    status = start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version)
-    upload_sct_dashboards()
-    upload_annotations()
-    return status
 
 
 def all_aws_regions():

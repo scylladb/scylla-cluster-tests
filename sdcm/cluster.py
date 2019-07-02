@@ -429,7 +429,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         # enable bootstrap.
         self.enable_auto_bootstrap = False
         self.scylla_version = ''
-        self._is_enterprise = None
+        self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
         self._cassandra_stress_version = None
@@ -639,6 +639,15 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         return self.__class__.__name__ == "GCENode"
 
     def scylla_pkg(self):
+        if self.is_enterprise is None:
+            if self.is_rhel_like():
+                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                              'No matches found' not in result.stdout) else False
+            else:
+                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
+                self.is_enterprise = True if 'scylla-enterprise' in result.stdout else False
+
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
     def file_exists(self, file_path):
@@ -649,23 +658,6 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error checking if file %s exists: %s',
                            file_path, details)
-
-    @property
-    def is_enterprise(self):
-        if self._is_enterprise is None:
-            if self.is_rhel_like():
-                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
-                if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result.stdout:
-                    result = self.remoter.run("sudo cat /etc/yum.repos.d/scylla.repo")
-                    self._is_enterprise = 'enterprise' in result.stdout
-                else:
-                    self._is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
-                                                   'No matches found' not in result.stdout) else False
-            else:
-                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                self._is_enterprise = True if 'scylla-enterprise' in result.stdout else False
-
-        return self._is_enterprise
 
     @property
     def public_ip_address(self):
@@ -822,6 +814,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                          "'%s' '%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
+
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
         return download_url, download_instructions
 
@@ -839,12 +832,23 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
-                url = ""
-                download_instructions = "failed to upload"
+                urls = []
+                download_instructions = ''
                 try:
                     coredump = line.split()[-1]
                     self.log.debug('Found coredump file: {}'.format(coredump))
-                    url, download_instructions = self._upload_coredump(coredump)
+                    coredump_files = self._try_split_coredump(coredump)
+                    for f in coredump_files:
+                        urls.append(self._upload_coredump(f))
+                    if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
+                        for url in urls:
+                            download_instructions += 'wget {}\n'.format(url)
+                        base_name = os.path.basename(coredump)
+                        if len(coredump_files) > 1:
+                            download_instructions += "\n# To join coredump pieces, you may use:\n"
+                            download_instructions += "cat {}.gz.* > {}.gz\n".format(base_name, base_name)
+                        download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
+                        self.log.info(download_instructions)
                 finally:
                     CoreDumpEvent(corefile_url=url, download_instructions=download_instructions,
                                   backtrace=output, node=self)
@@ -1533,6 +1537,7 @@ server_encryption_options:
             self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
+            self.remoter.run('sudo yum clean all')
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
@@ -1861,13 +1866,12 @@ server_encryption_options:
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
 
-    def collect_mgmt_log(self):
-        self.log.debug("Collect scylla manager log ...")
-        mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
-        self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name),
-                         ignore_status=True, verbose=False)
-        self.log.debug("Collected log : {}".format(mgmt_log_name))
-        return mgmt_log_name
+    # def collect_mgmt_log(self):
+    #     self.log.debug("Collect scylla manager log ...")
+    #     mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
+    #     self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
+    #     self.log.debug("Collected log : {}".format(mgmt_log_name))
+    #     return mgmt_log_name
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -2073,11 +2077,11 @@ server_encryption_options:
         :param sub_cmd: subcommand like status
         :param args: arguments for the subcommand
         :param options: nodetool options:
-            -h	--host	Hostname or IP address.
-            -p	--port	Port number.
-            -pwf	--password-file	Password file path.
-            -pw	--password	Password.
-            -u	--username	Username.
+            -h  --host  Hostname or IP address.
+            -p  --port  Port number.
+            -pwf    --password-file Password file path.
+            -pw --password  Password.
+            -u  --username  Username.
         :param ignore_status: don't throw exception if the command fails
         :return: Remoter result object
         """
@@ -2940,26 +2944,25 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             node.start_scylla(verify_up=True)
             self.log.debug("'{0.name}' restarted.".format(node))  # pylint: disable=no-member
 
-    def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
-        os.mkdir(storing_dir)
+    # def collect_logs(self, storing_dir):
+    #     storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+    #     os.mkdir(storing_dir)
 
-        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo',
-                            '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
-        for node in self.nodes:  # pylint: disable=no-member
-            storing_dir_for_node = os.path.join(storing_dir, node.name)
-            src_dir = node.prepare_files_for_archive(files_to_archive)
-            node.remoter.receive_files(src=src_dir, dst=storing_dir)
-            with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
-                pkg_list_file.write(node.get_installed_packages())
-            with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as console_output_file:
-                console_output_file.write(node.get_console_output())
-            with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
-                imagedata = node.get_console_screenshot()
-                cscrn.write(decodestring(imagedata))
-            if os.path.exists(node.database_log):
-                shutil.copy(node.database_log, storing_dir_for_node)
-        return storing_dir
+    #     files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
+    #     for node in self.nodes:
+    #         storing_dir_for_node = os.path.join(storing_dir, node.name)
+    #         src_dir = node.prepare_files_for_archive(files_to_archive)
+    #         node.receive_files(src=src_dir, dst=storing_dir)
+    #         with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
+    #             pkg_list_file.write(node.get_installed_packages())
+    #         with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as co:
+    #             co.write(node.get_console_output())
+    #         with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
+    #             imagedata = node.get_console_screenshot()
+    #             cscrn.write(decodestring(imagedata))
+    #         if os.path.exists(node.database_log):
+    #             shutil.copy(node.database_log, storing_dir_for_node)
+    #     return storing_dir
 
     def get_seed_selected_by_reflector(self, node=None):
         """
@@ -3067,6 +3070,11 @@ class BaseLoaderSet(object):
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
+            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
         else:
@@ -3362,7 +3370,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.monitor_branch = self.params.get('monitor_branch')
+        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.4')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
         self.grafana_start_time = 0
@@ -3648,6 +3656,11 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         """.format(self))
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
+        self.save_sct_dashboards_config(node)
+        self.save_monitoring_version(node)
+
+    def save_monitoring_version(self, node):
+        node.remoter.run('echo "{0.monitor_branch}:{0.monitoring_version}" > {0.monitor_install_path}/monitor_version'.format(self), ignore_status=True)
 
     def add_sct_dashboards_to_grafana(self, node):
         sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
@@ -3663,19 +3676,17 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
                       json_filename=sct_dashboard_json)
 
-    def get_sct_dashboards_config(self):
+    def save_sct_dashboards_config(self, node):
+        sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
+
+        node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
+        sct_dashboard_file = self.get_sct_dashboards_config(node)
+        node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
+
+    def get_sct_dashboards_config(self, node):
         sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         return get_data_dir_path(sct_dashboard_json_filename)
-
-    def download_monitoring_data_dir(self, node):
-        try:
-            local_monitoring_data_dir = os.path.join(node.logdir, "monitoring_data")
-            node.remoter.receive_files(src=self.monitoring_data_dir, dst=local_monitoring_data_dir)
-            return local_monitoring_data_dir
-        except Exception:  # pylint: disable=broad-except
-            self.log.exception("Unable to download Prometheus data")  # pylint: disable=no-member
-            return ""
 
     @log_run_info
     def install_scylla_monitoring(self, node):
@@ -3705,76 +3716,25 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         """.format(self))
         node.remoter.run("bash -ce '%s'" % kill_script)
 
-    def install_phantom_js(self):
-        if not self.phantomjs_installed:
-            phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
-            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(phantomjs_base=phantomjs_base)
-            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(
-                phantomjs_tar=phantomjs_tar)
-            install_phantom_js_script = dedent("""
-                rm -rf {phantomjs_base}*
-                curl {phantomjs_url} -o {phantomjs_tar} -L
-                tar xvfj {phantomjs_tar}
-            """.format(phantomjs_base=phantomjs_base, phantomjs_url=phantomjs_url, phantomjs_tar=phantomjs_tar))
-            LOCALRUNNER.run("bash -ce '%s'" % install_phantom_js_script)
-            LOCALRUNNER.run(
-                "cd phantomjs-2.1.1-linux-x86_64 && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js")
-            self.phantomjs_installed = True
-        else:
-            self.log.debug("PhantomJS is already installed!")  # pylint: disable=no-member
-
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=too-many-locals,invalid-name
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
+        from logcollector import GrafanaSnapshotEntity, GrafanaScreenShotEntity
+
         if not test_start_time:
             self.log.error("No start time for test")  # pylint: disable=no-member
             return {}
         start_time = str(test_start_time).split('.')[0] + '000'
 
-        screenshot_names = [
-            {
-                'name': 'per-server-metrics-nemesis',
-                'path': 'dashboard/db/scylla-{scr_name}-{version}',
-                'size': '1920px*7000px'
-            },
-            {
-                'name': 'overview-metrics',
-                'path': 'd/overview-{version}/scylla-{scr_name}',
-                'size': '1920px*4000px'
-            }
-        ]
-
-        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
-
-        try:
-            self.install_phantom_js()
-            for i, node in enumerate(self.nodes):  # pylint: disable=no-member
-                screenshots = []
-                snapshots = []
-                for screenshot in screenshot_names:
-                    version = self.monitoring_version.replace('.', '-')
-                    screenshot_path = screenshot['path'].format(
-                        version=version,
-                        scr_name=screenshot['name'])
-                    grafana_url = screenshot_url_tmpl.format(
-                        node_ip=node.external_address,
-                        grafana_port=self.grafana_port,
-                        path=screenshot_path,
-                        st=start_time)
-                    datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    snapshot_path = os.path.join(node.logdir,
-                                                 "grafana-screenshot-%s-%s-%s.png" % (screenshot['name'], datetime_now, i))
-
-                    screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path, screenshot['size']))
-                    snapshots.append(self._get_shared_snapshot_link(grafana_url))
-
-                return {'screenshots': screenshots, 'snapshots': snapshots}
-
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error taking monitor snapshot: %s',  # pylint: disable=no-member
-                           str(details))
-            return {}
+        for node in self.nodes:
+            screenshot_collector = GrafanaScreenShotEntity(name="grafana-screenshot",
+                                                           test_start_time=start_time)
+            screenshots = screenshot_collector.collect(node, self.logdir)
+            snapshots_collector = GrafanaSnapshotEntity(name="grafana-snapshot",
+                                                        test_start_time=start_time)
+            snapshots = snapshots_collector.collect(node, self.logdir)
+        return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
@@ -3793,30 +3753,15 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
 
         return annotations_url
 
-    @staticmethod
-    def _get_screenshot_link(grafana_url, snapshot_path, size):
-        LOCALRUNNER.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" %s" % (
-                        grafana_url, snapshot_path, size))
-        return S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id())
-
-    def _get_shared_snapshot_link(self, grafana_url):
-        result = LOCALRUNNER.run(
-            "cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
-        # since there is only one monitoring node returning here
-        output = result.stdout.strip()
-        if "Error" in output:
-            self.log.info(output)  # pylint: disable=no-member
-            return ""
-        else:
-            self.log.info("Shared grafana snapshot: {}".format(output))  # pylint: disable=no-member
-            return output
-
     @log_run_info
     def download_monitor_data(self):
-        for node in self.nodes:  # pylint: disable=no-member
+        from logcollector import PrometheusSnapshotsEntity
+        for node in self.nodes:
             try:
-                snapshot_archive = self.get_prometheus_snapshot(node)
-                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
+                collector = PrometheusSnapshotsEntity(name='prometheus_snapshot')
+
+                snapshot_archive = collector.collect(node, self.logdir)
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
 
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception as details:  # pylint: disable=broad-except
@@ -3824,139 +3769,21 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                                str(details))
                 return ""
 
-    def download_scylla_manager_log(self):
-        for node in self.nodes:  # pylint: disable=no-member
-            try:
-                scylla_mgmt_log_path = node.collect_mgmt_log()
-                scylla_manager_local_log_path = os.path.join(node.logdir, 'scylla_manager_log')
-                node.remoter.receive_files(src=scylla_mgmt_log_path, dst=scylla_manager_local_log_path)
-                shutil.make_archive(scylla_manager_local_log_path, 'zip', scylla_mgmt_log_path)
-                link = S3Storage().upload_file("{}.zip".format(scylla_manager_local_log_path), dest_dir=Setup.test_id())
-                self.log.info("Scylla manager log uploaded {}".format(link))  # pylint: disable=no-member
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Error downloading scylla manager log : %s',  # pylint: disable=no-member
-                               str(details))
-
-    def collect_scylla_monitoring_logs(self, node):
-        log_paths = []
-        monitoring_dockers = self._get_running_monitoring_dockers(node)
-        for m_docker in monitoring_dockers:
-            m_docker_log_path = self._collect_monitoring_docker_log(node, m_docker)
-            if m_docker_log_path:
-                log_paths.append(m_docker_log_path)
-
-        return log_paths
-
-    def _get_running_monitoring_dockers(self, node):
-        monitoring_dockers = []
-        result = node.remoter.run("docker ps -a --format {{.Names}}", ignore_status=True)
-        if result.exit_status == 0:
-            monitoring_dockers = [docker.strip() for docker in result.stdout.split('\n') if docker.strip()]
-        else:
-            self.log.warning("Getting running docker containers failed: {}".format(result))  # pylint: disable=no-member
-
-        self.log.debug("Next monitoring dockers are running: {}".format(  # pylint: disable=no-member
-            monitoring_dockers))
-        return monitoring_dockers
-
-    def _collect_monitoring_docker_log(self, node, docker):
-        log_path = "/tmp/{}.log".format(docker)
-        cmd = "docker logs --details -t {} > {}".format(docker, log_path)
-        result = node.remoter.run(cmd, ignore_status=True)
-        if result.exit_status == 0:
-            return log_path
-        else:
-            self.log.warning("Collecting {} log failed {}".format(docker, result))  # pylint: disable=no-member
-            return ""
-
-    def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
-        os.mkdir(storing_dir)
-
-        for node in self.nodes:  # pylint: disable=no-member
-            scylla_mgmt_log = node.collect_mgmt_log()
-            node.remoter.receive_files(src=scylla_mgmt_log, dst=storing_dir)
-            monitoring_dockers_logs = self.collect_scylla_monitoring_logs(node)
-            node.remoter.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
-
-        return storing_dir
-
-    @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, ), message='Create prometheus snapshot')
-    def create_prometheus_snapshot(self, node):
-        p_stats = PrometheusDBStats(host=node.external_address)
-        result = p_stats.create_snapshot()
-        if result and "success" in result['status']:
-            snapshot_dir = os.path.join(self.monitoring_data_dir,
-                                        "snapshots",
-                                        result['data']['name'])
-            return snapshot_dir
-        else:
-            raise PrometheusSnapshotErrorException(result)
-
     def get_prometheus_snapshot(self, node):
-        try:
-            snapshot_dir = self.create_prometheus_snapshot(node)
-        except PrometheusSnapshotErrorException as details:
-            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(   # pylint: disable=no-member
-                details))
-            snapshot_dir = self.monitoring_data_dir
+        from logcollector import PrometheusSnapshotsEntity
 
-        archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)  # pylint: disable=no-member
-        result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
-                                                                 archive_snapshot_name),
-                                  ignore_status=True)
-        if result.exit_status > 0:
-            self.log.warning('Unable to create archive {}'.format(result))  # pylint: disable=no-member
-            return ""
+        collector = PrometheusSnapshotsEntity(name="prometheus_data")
 
-        try:
-            local_snapshot_data_dir = os.path.join(node.logdir, "prometheus_data")
-
-            if not os.path.exists(local_snapshot_data_dir):
-                os.mkdir(local_snapshot_data_dir)
-
-            local_archive_path = os.path.join(local_snapshot_data_dir,
-                                              os.path.basename(archive_snapshot_name))
-            if os.path.exists(local_archive_path):
-                self.log.info('Remove previous file {}'.format(local_archive_path))  # pylint: disable=no-member
-                os.remove(local_archive_path)
-
-            node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
-            return local_archive_path
-
-        except Exception:  # pylint: disable=broad-except
-            self.log.exception("Unable to download Prometheus data:")  # pylint: disable=no-member
-            return ""
-
-    def get_monitoring_data_stack(self, node):
-        archive_name = "monitoring_data_stack_{0.monitor_branch}_{0.monitoring_version}.tar.gz".format(self)
-
-        sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
-
-        node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir))
-        sct_dashboard_file = self.get_sct_dashboards_config()
-        node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
-
-        annotations_json = self.get_grafana_annotations(node)
-        if annotations_json:
-            tmp_dir = tempfile.mkdtemp()
-            with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as annotations_file:
-                annotations_file.write(annotations_json)
-            node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
-
-        node.remoter.run("cd {}; tar -czvf {} {}/".format(self.monitor_install_path_base,
-                                                          archive_name,
-                                                          os.path.basename(self.monitor_install_path)),
-                         ignore_status=True)
-        node.remoter.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
-                                   dst=self.logdir)  # pylint: disable=no-member
-        return os.path.join(self.logdir, archive_name)  # pylint: disable=no-member
+        return collector.collect(node, self.logdir)
 
     def download_monitoring_data_stack(self):
-        for node in self.nodes:  # pylint: disable=no-member
-            local_path_to_monitor_stack = self.get_monitoring_data_stack(node)
-            self.log.info('Path to monitoring stack {}'.format(  # pylint: disable=no-member
-                local_path_to_monitor_stack))
+        from logcollector import MonitoringStackEntity
+
+        for node in self.nodes:
+            collector = MonitoringStackEntity(name="monitoring-stack")
+
+            local_path_to_monitor_stack = collector.collect(node, self.logdir)
+            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
 
             return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
 

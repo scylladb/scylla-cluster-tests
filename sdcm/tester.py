@@ -21,10 +21,9 @@ import time
 import types
 from uuid import uuid4
 from functools import wraps
-import shutil
-import unittest
-import zipfile
+import libvirt
 import random
+import unittest
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -37,7 +36,6 @@ from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-nam
 from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
-import libvirt
 
 from sdcm.keystore import KeyStore
 from sdcm import cluster, nemesis, docker, cluster_baremetal, db_stats, wait
@@ -1480,60 +1478,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.exception('Exception in finalize_test method {}'.format(details))
             raise
         finally:
+            from logcollector import SCTLogCollector
             if self._failure_post_behavior == 'destroy':
                 clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
             stop_events_device()
-            self.collect_events_log()
-            self.zip_and_upload_job_log()
-            stop_rsyslog()
 
-    def zip_and_upload_job_log(self):
+            storing_dir = os.path.join(self.logdir, "collected_logs")
+            _, _, s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
+            self.log.info(s3_link)
 
-        job_log_dir_tmp = os.path.join(self.logdir, 'job_log')
-        if not os.path.exists(job_log_dir_tmp):
-            os.mkdir(job_log_dir_tmp)
-        for log_file in ['sct.log', 'output.log']:
-            f_path = os.path.join(self.logdir, log_file)
-            if os.path.isfile(f_path):
-                shutil.copy(f_path, job_log_dir_tmp)
-
-        archive_name = os.path.basename(job_log_dir_tmp)
-
-        try:
-            cur_dir = os.getcwd()
-            joblog_archive = os.path.join(self.logdir, archive_name + ".zip")
-            with zipfile.ZipFile(joblog_archive, "w", allowZip64=True) as arch:
-                os.chdir(job_log_dir_tmp)
-                for _, _, files in os.walk(job_log_dir_tmp):
-                    for log_file in files:
-                        arch.write(log_file)
-                os.chdir(cur_dir)
-            s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
-            self.log.info('Link to job.log archive {}'.format(s3_link))
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Errors during creating and uploading archive of sct.log {}'.format(details))
-        finally:
-            remove_files(job_log_dir_tmp)
-            remove_files(joblog_archive)
-        self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
-        if self.create_stats:
-            self.log.info("ES document id: {}".format(self.get_doc_id()))
-
-    def collect_events_log(self):
-        event_log_dir = EVENTS_PROCESSES['MainDevice'].event_log_base_dir
-
-        archive_name = os.path.basename(event_log_dir)
-        try:
-            event_log_archive = shutil.make_archive(archive_name, 'zip', event_log_dir)
-            s3_link = S3Storage().upload_file(file_path=event_log_archive, dest_dir=cluster.Setup.test_id())
+            stop_rsyslog()
+            self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
             if self.create_stats:
-                self.update({'test_details': {'log_files': {'events_log': s3_link}}})
-            self.log.info('Link to events log archive {}'.format(s3_link))
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Errors during creating and uploading archive of events log. {}'.format(details))
-        remove_files(event_log_archive)
+                self.log.info("ES document id: {}".format(self.get_doc_id()))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
 
@@ -1668,46 +1627,42 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
 
     def collect_logs(self):
+        do_collect = self.params.get('collect_logs', True)
+        if not do_collect:
+            self.log.warning("Collect logs is disabled")
+            return
+
         self.log.info('Start collect logs...')
         logs_dict = {"db_cluster_log": "",
                      "loader_log": "",
                      "monitoring_log": "",
                      "prometheus_data": "",
                      "monitoring_stack": ""}
-
+        from sdcm.logcollector import ScyllaLogCollector, MonitorLogCollector
         storing_dir = os.path.join(self.logdir, "collected_logs")
         makedirs(storing_dir)
 
+        if not os.path.exists(storing_dir):
+            os.makedirs(storing_dir)
+
         self.log.info("Storing dir is {}".format(storing_dir))
         if self.db_cluster:
-            db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
-            logs_dict["db_cluster_log"] = S3Storage().upload_file(file_path=self.archive_logs(db_cluster_log_path),
-                                                                  dest_dir=cluster.Setup.test_id())
-        if self.loaders:
-            loader_log_path = self.loaders.collect_logs(storing_dir)
-            logs_dict["loader_log"] = S3Storage().upload_file(file_path=self.archive_logs(loader_log_path),
-                                                              dest_dir=cluster.Setup.test_id())
+            db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, cluster.Setup.test_id(), storing_dir)
+            _, archive_path, s3_link = db_log_collector.collect_logs(self.logdir)
+            self.log.info(archive_path)
+            self.log.info(s3_link)
+            logs_dict["db_cluster_log"] = s3_link
+
         if self.monitors.nodes:
-            monitoring_log_path = self.monitors.collect_logs(storing_dir)
-            logs_dict["monitoring_log"] = S3Storage().upload_file(file_path=self.archive_logs(monitoring_log_path),
-                                                                  dest_dir=cluster.Setup.test_id())
-            prometheus_data = self.monitors.download_monitor_data()
-            logs_dict["prometheus_data"] = prometheus_data
-            logs_dict["monitoring_stack"] = self.monitors.download_monitoring_data_stack()
+            monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storing_dir)
+            _, archive_path, s3_link = monitor_log_collector.collect_logs(self.logdir)
+            logs_dict["monitoring_log"] = s3_link
 
         if self.create_stats:
             self.update({'test_details': {'log_files': logs_dict}})
 
         self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
                       format(cluster.Setup.test_id()))
-
-        remove_files(storing_dir)
-
-    def archive_logs(self, path):
-        self.log.info('Creating archive....')
-        archive_path = shutil.make_archive(path, 'zip', root_dir=path)
-        self.log.info('Path to archive file: %s', archive_path)
-        return archive_path
 
     def print_failure_to_log(self):
         """

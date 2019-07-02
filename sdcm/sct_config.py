@@ -831,6 +831,9 @@ class SCTConfiguration(dict):
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
              help="How to transport logs: rsyslog or ssh", choices=("rsyslog", "ssh")),
+
+        dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
+             help="Collect logs from instances and sct runner")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',

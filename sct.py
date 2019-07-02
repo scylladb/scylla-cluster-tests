@@ -14,8 +14,9 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
-                               list_logs_by_test_id, restore_monitoring_stack, get_branched_ami, gce_meta_to_dict,
+                               list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws)
+from sdcm.utils.monitorstack import restore_monitor_stack
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 
@@ -285,12 +286,12 @@ def investigate():
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
 def show_log(test_id):
-    tbl = PrettyTable(["Log type", "Link"])
-    tbl.align = "l"
+    x = PrettyTable(["Date", "Log type", "Link"])
+    x.align = "l"
     files = list_logs_by_test_id(test_id)
     for log in files:
-        tbl.add_row([log["type"], log["link"]])
-    click.echo(tbl.get_string(title="Log links for testrun with test id {}".format(test_id)))
+        x.add_row([log["date"], log["type"], log["link"]])
+    click.echo(x.get_string(title="Log links for testrun with test id {}".format(test_id)))
 
 
 @investigate.command('show-monitor', help="Show link to prometheus data snapshot")
@@ -300,9 +301,9 @@ def show_monitor(test_id, debug_log):
     click.echo('Search monitor stack archive files for test id {} and restoring...'.format(test_id))
     if debug_log:
         LOGGER.setLevel(logging.DEBUG)
-    status = restore_monitoring_stack(test_id)
-    tbl = PrettyTable(['Name', 'container', 'Link'])
-    tbl.align = 'l'
+    status = restore_monitor_stack(test_id)
+    x = PrettyTable(['Name', 'container', 'Link'])
+    x.align = 'l'
     if status:
         click.echo('Monitoring stack restored')
 
@@ -370,6 +371,32 @@ def cloud_usage_report(emails):
     click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
     cloud_report(mail_to=email_list)
     click.secho(message="Done." % email_list, fg="yellow")
+
+
+@cli.command('collect-logs', help='Collect logs from cluster by test-id')
+@click.option('--test-id', help='Find cluster by test-id')
+@click.option('--log-dir', help='Path to directory with sct results')
+@click.option('--backend', help='Backend where to find nodes', default='aws')
+# @click.option('--user', help='Authenticate with user to remote nodes')
+# @click.option('--key_file', help='Key file for authorization')
+# def collect_logs(test_id=None, backend='aws', user='centos', key_file='', log_dir=None):
+def collect_logs(test_id=None, log_dir=None, backend='aws'):
+    from sdcm.logcollector import Collector
+    if not os.environ.get('SCT_CLUSTER_BACKEND', None):
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
+    config = SCTConfiguration()
+
+    collector = Collector(test_id=test_id, params=config, test_dir=log_dir)
+
+    collected_logs = collector.run()
+
+    x = PrettyTable(['Cluster set', 'Link'])
+    x.align = 'l'
+    for cluster_type, s3_link in collected_logs.items():
+        x.add_row([cluster_type, s3_link])
+    click.echo(x.get_string(title="Collected logs by test-id: {} Storing dir: {}".format(collector.test_id,
+                                                                                         collector.storing_dir,)))
 
 
 if __name__ == '__main__':
