@@ -751,11 +751,9 @@ class BaseNode(object):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
-        while True:
-            if self.termination_event.isSet():
-                break
+        while not self.termination_event.isSet():
+            self.termination_event.wait(15)
             self.get_backtraces()
-            time.sleep(30)
 
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
