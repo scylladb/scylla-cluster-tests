@@ -86,7 +86,6 @@ class EventsDevice(Process):
                             filters[obj.id] = obj
                         else:
                             del filters[obj.id]
-
                     obj_filtered = obj_filtered or isinstance(obj, SystemEvent)
                     if not obj_filtered:
                         yield obj.__class__.__name__, obj
@@ -477,6 +476,11 @@ def start_events_device(log_dir, timeout=5):
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
+
+    # default filters
+    EVENTS_PROCESSES['default_filter'] = []
+    EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: supressed')]
+    EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: suppressed')]
 
 
 def stop_events_device():

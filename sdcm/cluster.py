@@ -317,6 +317,7 @@ class BaseNode(object):
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
                                        DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
                                        DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
+                                       DatabaseLogEvent(type='FILESYSTEM_ERROR', regex='filesystem_error'),
                                        DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
                                        DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
                                        DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
