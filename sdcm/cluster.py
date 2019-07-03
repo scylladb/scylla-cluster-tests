@@ -1967,9 +1967,12 @@ class BaseCluster(object):
 
     def get_backtraces(self):
         for node in self.nodes:
-            node.get_backtraces()
-            if node.n_coredumps > 0:
-                self.coredumps[node.name] = node.n_coredumps
+            try:
+                node.get_backtraces()
+                if node.n_coredumps > 0:
+                    self.coredumps[node.name] = node.n_coredumps
+            except Exception as ex:
+                self.log.warning("Unable to get coredump status from node {node}: {ex}".format(**locals()))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
