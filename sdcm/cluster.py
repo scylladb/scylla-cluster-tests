@@ -3332,6 +3332,7 @@ class BaseMonitorSet(object):
                 templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)
             loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
+            gemini_loader_targets_list = ["%s:2112" % n.ip_address for n in self.targets["loaders"].nodes]
 
             # remove those jobs if exists, for support of 'reuse_cluster: true'
             def remove_sct_metrics(x):
@@ -3341,6 +3342,8 @@ class BaseMonitorSet(object):
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
+            scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
+                                       static_configs=[dict(targets=gemini_loader_targets_list)]))
             if self.sct_ip_port:
                 scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
                                            static_configs=[dict(targets=[self.sct_ip_port])]))

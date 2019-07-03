@@ -86,7 +86,7 @@ class GeminiTest(ClusterTester):
 
     def _prepare_test_results(self):
         return {
-            "test_name": self.avocado_params.id.name.split('.')[0],
+            "test_name": self.id(),
             "build_url": os.getenv('BUILD_URL', "#"),
             "start_time": "",
             "end_time": "",
