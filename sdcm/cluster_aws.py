@@ -4,10 +4,12 @@ import uuid
 import os
 import tempfile
 import yaml
+import json
 
 from botocore.exceptions import WaiterError, ClientError
 from textwrap import dedent
 from threading import Thread
+from datetime import datetime
 
 import cluster
 import ec2_client
@@ -117,7 +119,7 @@ class AWSCluster(cluster.BaseCluster):
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
                                    spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
@@ -468,14 +470,21 @@ class AWSNode(cluster.BaseNode):
 
     def monitor_aws_termination_thread(self):
         while True:
+            duration = 5
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
             aws_message = self.get_aws_termination_notification()
             if aws_message:
                 self.log.warning('Got spot termination notification from AWS %s' % aws_message)
-                SpotTerminationEvent(node=self, aws_message=aws_message)
-            time.sleep(5)
+                terminate_action = json.loads(aws_message)
+                terminate_action_timestamp = time.mktime(datetime.strptime(terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
+                duration = terminate_action_timestamp - time.time() - 15
+                if duration <= 0:
+                    duration = 5
+                terminate_action['time-left'] = terminate_action_timestamp - time.time()
+                SpotTerminationEvent(node=self, aws_message=terminate_action)
+            time.sleep(duration)
 
     def start_aws_termination_monitoring(self):
         self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
