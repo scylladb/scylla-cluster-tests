@@ -23,6 +23,9 @@ class GCENode(cluster.BaseNode):
         self._instance = gce_instance
         self._gce_service = gce_service
         self._wait_public_ip()
+        # sleep 10 seconds for waiting users are added to system
+        # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121
+        time.sleep(10)
         ssh_login_info = {'hostname': None,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
