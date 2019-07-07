@@ -3,8 +3,8 @@ db_type: scylla
 ip_ssh_connections: 'private'
 
 mgmt_port: 10090
-scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2018.1.repo'
-scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.3.repo'
+scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2019.1.repo'
+scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.4.repo'
 
 experimental: 'true'
 
