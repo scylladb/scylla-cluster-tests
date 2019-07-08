@@ -1477,10 +1477,14 @@ class DisruptiveMonkey(Nemesis):
         #  - DecommissionMonkey
         #  - NodeRestartWithResharding
         #  - DrainerMonkey
+
+    def __init__(self, *args, **kwargs):
+        super(DisruptiveMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=True)
+
     @log_time_elapsed_and_status
     def disrupt(self):
-        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=True)
-        self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
 class NonDisruptiveMonkey(Nemesis):
@@ -1492,22 +1496,27 @@ class NonDisruptiveMonkey(Nemesis):
         #  - NoCorruptRepairMonkey
         #  - MgmtRepair
         #  - AbortRepairMonkey
+
+    def __init__(self, *args, **kwargs):
+        super(NonDisruptiveMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False)
+
     @log_time_elapsed_and_status
     def disrupt(self):
-        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False)
-        self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
 class GeminiChaosMonkey(Nemesis):
     # Limit the nemesis scope to use with gemini
         # - StopStartMonkey
         # - RestartThenRepairNodeMonkey
+    def __init__(self, *args, **kwargs):
+        super(GeminiChaosMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True)
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True)
-        self.log.info(disrupt_methods_list)
-        self.call_random_disrupt_method(disrupt_methods=disrupt_methods_list)
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
