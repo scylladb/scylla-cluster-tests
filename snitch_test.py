@@ -35,7 +35,7 @@ class SnitchTest(ClusterTester):
 
         self.log.info("PASS: system.peers isn't empty as expected")
 
-        result = self.db_cluster.nodes[0].run_nodetool("status")
+        result = self.db_cluster.nodes[0].check_node_health()
         assert 'Datacenter: us-east1scylla_node_east' in result.stdout
         assert 'Datacenter: us-west1scylla_node_west' in result.stdout
 

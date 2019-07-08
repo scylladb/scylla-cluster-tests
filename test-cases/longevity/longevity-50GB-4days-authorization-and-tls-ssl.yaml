@@ -18,6 +18,8 @@ n_loaders: 3
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
+# Seems the c5.xlarge type is small for this load - I receive OOM on 2 loaders
+instance_type_loader: 'c5.2xlarge'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5

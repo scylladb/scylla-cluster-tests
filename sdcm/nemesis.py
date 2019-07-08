@@ -301,13 +301,7 @@ class Nemesis(object):
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
         result = self.target_node.run_nodetool("drain")
-        for node in self.cluster.nodes:
-            if node == self.target_node:
-                self.log.info('Status for target %s: %s', node,
-                              node.run_nodetool('status'))
-            else:
-                self.log.info('Status for regular %s: %s', node,
-                              node.run_nodetool('status'))
+        self.cluster.check_cluster_health()
         if result is not None:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -987,20 +981,8 @@ def log_time_elapsed_and_status(method):
     :return: Wrapped method.
     """
 
-    def print_nodetool_status(self):
-        for node in self.cluster.nodes:
-            try:
-                if node == self.target_node:
-                    self.log.info('Status for target %s: %s', node,
-                                  node.run_nodetool('status'))
-                else:
-                    self.log.info('Status for regular %s: %s', node,
-                                  node.run_nodetool('status'))
-            except Exception as ex:
-                self.log.info("Unable to get nodetool status from '{node}': {ex}".format(**locals()))
-
     def wrapper(*args, **kwargs):
-        print_nodetool_status(args[0])
+        args[0].cluster.check_cluster_health()
         num_nodes_before = len(args[0].cluster.nodes)
         start_time = time.time()
         args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
@@ -1043,7 +1025,7 @@ def log_time_elapsed_and_status(method):
 
             args[0].update_stats(disrupt, status, log_info)
             DisruptionEvent(type='end', name=disrupt, status=status, **log_info)
-            print_nodetool_status(args[0])
+            args[0].cluster.check_cluster_health()
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %

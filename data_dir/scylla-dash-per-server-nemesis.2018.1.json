@@ -5147,9 +5147,14 @@
                         "selected": false,
                         "text": "SpotTerminationEvent",
                         "value": "SpotTerminationEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "ClusterHealthValidatorEvent",
+                        "value": "ClusterHealthValidatorEvent"
                       }
                     ],
-                    "query": "InfoEvent, CassandraStressEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent",
+                    "query": "InfoEvent, CassandraStressEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, ClusterHealthValidatorEvent",
                     "skipUrlSync": false,
                     "type": "custom"
                   }

@@ -40,11 +40,13 @@ from datetime import datetime
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
+    get_latest_gemini_version
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
 
-from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent
+from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent, \
+    ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
 
 
@@ -1877,9 +1879,66 @@ server_encryption_options:
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
         result = self.remoter.run(cmd, ignore_status=ignore_status)
-        self.log.debug("Command '%s' duration -> %s s", result.command,
-                       result.duration)
+        self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
+
         return result
+
+    def check_node_health(self):
+        self.check_nodes_status()
+        self.check_schema_version()
+
+    def check_nodes_status(self):
+        # Validate nodes health
+        node_type = 'target' if self.running_nemesis else 'regular'
+        # TODO: improve this part (using get_nodetool_status function from ScyllaCluster)
+        ClusterHealthValidatorEvent(type='start', name='NodesStatus', status=True, node=self.name)
+        try:
+            self.log.info('Status for %snode %s: %s' % (node_type, self.name, self.run_nodetool('status')))
+
+            ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=True, node=self.name)
+
+        except Exception as ex:
+            ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=False,
+                                        node=self.name,
+                                        error="Unable to get nodetool status from '{node}': {ex}".format(**locals()))
+
+    def check_schema_version(self):
+        # Get schema version
+        ClusterHealthValidatorEvent(type='start', name='NodeSchemaVersion', status=True, node=self.name)
+        errors = []
+        try:
+            result = self.run_nodetool('gossipinfo')
+            schema_version = list(set([line.replace('SCHEMA:', '')
+                                       for line in result.stdout.split() if line.startswith('SCHEMA:')]))[0]
+            self.log.info('Gossipinfo schema_version: %s' % (schema_version))
+
+            # Search for nulls in system.peers
+            peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
+                                           'rpc_address, schema_version, supported_features from system.peers',
+                                           split=True)
+
+            for line in peers_details[3:-2]:
+                line_splitted = line.split('|')
+                current_node_ip = line_splitted[0].strip()
+                nulls = [column for column in line_splitted[1:] if column.strip() == 'null']
+
+                if nulls:
+                    errors.append('Found nulls in system.peers on the node %s: %s' % (current_node_ip, peers_details))
+
+                actual_schema_version = line_splitted[6].strip()
+                if actual_schema_version != schema_version:
+                    errors.append('Expected schema version: %s. Wrong schema version found on the '
+                                  'node %s: %s' % (schema_version, current_node_ip, actual_schema_version))
+        except Exception as e:
+            errors.append('Validate schema version failed. Error: {}'.format(e.message))
+
+        if errors:
+            ClusterHealthValidatorEvent(type='end', name='NodeSchemaVersion', status=False,
+                                        node=self.name,
+                                        error='; '.join(errors))
+        else:
+            ClusterHealthValidatorEvent(type='end', name='NodeSchemaVersion', status=True,
+                                        node=self.name)
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
@@ -2402,6 +2461,14 @@ class BaseScyllaCluster(object):
                         pass
         return status
 
+    def check_cluster_health(self):
+        ClusterHealthValidatorEvent(type='start', name='ClusterHealthCheck', status=True)
+
+        for node in self.nodes:
+            node.check_node_health()
+
+        ClusterHealthValidatorEvent(type='end', name='ClusterHealthCheck', status=True)
+
     def check_nodes_up_and_normal(self, nodes=[]):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
@@ -2587,7 +2654,7 @@ class BaseScyllaCluster(object):
         self.get_seed_nodes()
         self.get_scylla_version()
         self.set_traffic_control()
-        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].run_nodetool("status"))
+        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].check_node_health())
 
     def restart_scylla(self, nodes=None):
         if nodes:
