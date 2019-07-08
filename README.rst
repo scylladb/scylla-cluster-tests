@@ -401,4 +401,4 @@ Footnotes
 * [2] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
 * [3] https://prometheus.io/
 * [4] http://grafana.org/
-.. _repo: https://github.com/scylladb/scylla-grafana-monitoring
+.. _repo: https://github.com/scylladb/scylla-monitoring
