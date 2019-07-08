@@ -11,24 +11,31 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2016 ScyllaDB
+# Copyright (c) 2019 ScyllaDB
 
 import random
 import string
 import time
 
-from avocado import main
-from avocado.utils import process
-
 from sdcm.tester import ClusterTester
 
 # performance_regression_row_level_repair_test.py
+from sdcm.utils import measure_time
+
+
 class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     """
     Test Scylla performance regression with cassandra-stress.
 
-    :avocado: enable
     """
+
+    KEYSPACE_NAME = "ks"
+    TABLE_NAME = "cf"
+    INT_COLUMNS = 20  # TODO: 99
+    PARTITIONS = 30  # TODO: 100
+    BIG_PARTITION_IDX = PARTITIONS + 1
+    BIG_PARTITION_ROWS = 150  # TODO: 100000
+    ROWS_IN_PARTITION = 15  # TODO: 30
 
     def __init__(self, *args, **kwargs):
         super(PerformanceRegressionRowLevelRepairTest, self).__init__(*args, **kwargs)
@@ -40,13 +47,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         1. TODO: docstring
         """
-        KEYSPACE_NAME = "ks"
-        TABLE_NAME = "cf"
-        INT_COLUMNS = 20  # TODO: 99
-        PARTITIONS = 30  # TODO: 100
-        BIG_PARTITION_IDX = PARTITIONS + 1
-        BIG_PARTITION_ROWS = 150  # TODO: 100000
-        ROWS_IN_PARTITION = 15 # TODO: 30
+
 
         # Util functions ===============================================================================================
 
@@ -55,17 +56,17 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             session = self.cql_connection_patient(node)
             return session
 
-        def _get_cql_session_and_use_keyspace(node=None, keyspace=KEYSPACE_NAME):
+        def _get_cql_session_and_use_keyspace(node=None, keyspace=self.KEYSPACE_NAME):
             session = _get_cql_session(node=node)
             session.execute("USE {}".format(keyspace))
             return session
 
-        def _create_update_command(column_expr, pk, ck, table_name=TABLE_NAME):
+        def _create_update_command(column_expr, pk, ck, table_name=self.TABLE_NAME):
             cql_update_cmd = 'update {table_name} set {column_expr} where pk={pk} and ck={ck}'.format(**locals())
             self.log.debug("Generated CQL update command of: {}".format(cql_update_cmd))
             return cql_update_cmd
 
-        def _update_table(table_name=TABLE_NAME, keyspace=KEYSPACE_NAME):
+        def _update_table(table_name=self.TABLE_NAME, keyspace=self.KEYSPACE_NAME):
             self.log.debug('Update table')
             session = _get_cql_session_and_use_keyspace(keyspace=keyspace)
 
@@ -77,45 +78,42 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                     num_of_total_updates, num_of_updates))
             for _ in range(num_of_updates):
                 # Update/delete int columns to a random big partition
-                column = random.randint(1, INT_COLUMNS - 1)
+                column = random.randint(1, self.INT_COLUMNS - 1)
                 column_name = 'c{}'.format(column)
                 new_value = random.choice(['NULL', random.randint(0, 500000)])
                 column_expr = '{} = {}'.format(column_name, new_value)
                 stmts.append(_create_update_command(column_expr=column_expr,
-                                                    pk=random.randint(1, PARTITIONS),
-                                                    ck=random.randint(1, ROWS_IN_PARTITION),
+                                                    pk=random.randint(1, self.PARTITIONS),
+                                                    ck=random.randint(1, self.BIG_PARTITION_ROWS),
                                                     table_name=table_name))
 
                 # Update/delete row inside the largest partition
                 stmts.append(_create_update_command(column_expr=column_expr,
-                                                    pk=BIG_PARTITION_IDX, ck=random.randint(1, BIG_PARTITION_ROWS),
+                                                    pk=self.BIG_PARTITION_IDX, ck=random.randint(1, self.BIG_PARTITION_ROWS),
                                                     table_name=table_name))
 
             for stmt in stmts:
                 session.execute(stmt)
 
-        def _pre_create_schema(table_name=TABLE_NAME, keyspace=KEYSPACE_NAME):
+        def _pre_create_schema(table_name=self.TABLE_NAME, keyspace=self.KEYSPACE_NAME, int_columns=self.INT_COLUMNS):
             self.log.debug('Create schema')
             session = _get_cql_session()
 
-            INT_COLUMNS = 30 # TODO: 99
             stmt = "CREATE KEYSPACE IF NOT EXISTS {}".format(
                 keyspace) + " WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}"
             session.execute(stmt)
             session.execute("USE {}".format(keyspace))
             stmt = 'create table {} (pk int, ck int, {}, clist list<int>, cset set<text>, cmap map<int, text>, ' \
-                   'PRIMARY KEY(pk, ck))'.format(table_name, ', '.join('c%d int' % i for i in xrange(1, INT_COLUMNS)))
+                   'PRIMARY KEY(pk, ck))'.format(table_name, ', '.join('c%d int' % i for i in xrange(1, int_columns)))
             session.execute(stmt)
 
-        def _pre_fill_schema(table_name=TABLE_NAME):
+        def _pre_fill_schema(table_name=self.TABLE_NAME, partitions=self.PARTITIONS, rows_in_partition=self.ROWS_IN_PARTITION):
 
             self.log.debug('Prefill schema')
             session = _get_cql_session_and_use_keyspace()
 
             # Prefill
-            partitions = PARTITIONS
-            rows_in_partition = ROWS_IN_PARTITION
-            self.log.debug('Create {} partitions with {} rows'.format(partitions, rows_in_partition))
+            self.log.info('Create {} partitions with {} rows'.format(partitions, rows_in_partition))
             for i in xrange(1, partitions + 1):
                 for k in xrange(1, rows_in_partition + 1):
                     str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
@@ -124,10 +122,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                            '{open}{set_value}{close}, {map_value})'.format(table_name=table_name,
                                                                            columns=', '.join(
                                                                                'c%d' % l for l in
-                                                                               xrange(1, INT_COLUMNS)),
+                                                                               xrange(1, self.INT_COLUMNS)),
                                                                            int_values=', '.join(
                                                                                '%d' % l for l in
-                                                                               xrange(1, INT_COLUMNS)),
+                                                                               xrange(1, self.INT_COLUMNS)),
                                                                            ilist=i, klist=k, open='{\'',
                                                                            set_value=str, close='\'}',
                                                                            map_value='{%d: \'%s\'}' % (k, str)
@@ -136,45 +134,30 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
             # Pre-fill the largest partition
             big_partition = partitions + 1
-            big_partition_rows = BIG_PARTITION_ROWS  # TODO: 100000
+            big_partition_rows = self.BIG_PARTITION_ROWS  # TODO: 100000
             total_rows = partitions * rows_in_partition + big_partition_rows
-            self.log.debug('Create partition where pk = {} with {} rows'.format(big_partition, big_partition_rows))
+            self.log.info('Create partition where pk = {} with {} rows'.format(big_partition, big_partition_rows))
             for k in xrange(1, big_partition_rows + 1):
                 str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
                 stmt = 'insert into {table_name} (pk, ck, {columns}, clist, cset, cmap) values ({ilist}, {klist}, {int_values}, ' \
                        '[{ilist}, {klist}], ' \
                        '{open}{set_value}{close}, {map_value})'.format(table_name=table_name,
                                                                        columns=', '.join(
-                                                                           'c%d' % l for l in xrange(1, INT_COLUMNS)),
+                                                                           'c%d' % l for l in xrange(1, self.INT_COLUMNS)),
                                                                        int_values=', '.join(
-                                                                           '%d' % l for l in xrange(1, INT_COLUMNS)),
+                                                                           '%d' % l for l in xrange(1, self.INT_COLUMNS)),
                                                                        ilist=big_partition, klist=k, open='{\'',
                                                                        set_value=str, close='\'}',
                                                                        map_value='{%d: \'%s\'}' % (k, str)
                                                                        )
                 session.execute(stmt)
 
-        def _run_nodetool(cmd, node):
-            try:
-                result = node.remoter.run(cmd)
-                self.log.debug("Command '%s' duration -> %s s", result.command,
-                               result.duration)
-                return result
-            except process.CmdError, details:
-                err = ("nodetool command '%s' failed on node %s: %s" %
-                       (cmd, node, details.result))
-                self.log.error(err)
-                raise
-            except Exception:
-                err = 'Unexpected exception running nodetool'
-                self.log.error(err, exc_info=True)
-                raise
-
-        @measureTime
+        @measure_time
         def _run_repair(node):
             self.log.info('Running nodetool repair on {}'.format(node.name))
             repair_cmd = 'nodetool -h localhost repair'
-            result = _run_nodetool(cmd=repair_cmd, node=node)
+            result = node.run_nodetool(repair_cmd)
+
             return result
 
         # Util functions ===============================================================================================
@@ -208,16 +191,3 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.check_specific_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
-
-def measureTime(func, *args, **kwargs):
-    def wrapped(*args, **kwargs):
-        start = time.time()
-        func_res = func(*args, **kwargs)
-        end = time.time()
-        return end - start, func_res
-
-    return wrapped
-
-
-if __name__ == '__main__':
-    main()
