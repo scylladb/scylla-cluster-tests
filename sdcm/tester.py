@@ -55,7 +55,7 @@ from . import docker
 from . import cluster_baremetal
 from . import db_stats
 from db_stats import PrometheusDBStats
-from results_analyze import PerformanceResultsAnalyzer, SpecificStatsPerformanceAnalyzer
+from results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -1275,9 +1275,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def check_specific_regression(self, dict_specific_tested_stats):
 
-        ra = SpecificStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                              send_email=self.params.get('send_email', default=True),
-                                              email_recipients=self.params.get('email_recipients', default=None))
+        ra = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                                               send_email=self.params.get('send_email', default=True),
+                                               email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
             ra.check_regression(self._test_id, dict_specific_tested_stats=dict_specific_tested_stats, is_gce=is_gce)

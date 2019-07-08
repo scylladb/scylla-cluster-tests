@@ -175,10 +175,12 @@ class BaseResultsAnalyzer(object):
         return NotImplementedError("check_regression should be implemented!")
 
 
-class SpecificStatsPerformanceAnalyzer(BaseResultsAnalyzer):
-
+class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Get specified performance test results from elasticsearch DB and analyze it to find a regression
+    """
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
-        super(SpecificStatsPerformanceAnalyzer, self).__init__(
+        super(SpecifiedStatsPerformanceAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
