@@ -175,10 +175,10 @@ class BaseResultsAnalyzer(object):
         return NotImplementedError("check_regression should be implemented!")
 
 
-class SpecificResultsAnalyzer(BaseResultsAnalyzer):
+class SpecificStatsPerformanceAnalyzer(BaseResultsAnalyzer):
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
-        super(SpecificResultsAnalyzer, self).__init__(
+        super(SpecificStatsPerformanceAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
