@@ -441,7 +441,7 @@ def restore_monitoring_stack(test_id):
 
     logger.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
 
-    monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-grafana-monitoring-{}'.format(monitoring_branch))
+    monitoring_dockers_dir = os.path.join(monitor_stack_workdir, 'scylla-monitoring-{}'.format(monitoring_branch))
 
     def upload_sct_dashboards():
         sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
