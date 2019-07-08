@@ -234,6 +234,16 @@ def clean_instances_aws(tags_dict):
                 assert instance['CurrentState']['Name'] in ['terminated', 'shutting-down']
 
 
+def measure_time(func, *args, **kwargs):
+    @wraps
+    def wrapped(*args, **kwargs):
+        start = time.time()
+        func_res = func(*args, **kwargs)
+        end = time.time()
+        return end - start, func_res
+
+    return wrapped
+
 def clean_instances_gce(tags_dict):
     """
     Remove all instances with specific tags GCE
