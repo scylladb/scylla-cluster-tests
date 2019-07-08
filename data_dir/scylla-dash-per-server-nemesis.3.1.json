@@ -4810,6 +4810,122 @@
                 "showTitle": false,
                 "title": "New row",
                 "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": "30",
+                "panels": [
+                    {
+                        "class": "text_panel",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Gemini metrics</h1>",
+                        "editable": true,
+                        "error": false,
+                        "id": 69,
+                        "links": [],
+                        "mode": "html",
+                        "span": 12,
+                        "style": {},
+                        "title": "",
+                        "transparent": true,
+                        "type": "text"
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "Gemini metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": 250,
+                "panels": [
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "class": "ops_panel",
+                        "dashLength": 10,
+                        "dashes": false,
+                        "datasource": "prometheus",
+                        "description": "",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {},
+                        "id": 70,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 1,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "spaceLength": 10,
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                                {
+                                    "refId": "A",
+                                    "expr": "gemini_cql_requests",
+                                    "intervalFactor": 1,
+                                    "format": "time_series"
+                                }
+                        ],
+                        "thresholds": [],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Gemini metrics",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "individual"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "buckets": null,
+                            "mode": "time",
+                            "name": null,
+                            "show": true,
+                            "values": []
+                        },
+                        "yaxes": [
+                            {
+                                "format": "ops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "Gemini metrics",
+                "titleSize": "h6"
             }
         ],
         "schemaVersion": 14,

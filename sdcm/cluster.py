@@ -3341,6 +3341,12 @@ class BaseMonitorSet(object):
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
+
+            if self.params.get('gemini_cmd', None):
+                gemini_loader_targets_list = ["%s:2112" % n.ip_address for n in self.targets["loaders"].nodes]
+                scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
+                                           static_configs=[dict(targets=gemini_loader_targets_list)]))
+
             if self.sct_ip_port:
                 scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
                                            static_configs=[dict(targets=[self.sct_ip_port])]))
