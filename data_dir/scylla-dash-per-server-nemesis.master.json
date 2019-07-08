@@ -4838,7 +4838,7 @@
                     {
                         "aliasColors": {},
                         "bars": false,
-                        "class": "bytes_panel",
+                        "class": "ops_panel",
                         "dashLength": 10,
                         "dashes": false,
                         "datasource": "prometheus",
@@ -4898,7 +4898,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "bytes",
+                                "format": "ops",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
