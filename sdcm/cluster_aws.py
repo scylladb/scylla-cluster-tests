@@ -657,7 +657,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.run_nodetool('status')
+        node.check_nodes_status()
 
     def destroy(self):
         self.stop_nemesis()

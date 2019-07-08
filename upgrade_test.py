@@ -430,7 +430,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.run_nodetool("status")
+        self.db_cluster.node_to_upgrade.check_node_health()
 
         # wait for the prepare write workload to finish
         self.verify_stress_thread(prepare_write_cs_thread_pool)
@@ -455,7 +455,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.run_nodetool("status")
+        self.db_cluster.node_to_upgrade.check_node_health()
 
         # wait for the 10m read workload to finish
         self.verify_stress_thread(read_10m_cs_thread_pool)
@@ -469,14 +469,14 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
         self.rollback_node(self.db_cluster.nodes[indexes[1]])
         self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
-        self.db_cluster.nodes[indexes[1]].run_nodetool("status")
+        self.db_cluster.nodes[indexes[1]].check_node_health()
 
         for i in indexes[1:]:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
             self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.run_nodetool("status")
+            self.db_cluster.node_to_upgrade.check_node_health()
 
         # wait for the 20m read workload to finish
         self.verify_stress_thread(read_20m_cs_thread_pool)

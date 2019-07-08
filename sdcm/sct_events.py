@@ -229,6 +229,8 @@ class DisruptionEvent(SctEvent):
         self.duration = duration
         self.node = str(node)
         self.severity = Severity.NORMAL if status else Severity.ERROR
+        self.error = None
+        self.full_traceback = ''
         if error:
             self.error = error
             self.full_traceback = str(full_traceback)
@@ -243,6 +245,28 @@ class DisruptionEvent(SctEvent):
         elif self.severity == Severity.ERROR:
             return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
                 super(DisruptionEvent, self).__str__(), self)
+
+
+class ClusterHealthValidatorEvent(SctEvent):
+    def __init__(self, type, name, status, node=None, message=None, error=None, **kwargs):
+        super(ClusterHealthValidatorEvent, self).__init__()
+        self.name = name
+        self.type = type
+        self.node = str(node)
+        self.severity = Severity.NORMAL if status else Severity.CRITICAL
+        self.error = error if error else ''
+        self.message = message if message else ''
+
+        self.__dict__.update(kwargs)
+        self.publish()
+
+    def __str__(self):
+        if self.severity == Severity.NORMAL:
+            return "{0}: type={1.type} name={1.name} node={1.node} message={1.message}".format(
+                super(ClusterHealthValidatorEvent, self).__str__(), self)
+        elif self.severity == Severity.CRITICAL:
+            return "{0}: type={1.type} name={1.name} node={1.node} error={1.error}".format(
+                super(ClusterHealthValidatorEvent, self).__str__(), self)
 
 
 class FullScanEvent(SctEvent):
