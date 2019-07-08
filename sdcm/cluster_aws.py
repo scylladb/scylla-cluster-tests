@@ -484,7 +484,12 @@ class AWSNode(cluster.BaseNode):
             duration = 5
             if self.termination_event.isSet():
                 break
-            self.wait_ssh_up(verbose=False)
+            try:
+                self.wait_ssh_up(verbose=False)
+            except Exception as ex:
+                logger.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
+                               "Error details: '%s'", self.name, ex)
+                continue
             aws_message = self.get_aws_termination_notification()
             if aws_message:
                 self.log.warning('Got spot termination notification from AWS %s' % aws_message)
