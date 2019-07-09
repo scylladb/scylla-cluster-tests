@@ -8,15 +8,14 @@ import logging
 import requests
 import json
 import yaml
-import shutil
 from textwrap import dedent
 from math import sqrt
-from base64 import decodestring
 
 from requests import ConnectionError
 
 from es import ES
-from utils import get_job_name, retrying, remove_comments, S3Storage
+from utils import get_job_name, retrying, remove_comments
+
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +115,14 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
+def get_gemini_cmd_params(cmd):
+    cmd = cmd.strip()
+    cmd_params = {
+        'raw_cmd': cmd
+    }
+    return cmd_params
+
+
 class PrometheusDBStats(object):
     def __init__(self, host, port=9090):
         self.host = host
@@ -128,8 +135,11 @@ class PrometheusDBStats(object):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
     @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError,))
-    def request(self, url):
-        response = requests.get(url)
+    def request(self, url, post=False):
+        if post:
+            response = requests.post(url)
+        else:
+            response = requests.get(url)
         result = json.loads(response.content)
         logger.debug("Response from Prometheus server: %s", str(result)[:200])
         if result["status"] == "success":
@@ -151,7 +161,6 @@ class PrometheusDBStats(object):
         """
         :param start_time=<rfc3339 | unix_timestamp>: Start timestamp.
         :param end_time=<rfc3339 | unix_timestamp>: End timestamp.
-
         :param query:
         :return: {
                   metric: { },
@@ -187,7 +196,6 @@ class PrometheusDBStats(object):
     def get_throughput(self, start_time, end_time):
         """
         Get Scylla throughput (ops/second) from PrometheusDB
-
         :return: list of tuples (unix time, op/s)
         """
         if not self._check_start_end_time(start_time, end_time):
@@ -211,6 +219,12 @@ class PrometheusDBStats(object):
     def get_latency_write_99(self, start_time, end_time):
         return self.get_latency(start_time, end_time, latency_type="write")
 
+    def create_snapshot(self):
+        url = "http://{0.host}:{0.port}/api/v1/admin/tsdb/snapshot".format(self)
+        result = self.request(url, True)
+        logger.debug('Request result: {}'.format(result))
+        return result
+
 
 class Stats(object):
     """
@@ -219,6 +233,7 @@ class Stats(object):
     1. without arguments - as a based class of TestStatsMixin - for saving test statistics
     2. with arguments - as a separate object to update an existing document
     """
+
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)
@@ -227,6 +242,9 @@ class Stats(object):
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
+
+    def get_doc_id(self):
+        return self._test_id
 
     def create(self):
         self.es.create_doc(index=self._test_index, doc_type=self._es_doc_type, doc_id=self._test_id, body=self._stats)
@@ -246,9 +264,11 @@ class TestStatsMixin(Stats):
     """
     This mixin is responsible for saving test details and statistics in database.
     """
-    KEYS = ['test_details', 'setup_details', 'system_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
+    KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
+    STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
+    STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
     def __init__(self, *args, **kwargs):
         super(TestStatsMixin, self).__init__(*args, **kwargs)
@@ -280,24 +300,24 @@ class TestStatsMixin(Stats):
     def get_setup_details(self):
         exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
         setup_details = {}
-        is_gce = False
-        for p in self.params.iteritems():
-            if ('/run/backends/gce', 'cluster_backend', 'gce') == p:
-                is_gce = True
-        for p in self.params.iteritems():
-            if p[1] in exclude_details or p[1].startswith('stress_cmd'):
+        is_gce = self.params.get('cluster_backend') == 'gce'
+
+        test_params = self.params.items()
+
+        for k, v in test_params:
+            if k in exclude_details or (isinstance(k, str) and k.startswith('stress_cmd')):
                 continue
             else:
-                if is_gce and (p[0], p[1]) in \
-                        [('/run', 'instance_type_loader'),
-                         ('/run', 'instance_type_monitor'),
-                         ('/run/databases/scylla', 'instance_type_db')]:
+                if is_gce and k in \
+                        ['instance_type_loader',
+                         'instance_type_monitor',
+                         'instance_type_db']:
                     # exclude these params from gce run
                     continue
-                elif p[1] == 'n_db_nodes' and isinstance(p[2], str) and re.search('\s', p[2]):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in p[2].split()])
+                elif k == 'n_db_nodes' and isinstance(v, str) and re.search(r'\s', v):  # multidc
+                    setup_details['n_db_nodes'] = sum([int(i) for i in v.split()])
                 else:
-                    setup_details[p[1]] = p[2]
+                    setup_details[k] = v
 
         new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
@@ -305,9 +325,13 @@ class TestStatsMixin(Stats):
         if is_gce and self.db_cluster:
             setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get('cpuPlatform', 'UNKNOWN')
 
+        setup_details['db_cluster_node_details'] = {}
         return setup_details
 
     def get_test_details(self):
+        # avoid cyclic-decencies between cluster and db_stats
+        from sdcm.cluster import Setup
+
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
         test_details['job_name'] = get_job_name()
@@ -315,24 +339,18 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration', default=60)
         test_details['start_time'] = time.time()
-        test_details['grafana_snapshot'] = ""
-        test_details['prometheus_report'] = ""
+        test_details['grafana_snapshots'] = []
+        test_details['grafana_screenshots'] = []
+        test_details['grafana_annotations'] = []
+        test_details['prometheus_data'] = ""
+        test_details['test_id'] = Setup.test_id()
+        test_details['log_files'] = {}
         return test_details
 
-    def get_system_details(self):
-        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
-        system_details = {}
-        for node in self.db_cluster.nodes:
-            node_system_info = {}
-            node_system_info[node.name] = {
-                'cpu_model': node.get_cpumodel(),
-                'sys_info': node.get_system_info(),
-            }
-            system_details.update(node_system_info)
-        archive = self.archive_system_details_information(files_to_archive)
-        s3_link_to_archive = S3Storage.upload_file(file_path=archive)
-        system_details.update({'sys_info_data_url': s3_link_to_archive})
-        return system_details
+    def get_db_cluster_node_details(self):
+
+        return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
+                'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
     def create_test_stats(self, sub_type=None, specific_tested_stats = None):
         self._test_index = self.__class__.__name__.lower()
@@ -342,9 +360,9 @@ class TestStatsMixin(Stats):
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
         if sub_type:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(self.params.id.name, sub_type)
+            self._stats['test_details']['test_name'] = '{}_{}'.format(self.id(), sub_type)
         else:
-            self._stats['test_details']['test_name'] = self.params.id.name
+            self._stats['test_details']['test_name'] = self.id()
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
         if specific_tested_stats:
@@ -360,6 +378,8 @@ class TestStatsMixin(Stats):
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
+        elif stresser == 'gemini':
+            cmd_params = get_gemini_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
@@ -389,7 +409,7 @@ class TestStatsMixin(Stats):
 
     def get_prometheus_stats(self):
         self.log.info("Calculating throughput stats from PrometheusDB...")
-        ps = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        ps = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
         offset = 120  # 2 minutes offset
         start = int(self._stats["test_details"]["start_time"] + offset)
         end = int(time.time() - offset)
@@ -400,85 +420,70 @@ class TestStatsMixin(Stats):
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
-    def update_stress_results(self, results):
+    def update_stress_results(self, results, calculate_stats=True):
         if 'stats' not in self._stats['results']:
             self._stats['results']['stats'] = results
         else:
             self._stats['results']['stats'].extend(results)
-        self.calculate_stats_average()
+        if calculate_stats:
+            self.calculate_stats_average()
+            self.calculate_stats_total()
         self.update(dict(results=self._stats['results']))
 
+    def _convert_stat(self, stat, stress_result):
+        if stat not in stress_result or stress_result[stat] == 'NaN':
+            self.log.warning("Stress stat not found: '%s'", stat)
+            return 0
+        try:
+            return float(stress_result[stat])
+        except Exception as details:
+            self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
+                             "Discarding stat." % (stress_result[stat], stat, details))
+        return 0
+
+    def _calc_stat_total(self, stat):
+        total = 0
+        for stress_result in self._stats['results']['stats']:
+            stat_val = self._convert_stat(stat=stat, stress_result=stress_result)
+            if not stat_val:
+                return 0  # discarding all stat results completely if one of the results is bad
+            total += stat_val
+        return total
+
     def calculate_stats_average(self):
+        # calculate average stats
         average_stats = {}
+        for stat in self.STRESS_STATS:
+            average_stats[stat] = ''  # default
+            total = self._calc_stat_total(stat=stat)
+            if total:
+                average_stats[stat] = round(total / len(self._stats['results']['stats']), 1)
+        self._stats['results']['stats_average'] = average_stats
+
+    def calculate_stats_total(self):
         total_stats = {}
+        for stat in self.STRESS_STATS_TOTAL:
+            total_stats[stat] = ''  # default
+            total = self._calc_stat_total(stat=stat)
+            if total:
+                total_stats[stat] = total
+        self._stats['results']['stats_total'] = total_stats
 
-        for key in self._stats['results']['stats'][0].keys():
-            # exclude loader info from statistics
-            if key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
-                continue
-            summary = 0
-            for stat in self._stats['results']['stats']:
-                if key not in stat or stat[key] == 'NaN':
-                    continue
-                try:
-                    summary += float(stat[key])
-                except Exception as details:
-                    self.log.debug('Catch upon calculating stat everage Exception: %s', details)
-                    average_stats[key] = stat[key]
-            if key not in average_stats:
-                average_stats[key] = round(summary / len(self._stats['results']['stats']), 1)
-                if key in ['op rate', 'Total errors']:
-                    total_stats.update({key: summary})
-        if average_stats:
-            self._stats['results']['stats_average'] = average_stats
-        if total_stats:
-            self._stats['results']['stats_total'] = total_stats
-
-    def archive_system_details_information(self, files_to_archive):
-        """Create an archive of system details data
-
-        For each node prepare relevant files on node, copy them to local directory
-        <cluster_log_dir>/system_data , write to files the installed
-        packages on node, instace console output and screenshot on
-        aws deployment, arhcive contents of appropriate directory and upload to
-        S3 storage.
-
-        Arguments:
-            files_to_archive {list} -- list of files as fullpath which should be stored as
-            system details data
-
-        Returns:
-            [str] -- fullpath to archive file
-        """
-        storing_dir = os.path.join(self.db_cluster.logdir, 'system_data')
-        os.mkdir(storing_dir)
-        for node in self.db_cluster.nodes:
-            src_dir = node.prepare_files_for_archive(files_to_archive)
-            node.receive_files(src=src_dir, dst=storing_dir)
-            with open(os.path.join(storing_dir, node.name, 'installed_pkgs'), 'w') as pkg_list_file:
-                pkg_list_file.write(node.get_installed_packages())
-            with open(os.path.join(storing_dir, node.name, 'console_output'), 'w') as co:
-                co.write(node.get_console_output())
-            with open(os.path.join(storing_dir, node.name, 'console_screenshot.jpg'), 'wb') as cscrn:
-                imagedata = node.get_console_screenshot()
-                cscrn.write(decodestring(imagedata))
-
-        self.log.info('Creating archive....')
-        archive = shutil.make_archive(self.db_cluster.logdir, 'zip', root_dir=storing_dir)
-        self.log.info('Path to archive file: %s' % archive)
-        return archive
-
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, system_details=None, dict_specific_tested_stats=None):
-
-
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None):
         if self.create_stats:
             update_data = {}
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            if self.monitors:
+            if self.monitors and self.monitors.nodes:
                 test_start_time = self._stats['test_details']['start_time']
                 update_data['results'] = self.get_prometheus_stats()
-                self._stats['test_details']['grafana_snapshot'] = self.monitors.get_grafana_screenshot(test_start_time)
-                self._stats['test_details']['prometheus_report'] = self.monitors.download_monitor_data()
+                grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
+                self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
+                self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
+                self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
+                self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
+
+            if self.db_cluster:
+                self._stats['setup_details']['db_cluster_node_details'] = self.get_db_cluster_node_details()
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
@@ -488,8 +493,8 @@ class TestStatsMixin(Stats):
                 self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
                 res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
                 self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
-            self._stats['status'] = self.status
 
+            self._stats['status'] = self.status
             update_data.update(
                 {'status': self._stats['status'],
                  'setup_details': self._stats['setup_details'],
@@ -499,8 +504,6 @@ class TestStatsMixin(Stats):
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
-            if system_details:
-                update_data.update({'system_details': system_details})
 
             if dict_specific_tested_stats and len(dict_specific_tested_stats) > 0:
                 self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
@@ -510,3 +513,9 @@ class TestStatsMixin(Stats):
                 update_data.update(dict_specific_tested_stats)
             self.log.debug("The total data to update is: {}".format(update_data))
             self.update(update_data)
+
+    def get_doc_data(self, key):
+        if self.create_stats:
+            result = self.es.get_doc(self._test_index, self.get_doc_id(), doc_type=self._es_doc_type)
+
+            return result['_source'].get(key, None)
