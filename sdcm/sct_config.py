@@ -214,21 +214,12 @@ class SCTConfiguration(dict):
 
         dict(name="reuse_cluster", env="SCT_REUSE_CLUSTER", type=str,
              help="""
-            If true `test_id` would be used to run a test with existing cluster.
-            You have to define all the nodes ip addresses both public and private:
-
-            `reuse_cluster: True`
-            `test_id: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
-            `db_nodes_public_ip: []`
-            `db_nodes_private_ip: []`
-            `loaders_public_ip: []`
-            `loaders_private_ip: []`
-            `monitor_nodes_public_ip: []`
-            `monitor_nodes_private_ip: []`
+            If reuse_cluster is set it should hold test_id of the cluster that will be reused.
+            `reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`
          """),
 
         dict(name="test_id", env="SCT_TEST_ID",  type=str,
-             help="""see [`reuse_cluster`](#reuse_cluster) for more info on usage."""),
+             help="""Set the test_id of the run manually. Use only from the env before running Hydra"""),
 
         dict(name="seeds_first", env="SCT_SEEDS_FIRST",  type=boolean,
              help="""If true would start and wait for the seed nodes to finish booting"""),

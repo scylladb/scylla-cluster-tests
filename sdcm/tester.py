@@ -16,6 +16,7 @@ import os
 import logging
 import time
 import types
+from uuid import uuid4
 from functools import wraps
 import boto3.session
 import libvirt
@@ -133,14 +134,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         super(ClusterTester, self).__init__(methodName=methodName)
 
         self.status = "RUNNING"
-
-        self.log = logging.getLogger(__name__)
-        self.logdir = os.path.join(cluster.Setup.logdir(), self.id())
-        self.outputdir = os.path.join(self.logdir, 'data')
-        os.makedirs(self.outputdir)
-
         self.params = SCTConfiguration()
         self.params.verify_configuration()
+        reuse_cluster_id = self.params.get('reuse_cluster', default=False)
+        if reuse_cluster_id:
+            cluster.Setup.reuse_cluster(True)
+            cluster.Setup.set_test_id(reuse_cluster_id)
+        else:
+            # Test id is set by Hydra or generated if running without Hydra
+            cluster.Setup.set_test_id(self.params.get('test_id', default=uuid4()))
+        cluster.Setup.set_test_name(self.id())
+        self.log = logging.getLogger(__name__)
+        self.logdir = cluster.Setup.logdir()
 
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
@@ -153,10 +158,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
         cluster.set_duration(self._duration)
-
-        cluster.Setup.set_test_id(self.params.get('test_id'))
-        cluster.Setup.set_test_name(self.id())
-        cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
         cluster_backend = self.params.get('cluster_backend', default='')
         if cluster_backend == 'aws':
@@ -786,7 +787,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return CassandraStressThread(loader_set=self.loaders,
                                      stress_cmd=stress_cmd,
                                      timeout=timeout,
-                                     output_dir=self.outputdir,
+                                     output_dir=cluster.Setup.logdir(),
                                      stress_num=stress_num,
                                      keyspace_num=keyspace_num,
                                      profile=profile,
@@ -800,7 +801,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                    self.outputdir,
+                                                    cluster.Setup.logdir(),
                                                     node_list=self.db_cluster.nodes)
 
     def run_gemini(self, cmd, duration=None):
@@ -810,7 +811,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         oracle_node = random.choice(self.cs_db_cluster.nodes)
         if self.create_stats:
             self.update_stress_cmd_details(cmd, stresser='gemini')
-        return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
+        return self.loaders.run_gemini_thread(cmd, timeout, cluster.Setup.logdir(),
                                               test_node=test_node.ip_address,
                                               oracle_node=oracle_node.ip_address)
 
@@ -1354,7 +1355,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info("ES document id: {}".format(self.get_doc_id()))
 
     def collect_events_log(self):
-        event_log_base_dir = os.path.dirname(self.logdir)
+        event_log_base_dir = self.logdir
         event_log_dir = os.path.join(event_log_base_dir, 'events_log')
         if not os.path.exists(event_log_dir):
             os.mkdir(event_log_dir)
@@ -1506,7 +1507,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "prometheus_data": "",
                      "monitoring_stack": ""}
 
-        storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
+        storing_dir = os.path.join(self.logdir, "collected_logs")
         os.makedirs(storing_dir)
 
         self.log.info("Storing dir is {}".format(storing_dir))
