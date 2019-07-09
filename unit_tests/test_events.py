@@ -142,6 +142,16 @@ class SctEventsTests(unittest.TestCase):
             with open(log_file) as f:
                 self.assertNotIn('supressed', f.read())
 
+    def test_failed_stall_during_filter(self):
+
+        with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
+
+            event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
+            event.add_info_and_publish(node="A", line_number=22,
+                                       line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20")
+            logging.info(event.severity)
+            self.assertTrue(event.severity == Severity.CRITICAL)
+
     @unittest.skip("this test need some more work")
     def test_kill_test_event(self):
         self.assertTrue(self.test_killer.is_alive())

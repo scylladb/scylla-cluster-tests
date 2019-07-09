@@ -166,9 +166,11 @@ class DbEventsFilter(SystemEvent):
         self.cancel_filter()
 
     def eval_filter(self, event):
-        name = self.type and self.type == getattr(event, 'type', '')
-        string = self.line and self.line in getattr(event, 'line', '')
-        return (name and string) if self.line else name
+        line = getattr(event, 'line', '')
+        _type = getattr(event, 'type', '')
+        is_name_matching = self.type and _type and self.type == _type
+        is_line_matching = self.line and line and self.line in line
+        return (is_name_matching and is_line_matching) if self.line else is_name_matching
 
 
 class InfoEvent(SctEvent):
@@ -299,7 +301,7 @@ class DatabaseLogEvent(SctEvent):
                     self.severity = Severity.NORMAL
 
             except (ValueError, IndexError):
-                LOGGER.exception("failed to read REACTOR_STALLED line=[%s] ", line)
+                LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
 
     def add_backtrace_info(self, backtrace=None, raw_backtrace=None):
         if backtrace:
