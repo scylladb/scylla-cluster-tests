@@ -20,8 +20,9 @@ from functools import wraps
 import boto3.session
 import libvirt
 import shutil
-from avocado import Test
-from avocado.utils.process import CmdError
+import random
+import unittest
+
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
@@ -39,7 +40,6 @@ from .cluster_openstack import LoaderSetOpenStack
 from .cluster_libvirt import MonitorSetLibvirt
 from .cluster_openstack import MonitorSetOpenStack
 from .cluster import NoMonitorSet, SCYLLA_DIR
-from .cluster import RemoteCredentials
 from .cluster_libvirt import ScyllaLibvirtCluster
 from .cluster_openstack import ScyllaOpenStackCluster
 from .cluster import UserRemoteCredentials
@@ -50,12 +50,20 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances
+from .utils import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, configure_logging
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
+from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
+from sdcm.stress_thread import CassandraStressThread
+from sdcm import wait
+
+from invoke.exceptions import UnexpectedExit, Failure
+
+configure_logging()
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -67,7 +75,7 @@ try:
 except ImportError:
     pass
 
-TEST_LOG = logging.getLogger('avocado.test')
+TEST_LOG = logging.getLogger(__name__)
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -101,26 +109,9 @@ class FlakyRetryPolicy(RetryPolicy):
             return self.RETHROW, None
 
 
-def retry_till_success(fun, *args, **kwargs):
-    timeout = kwargs.pop('timeout', 60)
-    bypassed_exception = kwargs.pop('bypassed_exception', Exception)
-
-    deadline = time.time() + timeout
-    while True:
-        try:
-            return fun(*args, **kwargs)
-        except bypassed_exception:
-            if time.time() > deadline:
-                raise
-            else:
-                # brief pause before next attempt
-                time.sleep(0.25)
-
-
-def clean_resources_on_exception(method):
+def teardown_on_exception(method):
     """
-    Ensure that resources used in test are cleaned upon unhandled exceptions.
-
+    Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
     :param method: ScyllaClusterTester method to wrap.
     :return: Wrapped method.
     """
@@ -129,20 +120,27 @@ def clean_resources_on_exception(method):
         try:
             return method(*args, **kwargs)
         except Exception:
-            TEST_LOG.exception("Exception in %s. Will clean resources", method.__name__)
-            args[0].clean_resources()
+            TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
+            args[0].tearDown()
             raise
     return wrapper
 
 
-class ClusterTester(db_stats.TestStatsMixin, Test):
+class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
-    def __init__(self, methodName='test', name=None, params=None,
-                 base_logdir=None, tag=None, job=None, runner_queue=None):
-        super(ClusterTester, self).__init__(methodName=methodName, name=name,
-                                            params=params,
-                                            base_logdir=base_logdir, tag=tag,
-                                            job=job, runner_queue=runner_queue)
+    def __init__(self, methodName='test'):
+        super(ClusterTester, self).__init__(methodName=methodName)
+
+        self.status = "RUNNING"
+
+        self.log = logging.getLogger(__name__)
+        self.logdir = os.path.join(cluster.Setup.logdir(), self.id())
+        self.outputdir = os.path.join(self.logdir, 'data')
+        os.makedirs(self.outputdir)
+
+        self.params = SCTConfiguration()
+        self.params.verify_configuration()
+
         self._failure_post_behavior = self.params.get(key='failure_post_behavior',
                                                       default='destroy')
         ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
@@ -156,30 +154,49 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cluster.set_duration(self._duration)
 
         cluster.Setup.set_test_id(self.params.get('test_id'))
+        cluster.Setup.set_test_name(self.id())
         cluster.Setup.reuse_cluster(self.params.get('reuse_cluster', default=False))
         cluster.Setup.keep_cluster(self._failure_post_behavior)
+        cluster_backend = self.params.get('cluster_backend', default='')
+        if cluster_backend == 'aws':
+            cluster.Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
+        elif cluster_backend == 'gce':
+            cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
+        cluster.Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        cluster.Setup.set_intra_node_comm_public(self.params.get('intra_node_comm_public') or cluster.Setup.MULTI_REGION)
+
+        version_tag = self.params.get('ami_id_db_scylla_desc')
+        if version_tag:
+            cluster.Setup.tags('version', version_tag)
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
+        self._logs = {}
+
+        start_events_device(cluster.Setup.logdir())
+        time.sleep(0.5)
+        InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
+
+    @property
+    def test_duration(self):
+        return self._duration
 
     def get_duration(self, duration):
         """Calculate duration based on test_duration
-
         Calculate duration for stress threads
-
         Arguments:
             duration {int} -- time duration in minutes
-
         Returns:
             int -- time duration in seconds
         """
         if not duration:
-            duration = self._duration
+            duration = self.test_duration
         return duration * 60 + 600
 
-    @clean_resources_on_exception
+    @teardown_on_exception
+    @log_run_info
     def setUp(self):
         self.credentials = []
         self.db_cluster = None
@@ -187,10 +204,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         self.loaders = None
         self.monitors = None
         self.connections = []
-        logging.getLogger('botocore').setLevel(logging.CRITICAL)
-        logging.getLogger('boto3').setLevel(logging.CRITICAL)
-        if self.create_stats:
-            self.create_test_stats()
+
         self.init_resources()
         if self.params.get('seeds_first', default='false') == 'true':
             seeds_num = self.params.get('seeds_num', default=1)
@@ -200,6 +214,20 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.db_cluster.wait_for_init()
         if self.cs_db_cluster:
             self.cs_db_cluster.wait_for_init()
+
+        if self.create_stats:
+            self.create_test_stats()
+
+        # change RF of system_auth
+        system_auth_rf = self.params.get('system_auth_rf', default=3)
+        if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
+            self.log.info('change RF of system_auth to %s' % system_auth_rf)
+            node = self.db_cluster.nodes[0]
+            with self.cql_connection_patient(node) as session:
+                session.execute("ALTER KEYSPACE system_auth WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': %s};" % system_auth_rf)
+            self.log.info('repair system_auth keyspace ...')
+            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
+
         db_node_address = self.db_cluster.nodes[0].private_ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
         self.monitors.wait_for_init()
@@ -212,16 +240,27 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def get_nemesis_class(self):
         """
         Get a Nemesis class from parameters.
-
         :return: Nemesis class.
         :rtype: nemesis.Nemesis derived class
         """
-        class_name = self.params.get('nemesis_class_name')
-        return getattr(nemesis, class_name)
+        nemesis_threads = []
+        list_class_name = self.params.get('nemesis_class_name')
+        for cl in list_class_name.split(' '):
+            try:
+                nemesis_name, num = cl.strip().split(':')
+                nemesis_name = nemesis_name.strip()
+                num = num.strip()
+
+            except ValueError:
+                nemesis_name = cl.split(':')[0]
+                num = 1
+            nemesis_threads.append({'nemesis': getattr(nemesis, nemesis_name), 'num_threads': int(num)})
+
+        return nemesis_threads
 
     def get_cluster_openstack(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('openstack_instance_type_loader')
         if db_info['n_nodes'] is None:
@@ -250,12 +289,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                               ex_force_service_region=service_region,
                               ex_tenant_name=tenant)
         user_credentials = self.params.get('user_credentials_path', None)
-        if user_credentials:
-            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-        else:
-            self.credentials.append(RemoteCredentials(service=service,
-                                                      key_prefix='sct',
-                                                      user_prefix=user_prefix))
+        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         self.db_cluster = ScyllaOpenStackCluster(openstack_image=self.params.get('openstack_image'),
                                                  openstack_image_username=self.params.get('openstack_image_username'),
@@ -298,7 +332,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('gce_instance_type_loader')
         if loader_info['disk_type'] is None:
@@ -408,7 +442,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = self.params.get('n_loaders')
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if db_info['n_nodes'] is None:
@@ -421,6 +455,20 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
+        if db_info['disk_size'] is None:
+            db_info['disk_size'] = self.params.get('aws_root_disk_size_db', default=None)
+        if db_info['device_mappings'] is None:
+            if db_info['disk_size']:
+                db_info['device_mappings'] = [{
+                    "DeviceName": self.params.get("aws_root_disk_name_db", default="/dev/sda1"),
+                    "Ebs": {
+                        "VolumeSize": db_info['disk_size'],
+                        "VolumeType": "gp2"
+                    }
+                }]
+            else:
+                db_info['device_mappings'] = []
+
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
@@ -446,12 +494,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             session = boto3.session.Session(region_name=i)
             service = session.resource('ec2')
             services.append(service)
-            if user_credentials:
-                self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-            else:
-                self.credentials.append(RemoteCredentials(service=service,
-                                                          key_prefix='sct',
-                                                          user_prefix=user_prefix))
+            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         ec2_security_group_ids = []
         for i in self.params.get('security_group_ids').split():
@@ -485,12 +528,28 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     **cl_params)
             elif db_type == 'mixed_scylla':
                 cluster.Setup.mixed_cluster(True)
+                n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes', 1)
                 cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
-                                      user_prefix=user_prefix + '-oracle'))
+                                      user_prefix=user_prefix + '-oracle',
+                                      n_nodes=[n_test_oracle_db_nodes]))
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_oracle').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
                     **cl_params)
+            elif db_type == 'cloud_scylla':
+                cloud_credentials = self.params.get('cloud_credentials_path', None)
+
+                credentials = [UserRemoteCredentials(key_file=cloud_credentials)]
+                params = dict(
+                    n_nodes=[self.params.get('n_db_nodes')],
+                    public_ips=self.params.get('db_nodes_public_ip', None),
+                    private_ips=self.params.get('db_nodes_private_ip', None),
+                    user_prefix=self.params.get('user_prefix', None),
+                    credentials=credentials,
+                    params=self.params,
+                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                )
+                return cluster_baremetal.ScyllaPhysicalCluster(**params)
 
         db_type = self.params.get('db_type')
         if db_type in ('scylla', 'cassandra'):
@@ -501,6 +560,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         elif db_type == 'mixed_scylla':
             self.db_cluster = create_cluster('scylla')
             self.cs_db_cluster = create_cluster('mixed_scylla')
+        elif db_type == 'cloud_scylla':
+            self.db_cluster = create_cluster('cloud_scylla')
         else:
             self.error('Incorrect parameter db_type: %s' %
                        self.params.get('db_type'))
@@ -615,7 +676,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         )
         self.db_cluster = docker.ScyllaDockerCluster(**params)
 
-        params['n_nodes'] = self.params.get('n_loaders')
+        params['n_nodes'] = int(self.params.get('n_loaders'))
         self.loaders = docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
@@ -636,7 +697,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
-        params['n_nodes'] = self.params.get('n_loaders')
+        params['n_nodes'] = int(self.params.get('n_loaders'))
         params['public_ips'] = self.params.get('loaders_public_ip')
         params['private_ips'] = self.params.get('loaders_private_ip')
         self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
@@ -646,7 +707,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
-    @clean_resources_on_exception
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
         if loader_info is None:
@@ -664,7 +724,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         if cluster_backend is None:
             cluster_backend = 'aws'
 
-        if cluster_backend == 'aws':
+        if cluster_backend == 'aws' or cluster_backend == 'aws-siren':
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
         elif cluster_backend == 'libvirt':
@@ -692,10 +752,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         else:
             for i in range(seeds_num):
                 self.db_cluster.nodes[i].is_seed = True
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.nodes[i].is_seed = True
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            if len(self.db_cluster.datacenter) > 1:
+            if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
                 ips = [ip for ip in self.db_cluster.get_node_public_ips()]
                 ip = ','.join(ips)
             else:
@@ -703,51 +765,49 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
         return stress_cmd
 
-    @clean_resources_on_exception
     def run_stress(self, stress_cmd, duration=None):
         stress_cmd = self._cs_add_node_flag(stress_cmd)
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                              duration=duration)
-        self.verify_stress_thread(stress_queue)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
+                                                duration=duration)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
-    @clean_resources_on_exception
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           keyspace_name='', round_robin=False, stats_aggregate_cmds=True):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
+        timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds)
-        return self.loaders.run_stress_thread(stress_cmd, timeout,
-                                              self.outputdir,
-                                              stress_num=stress_num,
-                                              keyspace_num=keyspace_num,
-                                              keyspace_name=keyspace_name,
-                                              profile=profile,
-                                              node_list=self.db_cluster.nodes,
-                                              round_robin=round_robin)
 
-    @clean_resources_on_exception
+        return CassandraStressThread(loader_set=self.loaders,
+                                     stress_cmd=stress_cmd,
+                                     timeout=timeout,
+                                     output_dir=self.outputdir,
+                                     stress_num=stress_num,
+                                     keyspace_num=keyspace_num,
+                                     profile=profile,
+                                     node_list=self.db_cluster.nodes,
+                                     round_robin=round_robin,
+                                     keyspace_name=keyspace_name).run()
+
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
+
+        timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                              self.outputdir,
-                                              node_list=self.db_cluster.nodes)
+                                                    self.outputdir,
+                                                    node_list=self.db_cluster.nodes)
 
-    @clean_resources_on_exception
     def run_gemini(self, cmd, duration=None):
-        if duration is None:
-            duration = self.params.get('test_duration')
-        timeout = duration * 60 + 600
-        time.sleep(30)
+
+        timeout = self.get_duration(duration)
+        test_node = random.choice(self.db_cluster.nodes)
+        oracle_node = random.choice(self.cs_db_cluster.nodes)
+        if self.create_stats:
+            self.update_stress_cmd_details(cmd, stresser='gemini')
         return self.loaders.run_gemini_thread(cmd, timeout, self.outputdir,
-                                              test_node=self.db_cluster.nodes[0].private_ip_address,
-                                              oracle_node=self.cs_db_cluster.nodes[0].private_ip_address)
+                                              test_node=test_node.ip_address,
+                                              oracle_node=oracle_node.ip_address)
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
@@ -758,8 +818,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             if self.params.get('fullscan', default=False):
                 self.loaders.kill_fullscan_thread()
 
-    def verify_stress_thread(self, queue):
-        results, errors = self.loaders.verify_stress_thread(queue, self.db_cluster)
+    def verify_stress_thread(self, cs_thread_pool):
+        if isinstance(cs_thread_pool, dict):
+            results = self.get_stress_results_bench(queue=cs_thread_pool)
+            errors = []
+        else:
+            results, errors = cs_thread_pool.verify_results()
         # Sometimes, we might have an epic error messages list
         # that will make small machines driving the avocado test
         # to run out of memory when writing the XML report. Since
@@ -774,33 +838,52 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             self.fail("cassandra-stress errors on "
                       "nodes:\n%s" % "\n".join(errors))
 
-    @clean_resources_on_exception
     def get_stress_results(self, queue, store_results=True):
-        results = self.loaders.get_stress_results(queue)
+        results = queue.get_results()
         if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
 
-    @clean_resources_on_exception
     def get_stress_results_bench(self, queue):
         results = self.loaders.get_stress_results_bench(queue)
         if self.create_stats:
             self.update_stress_results(results)
         return results
 
-    @clean_resources_on_exception
     def get_gemini_results(self, queue):
         results = self.loaders.get_gemini_results(queue)
-        return results
+        result = self.verify_gemini_results(results)
+        return result
+
+    def verify_gemini_results(self, results):
+        stats = {'status': None, 'results': [], 'errors': {}}
+        if not results:
+            self.log.error('Gemini results are not found')
+            stats['status'] = 'FAILED'
+        else:
+
+            for res in results:
+                stats['results'].append(res)
+                for err_type in ['write_errors', 'read_errors', 'errors']:
+                    if err_type in res.keys() and res[err_type]:
+                        self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                        stats['status'] = 'FAILED'
+                        stats['errors'][err_type] = res[err_type]
+        if not stats['status']:
+            stats['status'] = "PASSED"
+        if self.create_stats:
+            self.update_stress_results(results, calculate_stats=False)
+            self.update({'status': stats['status'],
+                         'test_details': {'status': stats['status']},
+                         'errors': stats['errors']})
+        return stats
 
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
         """Run thread of cql command select count(*)
-
         Calculaute test duration and timeout interval between
         requests and execute the thread with cqlsh command to
         db node 'select count(*) ks.cf, where ks and cf are
         random choosen from current configuration'
-
         Keyword Arguments:
             timeout {number} -- interval between request in min (default: {1})
             duration {int} -- duration of running thread in min (default: {None})
@@ -809,7 +892,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         interval = interval * 60
         self.loaders.run_fullscan_thread(ks_cf,
                                          db_nodes=self.db_cluster.nodes,
-                                         datacenter=self.db_cluster.datacenter,
                                          interval=interval,
                                          duration=duration)
 
@@ -821,15 +903,15 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                         port=None, ssl_opts=None):
         node_ips = [node.public_ip_address]
         if not port:
-            port = 9042
+            port = node.CQL_PORT
 
         if protocol_version is None:
             protocol_version = 3
 
         authenticator = self.params.get('authenticator')
         if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = 'cassandra'
-            password = 'cassandra'
+            user = self.params.get('authenticator_user', default='cassandra')
+            password = self.params.get('authenticator_password', default='cassandra')
 
         if user is not None:
             auth_provider = self.get_auth_provider(user=user,
@@ -856,8 +938,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # override driver default consistency level of LOCAL_QUORUM
         session.default_consistency_level = ConsistencyLevel.ONE
 
-        self.connections.append(session)
-        return session
+        return ScyllaCQLSession(session, cluster)
 
     def cql_connection(self, node, keyspace=None, user=None,
                        password=None, compression=True, protocol_version=None,
@@ -873,32 +954,25 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                  protocol_version=None, port=None,
                                  ssl_opts=None):
 
-        wlrr = WhiteListRoundRobinPolicy([node.public_ip_address])
+        wlrr = WhiteListRoundRobinPolicy([node.external_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-                               user=None, password=None, timeout=30,
+                               user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_opts=None):
         """
         Returns a connection after it stops throwing NoHostAvailables.
-
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection(**kwargs)
 
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,
                                          user=None, password=None, timeout=30,
                                          compression=True,
@@ -906,42 +980,64 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                                          port=None, ssl_opts=None):
         """
         Returns a connection after it stops throwing NoHostAvailables.
-
         If the timeout is exceeded, the exception is raised.
         """
-        return retry_till_success(self.cql_connection_exclusive,
-                                  node,
-                                  keyspace=keyspace,
-                                  user=user,
-                                  password=password,
-                                  timeout=timeout,
-                                  compression=compression,
-                                  protocol_version=protocol_version,
-                                  port=port,
-                                  ssl_opts=ssl_opts,
-                                  bypassed_exception=NoHostAvailable)
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection_exclusive(**kwargs)
 
-    def create_ks(self, session, name, rf):
+    def is_keyspace_in_cluster(self, session, keyspace_name):
+        query_result = session.execute("SELECT * FROM system_schema.keyspaces;")
+        keyspace_list = [row.keyspace_name.lower() for row in query_result.current_rows]
+        return keyspace_name.lower() in keyspace_list
+
+    def wait_validate_keyspace_existence(self, session, keyspace_name, timeout=180, step=5):
+        text = 'waiting for the keyspace "{}" to be created in the cluster'.format(keyspace_name)
+        does_keyspace_exist = wait.wait_for(func=self.is_keyspace_in_cluster, step=step, text=text, timeout=timeout,
+                                            session=session, keyspace_name=keyspace_name)
+        return does_keyspace_exist
+
+    def create_keyspace(self, keyspace_name, replication_factor, replication_strategy=None):
+        """
+        The default of replication_strategy depends on the type of the replication_factor:
+            If it's int, the default of replication_strategy will be 'SimpleStrategy'
+            If it's dict, the default of replication_strategy will be 'NetworkTopologyStrategy'
+        In the case of NetworkTopologyStrategy, replication_strategy should be a dict that contains the name of
+        every dc that the keyspace should be replicated to as keys, and the replication factor of each of those dc
+        as values, like so:
+        {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
+        """
+
         query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
-        if isinstance(rf, types.IntType):
-            # we assume simpleStrategy
-            session.execute(query % (name,
-                                     "'class':'SimpleStrategy', "
-                                     "'replication_factor':%d" % rf))
-        else:
-            assert len(rf) != 0, "At least one datacenter/rf pair is needed"
-            # we assume networkTopologyStrategy
-            options = ', '.join(['\'%s\':%d' % (d, r) for
-                                 d, r in rf.iteritems()])
-            session.execute(query % (name,
-                                     "'class':'NetworkTopologyStrategy', %s" %
-                                     options))
-        session.execute('USE %s' % name)
+        execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
+        with self.cql_connection_patient(execution_node) as session:
 
-    def create_cf(self, session, name, key_type="varchar",
-                  speculative_retry=None, read_repair=None, compression=None,
-                  gc_grace=None, columns=None,
-                  compact_storage=False, in_memory=False):
+            if isinstance(replication_factor, types.IntType):
+                execution_result = session.execute(
+                    query % (keyspace_name, "'class':'{}', 'replication_factor':{}".format(
+                        replication_strategy if replication_strategy else "SimpleStrategy",
+                        replication_factor)))
+
+            else:
+                assert len(replication_factor) != 0, "At least one datacenter/replication_factor pair is needed"
+                options = ', '.join(["'{}':{}".format(dc_name, dc_specific_replication_factor) for
+                                     dc_name, dc_specific_replication_factor in replication_factor.iteritems()])
+                execution_result = session.execute(
+                    query % (keyspace_name, "'class':'{}', {}".format(
+                        replication_strategy if replication_strategy else "NetworkTopologyStrategy",
+                        options)))
+
+        if execution_result:
+            self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
+
+        with self.cql_connection_patient(validation_node) as session:
+            does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
+        return does_keyspace_exist
+
+    def create_table(self, name, key_type="varchar",
+                     speculative_retry=None, read_repair=None, compression=None,
+                     gc_grace=None, columns=None,
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None):
 
         additional_columns = ""
         if columns is not None:
@@ -974,10 +1070,12 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                      (query, speculative_retry))
         if in_memory:
             query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
+        if scylla_encryption_options is not None:
+            query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-
-        session.execute(query)
+        with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            session.execute(query)
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name, table_name, session):
@@ -1004,9 +1102,9 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         cl_clause = ', '.join(cl for cl in mv_clustering_key)
 
         query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
-                    'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
-                                                    table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
-                                                    pk=pk_clause, cl=cl_clause)
+            'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name, mv_name=mv_name, mv_columns=mv_columns_str,
+                                                                                            table_name=base_table_name, where_clause=' and '.join(wc for wc in where_clause),
+                                                                                            pk=pk_clause, cl=cl_clause)
         if compression is not None:
             query = ('%s AND compression = { \'sstable_compression\': '
                      '\'%sCompressor\' }' % (query, compression))
@@ -1032,7 +1130,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE keyspace_name='{0}' "
                                                        "AND view_name='{1}'".format(ks, view)))
             self.log.debug('View build status result: {}'.format(result))
-            return len([status for status in result  if status[0] == 'SUCCESS']) >= live_nodes_amount
+            return len([status for status in result if status[0] == 'SUCCESS']) >= live_nodes_amount
 
         attempts = 20
         nodes_status = cluster.get_nodetool_status()
@@ -1050,11 +1148,11 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         raise Exception("View {}.{} not built".format(ks, view))
 
-    def _wait_for_view_build_start(self, session, ks, view, seconds_to_wait = 20):
+    def _wait_for_view_build_start(self, session, ks, view, seconds_to_wait=20):
 
         def _check_build_started():
             result = self.rows_to_list(session.execute("SELECT last_token FROM system.views_builds_in_progress "
-                                                  "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
+                                                       "WHERE keyspace_name='{0}' AND view_name='{1}'".format(ks, view)))
             self.log.debug('View build in progress: {}'.format(result))
             return result != []
 
@@ -1068,15 +1166,66 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
-    def clean_resources(self):
-        self.log.debug('Cleaning up resources used in the test')
+    def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):
+        # Get and save how many rows in each partition.
+        # It may be used for validation data in the end of test
+        if not (table_name or primary_key_column):
+            self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
+            return {}
+
+        get_distinct_partition_keys_cmd = 'select distinct {pk} from {table}'.format(pk=primary_key_column,
+                                                                                     table=table_name)
+        out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True)
+        pk_list = sorted([int(pk) for pk in out[3:-3]])
+
+        # Collect data about partitions' rows amount.
+        partitions = {}
+        self.partitions_stats_file = os.path.join(self.logdir, save_into_file_name)
+        with open(self.partitions_stats_file, 'a') as f:
+            for i in pk_list:
+                self.log.debug("Next PK: {}".format(i))
+                count_partition_keys_cmd = 'select count(*) from {table_name} where {pk} = {i}'.format(**locals())
+                out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
+                self.log.debug('Count result: {}'.format(out))
+                partitions[i] = out[3] if len(out) > 3 else None
+                f.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
+        self.log.info('File with partitions row data: {}'.format(self.partitions_stats_file))
+
+        return partitions
+
+    def get_tables_id_of_keyspace(self, session, keyspace_name):
+        query = "SELECT id FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        table_id = self.rows_to_list(session.execute(query))
+        return table_id[0]
+
+    def get_tables_name_of_keyspace(self, session, keyspace_name):
+        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        table_id = self.rows_to_list(session.execute(query))
+        return table_id[0]
+
+    def get_truncated_time_from_system_local(self, session):
+        query = "SELECT truncated_at FROM system.local"
+        truncated_time = self.rows_to_list(session.execute(query))
+        return truncated_time
+
+    def get_truncated_time_from_system_truncated(self, session, table_id):
+        query = "SELECT truncated_at FROM system.truncated WHERE table_uuid={}".format(table_id)
+        truncated_time = self.rows_to_list(session.execute(query))
+        return truncated_time[0]
+
+    def finalize_test(self):
+        self.stop_resources()
+        self.collect_logs()
+        self.clean_resources()
+
+    def stop_resources(self):
+        self.log.debug('Stopping all resources')
         self.kill_stress_thread()
+
         db_cluster_errors = None
         db_cluster_coredumps = None
-        db_cluster_system_details = None
-        if self.db_cluster is not None:
-            db_cluster_system_details = self.get_system_details()
 
+        if self.db_cluster is not None:
             db_cluster_errors = self.db_cluster.get_node_database_errors()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
@@ -1088,6 +1237,38 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
             for node in self.db_cluster.nodes:
                 node.stop_task_threads(timeout=60)
 
+        if self.loaders is not None:
+            self.loaders.get_backtraces()
+            for node in self.loaders.nodes:
+                node.stop_task_threads(timeout=60)
+
+        if self.monitors is not None:
+            self.monitors.get_backtraces()
+            for node in self.monitors.nodes:
+                node.stop_task_threads(timeout=60)
+
+        if self.create_stats:
+            self.update_test_details(errors=db_cluster_errors,
+                                     coredumps=db_cluster_coredumps,
+                                     )
+
+        if db_cluster_coredumps:
+            self.fail('Found coredumps on DB cluster nodes: %s' %
+                      db_cluster_coredumps)
+
+        if db_cluster_errors:
+            self.log.error('Errors found on DB node logs:')
+            for node_name, node_errors in db_cluster_errors.items():
+                for (index, line) in node_errors:
+                    self.log.error('%s: L%s -> %s',
+                                   node_name, index + 1, line.strip())
+            # TODO: remove this failure once we have the event analyzer inplace, cause not every error here should fail the test
+            self.fail('Errors found on DB node logs (see test logs)')
+
+    def clean_resources(self):
+        self.log.debug('Cleaning up resources used in the test')
+
+        if self.db_cluster is not None:
             if self._failure_post_behavior == 'destroy':
                 self.db_cluster.destroy()
                 self.db_cluster = None
@@ -1099,7 +1280,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.db_cluster = None
 
         if self.loaders is not None:
-            self.loaders.get_backtraces()
             if self._failure_post_behavior == 'destroy':
                 self.loaders.destroy()
                 self.loaders = None
@@ -1109,8 +1289,6 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 self.db_cluster = None
 
         if self.monitors is not None:
-            self.monitors.get_backtraces()
-
             if self._failure_post_behavior == 'destroy':
                 self.monitors.destroy()
                 self.monitors = None
@@ -1118,6 +1296,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                 for node in self.monitors.nodes:
                     node.instance.stop()
                 self.monitors = None
+
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
             if self._failure_post_behavior == 'destroy':
@@ -1125,45 +1304,62 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
                     cr.destroy()
                 self.credentials = []
 
-        self.update_test_details(errors=db_cluster_errors,
-                                 coredumps=db_cluster_coredumps,
-                                 system_details=db_cluster_system_details)
-
-        if db_cluster_coredumps:
-            self.fail('Found coredumps on DB cluster nodes: %s' %
-                      db_cluster_coredumps)
-
-        if db_cluster_errors:
-            self.log.error('Errors found on DB node logs:')
-            for node_errors in db_cluster_errors:
-                for node_name in node_errors:
-                    for (index, line) in node_errors[node_name]:
-                        self.log.error('%s: L%s -> %s',
-                                       node_name, index + 1, line.strip())
-            self.fail('Errors found on DB node logs (see test logs)')
-
     def tearDown(self):
+        self.log.info('TearDown is starting...')
+        InfoEvent('TEST_END')
         try:
-            self.clean_resources()
-            if self._failure_post_behavior == 'destroy':
-                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
+            self.finalize_test()
         except Exception as details:
-            self.log.exception('Exception in clean_resources method {}'.format(details))
+            self.log.exception('Exception in finalize_test method {}'.format(details))
             raise
         finally:
+            if self._failure_post_behavior == 'destroy':
+                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
+            stop_events_device()
+            self.collect_events_log()
             self.zip_and_upload_job_log()
 
     def zip_and_upload_job_log(self):
-        job_log_dir = os.path.dirname(os.path.dirname(self.logdir))
-        archive_name = os.path.join(job_log_dir, os.path.basename(job_log_dir))
+        job_log_dir = os.path.dirname(self.logdir)
+        event_log_dir_tmp = os.path.join(job_log_dir, 'job_log')
+        if not os.path.exists(event_log_dir_tmp):
+            os.mkdir(event_log_dir_tmp)
+        for f in ['sct.log', 'output.log']:
+            f_path = os.path.join(job_log_dir, f)
+            if os.path.isfile(f_path):
+                shutil.copy(f_path, event_log_dir_tmp)
+
+        archive_name = os.path.basename(event_log_dir_tmp)
+
         try:
-            archive = shutil.make_archive(archive_name, 'zip', job_log_dir, 'job.log')
-            s3_link = S3Storage.upload_file(file_path=archive)
+            joblog_archive = shutil.make_archive(archive_name, 'zip', event_log_dir_tmp)
+            s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
-                self.update({'test_details': {'job_log_link': s3_link}})
+                self.update({'test_details': {'log_files': {'job_log': s3_link}}})
             self.log.info('Link to job.log archive {}'.format(s3_link))
         except Exception as details:
-            self.log.warning('Errors during creating archive and uploading job.log {}'.format(details))
+            self.log.warning('Errors during creating and uploading archive of sct.log {}'.format(details))
+        self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
+        if self.create_stats:
+            self.log.info("ES document id: {}".format(self.get_doc_id()))
+
+    def collect_events_log(self):
+        event_log_base_dir = os.path.dirname(self.logdir)
+        event_log_dir = os.path.join(event_log_base_dir, 'events_log')
+        if not os.path.exists(event_log_dir):
+            os.mkdir(event_log_dir)
+        for f in ['events.log', 'raw_events.log']:
+            f_path = os.path.join(event_log_base_dir, f)
+            shutil.copy(f_path, event_log_dir)
+        archive_name = os.path.basename(event_log_dir)
+        try:
+            event_log_archive = shutil.make_archive(archive_name, 'zip', event_log_dir)
+            s3_link = S3Storage().upload_file(file_path=event_log_archive, dest_dir=cluster.Setup.test_id())
+            if self.create_stats:
+                self.update({'test_details': {'log_files': {'events_log': s3_link}}})
+            self.log.info('Link to events log archive {}'.format(s3_link))
+        except Exception as details:
+            self.log.warning('Errors during creating and uploading archive of events log. {}'.format(details))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
@@ -1175,14 +1371,14 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         population = " -pop seq="
 
         total_keys = size_in_gb * 1024 * 1024
-        n_loaders = self.params.get('n_loaders')
+        n_loaders = int(self.params.get('n_loaders'))
         keys_per_node = total_keys / n_loaders
 
         write_queue = list()
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                         str(keys_per_node * i) + stress_fixed_params
+                str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
@@ -1190,7 +1386,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
         if blocking:
             for stress in write_queue:
-                self.verify_stress_thread(queue=stress)
+                self.verify_stress_thread(cs_thread_pool=stress)
 
         return write_queue
 
@@ -1201,7 +1397,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
         cql_cmd = "ALTER table {key_space_name}.{table_name} " \
                   "WITH in_memory=true AND compaction={compaction_strategy}".format(**locals())
-        node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), verbose=True)
+        node.run_cqlsh(cql_cmd)
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),
@@ -1225,13 +1421,13 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         # if all are zeros the result will be False, otherwise we are still sending
         return any([float(v[1]) for v in results[0]["values"]])
 
-    @retrying(n=30, sleep_time=60, allowed_exceptions=(AssertionError, CmdError))
+    @retrying(n=30, sleep_time=60, allowed_exceptions=(AssertionError, UnexpectedExit, Failure))
     def wait_for_hints_to_be_sent(self, node, num_dest_nodes):
         num_shards = self.get_num_shards(node)
         hints_after_send_completed = num_shards * num_dest_nodes
         # after hints were sent to all nodes, the number of files should be 1 per shard per destination
         assert self.get_num_of_hint_files(node) <= hints_after_send_completed, "Waiting until the number of hint files " \
-                                                                        "will be %s." % hints_after_send_completed
+            "will be %s." % hints_after_send_completed
         assert self.hints_sending_in_progress() is False, "Waiting until Prometheus hints counter will not change"
 
     def verify_no_drops_and_errors(self, starting_from):
@@ -1265,8 +1461,8 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
 
     def check_regression(self):
         ra = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                             send_email=self.params.get('send_email', default=True),
-                             email_recipients=self.params.get('email_recipients', default=None))
+                                        send_email=self.params.get('send_email', default=True),
+                                        email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
             ra.check_regression(self._test_id, is_gce)
@@ -1303,3 +1499,37 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         """
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
+
+    def collect_logs(self):
+        self.log.info('Start collect logs...')
+        logs_dict = {"db_cluster_log": "",
+                     "monitoring_log": "",
+                     "prometheus_data": "",
+                     "monitoring_stack": ""}
+
+        storing_dir = os.path.join(self.logdir, str(cluster.Setup.test_id()))
+        os.makedirs(storing_dir)
+
+        self.log.info("Storing dir is {}".format(storing_dir))
+        if self.db_cluster:
+            db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
+            logs_dict["db_cluster_log"] = S3Storage().upload_file(file_path=self.archive_logs(db_cluster_log_path),
+                                                                  dest_dir=cluster.Setup.test_id())
+        if self.monitors.nodes:
+            monitoring_log_path = self.monitors.collect_logs(storing_dir)
+            logs_dict["monitoring_log"] = S3Storage().upload_file(file_path=self.archive_logs(monitoring_log_path),
+                                                                  dest_dir=cluster.Setup.test_id())
+            prometheus_data = self.monitors.download_monitor_data()
+            logs_dict["prometheus_data"] = prometheus_data
+            logs_dict["monitoring_stack"] = self.monitors.download_monitoring_data_stack()
+
+        if self.create_stats:
+            self.update({'test_details': {'log_files': logs_dict}})
+
+        self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".format(cluster.Setup.test_id()))
+
+    def archive_logs(self, path):
+        self.log.info('Creating archive....')
+        archive_path = shutil.make_archive(path, 'zip', root_dir=path)
+        self.log.info('Path to archive file: %s' % archive_path)
+        return archive_path
