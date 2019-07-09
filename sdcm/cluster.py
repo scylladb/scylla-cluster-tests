@@ -27,6 +27,7 @@ import shutil
 import itertools
 import json
 import io
+import concurrent.futures
 
 from base64 import decodestring
 
@@ -3029,39 +3030,6 @@ class BaseLoaderSet(object):
                 results['latmax'].append(latmax)
         return results
 
-    @staticmethod
-    def _parse_gemini_summary_json(json_str):
-        results = {'result': {}}
-        try:
-            results = json.loads(json_str)
-
-        except Exception as details:
-            logger.error("Invalid json document {}".format(details))
-
-        return results.get('result')
-
-    @staticmethod
-    def _parse_gemini_summary(lines):
-        results = {}
-        enable_parse = False
-
-        for line in lines:
-            line.strip()
-            if 'Results:' in line:
-                enable_parse = True
-                continue
-            if "run completed" in line:
-                enable_parse = False
-                continue
-            if not enable_parse:
-                continue
-
-            split_idx = line.index(':')
-            key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
-            results[key] = int(value)
-        return results
-
     def get_stress_results_bench(self, queue):
         results = []
         ret = []
@@ -3124,59 +3092,6 @@ class BaseLoaderSet(object):
                 kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate scylla-bench on node %s:\n%s', loader, kill_result)
-
-    def run_gemini_thread(self, cmd, timeout, output_dir, test_node, oracle_node):
-        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
-
-        def _run_gemini(node, loader_idx, cmd, test_node, oracle_node):
-            queue[TASK_QUEUE].put(node)
-            logdir = os.path.join(output_dir, self.name)
-            try:
-                os.makedirs(logdir)
-            except OSError:
-                pass
-            log_file_name = os.path.join(logdir,
-                                         'gemini-l%s-%s.log' %
-                                         (loader_idx, uuid.uuid4()))
-            # gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
-            gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())
-            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} --outfile {}".format(
-                                      cmd.strip(), test_node, oracle_node, gemini_log),
-                                      timeout=timeout,
-                                      ignore_status=False,
-                                      log_file=log_file_name)
-            queue[RES_QUEUE].put((node, result, gemini_log))
-            queue[TASK_QUEUE].task_done()
-
-        for loader_idx, loader in enumerate(self.nodes):
-            setup_thread = threading.Thread(target=_run_gemini,
-                                            args=(loader, loader_idx,
-                                                  cmd, test_node, oracle_node))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(30)
-
-        return queue
-
-    def get_gemini_results(self, queue):
-        results = []
-        ret = []
-        self.log.debug('Wait for %s gemini threads results', queue[TASK_QUEUE].qsize())
-        queue[TASK_QUEUE].join()
-        while not queue[RES_QUEUE].empty():
-            results.append(queue[RES_QUEUE].get())
-
-        for node, result, result_file in results:
-
-            local_gemini_result_file = os.path.join(self.logdir, os.path.basename(result_file))
-            node.receive_files(src=result_file, dst=local_gemini_result_file)
-            with open(local_gemini_result_file) as rf:
-                content = rf.read()
-                res = self._parse_gemini_summary_json(content)
-                if res:
-                    ret.append(res)
-
-        return ret
 
     def kill_gemini_thread(self):
         for loader in self.nodes:

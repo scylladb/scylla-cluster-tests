@@ -289,6 +289,31 @@ class FullScanEvent(SctEvent):
         return self.msg.format(super(FullScanEvent, self).__str__(), self)
 
 
+class GeminiEvent(SctEvent):
+    def __init__(self, type, cmd, result=None):
+        super(GeminiEvent, self).__init__()
+        self.type = type
+        self.cmd = cmd
+        self.msg = "{0}: type={1.type} gemini_cmd={1.cmd}"
+        self.result = ""
+        if result:
+            self.result += "Exit code: {exit_code}\n"
+            if result['stdout']:
+                self.result += "Command output: {stdout}\n"
+                result['stdout'] = result['stdout'].strip().split('\n')[-2:]
+            if result['stderr']:
+                self.result += "Command error: {stderr}\n"
+            self.result = self.result.format(**result)
+            if result['exit_code'] != 0 or result['stderr']:
+                self.severity = Severity.ERROR
+                self.type = 'error'
+            self.msg += '\n{1.result}'
+        self.publish()
+
+    def __str__(self):
+        return self.msg.format(super(GeminiEvent, self).__str__(), self)
+
+
 class CassandraStressEvent(SctEvent):
     def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
         super(CassandraStressEvent, self).__init__()
@@ -367,6 +392,10 @@ class DatabaseLogEvent(SctEvent):
 
 
 class CassandraStressLogEvent(DatabaseLogEvent):
+    pass
+
+
+class GeminiLogEvent(DatabaseLogEvent):
     pass
 
 

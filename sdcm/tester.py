@@ -62,6 +62,7 @@ from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.gemini_thread import GeminiStressThread
 from sdcm import wait
 
 from invoke.exceptions import UnexpectedExit, Failure
@@ -812,13 +813,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def run_gemini(self, cmd, duration=None):
 
         timeout = self.get_duration(duration)
-        test_node = random.choice(self.db_cluster.nodes)
-        oracle_node = random.choice(self.cs_db_cluster.nodes)
         if self.create_stats:
-            self.update_stress_cmd_details(cmd, stresser='gemini')
-        return self.loaders.run_gemini_thread(cmd, timeout, cluster.Setup.logdir(),
-                                              test_node=test_node.ip_address,
-                                              oracle_node=oracle_node.ip_address)
+            self.update_stress_cmd_details(cmd, stresser="gemini", aggregate=False)
+        return GeminiStressThread(test_cluster=self.db_cluster,
+                                  oracle_cluster=self.cs_db_cluster,
+                                  loaders=self.loaders,
+                                  gemini_cmd=cmd,
+                                  timeout=timeout,
+                                  outputdir=self.logdir).run()
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
@@ -828,6 +830,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 self.loaders.kill_stress_thread()
             if self.params.get('fullscan', default=False):
                 self.loaders.kill_fullscan_thread()
+            if self.params.get('gemini_cmd', default=False):
+                self.loaders.kill_gemini_thread()
 
     def verify_stress_thread(self, cs_thread_pool):
         if isinstance(cs_thread_pool, dict):
@@ -862,26 +866,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return results
 
     def get_gemini_results(self, queue):
-        results = self.loaders.get_gemini_results(queue)
-        result = self.verify_gemini_results(results)
-        return result
+        return queue.get_gemini_results()
 
-    def verify_gemini_results(self, results):
+    def verify_gemini_results(self, queue):
+        results = queue.get_gemini_results()
+
         stats = {'status': None, 'results': [], 'errors': {}}
         if not results:
             self.log.error('Gemini results are not found')
             stats['status'] = 'FAILED'
         else:
+            result = queue.verify_gemini_results(results)
+            stats.update(result)
 
-            for res in results:
-                stats['results'].append(res)
-                for err_type in ['write_errors', 'read_errors', 'errors']:
-                    if err_type in res.keys() and res[err_type]:
-                        self.log.error("Gemini {} errors: {}".format(err_type, res[err_type]))
-                        stats['status'] = 'FAILED'
-                        stats['errors'][err_type] = res[err_type]
-        if not stats['status']:
-            stats['status'] = "PASSED"
         if self.create_stats:
             self.update_stress_results(results, calculate_stats=False)
             self.update({'status': stats['status'],
