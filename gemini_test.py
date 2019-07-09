@@ -39,7 +39,7 @@ class GeminiTest(ClusterTester):
         self.log.debug('Start gemini benchmark')
         prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
-        result = self.get_gemini_results(queue=test_queue)
+        result = self.verify_gemini_results(queue=test_queue)
 
         prepared_results.update(result)
 
@@ -70,7 +70,7 @@ class GeminiTest(ClusterTester):
 
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
-        result = self.get_gemini_results(queue=test_queue)
+        result = self.verify_gemini_results(queue=test_queue)
 
         self.db_cluster.stop_nemesis(timeout=1600)
         nemesises = self.get_doc_data(key='nemesis')
