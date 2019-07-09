@@ -2,12 +2,13 @@ import json
 import time
 import logging
 import os
-from avocado.utils import process
 
 import cluster
 from sdcm.utils import retrying
+from remote import LocalCmdRunner
 
 logger = logging.getLogger(__name__)
+localrunner = LocalCmdRunner()
 
 BASE_NAME = 'db-node'
 LOADER_NAME = 'loader-node'
@@ -31,7 +32,7 @@ class CannotFindContainers(Exception):
 
 
 def _cmd(cmd, timeout=10, sudo=False):
-    res = process.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
+    res = localrunner.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout, sudo=sudo)
     if res.exit_status:
         if 'No such container:' in res.stderr:
             raise DockerContainerNotExists(res.stderr)
@@ -41,11 +42,12 @@ def _cmd(cmd, timeout=10, sudo=False):
 
 class DockerNode(cluster.BaseNode):
 
-    def __init__(self, name, credentials, base_logdir=None, node_prefix=None):
+    def __init__(self, name, credentials, parent_cluster, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
                           'user': 'scylla-test',
                           'key_file': credentials.key_file}
         super(DockerNode, self).__init__(name=name,
+                                         parent_cluster=parent_cluster,
                                          base_logdir=base_logdir,
                                          ssh_login_info=ssh_login_info,
                                          node_prefix=node_prefix)
@@ -75,9 +77,10 @@ class DockerNode(cluster.BaseNode):
     def private_ip_address(self):
         return self._get_public_ip_address()
 
-    def run_nodetool(self, cmd):
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False):
+        cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
         logger.debug('run nodetool %s' % cmd)
-        return _cmd('exec {} nodetool {}'.format(self.name, cmd))
+        return _cmd('exec {} {}'.format(self.name, cmd))
 
     def wait_public_ip(self):
         while not self._public_ip_address:
@@ -147,6 +150,7 @@ class DockerCluster(cluster.BaseCluster):
     def _create_node(self, node_name):
         return DockerNode(node_name,
                           credentials=self.credentials[0],
+                          parent_cluster=self,
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix)
 

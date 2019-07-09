@@ -1,6 +1,7 @@
 import logging
 import datetime
 import time
+import json
 import boto3
 import base64
 from botocore.exceptions import ClientError, NoRegionError
@@ -39,22 +40,24 @@ class CreateSpotFleetError(ClientError):
 
 class EC2Client(object):
 
-    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None):
+    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
-        self._resource = boto3.resource('ec2')
+        self._resource = boto3.resource('ec2', region_name=region_name)
+        self.region_name = region_name
         self._timeout = timeout  # request timeout in seconds
         self._price_index = 1.5
         self._wait_interval = 5  # seconds
+        self.spot_max_price_percentage = spot_max_price_percentage
 
     def _get_ec2_client(self, region_name=None):
-            try:
-                return boto3.client(service_name='ec2', region_name=region_name)
-            except NoRegionError:
-                if not region_name:
-                    raise CreateEC2ClientNoRegionError()
-                # next class instance could be created without region_name parameter
-                boto3.setup_default_session(region_name=region_name)
-                return self._get_ec2_client()
+        try:
+            return boto3.client(service_name='ec2', region_name=region_name)
+        except NoRegionError:
+            if not region_name:
+                raise CreateEC2ClientNoRegionError()
+            # next class instance could be created without region_name parameter
+            boto3.setup_default_session(region_name=region_name)
+            return self._get_ec2_client()
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None):
@@ -100,18 +103,18 @@ class EC2Client(object):
                              'InstanceType': instance_type,
                              'NetworkInterfaces': network_if,
                              'Placement': {'AvailabilityZone': region_name},
+                             'TagSpecifications': [
+                                 {
+                                     'ResourceType': 'instance',
+                                     'Tags': tags_list
+                                 }
+
+                             ]
                              },
                         ],
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
-                        'TagSpecifications' : [
-                            {
-                                'ResourceType': 'instance',
-                                'Tags': tags_list
-                            }
-
-                        ]
                         }
         if key_pair:
             fleet_config['LaunchSpecifications'][0].update({'KeyName': key_pair})
@@ -127,22 +130,58 @@ class EC2Client(object):
         logger.debug('Spot fleet request: %s', request_id)
         return request_id
 
-    def _get_spot_price(self, instance_type, region_name=''):
+    @staticmethod
+    def get_instance_price(region_name, instance_type):
+        regions_names_map = {
+            'us-east-2': 'US East (Ohio)',
+            'us-east-1': 'US East (N. Virginia)',
+            'us-west-1': 'US West (N. California)',
+            'us-west-2': 'US West (Oregon)',
+            'ap-south-1': 'Asia Pacific (Mumbai)',
+            'ap-northeast-3': 'Asia Pacific (Osaka-Local)',
+            'ap-northeast-2': 'Asia Pacific (Seoul)',
+            'ap-southeast-1': 'Asia Pacific (Singapore)',
+            'ap-southeast-2': 'Asia Pacific (Sydney)',
+            'ap-northeast-1': 'Asia Pacific (Tokyo)',
+            'ca-central-1': 'Canada (Central)',
+            'eu-central-1': 'EU (Frankfurt)',
+            'eu-west-1': 'EU (Ireland)',
+            'eu-west-2': 'EU (London)',
+            'eu-west-3': 'EU (Paris)',
+            'eu-north-1': 'EU (Stockholm)',
+            'sa-east-1': 'South America (Sao Paulo)'
+        }
+
+        pricing = boto3.client('pricing', region_name='us-east-1')
+        response = pricing.get_products(
+            ServiceCode='AmazonEC2',
+            Filters=[
+                {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
+                {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
+                {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw', 'Value': 'NA'},
+                {'Type': 'TERM_MATCH', 'Field': 'tenancy', 'Value': 'Shared'},
+                {'Type': 'TERM_MATCH', 'Field': 'capacitystatus', 'Value': 'Used'},
+                {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': regions_names_map[region_name]}
+            ],
+            MaxResults=10
+        )
+        assert response['PriceList'], "failed to get price for {instance_type} in {region_name}".format(
+            region_name=region_name, instance_type=instance_type)
+        price = response['PriceList'][0]
+        price_dimensions = next(iter(json.loads(price)['terms']['OnDemand'].values()))['priceDimensions']
+        instance_price = next(iter(price_dimensions.values()))['pricePerUnit']['USD']
+        return instance_price
+
+    def _get_spot_price(self, instance_type):
         """
         Calculate spot price for bidding
         :return: spot bid price
         """
-        logger.info('Calculating spot price for bidding')
-        history = self._client.describe_spot_price_history(InstanceTypes=[instance_type], AvailabilityZone=region_name)
-        if 'SpotPriceHistory' not in history or not history['SpotPriceHistory']:
-            raise GetSpotPriceHistoryError("Failed getting spot price history for instance type %s", instance_type)
-        prices = [float(item['SpotPrice']) for item in history['SpotPriceHistory']]
-        price_avg = round(sum(prices) / len(prices), 4)
-        price_min = min(prices)
-        price_desired = (price_avg + price_min) / 4
-        if price_desired < price_min:
-            price_desired = price_min
-        price = (dict(min=price_min, max=max(prices), avg=price_avg, desired=round(price_desired, 4)))
+        logger.info('Calculating spot price based on OnDemand price')
+
+        on_demand_price = float(self.get_instance_price(self.region_name, instance_type))
+
+        price = dict(max=on_demand_price, desired=on_demand_price * self.spot_max_price_percentage)
         logger.info('Spot bid price: %s', price)
         return price
 
@@ -186,7 +225,7 @@ class EC2Client(object):
         resp = self._client.describe_spot_fleet_requests(SpotFleetRequestIds=[request_id])
         for req in resp['SpotFleetRequestConfigs']:
             if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
-                            req['ActivityStatus'] != STATUS_FULFILLED:
+                    req['ActivityStatus'] != STATUS_FULFILLED:
                 if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
                     tt = datetime.datetime.now().timetuple()
                     search_start_time = datetime.datetime(tt.tm_year, tt.tm_mon, tt.tm_mday)
@@ -258,19 +297,14 @@ class EC2Client(object):
 
         :return: list of instance id-s
         """
-        instance_ids = []
+
         spot_price = self._get_spot_price(instance_type)
-        price_desired = spot_price['desired']
-        while not instance_ids and price_desired <= spot_price['avg']:
-            request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, price_desired,
-                                                      key_pair, user_data, count, duration,
-                                                      block_device_mappings=block_device_mappings)
-            instance_ids, resp = self._wait_for_request_done(request_ids)
-            if not instance_ids and resp == STATUS_PRICE_TOO_LOW:
-                price_desired = round(price_desired * self._price_index, 4)
-                if price_desired <= spot_price['avg']:
-                    logger.info('Got price-too-low, retrying with higher price %s', price_desired)
-                    continue
+
+        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
+                                                  key_pair, user_data, count, duration,
+                                                  block_device_mappings=block_device_mappings)
+        instance_ids, resp = self._wait_for_request_done(request_ids)
+
         if not instance_ids:
             raise CreateSpotInstancesError("Failed to get spot instances: %s" % resp)
 

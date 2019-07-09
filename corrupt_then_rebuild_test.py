@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-from avocado import main
 from sdcm.tester import ClusterTester
 from sdcm import nemesis
 
@@ -34,9 +33,5 @@ class CorruptThenRebuildTest(ClusterTester):
         current_nemesis.disrupt()
 
         for stress in write_queue:
-            self.verify_stress_thread(queue=stress)
+            self.verify_stress_thread(cs_thread_pool=stress)
         self.populate_data_parallel(100, blocking=False, read=True)
-
-
-if __name__ == '__main__':
-    main()

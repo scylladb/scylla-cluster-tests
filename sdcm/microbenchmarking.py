@@ -23,8 +23,31 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
+class LargeNumberOfDatasetsException(Exception):
+    def __init__(self, msg, *args, **kwargs):
+        super(LargeNumberOfDatasetsException, self).__init__(*args, **kwargs)
+        self.message = msg
+
+    def __str__(self):
+        return "MBM: {0.message}".format(self)
+
+
+class EmptyResultFolder(Exception):
+    def __init__(self, msg, *args, **kwargs):
+        super(EmptyResultFolder, self).__init__(*args, **kwargs)
+        self.message = msg
+
+    def __str__(self):
+        return "MBM: {0.message}".format(self)
+
+
 class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
-    def __init__(self, email_recipients):
+    allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
+    higher_better = ('frag/s',)
+    lower_better = ('avg aio',)
+    submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
+
+    def __init__(self, email_recipients, db_version=None):
         super(MicroBenchmarkingResultsAnalyzer, self).__init__(
             es_index="microbenchmarking",
             es_doc_type="microbenchmark",
@@ -37,8 +60,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
         self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)
+        self.db_version = db_version
+        self.build_url = os.getenv('BUILD_URL', "")
+        self.cur_version_info = None
+        self.metrics = self.higher_better + self.lower_better
 
-    def check_regression(self, current_results, html_report_path):
+    def check_regression(self, current_results):
+        if not current_results:
+            return {}
+        START_DATE = datetime.datetime.strptime("2019-01-01", "%Y-%m-%d")
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.test_args",  # [64-32.1)
@@ -47,19 +77,28 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             "hits.hits._source.test_run_date",
             "hits.hits._source.test_group_properties.name",  # large-partition-skips
             "hits.hits._source.results.stats.aio",
+            "hits.hits._source.results.stats.avg aio",
             "hits.hits._source.results.stats.cpu",
             "hits.hits._source.results.stats.time (s)",
             "hits.hits._source.results.stats.frag/s",
             "hits.hits._source.versions",
+            "hits.hits._source.excluded"
         )
 
-        cur_version_info = current_results[current_results.keys()[0]]['versions']['scylla-server']
-        cur_version = cur_version_info["version"]
+        self.db_version = self.cur_version_info["version"]
         tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
-                                         q="hostname:'%s' AND versions.scylla-server.version:%s*" % (self.hostname,
-                                                                                                     cur_version[:3]))
+                                         q="hostname:'%s' \
+                                            AND versions.scylla-server.version:%s* \
+                                            AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,
+                                                                                               self.db_version[:3]))
         assert tests_filtered, "No results from DB"
-        results = tests_filtered["hits"]["hits"]
+
+        results = []
+        for doc in tests_filtered['hits']['hits']:
+            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], "%Y-%m-%d %H:%M:%S")
+            if doc_date > START_DATE:
+                results.append(doc)
+
         sorted_by_type = defaultdict(list)
         for res in results:
             test_type = "%s_%s" % (res["_source"]["test_group_properties"]["name"],
@@ -85,18 +124,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         #               "Diff best [%]":
         #           },
         # }
-        allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
-        higher_better = ('frag/s',)
-        lower_better = ('aio',)
-        submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
-        metrics = higher_better + lower_better
 
         def set_results_for(metrica):
             list_of_results_from_db.sort(key=lambda x: datetime.datetime.strptime(x["_source"]["test_run_date"],
                                                                                   self._run_date_pattern))
 
             def get_metrica_val(x):
-                return float(x["_source"]["results"]["stats"][metrica])
+                metrica_val = x["_source"]["results"]["stats"].get(metrica, None)
+                return float(metrica_val) if metrica_val else None
 
             def get_commit_id(x):
                 return x["_source"]['versions']['scylla-server']['commit_id']
@@ -106,31 +141,52 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                                                   "%Y%m%d").date()
 
             def get_best_result_for_metrica():
+                # build new list with results where analyzing metrica is not None
+                # metrica s with result 0, will be included
 
-                if metrica in higher_better:
-                    best_result = max(list_of_results_from_db, key=get_metrica_val)
-                elif metrica in lower_better:
-                    best_result = min(list_of_results_from_db, key=get_metrica_val)
+                list_for_searching = [el for el in list_of_results_from_db if get_metrica_val(el) is not None]
 
-                return best_result
+                # if list is empty ( which could be happened for new metric),
+                # then return first element in list, because result will be None
+                if not list_for_searching:
+                    return list_of_results_from_db[0]
+                if metrica in self.higher_better:
+                    return max(list_for_searching, key=get_metrica_val)
+                elif metrica in self.lower_better:
+                    return min(list_for_searching, key=get_metrica_val)
+                else:
+                    return list_of_results_from_db[0]
 
-            def get_diffs():
-                diff_best = ((cur_val - best_result_val) / best_result_val) * 100 if best_result_val > 0 else cur_val * 100
-                diff_last = ((cur_val - last_val) / last_val) * 100 if last_val > 0 else cur_val * 100
+            def count_diff(cur_val, dif_val):
+                if cur_val is None or dif_val is None:
+                    return None
 
-                if metrica in higher_better:
-                    diff_best = -diff_best
-                    diff_last = -diff_last
+                ret_dif = ((cur_val - dif_val) / dif_val) * 100 if dif_val > 0 else cur_val * 100
 
-                diff_last = -diff_last if diff_last != 0 else 0
-                diff_best = -diff_best if diff_best != 0 else 0
+                if metrica in self.higher_better:
+                    ret_dif = -ret_dif
+
+                ret_dif = -ret_dif if ret_dif != 0 else 0
+
+                return ret_dif
+
+            def get_diffs(cur_val, best_result_val, last_val):
+                # if last result doesn't contain the metric
+                # assign 0 to last value to count formula of changes
+
+                diff_best = count_diff(cur_val, best_result_val)
+                diff_last = count_diff(cur_val, last_val)
+
                 return (diff_last, diff_best)
 
-            if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == cur_version_info["commit_id"]:
+            if len(list_of_results_from_db) > 1 and get_commit_id(list_of_results_from_db[-1]) == self.cur_version_info["commit_id"]:
                 last_idx = -2
             else:  # when current results are on disk but db is not updated
                 last_idx = -1
-            cur_val = float(current_result["results"]["stats"][metrica])
+
+            cur_val = current_result["results"]["stats"].get(metrica, None)
+            if cur_val:
+                cur_val = float(cur_val)
 
             last_val = get_metrica_val(list_of_results_from_db[last_idx])
             last_commit = get_commit_id(list_of_results_from_db[last_idx])
@@ -141,7 +197,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             best_result_commit = get_commit_id(best_result)
             best_commit_date = get_commit_date(best_result)
 
-            diff_last, diff_best = get_diffs()
+            diff_last, diff_best = get_diffs(cur_val, best_result_val, last_val)
 
             stats = {
                 "Current": cur_val,
@@ -154,7 +210,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
             }
 
-            if (diff_last < -5 or diff_best < -5):
+            if ((diff_last and diff_last < -5) or (diff_best and diff_best < -5)):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
 
@@ -167,7 +223,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
 
         def set_results_for_sub(metrica):
             report_results[test_type][metrica].update({'Stats': {}})
-            for submetrica in submetrics.get(metrica):
+            for submetrica in self.submetrics.get(metrica):
                 submetrica_cur_val = float(current_result["results"]["stats"][submetrica])
                 report_results[test_type][metrica]['Stats'].update({submetrica: submetrica_cur_val})
 
@@ -176,24 +232,32 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             if not list_of_results_from_db:
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
-            for metrica in metrics:
+            for metrica in self.metrics:
                 self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
                 set_results_for(metrica)
-                if metrica in submetrics.keys():
+                if metrica in self.submetrics.keys():
                     set_results_for_sub(metrica)
+
+        return report_results
+
+    def send_html_report(self, report_results, html_report_path=None, send=True):
 
         subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
         dashboard_path = "app/kibana#/dashboard/aee9b370-09db-11e9-a976-2fe0f5890cd0?_g=(filters%3A!())"
+
         for_render = {
             "subject": subject,
+            "testrun_id": self.test_run_date,
             "results": report_results,
-            "stats_names": allowed_stats,
-            "metrics": metrics,
+            "stats_names": self.allowed_stats,
+            "metrics": self.metrics,
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
+            "build_url": self.build_url,
             "full_report": True,
             "hostname": self.hostname,
+            "test_version": self.cur_version_info
         }
-        for_render.update(dict(test_version=cur_version_info))
+
         if html_report_path:
             html_file_path = html_report_path
         else:
@@ -201,7 +265,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.render_to_html(for_render, html_file_path=html_file_path)
         for_render["full_report"] = False
         summary_html = self.render_to_html(for_render)
-        self.send_email(subject, summary_html, files=(html_file_path,))
+        if send:
+            self.send_email(subject, summary_html, files=(html_file_path,))
+        else:
+            return html_file_path, summary_html
 
     def get_results(self, results_path, update_db):
         bad_chars = " "
@@ -211,7 +278,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
             self.log.info(fullpath)
             if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
                     len(subdirs) > 1):
-                raise Exception('Test set {} has more than one datasets: {}'.format(
+                raise LargeNumberOfDatasetsException('Test set {} has more than one datasets: {}'.format(
                     os.path.basename(fullpath),
                     subdirs))
 
@@ -221,6 +288,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 dirname = os.path.basename(os.path.dirname(fullpath))
                 self.log.info("Test set: {}".format(dirname))
                 for filename in files:
+                    if filename.startswith('.'):
+                        continue
                     new_filename = "".join(c for c in filename if c not in bad_chars)
                     test_args = os.path.splitext(new_filename)[0]
                     test_type = dirname + "_" + test_args
@@ -231,34 +300,219 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     datastore.update({'hostname': self.hostname,
                                       'test_args': test_args,
                                       'test_run_date': self.test_run_date,
-                                      'dataset_name': dataset_name
+                                      'dataset_name': dataset_name,
+                                      'excluded': False
                                       })
                     if update_db:
                         self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
                                             doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
                     results[test_type] = datastore
+        if not results:
+            raise EmptyResultFolder("perf_fast_forward_output folder is empty")
+
+        self.cur_version_info = results[results.keys()[0]]['versions']['scylla-server']
         return results
+
+    def exclude_test_run(self, testrun_id=''):
+        """Exclude test results by testrun id
+
+        Filter test result by hostname, scylla version and test_run_date filed
+        and mark the all found result with flag exluded: True
+
+        Keyword Arguments:
+            testrun_id {str} -- testrun id as value of field test_run_date (default: {''})
+        """
+        if not testrun_id or not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+
+        self.log.info('Exclude testrun {} from results'.format(testrun_id))
+        filter_path = (
+            "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
+            "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
+            "hits.hits._source.test_run_date",
+        )
+        testrun_results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                          q="hostname:'%s' AND versions.scylla-server.version:%s* AND test_run_date:\"%s\"" % (self.hostname,
+                                                                                                                               self.db_version[:3],
+                                                                                                                               testrun_id))
+        if not testrun_results:
+            self.log.info("Nothing to exclude")
+            return
+
+        for res in testrun_results['hits']['hits']:
+            self.log.info(res['_id'])
+            self.log.info(res['_source']['test_run_date'])
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=res['_id'],
+                                body={'excluded': True})
+
+    def exclude_by_test_id(self, test_id=''):
+        """Exclude test result by id
+
+        Filter test result by id (ex. 2018-10-29_18:58:51_large-partition-single-key-slice_begin_incl_0-500000_end_incl.1)
+        and mark the test result with flag excluded: True
+        Keyword Arguments:
+            test_id {str} -- test id from field _id (default: {''})
+        """
+        if not test_id or not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+
+        self.log.info('Exclude test id {} from results'.format(test_id))
+        doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
+        if doc:
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=doc['_id'],
+                                body={'excluded': True})
+        else:
+            self.log.info("Nothing to exclude")
+            return
+
+    def exclude_before_date(self, date=''):
+        """Exclude all test results before date
+
+        Query test result by hostname and scylla version,
+        convert string to date object,
+        filter all test result with versions.scylla-server.run_date_time before
+        date, and mark them with flag excluded: True
+
+        Keyword Arguments:
+            date {str} -- date in format YYYY-MM-DD or YYYY-MM-DD hh:mm:ss (default: {''})
+        """
+        if not date and not self.db_version:
+            self.log.info("Nothing to exclude")
+            return
+        format_pattern = "%Y-%m-%d %H:%M:%S"
+
+        try:
+            date = datetime.datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            try:
+                date = datetime.datetime.strptime(date, format_pattern)
+            except ValueError:
+                self.log.error("Wrong format of parameter --before-date. Should be \"YYYY-MM-DD\" or \"YYYY-MM-DD hh:mm:ss\"")
+                return
+
+        filter_path = (
+            "hits.hits._id",
+            "hits.hits._source.hostname",
+            "hits.hits._source.versions.scylla-server.run_date_time"
+        )
+        self.log.info('Exclude tests before date {}'.format(date))
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q="hostname:'%s' AND versions.scylla-server.version:%s*" %
+                                  (self.hostname, self.db_version[:3]))
+        if not results:
+            self.log.info('Nothing to exclude')
+            return
+
+        before_date_results = []
+        for doc in results['hits']['hits']:
+            doc_date = datetime.datetime.strptime(doc['_source']['versions']['scylla-server']['run_date_time'], format_pattern)
+            if doc_date < date:
+                before_date_results.append(doc)
+
+        for res in before_date_results:
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=res['_id'],
+                                body={'excluded': True})
+
+    def exclude_testrun_by_commit_id(self, commit_id=None):
+        if not commit_id and not self.db_version:
+            self.log.info('Nothing to exclude')
+            return
+
+        filter_path = (
+            "hits.hits._id",
+            "hits.hits._source.hostname",
+            "hits.hits._source.versions.scylla-server.commit_id",
+            "hits.hits._source.test_run_date"
+        )
+
+        self.log.info('Exclude tests by commit id #{}'.format(commit_id))
+
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q="hostname:'{}' \
+                                  AND versions.scylla-server.version:{}*\
+                                  AND versions.scylla-server.commit_id:'{}'".format(self.hostname, self.db_version[:3], commit_id))
+        if not results:
+            self.log.info('There is no testrun results for commit id #{}'.format(commit_id))
+            return
+
+        for doc in results['hits']['hits']:
+            self.log.info("Exlcude test: {}\nCommit: #{}\nRun Date time: {}\n".format(doc['_id'],
+                                                                                      doc['_source']['versions']['scylla-server']['commit_id'],
+                                                                                      doc['_source']['test_run_date']))
+            self._es.update_doc(index=self._es_index,
+                                doc_type=self._es_doc_type,
+                                doc_id=doc['_id'],
+                                body={'excluded': True})
 
 
 def main(args):
-    mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
-    results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
-    if results:
-        mbra.check_regression(results, html_report_path=args.report_path)
-    else:
-        logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
-        sys.exit(1)
+    if args.mode == 'exclude':
+        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=None, db_version=args.db_version)
+        if args.testrun_id:
+            mbra.exclude_test_run(args.testrun_id)
+        if args.test_id:
+            mbra.exclude_by_test_id(args.test_id)
+        if args.before_date:
+            mbra.exclude_before_date(args.before_date)
+        if args.commit_id:
+            mbra.exclude_testrun_by_commit_id(args.commit_id)
+    if args.mode == 'check':
+        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
+        results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
+        if results:
+            if args.hostname:
+                mbra.hostname = args.hostname
+            report_results = mbra.check_regression(results)
+            mbra.send_html_report(report_results, html_report_path=args.report_path)
+        else:
+            logger.warning('Perf_fast_forward testrun is failed or not build results in json format')
+            sys.exit(1)
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Microbencmarking stats uploader and analyzer")
-    parser.add_argument("--update-db", action="store_true", default=False,
-                        help="Upload current microbenchmarking stats to ElasticSearch")
-    parser.add_argument("--results-path", action="store", default=".",
-                        help="Path where to search for test results")
-    parser.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
-                        help="Comma separated email addresses list that will get the report")
-    parser.add_argument("--report-path", action="store", default="",
-                        help="Save HTML generated results report to the file path before sending by email")
+    parser = argparse.ArgumentParser(description="Microbencmarking stats utility \
+        for upload and analyze or exclude test result from future analyze")
+
+    subparser = parser.add_subparsers(dest='mode',
+                                      title='Microbencmarking utility modes',
+                                      description='Microbencmarking could be run in two modes definded by subcommand',
+                                      metavar='Modes',
+                                      help='To see subcommand help use  microbenchmarking.py subcommand -h')
+    exclude = subparser.add_parser('exclude', help='Exclude results by testrun, testid or date')
+    exclude_group = exclude.add_mutually_exclusive_group(required=True)
+    exclude_group.add_argument('--testrun-id', action='store', default='',
+                               help='Exclude test results for testrun id')
+    exclude_group.add_argument('--test-id', action='store', default='',
+                               help='Exclude test result by id')
+    exclude_group.add_argument('--before-date', action='store', default='',
+                               help='Exclude all test results before date of run stored in field versions.scylla-server.run_date_time.\
+                               Value in format YYYY-MM-DD or YYYY-MM-DD hh:mm:ss')
+    exclude_group.add_argument('--commit-id', action='store', default='',
+                               help='Exclude test run for specific commit id')
+    exclude.add_argument('--db-version', action='store', default='',
+                         help='Exclude test results for scylla version',
+                         required=True)
+
+    check = subparser.add_parser('check', help='Upload and analyze test result')
+    check.add_argument("--update-db", action="store_true", default=False,
+                       help="Upload current microbenchmarking stats to ElasticSearch")
+    check.add_argument("--results-path", action="store", default=".",
+                       help="Path where to search for test results")
+    check.add_argument("--email-recipients", action="store", default="bentsi@scylladb.com",
+                       help="Comma separated email addresses list that will get the report")
+    check.add_argument("--report-path", action="store", default="",
+                       help="Save HTML generated results report to the file path before sending by email")
+    check.add_argument("--hostname", action="store", default="",
+                       help="Run check regression for host with hostname")
+
     return parser.parse_args()
 
 

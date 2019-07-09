@@ -112,6 +112,7 @@ class FlakyRetryPolicy(RetryPolicy):
 def teardown_on_exception(method):
     """
     Ensure that resources used in test are cleaned upon unhandled exceptions. and every process are stopped, and logs are uploaded
+
     :param method: ScyllaClusterTester method to wrap.
     :return: Wrapped method.
     """
@@ -1002,6 +1003,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         The default of replication_strategy depends on the type of the replication_factor:
             If it's int, the default of replication_strategy will be 'SimpleStrategy'
             If it's dict, the default of replication_strategy will be 'NetworkTopologyStrategy'
+
         In the case of NetworkTopologyStrategy, replication_strategy should be a dict that contains the name of
         every dc that the keyspace should be replicated to as keys, and the replication factor of each of those dc
         as values, like so:
@@ -1533,3 +1535,4 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         archive_path = shutil.make_archive(path, 'zip', root_dir=path)
         self.log.info('Path to archive file: %s' % archive_path)
         return archive_path
+

@@ -2,12 +2,14 @@ import time
 import logging
 import threading
 import Queue
+import atexit
+
 from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
 
-from avocado.utils import runtime as avocado_runtime
-from .loader import CassandraStressExporterSetup
 import cluster
+
+loggger = logging.getLogger(__name__)
 
 
 def get_openstack_service(user, password, auth_version, auth_url, service_type, service_name, service_region, tenant):
@@ -30,8 +32,7 @@ def clean_openstack_instance(user, password, auth_version, auth_url, service_typ
         instance = [n for n in service.list_nodes() if n.name == instance_name][0]
         service.destroy_node(instance)
     except Exception as details:
-        test_logger = logging.getLogger('avocado.test')
-        test_logger.error(str(details))
+        loggger.error(str(details))
 
 
 def clean_openstack_credential(user, password, auth_version, auth_url, service_type, service_name, service_region,
@@ -43,8 +44,7 @@ def clean_openstack_credential(user, password, auth_version, auth_url, service_t
         service.delete_key_pair(key_pair)
         cluster.remove_if_exists(credential_key_file)
     except Exception as details:
-        test_logger = logging.getLogger('avocado.test')
-        test_logger.error(str(details))
+        loggger.error(str(details))
 
 
 class OpenStackNode(cluster.BaseNode):
@@ -53,7 +53,7 @@ class OpenStackNode(cluster.BaseNode):
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, openstack_instance, openstack_service, credentials,
+    def __init__(self, openstack_instance, openstack_service, parent_cluster, credentials,
                  node_prefix='node', node_index=1, openstack_image_username='root',
                  base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
@@ -66,6 +66,7 @@ class OpenStackNode(cluster.BaseNode):
                           'wait_key_installed': 30,
                           'extra_ssh_options': '-tt'}
         super(OpenStackNode, self).__init__(name=name,
+                                            parent_cluster=parent_cluster,
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir,
                                             node_prefix=node_prefix)
@@ -138,18 +139,16 @@ class OpenStackCluster(cluster.BaseCluster):
             if cluster.OPENSTACK_SERVICE is None:
                 cluster.OPENSTACK_SERVICE = service
             if params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_openstack_credential,
-                                                               'args': (user,
-                                                                        password,
-                                                                        tenant,
-                                                                        auth_version,
-                                                                        auth_url,
-                                                                        service_type,
-                                                                        service_name,
-                                                                        service_region,
-                                                                        credential_key_name,
-                                                                        credential_key_file),
-                                                               'once': True})
+                atexit.register(clean_openstack_credential, user,
+                                password,
+                                tenant,
+                                auth_version,
+                                auth_url,
+                                service_type,
+                                service_name,
+                                service_region,
+                                credential_key_name,
+                                credential_key_file)
         cluster.CREDENTIALS.append(credentials)
 
         self._openstack_image = openstack_image
@@ -180,7 +179,7 @@ class OpenStackCluster(cluster.BaseCluster):
                                                            ex_keyname=self._credentials.name)
             cluster.OPENSTACK_INSTANCES.append(instance)
             nodes.append(OpenStackNode(openstack_instance=instance, openstack_service=self._openstack_service,
-                                       credentials=self._credentials,
+                                       credentials=self._credentials, parent_cluster=self,
                                        openstack_image_username=self._openstack_image_username,
                                        node_prefix=self.node_prefix, node_index=node_index,
                                        base_logdir=self.logdir))
@@ -210,7 +209,7 @@ class ScyllaOpenStackCluster(OpenStackCluster, cluster.BaseScyllaCluster):
                                                      node_prefix=node_prefix,
                                                      n_nodes=n_nodes,
                                                      params=params)
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data=''):

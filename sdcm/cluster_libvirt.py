@@ -6,13 +6,14 @@ import threading
 import uuid
 import Queue
 import xml.etree.cElementTree as etree
+import atexit
 
-from avocado.utils import runtime as avocado_runtime
-from avocado.utils import process
+from sdcm import wait
+from sdcm.remote import LocalCmdRunner
+from sdcm import cluster
 
-from . import wait
-from .loader import CassandraStressExporterSetup
-import cluster
+
+localrunner = LocalCmdRunner()
 
 
 class LibvirtNode(cluster.BaseNode):
@@ -21,7 +22,7 @@ class LibvirtNode(cluster.BaseNode):
     Wraps a domain object, so that we can also control the it through SSH.
     """
 
-    def __init__(self, domain, hypervisor, node_prefix='node', node_index=1,
+    def __init__(self, domain, hypervisor, parent_cluster, node_prefix='node', node_index=1,
                  domain_username='root', domain_password='', base_logdir=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._backing_image = None
@@ -33,6 +34,7 @@ class LibvirtNode(cluster.BaseNode):
                           'user': domain_username,
                           'password': domain_password}
         super(LibvirtNode, self).__init__(name=name,
+                                          parent_cluster=parent_cluster,
                                           ssh_login_info=ssh_login_info,
                                           base_logdir=base_logdir,
                                           node_prefix=node_prefix)
@@ -68,16 +70,6 @@ class LibvirtNode(cluster.BaseNode):
     def _wait_public_ip(self):
         while self._get_public_ip_address() is None:
             time.sleep(1)
-
-    # Remove after node setup is finished
-    def db_up(self):
-        try:
-            result = self.remoter.run('netstat -l | grep :9042',
-                                      verbose=False, ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:
-            self.log.error('Error checking for DB status: %s', details)
-            return False
 
     # Remove after node setup is finished
     def cs_installed(self, cassandra_stress_bin=None):
@@ -150,17 +142,13 @@ class LibvirtCluster(cluster.BaseCluster):
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': cluster.remove_if_exists,
-                                                               'args': (dst_image_path,),
-                                                               'once': True})
+                atexit.register(cluster.remove_if_exists, dst_image_path)
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
             cluster.LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
             if self.params.get('failure_post_behavior') == 'destroy':
-                avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_domain,
-                                                               'args': (name,),
-                                                               'once': True})
+                atexit.register(cluster.clean_domain, name)
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
@@ -169,12 +157,13 @@ class LibvirtCluster(cluster.BaseCluster):
                                 '--vnc --noautoconsole --import' %
                                 (uri, name, memory, os_type, os_variant,
                                  dst_image_path, bridge))
-            process.run(virt_install_cmd)
+            localrunner.run(virt_install_cmd)
             cluster.LIBVIRT_DOMAINS.append(name)
             for domain in self._hypervisor.listAllDomains():
                 if domain.name() == name:
                     node = LibvirtNode(hypervisor=self._hypervisor,
                                        domain=domain,
+                                       parent_cluster=self,
                                        node_prefix=self.node_prefix,
                                        node_index=index,
                                        domain_username=self._domain_info[
@@ -207,7 +196,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
                                                    node_prefix=node_prefix,
                                                    n_nodes=n_nodes,
                                                    params=params)
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
 
     def _node_setup(self, node):
         # Sometimes people might set up base images with
@@ -347,4 +336,3 @@ class MonitorSetLibvirt(cluster.BaseMonitorSet, LibvirtCluster):
         self.log.info('Destroy nodes')
         for node in self.nodes:
             node.destroy()
-

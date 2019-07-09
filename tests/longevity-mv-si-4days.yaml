@@ -1,4 +1,4 @@
-test_duration: 5760
+test_duration: 6550
 prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.yaml ops'(insert=15,read1=1,read2=1,read3=1,read4=1,read5=1)' cl=QUORUM n=100000000 -port jmx=6868 -mode cql3 native -rate threads=10",
                     "cassandra-stress user profile=/tmp/c-s_profile_3si_5queries.yaml ops'(insert=25,si_read1=1,si_read2=1,si_read3=1,si_read4=1,si_read5=1)' cl=QUORUM n=100000000 -port jmx=6868 -mode cql3 native -rate threads=10"
                    ]
@@ -8,6 +8,7 @@ stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.y
                   "cassandra-stress user profile=/tmp/c-s_profile_2si_2queries.yaml ops'(insert=10,si_p_read1=1,si_p_read2=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"
 
                  ]
+run_fullscan: 'random, 15'
 n_db_nodes: 5
 n_loaders: 2
 n_monitor_nodes: 1
@@ -18,14 +19,12 @@ user_prefix: 'longevity-mv-si-4d-VERSION'
 failure_post_behavior: keep
 space_node_threshold: 644245
 ip_ssh_connections: 'private'
-#When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across the loaders (round_robin)
 round_robin: 'false'
 experimental: 'true'
-# append_conf: 'enable_sstable_data_integrity_check: true'
-append_scylla_args: '--blocked-reactor-notify-ms 1000 --enable-sstables-mc-format true'
+append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 
 # aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
+instance_provision: 'mixed'
 
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
@@ -58,24 +57,34 @@ backends: !mux
     aws: !mux
         cluster_backend: 'aws'
         user_credentials_path: '~/.ssh/scylla-qa-ec2'
-        instance_type_loader: 'c4.large'
-        instance_type_monitor: 't2.small'
+        instance_type_loader: 'c4.2xlarge'
+        instance_type_monitor: 't3.small'
         instance_type_db: 'i3.4xlarge'
         us_east_1:
             region_name: 'us-east-1'
             security_group_ids: 'sg-c5e1f7a0'
             subnet_id: 'subnet-ec4a72c4'
             ami_id_db_scylla: 'AMI-ID'
-            ami_id_loader: 'AMI-ID'
-            ami_id_monitor: 'ami-9887c6e7' # Clean CentOs 7 ami
+            ami_id_loader: 'ami-0803fc42f8277925f' # Loader dedicated AMI
+            ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
             aws_root_disk_size_monitor: 20  # GB
             ami_db_scylla_user: 'centos'
             ami_loader_user: 'centos'
             ami_monitor_user: 'centos'
+        eu_west_1:
+            region_name: 'eu-west-1'
+            security_group_ids: 'sg-059a7f66a947d4b5c'
+            subnet_id: 'subnet-088fddaf520e4c7a8'
+            ami_id_db_scylla: 'AMI_ID'
+            ami_id_loader: 'ami-0668349068972415c' # Loader dedicated AMI
+            ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+            ami_db_scylla_user: 'centos'
+            ami_loader_user: 'centos'
+            ami_monitor_user: 'centos'
+            aws_root_disk_size_monitor: 20  # GB
 
 databases: !mux
     cassandra:
         db_type: cassandra
     scylla:
         db_type: scylla
-

@@ -1,0 +1,20 @@
+@startuml
+salt
+{
+scale 2
+{T
+ + scylla-cluster-tests
+ ++ jenkins-pipelines
+ +++ longevity-10gb-3h.jenkinsfile
+ +++ longevity-200GB-48h-verifier-LimitedMonkey-tls.jenkinsfile
+ +++ rolling-upgrade-centos7.jenkinsfile
+ +++ ...
+ +++ byo-longevity.jenkinsfile
+ ++ vars
+ +++ longevityPipeline.groovy
+ +++ rollingUpgradePipeline.groovy
+ +++ ...
+ ++ Jenkinsfile
+}
+}
+@enduml

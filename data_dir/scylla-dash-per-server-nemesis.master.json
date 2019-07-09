@@ -3,13 +3,68 @@
         "annotations": {
             "list": [
                 {
-                    "builtIn": 1,
-                    "datasource": "-- Grafana --",
-                    "enable": true,
-                    "hide": true,
-                    "iconColor": "rgba(0, 211, 255, 1)",
-                    "name": "Annotations & Alerts",
-                    "type": "dashboard"
+                  "builtIn": 1,
+                  "datasource": "-- Grafana --",
+                  "enable": true,
+                  "hide": true,
+                  "iconColor": "rgba(0, 211, 255, 1)",
+                  "name": "Annotations & Alerts",
+                  "type": "dashboard"
+                },
+                {
+                  "datasource": "-- Grafana --",
+                  "enable": false,
+                  "hide": false,
+                  "iconColor": "#962d82",
+                  "limit": 100,
+                  "matchAny": true,
+                  "name": "Events[Custom Filter]",
+                  "showIn": 0,
+                  "tags": [
+                    "$sct_tags"
+                  ],
+                  "type": "tags"
+                },
+                {
+                  "datasource": "-- Grafana --",
+                  "enable": false,
+                  "hide": false,
+                  "iconColor": "#badff4",
+                  "limit": 100,
+                  "matchAny": true,
+                  "name": "Events[NORMAL]",
+                  "showIn": 0,
+                  "tags": [
+                    "NORMAL"
+                  ],
+                  "type": "tags"
+                },
+                {
+                  "datasource": "-- Grafana --",
+                  "enable": false,
+                  "hide": false,
+                  "iconColor": "#ef843c",
+                  "limit": 100,
+                  "name": "Events[ERROR]",
+                  "showIn": 0,
+                  "tags": [
+                    "ERROR"
+                  ],
+                  "type": "tags"
+                },
+                {
+                  "datasource": "-- Grafana --",
+                  "enable": false,
+                  "hide": false,
+                  "iconColor": "rgba(255, 96, 96, 1)",
+                  "limit": 100,
+                  "matchAny": true,
+                  "name": "Events[CRITICAL]",
+                  "showIn": 0,
+                  "tags": [
+                    "CRITICAL"
+                  ],
+                  "type": "tags"
                 }
             ]
         },
@@ -17,7 +72,6 @@
         "gnetId": null,
         "graphTooltip": 1,
         "hideControls": true,
-        "id": 2,
         "links": [],
         "refresh": "30s",
         "rows": [
@@ -448,7 +502,12 @@
                         "points": false,
                         "renderer": "flot",
                         "seriesOverrides": [
-                            {}
+                            {
+                                "alias": "/method=\"[a-zA-Z]/",
+                                 "fill": 2,
+                                 "lines": true,
+                                 "yaxis": 2
+                            }
                         ],
                         "spaceLength": 10,
                         "span": 5,
@@ -507,6 +566,89 @@
                                 "show": true
                             }
                         ]
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "New row",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": "250px",
+                "panels": [
+                    {
+                      "type": "table",
+                      "title": "SCT Events",
+                      "span": 12,
+                      "id": 67,
+                      "targets": [],
+                      "styles": [
+                        {
+                          "unit": "short",
+                          "type": "hidden",
+                          "alias": "",
+                          "decimals": 2,
+                          "colors": [
+                            "rgba(245, 54, 54, 0.9)",
+                            "rgba(237, 129, 40, 0.89)",
+                            "rgba(50, 172, 45, 0.97)"
+                          ],
+                          "colorMode": null,
+                          "pattern": "Title",
+                          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+                          "thresholds": [],
+                          "mappingType": 1
+                        },
+                        {
+                          "unit": "short",
+                          "type": "string",
+                          "alias": "Message",
+                          "decimals": 2,
+                          "colors": [
+                            "rgba(245, 54, 54, 0.9)",
+                            "rgba(237, 129, 40, 0.89)",
+                            "rgba(50, 172, 45, 0.97)"
+                          ],
+                          "colorMode": null,
+                          "pattern": "Text",
+                          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+                          "thresholds": [],
+                          "mappingType": 1,
+                          "preserveFormat": true,
+                          "sanitize": true
+                        },
+                        {
+                          "unit": "short",
+                          "type": "date",
+                          "alias": "",
+                          "decimals": 2,
+                          "colors": [
+                            "rgba(245, 54, 54, 0.9)",
+                            "rgba(237, 129, 40, 0.89)",
+                            "rgba(50, 172, 45, 0.97)"
+                          ],
+                          "colorMode": null,
+                          "pattern": "Time",
+                          "dateFormat": "YYYY-MM-DD HH:mm:ss.SSS",
+                          "thresholds": [],
+                          "mappingType": 1
+                        }
+                      ],
+                      "transform": "annotations",
+                      "pageSize": 10,
+                      "showHeader": true,
+                      "columns": [],
+                      "scroll": true,
+                      "fontSize": "100%",
+                      "sort": {
+                        "col": null,
+                        "desc": false
+                      },
+                      "links": [],
+                      "transparent": false
                     }
                 ],
                 "repeat": null,
@@ -4662,6 +4804,122 @@
                 "showTitle": false,
                 "title": "New row",
                 "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": "30",
+                "panels": [
+                    {
+                        "class": "text_panel",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Gemini metrics</h1>",
+                        "editable": true,
+                        "error": false,
+                        "id": 69,
+                        "links": [],
+                        "mode": "html",
+                        "span": 12,
+                        "style": {},
+                        "title": "",
+                        "transparent": true,
+                        "type": "text"
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "Gemini metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": 250,
+                "panels": [
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "class": "ops_panel",
+                        "dashLength": 10,
+                        "dashes": false,
+                        "datasource": "prometheus",
+                        "description": "",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {},
+                        "id": 70,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 1,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "spaceLength": 10,
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                                {
+                                    "refId": "A",
+                                    "expr": "gemini_cql_requests",
+                                    "intervalFactor": 1,
+                                    "format": "time_series"
+                                }
+                        ],
+                        "thresholds": [],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "Gemini metrics",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "individual"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "buckets": null,
+                            "mode": "time",
+                            "name": null,
+                            "show": true,
+                            "values": []
+                        },
+                        "yaxes": [
+                            {
+                                "format": "ops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "Gemini metrics",
+                "titleSize": "h6"
             }
         ],
         "schemaVersion": 14,
@@ -4800,7 +5058,55 @@
                     "tagsQuery": "",
                     "type": "query",
                     "useTags": false
-                }
+                },
+                {
+                    "allValue": null,
+                    "current": {
+                      "tags": [],
+                      "text": "",
+                      "value": []
+                    },
+                    "hide": 1,
+                    "includeAll": false,
+                    "label": null,
+                    "multi": true,
+                    "name": "sct_tags",
+                    "options": [
+                      {
+                        "selected": false,
+                        "text": "InfoEvent",
+                        "value": "InfoEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "CassandraStressEvent",
+                        "value": "CassandraStressEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "DatabaseLogEvent",
+                        "value": "DatabaseLogEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "DisruptionEvent",
+                        "value": "DisruptionEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "CoreDumpEvent",
+                        "value": "CoreDumpEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "SpotTerminationEvent",
+                        "value": "SpotTerminationEvent"
+                      }
+                    ],
+                    "query": "InfoEvent, CassandraStressEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, SpotTerminationEvent",
+                    "skipUrlSync": false,
+                    "type": "custom"
+                  }
             ]
         },
         "time": {

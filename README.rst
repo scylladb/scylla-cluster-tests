@@ -1,8 +1,8 @@
 SCT - Scylla Cluster Tests
-==========================
+##########################
 
 SCT tests are designed to test Scylla database on physical/virtual servers under high read/write load.
-Currently the tests are run using avocado[1] framework (version 36.4)
+Currently the tests are run using built in unittest
 These tests automatically create:
 
 * Scylla clusters - Run Scylla database
@@ -10,7 +10,7 @@ These tests automatically create:
 * Monitoring server - uses official Scylla Monitoring repo_ to monitor Scylla clusters and Loaders
 
 What's inside?
---------------
+==============
 
 1. A library, called ``sdcm`` (stands for scylla distributed cluster
    manager). The word 'distributed' was used here to differentiate
@@ -36,14 +36,31 @@ What's inside?
    * SCT dashboards definition files for Grafana
 
 3. Python files with tests. The convention is that test files have the ``_test.py`` suffix.
+4. Utilities directory named ``utils``. Contains help utilities for log analizing
 
 Maintained branches
--------------------
+===================
 
 https://github.com/scylladb/scylla-cluster-tests/wiki
 
+Contribution
+============
+Since we are trying to keep the code neat, please install this git precommit hooks, that would fix the code style, and run more checks::
+
+    pip install pre-commit==1.14.4
+    pre-commit install
+
+If you want to remove the hook::
+
+    pre-commit uninstall
+
+Doing a commit without the hook checks::
+
+    git commit ... -n
+
+
 Setting up SCT environment
---------------------------
+==========================
 
 Currently we support Red Hat like operating systems that use YUM package manager.
 SCT tests can run on two environments: on local RHEL like OS (tested on Fedora) or inside SCT docker container.
@@ -66,7 +83,7 @@ From here you can proceed with on of the 2 options
 Option 1: Setup SCT in Docker
 -----------------------------
 As mentioned before, instead of installing all the prerequisites on your machine, you can also use SCT Docker
-container (aka Hydra) to run SCT avocado tests::
+container (aka Hydra) to run SCT tests::
 
     sudo ./install-hydra.sh
 
@@ -89,15 +106,15 @@ To run SCT tests locally run following::
 Run a test
 ----------
 
-Example running avocado using Hydra using `sample.yaml` configuration file
+Example running test using Hydra using `sample.yaml` configuration file
 
 on AWS::
 
-    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/aws"
+    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config tests/sample.yaml"
 
 on GCE::
 
-    hydra "avocado --show test run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/gce"
+    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend gce --config tests/sample.yaml"
 
 
 You can also enter the containerized SCT environment using::
@@ -115,6 +132,8 @@ List resources being used::
     # amazon
     aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --filter "Name=tag:RunByUser,Values=`whoami`"
 
+    # both GCE and AWS
+    hydra list-resources --user `whoami`
 
 Configuring test run configuration YAML
 ---------------------------------------
@@ -148,49 +167,35 @@ And then write::
       }
     });
 
+
 Run the tests
--------------
+=============
 
 AWS - Amazon Web Services
 -------------------------
 
 Change your current working directory to this test suite base directory,
-then run avocado. Example command line::
+then run test. Example command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/your_config.yaml --filter-only /run/backends/aws/us_east_1 /run/databases/scylla --filter-out /run/backends/libvirt /run/backends/openstack /run/backends/gce --open-browser
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config data_dir/your_config.yaml
 
 This command line is to run the test method ``test_custom_time``, in
 the class ``Longevitytest``, that lies inside the file ``longevity_test.py``,
-and the test will run using the AWS data defined in the branch ``us_east_1``
-of ``data_dir/your_config.yaml``. The flag ``--open-browser`` opens the avocado
-test job report on your default browser at the end of avocado's execution.
+and the test will run using the AWS data defined in the branch ``eu_west_1``
+of ``data_dir/your_config.yaml``.
 
+Reuse Cluster (AWS)
+^^^^^^^^^^^^^^^^^^^
 
-If you want to use the us_west_2 region, you can always change
-``/run/regions/us_east_1`` to ``/run/regions/us_west_2`` in
-the command above. You can also change the value ``/run/databases/scylla`` bit
-to ``/run/databases/cassandra`` to run the same test on a cassandra node.
+Running a test with already provisioned cluster, you can get the test_id in the AWS console of the one of the nodes tags tab::
 
-Also, please note that ``scylla.yaml`` is a sample configuration.
-On your organization, you really have to update values with ones you
-actually have access to.
+    # add the following to your config yaml
+    test_id: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+    reuse_cluster: true
 
-You'll see something like::
-
-    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
-    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
-    TESTS      : 1
-     (1/1) longevity_test.py:LongevityTest.test_custom_time : /
-
-A throbber, that will spin until the test ends. This will hopefully evolve to::
-
-    JOB ID     : ca47ccbaa292c4d414e08f2167c41776f5c3da61
-    JOB LOG    : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/job.log
-    TESTS      : 1
-     (1/1) longevity_test.py:LongevityTest.test_custom_time : PASS (1083.19 s)
-    RESULTS    : PASS 1 | ERROR 0 | FAIL 0 | SKIP 0 | WARN 0 | INTERRUPT 0
-    JOB HTML   : /home/lmr/avocado/job-results/job-2016-01-05T20.45-ca47ccb/html/results.html
-    TIME       : 1083.19 s
+    # or with using the new configuration, before the run test command
+    export SCT_TEST_ID=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+    export SCT_REUSE_CLUSTER=true
 
 
 Libvirt
@@ -211,7 +216,7 @@ In order to run tests using the libvirt backend, you'll need:
 
 With that said and done, you can run your test using the command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/openstack /run/backends/gce --open-browser
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend libvirt --config data_dir/scylla-lmr.yaml
 
 
 OpenStack
@@ -232,7 +237,7 @@ In order to run tests using the openstack backend, you'll need:
 
 With that said and done, you can run your test using the command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/libvirt /run/backends/gce --open-browser
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend openstack --config data_dir/scylla-lmr.yaml
 
 GCE - Google Compute Engine
 ---------------------------
@@ -249,25 +254,18 @@ In order to run tests using the GCE backend, you'll need:
 
 With that said and done, you can run your test using the command line::
 
-    avocado run longevity_test.py:LongevityTest.test_custom_time --multiplex data_dir/scylla-lmr.yaml --filter-only /run/backends/libvirt /run/databases/scylla --filter-out /run/backends/aws /run/backends/libvirt /run/backends/openstack --open-browser
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config data_dir/scylla-lmr.yaml
 
 
 (Optional) Follow what the test is doing
-----------------------------------------
+========================================
 
 What you can do while the test is running to see what's happening::
 
-    tail -f ~/avocado/job-results/latest/job.log
-
-or::
-
-    tail -f ~/avocado/job-results/latest/test-results/longevity_test.py\:LongevityTest.test_custom_time/debug.log
-
-At the end of the test, there's a path to an HTML file with the job report.
-The flag ``--open-browser`` actually opens that at the end of the test.
+    tail -f ~/sct-results/latest/job.log
 
 Test operations
----------------
+===============
 
 On a high level overview, the test operations are:
 
@@ -312,7 +310,7 @@ Keep in mind that the suite libraries are flexible, and will allow you to
 set scenarios that differ from this base one.
 
 Making sense of logs
---------------------
+====================
 
 In order to try to establish a timeline of what is going on, we opted for
 dumping a lot of information in the test main log. That includes:
@@ -323,9 +321,11 @@ dumping a lot of information in the test main log. That includes:
     15:43:23 DEBUG| Node lmr-scylla-db-node-88c994d5-1 [54.183.240.195 | 172.31.18.109] (seed: None): SSH access -> 'ssh -i /var/tmp/lmr-longevity-test-8b95682d.pem centos@54.183.240.195'
     ...
     15:47:52 INFO | Cluster lmr-scylla-db-cluster-88c994d5 (AMI: ami-1da7d17d Type: c4.xlarge): (6/6) DB nodes ready. Time elapsed: 79 s
+
 2) Scylla logs for all the DB nodes, logged as they happen. Example line::
 
     15:44:35 DEBUG| [54.183.193.208] [stdout] Feb 10 17:44:17 ip-172-30-0-123.ec2.internal systemd[1]: Starting Scylla Server...
+
 3) Coredump watching thread, that runs every 30 seconds and will tell you if
    scylla dumped core
 
@@ -397,26 +397,67 @@ dumping a lot of information in the test main log. That includes:
 
 With all that information going, the main log is hard to read, but at least
 you now have an outline of what is going on. We store the scylla logs
-on per node files, you can find them all in the test log directory (the
-avocado HTML report will help you locate and visualize all those files, just
-click on the test name link and you'll see the dir structure.
+on per node files, you can find them all in the test log directory
+
+SCT utilities
+=============
+
+1) utils/fetch_and_decode_stalls_from_job_database_logs.sh
+
+This script searches in the log all reactor stalles, find unique stalles and decode them.
+The script analyzes the database.logs that are located under ~/sct-results/<job-folder>/<test-folder>/<cluster-folder>. The script is going through nodes folders and analyze database.log for every node.
+
+2) utils/fetch_and_decode_stalls_from_journalctl_logs_all_nodes.sh -
+
+This script searches in the journalctl all reactor stalles, find unique stalles and decode them.
+Save the journalctl from every node to the database.log and move to the folders by node. Organize all folders in one folder, like::
+
+    logs/node1/database.log
+    logs/node2/database.log
+
+3) utils/fetch_and_decode_stalls_from_one_journalctl_log.sh
+
+This script searches in the one journalctl all reactor stalles, find unique stalles and decode them.
+Save the journalctl of one node to the database.log and move to the folder
+
+For examples see utilities documentation
+
+FAQ
+====
+**Q:** My c-s and memesis metrics are not exposed to the monitor while running locally, why ?
+
+**A:** since your computer isn't exposed to the internet, the monitor can't reach it::
+
+    # ngrok can be used to help with it
+    # goto https://ngrok.com/download, then in a separate terminal window
+    ./ngrok start --none
+
+    # back when you want to run your test
+    export SCT_NGROK_NAME=`whoami`
+
+    # run you test
+    hydra.sh run ....
+
+    # while test running your metrics api would be exposed for example:
+    # http://fruch.ngrok.io
+
 
 TODO
-----
+====
 
 * Set up buildable HTML documentation, and a hosted version of it.
 * Write more tests, improve test API (always in progress, I guess).
 
 Known issues
-------------
+=============
 
 * No test API guide. Bear with us while we set up hosted test API documentation, and take a look at the current tests and the `sdcm` library for more information.
 
 Footnotes
----------
+=========
 
-* [1] http://avocado-framework.github.io/
 * [2] https://ask.fedoraproject.org/en/question/45805/how-to-use-virt-manager-as-a-non-root-user/
 * [3] https://prometheus.io/
 * [4] http://grafana.org/
-.. _repo: https://github.com/scylladb/scylla-grafana-monitoring
+
+.. _repo: https://github.com/scylladb/scylla-monitoring

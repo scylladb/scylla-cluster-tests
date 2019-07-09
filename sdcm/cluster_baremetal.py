@@ -16,13 +16,14 @@ class NodeIpsNotConfiguredError(Exception):
 
 class PhysicalMachineNode(cluster.BaseNode):
 
-    def __init__(self, name, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
+    def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
                           'user': credentials.name,
                           'key_file': credentials.key_file}
         self._public_ip = public_ip
         self._private_ip = private_ip
         super(PhysicalMachineNode, self).__init__(name=name,
+                                                  parent_cluster=parent_cluster,
                                                   base_logdir=base_logdir,
                                                   ssh_login_info=ssh_login_info,
                                                   node_prefix=node_prefix)
@@ -37,7 +38,10 @@ class PhysicalMachineNode(cluster.BaseNode):
         return self._private_ip
 
     def set_hostname(self):
-        self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
+        # disabling for now, since doesn't working with Fabric from within docker, and not needed for syclla-cloud,
+        # since not using hostname anywhere
+        # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
+        pass
 
     def detect_disks(self):
         """
@@ -75,8 +79,9 @@ class PhysicalMachineCluster(cluster.BaseCluster):
 
     def _create_node(self, name, public_ip, private_ip):
         return PhysicalMachineNode(name,
-                                   public_ip,
-                                   private_ip,
+                                   parent_cluster=self,
+                                   public_ip=public_ip,
+                                   private_ip=private_ip,
                                    credentials=self.credentials[0],
                                    base_logdir=self.logdir,
                                    node_prefix=self.node_prefix)
@@ -91,10 +96,10 @@ class PhysicalMachineCluster(cluster.BaseCluster):
     def destroy(self):
         logger.info('Destroy nodes')
         for node in self.nodes:
-            node.destroy(force=True)
+            node.destroy()
 
 
-class ScyllaPhysicalCluster(PhysicalMachineCluster, cluster.BaseScyllaCluster):
+class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
         self._user_prefix = kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX)
@@ -108,7 +113,7 @@ class ScyllaPhysicalCluster(PhysicalMachineCluster, cluster.BaseScyllaCluster):
         We have to modify scylla.yaml on our own because we are not on AWS,
         where there are auto config scripts in place.
         """
-        self._node_setup(node, verbose)
+        pass  # self._node_setup(node, verbose)
 
 
 class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):

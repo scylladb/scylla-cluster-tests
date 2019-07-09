@@ -22,26 +22,31 @@ import tempfile
 import threading
 import time
 import uuid
-import getpass
-
 import yaml
 import shutil
+import itertools
+import json
+import io
+
+from base64 import decodestring
+
+import requests
+from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
-from avocado.utils import path
-from avocado.utils import process
-from avocado.utils import script
 from datetime import datetime
 from .log import SDCMAdapter
-from .remote import Remote
-from .remote import disable_master_ssh
+from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, get_job_name, verify_scylla_repo_file, S3Storage
-from .loader import CassandraStressExporterSetup
+from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
+from .collectd import ScyllaCollectdSetup
+from .db_stats import PrometheusDBStats
 
-from avocado.utils import runtime as avocado_runtime
+from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent
+from sdcm.sct_events import EVENTS_PROCESSES
+
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -64,7 +69,7 @@ DEFAULT_USER_PREFIX = getpass.getuser()
 TEST_DURATION = 60
 # max limit of coredump file can be uploaded(5 GB)
 COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
-IP_SSH_CONNECTIONS = 'public'
+IP_SSH_CONNECTIONS = 'private'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -73,6 +78,7 @@ SCYLLA_DIR = "/var/lib/scylla"
 
 
 logger = logging.getLogger(__name__)
+localrunner = LocalCmdRunner()
 
 
 def set_ip_ssh_connections(ip_type):
@@ -83,8 +89,6 @@ def set_ip_ssh_connections(ip_type):
 def set_duration(duration):
     global TEST_DURATION
     TEST_DURATION = duration
-    if TEST_DURATION >= 3 * 60:
-        disable_master_ssh()
 
 
 def set_libvirt_uri(libvirt_uri):
@@ -94,11 +98,11 @@ def set_libvirt_uri(libvirt_uri):
 
 def clean_domain(domain_name):
     global LIBVIRT_URI
-    process.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
-                ignore_status=True)
+    localrunner.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
+                    ignore_status=True)
 
-    process.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
-                ignore_status=True)
+    localrunner.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
+                    ignore_status=True)
 
 
 def remove_if_exists(file_path):
@@ -159,8 +163,14 @@ class Setup(object):
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
+    MULTI_REGION = False
+    BACKTRACE_DECODING = False
+    INTRA_NODE_COMM_PUBLIC = False
 
     _test_id = None
+    _test_name = None
+    TAGS = dict()
+    _logdir = None
 
     @classmethod
     def test_id(cls):
@@ -174,6 +184,36 @@ class Setup(object):
             cls._test_id = new_test_id
 
     @classmethod
+    def logdir(cls):
+        if not cls._logdir:
+            sct_base = os.path.expanduser(os.environ.get('_SCT_LOGDIR', '~/sct-results'))
+            cls._logdir = os.path.join(sct_base, str(cls.test_id()))
+            os.makedirs(cls._logdir)
+
+            latest_symlink = os.path.join(sct_base, 'latest')
+            if os.path.islink(latest_symlink):
+                os.remove(latest_symlink)
+            os.symlink(os.path.relpath(cls._logdir, sct_base), latest_symlink)
+            os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
+        return cls._logdir
+
+    @classmethod
+    def test_name(cls):
+        return cls._test_name
+
+    @classmethod
+    def set_test_name(cls, test_name):
+        cls._test_name = test_name
+
+    @classmethod
+    def set_multi_region(cls, multi_region):
+        cls.MULTI_REGION = multi_region
+
+    @classmethod
+    def set_intra_node_comm_public(cls, intra_node_comm_public):
+        cls.INTRA_NODE_COMM_PUBLIC = intra_node_comm_public
+
+    @classmethod
     def reuse_cluster(cls, val=False):
         cls.REUSE_CLUSTER = val
 
@@ -184,20 +224,26 @@ class Setup(object):
         else:
             cls.KEEP_ALIVE = False
 
+    @classmethod
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
+
+    @classmethod
+    def tags(cls, key, value):
+        cls.TAGS[key] = value
 
 
 def create_common_tags():
     username = os.environ.get('BUILD_USER', getpass.getuser())
     build_tag = os.environ.get('BUILD_TAG', None)
     tags = dict(RunByUser=username,
-                TestName=str(avocado_runtime.CURRENT_TEST.name),
+                TestName=str(Setup.test_name()),
                 TestId=str(Setup.test_id()))
 
     if build_tag:
         tags["JenkinsJobTag"] = build_tag
 
+    tags.update(Setup.TAGS)
     return tags
 
 
@@ -211,60 +257,14 @@ class NodeError(Exception):
             return self.msg
 
 
+class PrometheusSnapshotErrorException(Exception):
+    pass
+
+
 def prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
     return '%s-%s' % (user_prefix, base_name)
-
-
-class RemoteCredentials(object):
-
-    """
-    Wraps EC2.KeyPair, so that we can save keypair info into .pem files.
-    """
-
-    def __init__(self, service, key_prefix='keypair', user_prefix=None):
-        self.type = 'generated'
-        self.uuid = uuid.uuid4()
-        self.shortid = str(self.uuid)[:8]
-        self.service = service
-        key_prefix = prepend_user_prefix(user_prefix, key_prefix)
-        self.name = '%s-%s' % (key_prefix, self.shortid)
-        try:
-            self.key_pair = self.service.create_key_pair(KeyName=self.name)
-        except TypeError:
-            self.key_pair = self.service.create_key_pair(name=self.name)
-        self.key_pair_name = self.key_pair.name
-        self.key_file = os.path.join(tempfile.gettempdir(),
-                                     '%s.pem' % self.name)
-        self.write_key_file()
-        logger = logging.getLogger('avocado.test')
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
-        self.log.info('Created')
-
-    def __str__(self):
-        return "Key Pair %s -> %s" % (self.name, self.key_file)
-
-    def write_key_file(self):
-        # key_material is the attribute for boto3
-        attr = 'key_material'
-        if hasattr(self.key_pair, 'private_key'):
-            # private_key is the attribute for libcloud
-            attr = 'private_key'
-        with open(self.key_file, 'w') as key_file_obj:
-            key_file_obj.write(getattr(self.key_pair, attr))
-        os.chmod(self.key_file, 0o400)
-
-    def destroy(self):
-        if hasattr(self.key_pair, 'delete'):
-            self.key_pair.delete()
-        else:
-            self.service.delete_key_pair(self.key_pair)
-        try:
-            remove_if_exists(self.key_file)
-        except OSError:
-            pass
-        self.log.info('Destroyed')
 
 
 class UserRemoteCredentials(object):
@@ -286,38 +286,53 @@ class UserRemoteCredentials(object):
 
 
 class BaseNode(object):
+    CQL_PORT = 9042
 
-    def __init__(self, name, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         self.name = name
-        self.is_seed = None
+        self.is_seed = False
         self.dc_idx = dc_idx
-        try:
-            self.logdir = path.init_dir(base_logdir, self.name)
-        except OSError:
-            self.logdir = os.path.join(base_logdir, self.name)
+        self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
+        self.logdir = os.path.join(base_logdir, self.name)
+        os.makedirs(self.logdir)
 
         self._public_ip_address = None
         self._private_ip_address = None
-        self._ssh_ip_mapping = {'public': self.public_ip_address,
-                                'private': self.private_ip_address}
-        ssh_login_info['hostname'] = self._ssh_ip_mapping[IP_SSH_CONNECTIONS]
+        ssh_login_info['hostname'] = self.external_address
 
-        self.remoter = Remote(**ssh_login_info)
+        self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
-        logger = logging.getLogger('avocado.test')
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
 
         self._journal_thread = None
         self.n_coredumps = 0
+        self.last_line_no = 1
+        self.last_log_position = 0
         self._backtrace_thread = None
-        self._sct_log_formatter_installed = False
+        self._db_log_reader_thread = None
+        self._scylla_manager_journal_thread = None
         self._init_system = None
 
         self.database_log = os.path.join(self.logdir, 'database.log')
         self._database_log_errors_index = []
-        self._database_error_patterns = ['std::bad_alloc', 'integrity check failed']
+        self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
+                                       DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
+                                       DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
+                                       DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
+                                       DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
+                                       DatabaseLogEvent(type='FILESYSTEM_ERROR', regex='filesystem_error'),
+                                       DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
+                                       DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
+                                       DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
+                                       DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
+                                       DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled'),
+                                       DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out'),
+                                       DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL)]
+
         self.termination_event = threading.Event()
+        self._running_nemesis = None
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -327,6 +342,41 @@ class BaseNode(object):
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
+        self._cassandra_stress_version = None
+        self.lock = threading.Lock()
+
+    @property
+    def cassandra_stress_version(self):
+        if not self._cassandra_stress_version:
+            result = self.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
+            match = re.match("Version: (.*)", result.stdout)
+            if match:
+                self._cassandra_stress_version = match.group(1)
+            else:
+                self.log.error("C-S version not found!")
+                self._cassandra_stress_version = "unknown"
+        return self._cassandra_stress_version
+
+    @property
+    def running_nemesis(self):
+        return self._running_nemesis
+
+    @running_nemesis.setter
+    def running_nemesis(self, nemesis):
+        """Set name of nemesis which is started on node
+
+        Decorators:
+            running_nemesis.setter
+
+        Arguments:
+            nemesis {str} -- class name of Nemesis
+        """
+
+        # Only one Nemesis could run on node. Limitation
+        # of first version for X parallel Nemesis
+
+        with self.lock:
+            self._running_nemesis = nemesis
 
     @property
     def distro(self):
@@ -353,6 +403,8 @@ class BaseNode(object):
                 distro = Distro.UBUNTU14
             elif 'Ubuntu 16.04' in result.stdout:
                 distro = Distro.UBUNTU16
+            elif 'Ubuntu 18.04' in result.stdout:
+                distro = Distro.UBUNTU18
             elif 'Debian GNU/Linux 8' in result.stdout:
                 distro = Distro.DEBIAN8
             elif 'Debian GNU/Linux 9' in result.stdout:
@@ -388,8 +440,11 @@ class BaseNode(object):
     def is_ubuntu16(self):
         return self.distro == Distro.UBUNTU16
 
+    def is_ubuntu18(self):
+        return self.distro == Distro.UBUNTU18
+
     def is_ubuntu(self):
-        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14
+        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14 or self.distro == Distro.UBUNTU18
 
     def is_debian8(self):
         return self.distro == Distro.DEBIAN8
@@ -414,6 +469,9 @@ class BaseNode(object):
             return
         if self.is_ubuntu16() and ubuntu16_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
+            return
+        if self.is_ubuntu18() and ubuntu18_pkgs:
+            self.remoter.run('sudo apt-get install -y %s' % ubuntu18_pkgs)
             return
         if self.is_ubuntu14() and ubuntu14_pkgs:
             self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
@@ -469,11 +527,28 @@ class BaseNode(object):
     def private_ip_address(self):
         return self._private_ip_address
 
-    def ip_address(self, datacenter):
-        if (self.is_docker() or self.is_gce()) and len(datacenter) > 1:
+    @property
+    def ip_address(self):
+        if Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
+
+    @property
+    def external_address(self):
+        """
+        the communication address for usage between the test and the nodes
+        :return:
+        """
+
+        if IP_SSH_CONNECTIONS == 'public':
+            return self.public_ip_address
+        else:
+            return self.private_ip_address
+
+    @property
+    def is_spot(self):
+        return False
 
     @property
     def init_system(self):
@@ -487,16 +562,17 @@ class BaseNode(object):
 
         return self._init_system
 
-    def retrieve_journal(self):
+    def retrieve_journal(self, since):
         try:
+            since = '--since "{}" '.format(since) if since else ""
+            self.log.debug("Reading Scylla logs from {}".format(since[8:] if since else "the beginning"))
             if self.init_system == 'systemd':
                 # Here we're assuming that journalctl systems are Scylla images
-                db_services_log_cmd = ('journalctl -f --no-tail --no-pager '
+                db_services_log_cmd = ('sudo journalctl -f --no-tail --no-pager --utc {since}'
                                        '-u scylla-ami-setup.service '
                                        '-u scylla-io-setup.service '
                                        '-u scylla-server.service '
-                                       '-u scylla-jmx.service '
-                                       '-o json | /var/tmp/sct_log_formatter')
+                                       '-u scylla-jmx.service'.format(**locals()))
             elif self.file_exists('/usr/bin/scylla'):
                 db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
             else:
@@ -512,14 +588,6 @@ class BaseNode(object):
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
 
-    def install_sct_log_formatter(self):
-        result = self.remoter.run('test -e /var/tmp/sct_log_formatter', verbose=False, ignore_status=True)
-        if result.exit_status != 0:
-            sct_log_formatter = get_data_dir_path('sct_log_formatter')
-            self.remoter.send_files(src=sct_log_formatter, dst='/var/tmp')
-            self.remoter.run('chmod +x /var/tmp/sct_log_formatter')
-            self._sct_log_formatter_installed = True
-
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
             args=None, log_file=None, watch_stdout_pattern=None):
@@ -534,10 +602,6 @@ class BaseNode(object):
                                 options=options, verbose=verbose,
                                 args=args, log_file=log_file,
                                 watch_stdout_pattern=watch_stdout_pattern)
-
-    def run_nodetool(self, subcmd="status"):
-        result = self.remoter.run(cmd="nodetool %s" % subcmd, timeout=60, verbose=True)
-        return result.stdout
 
     def send_files(self, src, dst, delete_dst=False,
                    preserve_symlinks=False, verbose=False):
@@ -565,14 +629,18 @@ class BaseNode(object):
                                    verbose=verbose)
 
     def journal_thread(self):
+        read_from_timestamp = None
         while True:
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
-            self.retrieve_journal()
+            self.retrieve_journal(since=read_from_timestamp)
+            # when rebooting a node we would like to start reading from the timestamp that we stopped receiving logs
+            read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     def start_journal_thread(self):
         self._journal_thread = threading.Thread(target=self.journal_thread)
+        self._journal_thread.daemon = True
         self._journal_thread.start()
 
     def _get_coredump_backtraces(self, last=True):
@@ -580,7 +648,7 @@ class BaseNode(object):
         Get coredump backtraces.
 
         :param last: Whether to only show the last backtrace.
-        :return: process.CmdResult output
+        :return: fabric.Result output
         """
         try:
             backtrace_cmd = 'sudo coredumpctl info'
@@ -599,7 +667,9 @@ class BaseNode(object):
         self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
         self.remoter.run("sudo curl --request PUT --upload-file "
                          "'%s' '%s'" % (coredump, upload_url))
-        self.log.info("You can download it by https://storage.cloud.google.com/%s (available for ScyllaDB employee)" % upload_url)
+        download_url = 'https://storage.cloud.google.com/%s' % upload_url
+        self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
+        return download_url
 
     def _get_coredump_size(self, coredump):
         try:
@@ -646,17 +716,25 @@ class BaseNode(object):
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
-                coredump = line.split()[-1]
-                self.log.debug('Found coredump file: {}'.format(coredump))
-                coredump_files = self._try_split_coredump(coredump)
-                for f in coredump_files:
-                    self._upload_coredump(f)
-                if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
-                    base_name = os.path.basename(coredump)
-                    if len(coredump_files) > 1:
-                        self.log.info("To join coredump pieces, you may use: "
-                                      "'cat {}.gz.* > {}.gz'".format(base_name, base_name))
-                    self.log.info("To decompress you may use: 'unpigz --fast {}.gz'".format(base_name))
+                urls = []
+                download_instructions = ''
+                try:
+                    coredump = line.split()[-1]
+                    self.log.debug('Found coredump file: {}'.format(coredump))
+                    coredump_files = self._try_split_coredump(coredump)
+                    for f in coredump_files:
+                        urls.append(self._upload_coredump(f))
+                    if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
+                        for url in urls:
+                            download_instructions += 'wget {}\n'.format(url)
+                        base_name = os.path.basename(coredump)
+                        if len(coredump_files) > 1:
+                            download_instructions += "\n# To join coredump pieces, you may use:\n"
+                            download_instructions += "cat {}.gz.* > {}.gz\n".format(base_name, base_name)
+                        download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
+                        self.log.info(download_instructions)
+                finally:
+                    CoreDumpEvent(corefile_urls=urls, download_instructions=download_instructions, backtrace=output)
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
@@ -670,15 +748,11 @@ class BaseNode(object):
         :return: Number of coredumps
         :rtype: int
         """
-        try:
-            n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>/dev/null'
-            result = self.remoter.run(n_backtraces_cmd,
-                                      verbose=False, ignore_status=True)
-            return len(result.stdout.splitlines())
-        except Exception as details:
-            self.log.error('Error retrieving number of core dumps : %s',
-                           details)
-            return None
+        n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1 ||true'
+        result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
+        if "No coredumps found" in result.stdout:
+            return 0
+        return len(result.stdout.splitlines())
 
     def get_backtraces(self):
         """
@@ -700,15 +774,32 @@ class BaseNode(object):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
-        while True:
-            if self.termination_event.isSet():
-                break
+        while not self.termination_event.isSet():
+            self.termination_event.wait(15)
             self.get_backtraces()
-            time.sleep(30)
+
+    def db_log_reader_thread(self):
+        """
+        Keep reporting new events from db log, every 30 seconds.
+        """
+        while not self.termination_event.isSet():
+            self.termination_event.wait(15)
+            try:
+                self.search_database_log(start_from_beginning=False, publish_events=True)
+            except Exception:
+                self.log.exception("failed to read db log")
+            except (SystemExit, KeyboardInterrupt) as ex:
+                self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
 
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
+        self._backtrace_thread.daemon = True
         self._backtrace_thread.start()
+
+    def start_db_log_reader_thread(self):
+        self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread)
+        self._db_log_reader_thread.daemon = True
+        self._db_log_reader_thread.start()
 
     def __str__(self):
         return 'Node %s [%s | %s] (seed: %s)' % (self.name,
@@ -726,7 +817,8 @@ class BaseNode(object):
     def start_task_threads(self):
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
             self.start_journal_thread()
-        self.start_backtrace_thread()
+            self.start_backtrace_thread()
+            self.start_db_log_reader_thread()
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
@@ -735,12 +827,13 @@ class BaseNode(object):
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
+        if self._db_log_reader_thread:
+            self._db_log_reader_thread.join(timeout)
         if self._journal_thread:
-            # current implementation of journal thread uses blocking journalctl cmd with pipe to sct_log_formatter
-            # hence to stop the thread we need to kill the process first
-            self.remoter.run(cmd="sudo pkill -f sct_log_formatter", ignore_status=True)
+            self.remoter.run(cmd='sudo pkill -f "journalctl.*scylla"', ignore_status=True)
             self._journal_thread.join(timeout)
-        del self.remoter
+        if self._scylla_manager_journal_thread:
+            self.stop_scylla_manager_log_capture(timeout)
 
     def get_cpumodel(self):
         """Get cpu model from /proc/cpuinfo
@@ -801,8 +894,6 @@ class BaseNode(object):
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-        if not self._sct_log_formatter_installed:
-            self.install_sct_log_formatter()
         if not self.distro:
             self.distro = self.probe_distro()
 
@@ -818,7 +909,7 @@ class BaseNode(object):
             return False
 
     def db_up(self):
-        return self.is_port_used(port=9042, service_name="scylla-server")
+        return self.is_port_used(port=self.CQL_PORT, service_name="scylla-server")
 
     def jmx_up(self):
         return self.is_port_used(port=7199, service_name="scylla-jmx")
@@ -832,15 +923,23 @@ class BaseNode(object):
     def _parse_cfstats(cfstats_output):
         stat_dict = {}
         for line in cfstats_output.splitlines()[1:]:
+            # Example of line of cfstats output:
+            #       Space used (total): 123456
             stat_line = [element for element in line.strip().split(':') if
                          element]
             if stat_line:
                 try:
                     try:
+                        # Fix for space_node_threshold: if there are a few tables in the keyspace and space is used by the
+                        # table, that arrives last in the cfstats output, will be less then space_node_threshold,
+                        # the nemesis never will be run. Because of this, we sum space of all tables in the keyspace
+                        # This function is used just for wait_total_space_used_per_node, so I fix "Space used.." statistics only
+                        current_value = stat_dict[stat_line[0]] if 'Space used' in stat_line[0] \
+                                                                   and stat_line[0] in stat_dict else 0
                         if '.' in stat_line[1].split()[0]:
-                            stat_dict[stat_line[0]] = float(stat_line[1].split()[0])
+                            stat_dict[stat_line[0]] = float(stat_line[1].split()[0]) + current_value
                         else:
-                            stat_dict[stat_line[0]] = int(stat_line[1].split()[0])
+                            stat_dict[stat_line[0]] = int(stat_line[1].split()[0]) + current_value
                     except IndexError:
                         continue
                 except ValueError:
@@ -861,19 +960,20 @@ class BaseNode(object):
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
-            self.remoter.run('nodetool flush', ignore_status=True)
-            res = self.remoter.run('nodetool cfstats {}'.format(keyspace), ignore_status=True)
+            self.run_nodetool("flush", ignore_status=True)
+            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
         if tcpdump:
             self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
             tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
                                               kwargs={'tcpdump_id': tcpdump_id})
+            tcpdump_thread.daemon = True
             tcpdump_thread.start()
         wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
-            result = self.remoter.run('nodetool cfstats {}'.format(keyspace))
-        except process.CmdError:
+            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace)
+        except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
             raise
@@ -948,26 +1048,142 @@ class BaseNode(object):
         wait.wait_for(func=self.cs_installed, step=60,
                       text=text)
 
-    def search_database_log(self, expression):
+    def mark_log(self):
+        """
+        Returns "a mark" to the current position of this node Cassandra log.
+        This is for use with the from_mark parameter of watch_log_for_* methods,
+        allowing to watch the log from the position when this method was called.
+        """
+        if not os.path.exists(self.database_log):
+            return 0
+        with open(self.database_log) as f:
+            f.seek(0, os.SEEK_END)
+            return f.tell()
+
+    def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True):
+        """
+        Search for all known patterns listed in  `_database_error_events`
+
+        :param start_from_beginning: if True will search log from first line
+        :param publish_events: if True will publish events
+        :return: list of (line, error) tuples
+        """
+
         matches = []
-        pattern = re.compile(expression, re.IGNORECASE)
+        patterns = []
+        backtraces = []
+
+        index = 0
+        # prepare/compile all regexes
+        if search_pattern:
+            expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=Severity.CRITICAL)
+            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+        else:
+            for expression in self._database_error_events:
+                patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+
+        backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
         if not os.path.exists(self.database_log):
             return matches
+
+        if start_from_beginning:
+            start_search_from_byte = 0
+            last_line_no = 0
+        else:
+            start_search_from_byte = self.last_log_position
+            last_line_no = self.last_line_no
+
         with open(self.database_log, 'r') as f:
-            for index, line in enumerate(f):
-                if index not in self._database_log_errors_index:
-                    m = pattern.search(line)
-                    if m:
-                        self._database_log_errors_index.append(index)
-                        matches.append((index, line))
+            if start_search_from_byte:
+                f.seek(start_search_from_byte)
+            for index, line in enumerate(f, start=last_line_no):
+                m = backtrace_regex.search(line)
+                if m and backtraces:
+                    data = m.groupdict()
+                    if data['other_bt']:
+                        backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
+                    if data['scylla_bt']:
+                        backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
+
+                if index not in self._database_log_errors_index or start_from_beginning:
+                    # for each line use all regexes to match, and if found send an event
+                    for pattern, event in patterns:
+                        m = pattern.search(line)
+                        if m:
+                            self._database_log_errors_index.append(index)
+                            e = event.clone_with_info(node=self, line_number=index, line=line)
+                            backtraces.append(dict(event=e, backtrace=[]))
+
+                            if e.severity == Severity.CRITICAL:
+                                matches.append((index, line))
+            if not start_from_beginning:
+                self.last_line_no = index if index else last_line_no
+                self.last_log_position = f.tell() + 1
+
+        if publish_events:
+            for b in backtraces:
+                b['event'].add_backtrace_info(raw_backtrace="\n".join(b['backtrace']))
+
+            # filter function to attach the backtrace to the correct error and not to the back traces
+            # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
+            def filter_backtraces(backtrace):
+                last_error = filter_backtraces.last_error
+                try:
+                    if (last_error and
+                            backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 10
+                            and not filter_backtraces.last_error.type == 'BACKTRACE'):
+                        last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+                        return False
+                    return True
+                finally:
+                    filter_backtraces.last_error = backtrace['event']
+            filter_backtraces.last_error = None
+
+            backtraces = filter(filter_backtraces, backtraces)
+
+            for backtrace in backtraces:
+                if Setup.BACKTRACE_DECODING:
+                    if backtrace['event'].raw_backtrace:
+                        try:
+                            scylla_debug_info = self.get_scylla_debuginfo_file()
+                            output = self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
+                            backtrace['event'].add_backtrace_info(backtrace=output.stdout)
+                        except Exception:
+                            self.log.exception("failed to decode backtrace")
+                backtrace['event'].publish()
+
         return matches
 
-    def search_database_log_errors(self):
-        errors = []
-        for expression in self._database_error_patterns:
-            errors += self.search_database_log(expression)
-        return errors
+    def get_scylla_debuginfo_file(self):
+        """
+        Lookup the scylla debug information, in various places it can be.
+
+        :return the path to the scylla debug information
+        :rtype str
+        """
+        # first try default location
+        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
+        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        if results.exit_status == 0:
+            return scylla_debug_info
+
+        # then try the relocatable location
+        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla.bin*.debug')
+        if results.stdout.strip():
+            return results.stdout.strip()
+
+        # then look it up base on the build id
+        results = self.remoter.run('file /usr/bin/scylla')
+        build_id_regex = re.compile(r'BuildID\[.*\]=(.*),')
+        build_id = build_id_regex.search(results.stdout).group(1)
+
+        scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
+        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        if results.exit_status == 0:
+            return scylla_debug_info
+
+        raise Exception("Couldn't find scylla debug information")
 
     def datacenter_setup(self, datacenters):
         cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
@@ -984,7 +1200,8 @@ class BaseNode(object):
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
                      server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
-                     debug_install=False, hinted_handoff_disabled=False):
+                     debug_install=False, hinted_handoff_disabled=False, murmur3_partitioner_ignore_msb_bits=None,
+                     authorizer=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1024,6 +1241,24 @@ class BaseNode(object):
             p = re.compile('[# ]*hinted_handoff_enabled:.*')
             scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents)
 
+        if murmur3_partitioner_ignore_msb_bits:
+            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
+            p = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
+            if p.findall(scylla_yaml_contents):
+                scylla_yaml_contents = p.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(murmur3_partitioner_ignore_msb_bits)
+
+        if murmur3_partitioner_ignore_msb_bits:
+            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
+            p = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
+            if p.findall(scylla_yaml_contents):
+                scylla_yaml_contents = p.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
+                                             scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(murmur3_partitioner_ignore_msb_bits)
+
         if enable_exp:
             scylla_yaml_contents += "\nexperimental: true\n"
 
@@ -1059,6 +1294,10 @@ class BaseNode(object):
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
             p = re.compile('[# ]*authenticator:.*')
             scylla_yaml_contents = p.sub('authenticator: {0}'.format(authenticator),
+                                         scylla_yaml_contents)
+        if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
+            p = re.compile('[# ]*authorizer:.*')
+            scylla_yaml_contents = p.sub('authorizer: {0}'.format(authorizer),
                                          scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
@@ -1099,7 +1338,10 @@ server_encryption_options:
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
         if append_scylla_args:
-            self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+            if self.is_rhel_like():
+                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
+            elif self.is_debian() or self.is_ubuntu():
+                self.remoter.run("sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /'  /etc/default/scylla-server" % append_scylla_args)
 
         if debug_install and self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
@@ -1121,7 +1363,7 @@ server_encryption_options:
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
-            self.remoter.run('sudo apt-get update')
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
     def download_scylla_manager_repo(self, scylla_repo):
         if self.is_rhel_like():
@@ -1130,7 +1372,7 @@ server_encryption_options:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
         if not self.is_rhel_like():
-            self.remoter.run('sudo apt-get update')
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
     def clean_scylla(self):
         """
@@ -1160,6 +1402,8 @@ server_encryption_options:
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
+            # hack cause of broken caused by EPEL
+            self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         else:
@@ -1170,8 +1414,22 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+            elif self.is_ubuntu18() or self.is_ubuntu16():
+                install_prereqs = dedent("""
+                    apt-get install software-properties-common -y
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    add-apt-repository -y ppa:scylladb/ppa
+                    apt-get update
+                    apt-get install -y openjdk-8-jre-headless
+                    update-java-alternatives -s java-1.8.0-openjdk-amd64
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
-                self.remoter.run('echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list')
+                self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
+                self.remoter.run('echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
+                self.remoter.run("sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list")
+                self.remoter.run("echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install gnupg-curl -y')
                 self.remoter.run('sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
@@ -1180,11 +1438,47 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
-            self.remoter.run('sudo apt-get upgrade -y')
+            elif self.is_debian9():
+                install_debian_9_prereqs = dedent("""
+                    apt-get update
+                    apt-get install apt-transport-https -y
+                    apt-get install gnupg1-curl dirmngr -y
+                    apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
+
+            self.remoter.run('sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {}'.format(self.scylla_pkg()))
+            self.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
+
+    def install_scylla_debuginfo(self):
+        if not self.scylla_version:
+            self.get_scylla_version()
+        if self.is_rhel_like():
+            self.remoter.run(r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+        else:
+            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+
+    def get_scylla_version(self):
+        version_commands = ["scylla --version", "rpm -q {}".format(self.scylla_pkg())]
+        for version_cmd in version_commands:
+            try:
+                result = self.remoter.run(version_cmd)
+            except Exception as ex:
+                self.log.error('Failed getting scylla version: %s', ex)
+            else:
+                match = re.match(r"((\d+)\.(\d+)\.([\d\w]+)\.?([\d\w]+)?).*", result.stdout)
+                if match:
+                    scylla_version = match.group(1)
+                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
+                    self.scylla_version = scylla_version
+                    return scylla_version
+                else:
+                    self.log.error("Unknown ScyllaDB version")
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -1224,7 +1518,7 @@ server_encryption_options:
         if self.is_rhel_like():
             self.remoter.run('sudo yum update scylla-manager -y')
         else:
-            self.remoter.run('sudo apt-get update')
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
             # Upgrade should update packages of:
             # 1) scylla-manager
             # 2) scylla-manager-client
@@ -1235,8 +1529,9 @@ server_encryption_options:
             self.remoter.run('sudo supervisorctl start scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
+        time.sleep(5)
 
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, manager_backend_client_encrypt=None):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -1244,16 +1539,33 @@ server_encryption_options:
         if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
             raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
         if self.is_debian8():
+            self.remoter.run(cmd="sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
+            self.remoter.run(
+                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee -a /etc/apt/sources.list.d/backports.list")
+            self.remoter.run(cmd="sudo touch /etc/apt/apt.conf.d/99jessie-backports")
+            self.remoter.run(
+                cmd="sudo echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99jessie-backports")
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
             install_transport_https = dedent("""
-                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://http.debian.net/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
-                apt-get install apt-transport-https
-                apt-get install gnupg-curl
-                apt-get update
-                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                apt-get install -t jessie-backports ca-certificates-java -y
-                        """)
+                            if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
+                            sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
+                            echo 'Acquire::Check-Valid-Until false;' > /etc/apt/apt.conf.d/99jessie-backports
+                            sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
+                            apt-get install apt-transport-https
+                            apt-get install gnupg-curl
+                            apt-get update
+                            apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+                            apt-get install -t jessie-backports ca-certificates-java -y
+            """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
+            install_transport_backports = dedent("""
+                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
+                # apt-get install -t jessie-backports ca-certificates-java -y
+                apt-get install ca-certificates-java -y
+            """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_transport_backports)
 
         if self.is_debian9():
             install_debian_9_prereqs = dedent("""
@@ -1267,13 +1579,14 @@ server_encryption_options:
 
         if self.is_debian():
             install_open_jdk = dedent("""
-                apt-get install -y openjdk-8-jre-headless
+                apt-get install -y openjdk-8-jre-headless -t jessie-backports
                 update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
 
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y epel-release', retry=3)
+            self.remoter.run('sudo yum install python36-PyYAML -y', retry=3)
         else:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
@@ -1290,7 +1603,7 @@ server_encryption_options:
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-manager')
         else:
-            self.remoter.run('sudo apt-get update')
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
             self.remoter.run('sudo apt-get install -y scylla-manager --force-yes')
 
         if self.is_docker():
@@ -1301,7 +1614,7 @@ server_encryption_options:
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
-        ssh_config_script = dedent("""        
+        ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
                 ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
@@ -1317,6 +1630,34 @@ server_encryption_options:
 
         if not res or "Active: failed" in res.stdout:
             raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
+
+        self.start_scylla_manager_log_capture()
+
+    def retrieve_scylla_manager_log(self):
+        mgmt_log_name = os.path.join(self.logdir, 'scylla_manager.log')
+        cmd = "sudo journalctl -u scylla-manager -f".format(mgmt_log_name)
+        self.remoter.run(cmd, ignore_status=True, verbose=True, log_file=mgmt_log_name)
+
+    def scylla_manager_log_thread(self):
+        while not self.termination_event.isSet():
+            self.retrieve_scylla_manager_log()
+
+    def start_scylla_manager_log_capture(self):
+        self._scylla_manager_journal_thread = threading.Thread(target=self.scylla_manager_log_thread)
+        self._scylla_manager_journal_thread.start()
+
+    def stop_scylla_manager_log_capture(self, timeout=10):
+        cmd = "sudo pkill -f \"sudo journalctl -u scylla-manager -f\""
+        self.remoter.run(cmd, ignore_status=True, verbose=True)
+        self._scylla_manager_journal_thread.join(timeout)
+        self._scylla_manager_journal_thread = None
+
+    def collect_mgmt_log(self):
+        self.log.debug("Collect scylla manager log ...")
+        mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
+        self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
+        self.log.debug("Collected log : {}".format(mgmt_log_name))
+        return mgmt_log_name
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -1382,7 +1723,8 @@ server_encryption_options:
     @log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        self.start_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        if verify_up:
+            self.wait_jmx_up(timeout=timeout)
 
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
@@ -1407,7 +1749,8 @@ server_encryption_options:
     @log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        self.stop_scylla_jmx(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
+        if verify_down:
+            self.wait_jmx_down(timeout=timeout)
 
     def enable_client_encrypt(self):
         SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
@@ -1443,13 +1786,13 @@ server_encryption_options:
             [type] -- path to created directory structure
         """
         root_dir = '/tmp/%s' % self.name
-        self.remoter.run('mkdir %s' % root_dir)
+        self.remoter.run('mkdir -p %s' % root_dir, ignore_status=True)
         for f in fileslist:
             if self.file_exists(f):
                 old_full_path = os.path.dirname(f)[1:]
                 new_full_path = os.path.join(root_dir, old_full_path)
-                self.remoter.run('mkdir -p %s' % new_full_path)
-                self.remoter.run('cp -r %s %s' % (f, new_full_path))
+                self.remoter.run('mkdir -p %s' % new_full_path, ignore_status=True)
+                self.remoter.run('cp -r %s %s' % (f, new_full_path), ignore_status=True)
         return root_dir
 
     def get_console_output(self):
@@ -1465,6 +1808,97 @@ server_encryption_options:
         # raise NotImplementedError('Derived classes must implement get_console_output')
         self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
         return ''
+
+    def _resharding_status(self, status):
+        """
+        Check is there's Reshard listed in the log
+        status : expected values: "start" or "finish"
+        """
+        patt = re.compile('RESHARD')
+        result = self.run_nodetool("compactionstats")
+        found = patt.search(result.stdout)
+        # wait_for_status=='finish': If 'RESHARD' is not found in the compactionstats output, return True -
+        # means resharding was finished
+        # wait_for_status=='start: If 'RESHARD' is found in the compactionstats output, return True -
+        # means resharding was started
+
+        return bool(found) if status == 'start' else not bool(found)
+
+    # Default value of murmur3_partitioner_ignore_msb_bits parameter is 12
+    def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits=12):
+        self.stop_scylla()
+        # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
+        self.config_setup(murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+        self.start_scylla()
+
+        resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
+                                           text="Wait for re-sharding to be started", status='start')
+        if not resharding_started:
+            logger.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
+                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+            return
+
+        resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
+                                            text="Wait for re-sharding to be finished", status='finish')
+
+        if not resharding_finished:
+            logger.error('Resharding was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
+                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+        else:
+            logger.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
+                         format(murmur3_partitioner_ignore_msb_bits))
+
+    def _gen_nodetool_cmd(self, sub_cmd, args, options):
+        credentials = self.parent_cluster.get_db_auth()
+        if credentials:
+            options += '-u {} -pw {} '.format(*credentials)
+        return "nodetool {options} {sub_cmd} {args}".format(**locals())
+
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False):
+        """
+            Wrapper for nodetool command.
+            Command format: nodetool [options] command [args]
+
+        :param sub_cmd: subcommand like status
+        :param args: arguments for the subcommand
+        :param options: nodetool options:
+            -h	--host	Hostname or IP address.
+            -p	--port	Port number.
+            -pwf	--password-file	Password file path.
+            -pw	--password	Password.
+            -u	--username	Username.
+        :param ignore_status: don't throw exception if the command fails
+        :return: Remoter result object
+        """
+        cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
+        result = self.remoter.run(cmd, ignore_status=ignore_status)
+        self.log.debug("Command '%s' duration -> %s s", result.command,
+                       result.duration)
+        return result
+
+    def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
+        """cqlsh [options] [host [port]]"""
+        credentials = self.parent_cluster.get_db_auth()
+        auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
+        use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
+        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout}".format(**locals())
+        return 'cqlsh {options} -e "{command}" {host} {port}'.format(**locals())
+
+    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None, connect_timeout=5):
+        """Runs CQL command using cqlsh utility"""
+        cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
+                                  host=self.ip_address if not target_db_node else target_db_node.ip_address,
+                                  port=port if port else self.CQL_PORT,
+                                  connect_timeout=connect_timeout)
+        cqlsh_out = self.remoter.run(cmd, timeout=timeout + 1, verbose=verbose)
+        # stdout of cqlsh example:
+        #      pk
+        #      ----
+        #       2
+        #       3
+        #
+        #      (10 rows)
+        return cqlsh_out if not split else map(str.strip, cqlsh_out.stdout.splitlines())
 
 
 class BaseCluster(object):
@@ -1485,18 +1919,15 @@ class BaseCluster(object):
         self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
-        assert 'AVOCADO_TEST_LOGDIR' in os.environ
-        try:
-            self.logdir = path.init_dir(os.environ['AVOCADO_TEST_LOGDIR'],
-                                        self.name)
-        except OSError:
-            self.logdir = os.path.join(os.environ['AVOCADO_TEST_LOGDIR'],
-                                       self.name)
-        logger = logging.getLogger('avocado.test')
+        assert '_SCT_TEST_LOGDIR' in os.environ
+
+        self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'],
+                                   self.name)
+        os.makedirs(self.logdir)
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
-        self.nemesis = []
         self.params = params
         self.datacenter = region_names or []
         if Setup.REUSE_CLUSTER:
@@ -1539,12 +1970,16 @@ class BaseCluster(object):
                 results.append(queue.get(block=True, timeout=5))
             except Queue.Empty:
                 pass
+        return results
 
     def get_backtraces(self):
         for node in self.nodes:
-            node.get_backtraces()
-            if node.n_coredumps > 0:
-                self.coredumps[node.name] = node.n_coredumps
+            try:
+                node.get_backtraces()
+                if node.n_coredumps > 0:
+                    self.coredumps[node.name] = node.n_coredumps
+            except Exception as ex:
+                self.log.warning("Unable to get coredump status from node {node}: {ex}".format(**locals()))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
@@ -1573,7 +2008,7 @@ class BaseCluster(object):
     def get_node_database_errors(self):
         errors = {}
         for node in self.nodes:
-            node_errors = node.search_database_log_errors()
+            node_errors = node.search_database_log(start_from_beginning=True, publish_events=False)
             if node_errors:
                 errors.update({node.name: node_errors})
         return errors
@@ -1614,6 +2049,11 @@ class BaseCluster(object):
     def terminate_node(self, node):
         self.nodes.remove(node)
         node.destroy()
+
+    def get_db_auth(self):
+        user = self.params.get('authenticator_user', default=None)
+        password = self.params.get('authenticator_password', default=None)
+        return (user, password) if user and password else None
 
 
 class NodeSetupFailed(Exception):
@@ -1696,7 +2136,7 @@ class BaseScyllaCluster(object):
         self.nemesis = []
         self.nemesis_threads = []
         self._seed_node_rebooted = False
-        self.seed_nodes_private_ips = None
+        self.seed_nodes_ips = None
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -1709,8 +2149,8 @@ class BaseScyllaCluster(object):
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else\
             self.params.get('append_scylla_args')
 
-    def get_seed_nodes_private_ips(self):
-        if self.seed_nodes_private_ips is None:
+    def get_seed_nodes_from_node(self):
+        if self.seed_nodes_ips is None:
             node = self.nodes[0]
             yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
                                          'scylla.yaml')
@@ -1719,15 +2159,15 @@ class BaseScyllaCluster(object):
             with open(yaml_dst_path, 'r') as yaml_stream:
                 conf_dict = yaml.safe_load(yaml_stream)
                 try:
-                    self.seed_nodes_private_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-                except Exception, details:
+                    self.seed_nodes_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
+                except Exception as details:
                     self.log.debug('Loaded YAML data structure: %s', conf_dict)
                     self.log.error('Scylla YAML config contents:')
                     with open(yaml_dst_path, 'r') as yaml_stream:
                         self.log.error(yaml_stream.read())
                     raise ValueError('Exception determining seed node ips: %s' %
                                      details)
-        return self.seed_nodes_private_ips
+        return self.seed_nodes_ips
 
     def enable_client_encrypt(self):
         for node in self.nodes:
@@ -1740,33 +2180,26 @@ class BaseScyllaCluster(object):
             node.disable_client_encrypt()
 
     def get_seed_nodes(self):
-        seed_nodes_private_ips = self.get_seed_nodes_private_ips()
+        seed_nodes_ips = self.get_seed_nodes_from_node()
         seed_nodes = []
         for node in self.nodes:
-            if node.private_ip_address in seed_nodes_private_ips:
-                node.is_seed = True
+            if node.ip_address in seed_nodes_ips:
+                node.is_seed = True  # TODO: check if we need to change the is_seed, later on
                 seed_nodes.append(node)
-            else:
-                node.is_seed = False
+        assert seed_nodes, "We should have at least one selected seed by now"
         return seed_nodes
 
-    def get_seed_nodes_by_flag(self, private_ip=True):
+    def get_seed_nodes_by_flag(self):
         """
         We set is_seed at two point, before and after node_setup.
         However, we can only call this function when the flag is set.
         """
-        if private_ip:
-            node_private_ips = [node.private_ip_address for node
-                                in self.nodes if node.is_seed]
-            seeds = ",".join(node_private_ips)
-        else:
-            node_public_ips = [node.public_ip_address for node
-                                in self.nodes if node.is_seed]
-            seeds = ",".join(node_public_ips)
-        if not seeds:
-            # use first node as seed by default
-            seeds = self.nodes[0].private_ip_address if private_ip else self.nodes[0].public_ip_address
-            self.nodes[0].is_seed = True
+
+        node_ips = [node.ip_address for node
+                    in self.nodes if node.is_seed]
+        seeds = ",".join(node_ips)
+
+        assert seeds, "We should have at least one selected seed by now"
         return seeds
 
     def _update_db_binary(self, new_scylla_bin, node_list):
@@ -1778,11 +2211,22 @@ class BaseScyllaCluster(object):
         def update_scylla_bin(node, queue):
             node.log.info('Updating DB binary')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
+
+            # scylla binary is moved to different directory after relocation
+            # check if the installed binary is the relocated one or not
+            relocated_binary = '/opt/scylladb/libexec/scylla.bin'
+            if node.file_exists(relocated_binary):
+                binary_path = relocated_binary
+            else:
+                binary_path = '/usr/bin/scylla'
             # replace the binary
-            node.remoter.run('sudo cp -f /usr/bin/scylla /usr/bin/scylla.origin')
-            node.remoter.run('sudo cp -f /tmp/scylla /usr/bin/scylla')
-            node.remoter.run('sudo chown root.root /usr/bin/scylla')
-            node.remoter.run('sudo chmod +x  /usr/bin/scylla')
+            prereqs_script = dedent("""
+                cp -f {binary_path} {binary_path}.origin
+                cp -f /tmp/scylla {binary_path}
+                chown root.root {binary_path}
+                chmod +x {binary_path}
+            """.format(**locals()))
+            node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
             queue.put(node)
             queue.task_done()
 
@@ -1820,14 +2264,11 @@ class BaseScyllaCluster(object):
 
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB packages')
+            node.remoter.run('mkdir /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
             node.remoter.run('sudo yum update -y --skip-broken')
-            node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
-            # update *developmen* packages
-            node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development* | true')
-            # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
             node.remoter.run('yum list installed | grep scylla')
             queue.put(node)
@@ -1888,7 +2329,7 @@ class BaseScyllaCluster(object):
             use self.get_nodetool_status instead
         """
         assert verification_node in self.nodes
-        cmd_result = verification_node.remoter.run('nodetool status')
+        cmd_result = verification_node.run_nodetool('status')
         node_info_list = []
         for line in cmd_result.stdout.splitlines():
             line = line.strip()
@@ -1935,7 +2376,7 @@ class BaseScyllaCluster(object):
             verification_node = random.choice(self.nodes)
         status = {}
         res = verification_node.run_nodetool('status')
-        data_centers = res.strip().split("Data center: ")
+        data_centers = res.stdout.strip().split("Data center: ")
         for dc in data_centers:
             if dc:
                 lines = dc.splitlines()
@@ -1964,7 +2405,7 @@ class BaseScyllaCluster(object):
         up_statuses = []
         for node in nodes:
             for dc, dc_status in status.iteritems():
-                ip_status = dc_status.get(node.private_ip_address)
+                ip_status = dc_status.get(node.ip_address)
                 if ip_status and ip_status["state"] == "UN":
                     up_statuses.append(True)
                 else:
@@ -1979,30 +2420,15 @@ class BaseScyllaCluster(object):
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:
-            version_commands = ["scylla --version", "rpm -q {}".format(self.nodes[0].scylla_pkg())]
-            for version_cmd in version_commands:
-                try:
-                    result = self.nodes[0].remoter.run(version_cmd)
-                except Exception as ex:
-                    self.log.error('Failed getting scylla version: %s', ex)
-                else:
-                    match = re.match("(\d+[.]\d+[.]\w+).*", result.stdout)
-                    if match:
-                        scylla_version = match.group(1)
-                        self.log.info("Found ScyllaDB version: %s" % scylla_version)
-                        for node in self.nodes:
-                            node.scylla_version = scylla_version
-                        break
-                    else:
-                        self.log.error("Unknown ScyllaDB version")
+            scylla_version = self.nodes[0].get_scylla_version()
 
-    def run_cqlsh(self, node, cql_cmd, timeout=60, verbose=True):
-        cqlsh_out = node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), timeout=timeout, verbose=verbose)
-        return cqlsh_out.stdout
+            if scylla_version:
+                for node in self.nodes:
+                    node.scylla_version = scylla_version
 
     def get_test_keyspaces(self):
-        out = self.run_cqlsh(node=self.nodes[0], cql_cmd='select keyspace_name from system_schema.keyspaces')
-        return [ks.strip() for ks in out.split('\n')[3:-3] if 'system' not in ks]
+        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces', split=True)
+        return [ks.strip() for ks in out[3:-3] if 'system' not in ks]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
@@ -2045,8 +2471,10 @@ class BaseScyllaCluster(object):
                           key=key, threshold=size, keyspaces=keyspace)
 
     def add_nemesis(self, nemesis, tester_obj):
-        self.nemesis.append(nemesis(tester_obj=tester_obj,
-                                    termination_event=self.termination_event))
+        for nem in nemesis:
+            for i in range(nem['num_threads']):
+                self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
+                                                   termination_event=self.termination_event))
 
     def clean_nemesis(self):
         self.nemesis = []
@@ -2054,10 +2482,9 @@ class BaseScyllaCluster(object):
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=30):
         for nemesis in self.nemesis:
-            nemesis.set_termination_event(self.termination_event)
-            nemesis.set_target_node()
             nemesis_thread = threading.Thread(target=nemesis.run,
-                                              args=(interval,), verbose=True)
+                                              args=(interval, ), verbose=True)
+            nemesis_thread.daemon = True
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
@@ -2080,7 +2507,8 @@ class BaseScyllaCluster(object):
                           client_encrypt=self._param_enabled('client_encrypt'),
                           append_conf=self.params.get('append_conf'),
                           hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'),
-                          append_scylla_args=self.get_scylla_args())
+                          append_scylla_args=self.get_scylla_args(),
+                          authorizer=self.params.get('authorizer'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
@@ -2095,8 +2523,9 @@ class BaseScyllaCluster(object):
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()
             node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+            node.install_scylla_debuginfo()
 
-            if len(self.datacenter) > 1:
+            if Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = 'GossipingPropertyFileSnitch'
                 node.datacenter_setup(self.datacenter)
@@ -2109,14 +2538,14 @@ class BaseScyllaCluster(object):
             node.scylla_setup(disks)
 
             seed_address_list = seed_address.split(',')
-            if node.private_ip_address not in seed_address_list:
+            if node.ip_address not in seed_address_list:
                 wait.wait_for(func=lambda: self._seed_node_rebooted is True,
                               step=30,
                               text='Wait for seed node to be up after reboot')
             node.restart()
             node.wait_ssh_up()
 
-            if node.private_ip_address in seed_address_list:
+            if node.ip_address in seed_address_list:
                 self.log.info('Seed node is up after reboot')
                 self._seed_node_rebooted = True
 
@@ -2148,6 +2577,7 @@ class BaseScyllaCluster(object):
         self.get_seed_nodes()
         self.get_scylla_version()
         self.set_traffic_control()
+        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].run_nodetool("status"))
 
     def restart_scylla(self, nodes=None):
         if nodes:
@@ -2160,23 +2590,65 @@ class BaseScyllaCluster(object):
             node.start_scylla(verify_up=True)
             self.log.debug("'{0.name}' restarted.".format(node))
 
+    def collect_logs(self, storing_dir):
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        os.mkdir(storing_dir)
+
+        files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
+        for node in self.nodes:
+            storing_dir_for_node = os.path.join(storing_dir, node.name)
+            src_dir = node.prepare_files_for_archive(files_to_archive)
+            node.receive_files(src=src_dir, dst=storing_dir)
+            with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
+                pkg_list_file.write(node.get_installed_packages())
+            with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as co:
+                co.write(node.get_console_output())
+            with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
+                imagedata = node.get_console_screenshot()
+                cscrn.write(decodestring(imagedata))
+            if os.path.exists(node.database_log):
+                shutil.copy(node.database_log, storing_dir_for_node)
+        return storing_dir
+
 
 class BaseLoaderSet(object):
 
     def __init__(self, params):
-        self._loader_queue = []
+        self._loader_cycle = None
         self.params = params
-        self.cassandra_stress_version = ""
+        self._gemini_version = None
 
-    def get_cassandra_stress_version(self, node):
-        if not self.cassandra_stress_version:
-            result = node.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
-            match = re.match("Version: (.*)", result.stdout)
-            if match:
-                self.cassandra_stress_version = match.group(1)
-            else:
-                self.log.error("C-S version not found!")
-                self.cassandra_stress_version = "unknown"
+    @property
+    def gemini_version(self):
+        result = self.nodes[0].run('cd $HOME; ./gemini --version')
+        # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
+        # take only version number - 1.0.1
+        self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
+        return self._gemini_version
+
+    def install_gemini(self, node):
+        gemini_version = self.params.get('gemini_version', default='0.9.2')
+        if gemini_version.lower() == 'latest':
+            gemini_version = get_latest_gemini_version()
+
+        gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
+        # TODO: currently schema is not used by gemini tool need to store the schema
+        #       in data_dir for each test
+        gemini_schema_url = self.params.get('gemini_schema_url')
+        if not gemini_url or not gemini_schema_url:
+            logger.warning('Gemini URLs should be defined to run the gemini tool')
+        else:
+            gemini_tar = os.path.basename(gemini_url)
+            install_gemini_script = dedent("""
+                cd $HOME
+                rm -rf gemini*
+                curl -LO {gemini_url}
+                tar -xvf {gemini_tar}
+                chmod a+x gemini
+                curl -LO  {gemini_schema_url}
+            """.format(**locals()))
+            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
+            logger.debug('Gemini version {}'.format(self.gemini_version))
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
@@ -2184,6 +2656,14 @@ class BaseLoaderSet(object):
 
         if Setup.REUSE_CLUSTER:
             self.kill_stress_thread()
+            return
+
+        collectd_setup = ScyllaCollectdSetup()
+        collectd_setup.install(node)
+        self.install_gemini(node=node)
+        result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
+        if result.exit_status == 0:
+            self.log.debug('Skip loader setup for using a prepared AMI')
             return
 
         if node.is_ubuntu14():
@@ -2199,19 +2679,25 @@ class BaseLoaderSet(object):
 
         elif node.is_debian8():
             install_java_script = dedent("""
-                echo "deb http://http.debian.net/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/jessie-backports.list
+                sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
+                echo 'deb http://archive.debian.org/debian jessie-backports main' |sudo tee /etc/apt/sources.list.d/backports.list
+                sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
+                echo 'Acquire::Check-Valid-Until false;' |sudo tee /etc/apt/apt.conf.d/99jessie-backports
                 apt-get update
                 apt-get install gnupg-curl -y
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
                 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
+                echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /' |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
                 apt-get update
                 apt-get install -y openjdk-8-jre-headless -t jessie-backports
                 update-java-alternatives -s java-1.8.0-openjdk-amd64
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
-        node.download_scylla_repo(self.params.get('scylla_repo'))
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
@@ -2226,9 +2712,6 @@ class BaseLoaderSet(object):
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
 
         node.wait_cs_installed(verbose=verbose)
-        cs_exporter_setup = CassandraStressExporterSetup()
-        cs_exporter_setup.install(node)
-        self.get_cassandra_stress_version(node)
 
         # scylla-bench
         node.remoter.run('sudo yum install git -y')
@@ -2239,20 +2722,6 @@ class BaseLoaderSet(object):
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
-        # gemini tool
-        gemini_url = self.params.get('gemini_url')
-        gemini_static_url = self.params.get('gemini_static_url')
-        if not gemini_url or not gemini_static_url:
-            logger.warning('Gemini URLs should be defined to run the gemini tool')
-        else:
-            install_gemini_script = dedent("""
-                cd $HOME
-                curl -L -o gemini {gemini_url}
-                chmod a+x gemini
-                curl -LO  {gemini_static_url}                
-            """.format(**locals()))
-            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
-
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
@@ -2262,122 +2731,17 @@ class BaseLoaderSet(object):
         return 'loaders_public_ip' if public_ip else 'loaders_private_ip'
 
     def get_loader(self):
-        if not self._loader_queue:
-            self._loader_queue = [node for node in self.nodes]
-        return self._loader_queue.pop(0)
 
-    def run_stress_thread(self, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
-                          profile=None, node_list=[], round_robin=False):
-        if self.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
-            stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
-
-        if keyspace_name:
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(keyspace_name))
-        else:
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace$2 ")
-
-        if profile:
-            with open(profile) as fp:
-                profile_content = fp.read()
-                cs_profile = script.TemporaryScript(name=os.path.basename(profile), content=profile_content)
-                self.log.info('Profile content:\n%s' % profile_content)
-                cs_profile.save()
-        queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
-
-        def node_run_stress(node, loader_idx, cpu_idx, keyspace_idx, profile, stress_cmd):
-            queue[TASK_QUEUE].put(node)
-            if node_list and '-node' not in stress_cmd:
-                first_node = [n for n in node_list if n.dc_idx == loader_idx % 3]
-                first_node = first_node[0] if first_node else node_list[0]
-                stress_cmd += " -node {}".format(first_node.private_ip_address)
-            stress_cmd_opt = stress_cmd.split()[1]
-            cs_pipe_name = '/tmp/cs_{}_pipe_$1_$2'.format(stress_cmd_opt)
-            stress_cmd = "mkfifo {}; cat {}|python /usr/bin/cassandra_stress_exporter {} & ".format(cs_pipe_name,
-                                                                                                    cs_pipe_name,
-                                                                                                    stress_cmd_opt) +\
-                         stress_cmd +\
-                         "|tee {}; pkill -P $$ -f cassandra_stress_exporter; rm -f {}".format(cs_pipe_name,
-                                                                                              cs_pipe_name)
-            # We'll save a script with the last c-s command executed on loaders
-            stress_script = script.TemporaryScript(name='run_cassandra_stress.sh',
-                                                   content='%s\n' % stress_cmd)
-            self.log.info('Stress script content:\n%s' % stress_cmd)
-            stress_script.save()
-
-            try:
-                logdir = path.init_dir(output_dir, self.name)
-            except OSError:
-                logdir = os.path.join(output_dir, self.name)
-            log_file_name = os.path.join(logdir,
-                                         'cassandra-stress-l%s-c%s-%s.log' %
-                                         (loader_idx, cpu_idx, uuid.uuid4()))
-            # This tag will be output in the header of c-stress result,
-            # we parse it to know the loader & cpu info in _parse_cs_summary().
-            tag = 'TAG: loader_idx:%s-cpu_idx:%s-keyspace_idx:%s' % (loader_idx, cpu_idx, keyspace_idx)
-
-            self.log.debug('cassandra-stress log: %s', log_file_name)
-            dst_stress_script_dir = os.path.join('/home', node.remoter.user)
-            dst_stress_script = os.path.join(dst_stress_script_dir,
-                                             os.path.basename(stress_script.path))
-            node.remoter.send_files(stress_script.path, dst_stress_script_dir)
-            if profile:
-                node.remoter.send_files(cs_profile.path, os.path.join('/tmp', os.path.basename(profile)))
-            node.remoter.run(cmd='chmod +x %s' % dst_stress_script)
-
-            if stress_num > 1:
-                node_cmd = 'taskset -c %s %s' % (cpu_idx, dst_stress_script)
-            else:
-                node_cmd = dst_stress_script
-            node_cmd = 'echo %s; %s %s %s' % (tag, node_cmd, cpu_idx, keyspace_idx)
-
-            result = node.remoter.run(cmd=node_cmd,
-                                      timeout=timeout,
-                                      ignore_status=True,
-                                      log_file=log_file_name)
-            queue[RES_QUEUE].put((node, result))
-            queue[TASK_QUEUE].task_done()
-
-        if round_robin:
-            # cancel stress_num
-            stress_num = 1
-            loaders = [self.get_loader()]
-            self.log.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-        else:
-            loaders = self.nodes
-
-        for loader_idx, loader in enumerate(loaders):
-            for cpu_idx in range(stress_num):
-                for ks_idx in range(1, keyspace_num + 1):
-                    setup_thread = threading.Thread(target=node_run_stress,
-                                                    args=(loader, loader_idx,
-                                                          cpu_idx, ks_idx, profile, stress_cmd))
-                    setup_thread.daemon = True
-                    setup_thread.start()
-                    if loader_idx == 0 and cpu_idx == 0:
-                        time.sleep(30)
-
-        return queue
+        if not self._loader_cycle:
+            self._loader_cycle = itertools.cycle([node for node in self.nodes])
+        return next(self._loader_cycle)
 
     def kill_stress_thread(self):
-        kill_script_contents = 'PIDS=$(pgrep -f cassandra-stress) && pkill -TERM -P $PIDS'
-        kill_script = script.TemporaryScript(name='kill_cassandra_stress.sh',
-                                             content=kill_script_contents)
-        kill_script.save()
-        kill_script_dir = os.path.dirname(kill_script.path)
         for loader in self.nodes:
-            loader.remoter.run(cmd='mkdir -p %s' % kill_script_dir)
-            loader.remoter.send_files(kill_script.path, kill_script_dir)
-            loader.remoter.run(cmd='chmod +x %s' % kill_script.path)
-            cs_active = loader.remoter.run(cmd='pgrep -f cassandra-stress',
-                                           ignore_status=True)
-            if cs_active.exit_status == 0:
-                kill_result = loader.remoter.run(kill_script.path,
-                                                 ignore_status=True)
-                if kill_result.exit_status != 0:
-                    self.log.error('Terminate c-s on node %s:\n%s',
-                                   loader, kill_result)
-            loader.remoter.run(cmd='rm -rf %s' % kill_script_dir)
-        kill_script.remove()
+            try:
+                loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
+            except Exception as ex:
+                self.log.warning("failed to kill stress-command on [%s]: [%s]", str(loader), str(ex))
 
     @staticmethod
     def _parse_cs_summary(lines):
@@ -2525,14 +2889,28 @@ class BaseLoaderSet(object):
         return results
 
     @staticmethod
+    def _parse_gemini_summary_json(json_str):
+        results = {'result': {}}
+        try:
+            results = json.loads(json_str)
+
+        except Exception as details:
+            logger.error("Invalid json document {}".format(details))
+
+        return results.get('result')
+
+    @staticmethod
     def _parse_gemini_summary(lines):
         results = {}
         enable_parse = False
 
         for line in lines:
             line.strip()
-            if line.startswith('Results:'):
+            if 'Results:' in line:
                 enable_parse = True
+                continue
+            if "run completed" in line:
+                enable_parse = False
                 continue
             if not enable_parse:
                 continue
@@ -2542,44 +2920,6 @@ class BaseLoaderSet(object):
             value = line[split_idx + 1:].split()[0]
             results[key] = int(value)
         return results
-
-    def verify_stress_thread(self, queue, db_cluster):
-        results = []
-        cs_summary = []
-        self.log.debug('Wait for %s stress threads to verify', queue[TASK_QUEUE].qsize())
-        queue[TASK_QUEUE].join()
-        while not queue[RES_QUEUE].empty():
-            results.append(queue[RES_QUEUE].get())
-
-        errors = []
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = self._parse_cs_summary(lines)
-            if node_cs_res:
-                cs_summary.append(node_cs_res)
-            for line in lines:
-                if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
-
-        return cs_summary, errors
-
-    def get_stress_results(self, queue):
-        results = []
-        ret = []
-        self.log.debug('Wait for %s stress threads results', queue[TASK_QUEUE].qsize())
-        queue[TASK_QUEUE].join()
-        while not queue[RES_QUEUE].empty():
-            results.append(queue[RES_QUEUE].get())
-
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = self._parse_cs_summary(lines)
-            if node_cs_res:
-                ret.append(node_cs_res)
-
-        return ret
 
     def get_stress_results_bench(self, queue):
         results = []
@@ -2601,10 +2941,15 @@ class BaseLoaderSet(object):
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
             queue[TASK_QUEUE].put(node)
+
+            CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+
+            logdir = os.path.join(output_dir, self.name)
             try:
-                logdir = path.init_dir(output_dir, self.name)
+                os.makedirs(logdir)
             except OSError:
-                logdir = os.path.join(output_dir, self.name)
+                pass
+
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
@@ -2615,6 +2960,9 @@ class BaseLoaderSet(object):
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
+
+            CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
@@ -2641,20 +2989,22 @@ class BaseLoaderSet(object):
 
         def _run_gemini(node, loader_idx, cmd, test_node, oracle_node):
             queue[TASK_QUEUE].put(node)
+            logdir = os.path.join(output_dir, self.name)
             try:
-                logdir = path.init_dir(output_dir, self.name)
+                os.makedirs(logdir)
             except OSError:
-                logdir = os.path.join(output_dir, self.name)
+                pass
             log_file_name = os.path.join(logdir,
                                          'gemini-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
-            gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
-            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} | tee {}".format(
+            # gemini_log = tempfile.NamedTemporaryFile(prefix='gemini-', suffix='.log').name
+            gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())
+            result = node.remoter.run(cmd="/$HOME/{} --test-cluster={} --oracle-cluster={} --outfile {}".format(
                                       cmd.strip(), test_node, oracle_node, gemini_log),
                                       timeout=timeout,
-                                      ignore_status=True,
+                                      ignore_status=False,
                                       log_file=log_file_name)
-            queue[RES_QUEUE].put((node, result))
+            queue[RES_QUEUE].put((node, result, gemini_log))
             queue[TASK_QUEUE].task_done()
 
         for loader_idx, loader in enumerate(self.nodes):
@@ -2675,12 +3025,15 @@ class BaseLoaderSet(object):
         while not queue[RES_QUEUE].empty():
             results.append(queue[RES_QUEUE].get())
 
-        for node, result in results:
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            res = self._parse_gemini_summary(lines)
-            if res:
-                ret.append(res)
+        for node, result, result_file in results:
+
+            local_gemini_result_file = os.path.join(self.logdir, os.path.basename(result_file))
+            node.receive_files(src=result_file, dst=local_gemini_result_file)
+            with open(local_gemini_result_file) as rf:
+                content = rf.read()
+                res = self._parse_gemini_summary_json(content)
+                if res:
+                    ret.append(res)
 
         return ret
 
@@ -2692,24 +3045,24 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
-    def get_non_system_ks_cf_list(self, loader_node, db_node_ip):
+    def get_non_system_ks_cf_list(self, loader_node, db_node, request_timeout=300):
         """Get all not system keyspace.tables pairs
 
         Arguments:
             loader_node {BaseNode} -- LoaderNoder to send request
             db_node_ip {str} -- ip of db_node
         """
-        cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
-        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
 
+        result = loader_node.run_cqlsh(cmd='SELECT keyspace_name, table_name from system_schema.tables',
+                                       timeout=request_timeout, verbose=False, target_db_node=db_node, split=True)
         avaialable_ks_cf = []
-        for row in result.stdout.split('\n'):
+        for row in result:
             if '|' not in row:
                 continue
             avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
         return [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
 
-    def run_fullscan(self, ks_cf, loader_node, db_node_ip):
+    def run_fullscan(self, ks_cf, loader_node, db_node):
         """Run cql select count(*) request
 
         if ks_cf is not random, use value from config
@@ -2723,7 +3076,7 @@ class BaseLoaderSet(object):
             object -- object with result of remoter.run command
         """
 
-        ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node_ip)
+        ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node)
         if ks_cf not in ks_cf_list:
             self.log.warning('Keyspace of column family {} does not exists. Using random.'.format(ks_cf))
             ks_cf = 'random'
@@ -2731,13 +3084,25 @@ class BaseLoaderSet(object):
         if 'random' in ks_cf.lower():
             ks_cf = random.choice(ks_cf_list)
 
-        self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
-        cmd = 'select count(*) from {}'.format(ks_cf)
-        result = loader_node.remoter.run('cqlsh --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+        FullScanEvent(type='start', loader_node=loader_node, db_node_ip=db_node.ip_address, ks_cf=ks_cf)
 
+        self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
+
+        try:
+            result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
+                                           timeout=3600, verbose=False, target_db_node=db_node, connect_timeout=10)
+        except (UnexpectedExit, Failure) as details:
+            self.log.error('Fullscan command finished with errors: {}'.format(details))
+            result = details.result
+
+        FullScanEvent(type='finish', loader_node=loader_node,
+                      db_node_ip=db_node.ip_address, ks_cf=ks_cf,
+                      result={'exit_code': result.exited,
+                              'stdout': result.stdout,
+                              'stderr': result.stderr})
         return result
 
-    def run_fullscan_thread(self, ks_cf, db_nodes, datacenter, interval=60, duration=60):
+    def run_fullscan_thread(self, ks_cf, db_nodes, interval=60, duration=60):
         """Run in thread request from loader node
 
         Run on randomly choosen loader node the cql request to
@@ -2757,17 +3122,22 @@ class BaseLoaderSet(object):
             start = current = time.time()
             while current - start < duration:
                 loader_node = random.choice(self.nodes)
-                db_node = random.choice(db_nodes)
-                self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
                 if loader_node.termination_event.isSet():
                     break
-                result = self.run_fullscan(ks_cf, loader_node, db_node.ip_address(datacenter))
+                db_node = random.choice(db_nodes)
+                if hasattr(db_node, 'remoter') and db_node.remoter and not db_node.remoter.is_up():
+                    self.log.warning("Chosen node is down. Choose new one")
+                    continue
+                self.log.info('Fullscan start on node {} from loader {}'.format(db_node.name, loader_node.name))
+
+                result = self.run_fullscan(ks_cf, loader_node, db_node)
                 self.log.debug(result)
                 self.log.info('Fullscan done on node {} from loader {}'.format(db_node.name, loader_node.name))
                 time.sleep(interval)
                 current = time.time()
 
         th = threading.Thread(target=run_in_thread)
+        th.daemon = True
         th.start()
 
     def kill_fullscan_thread(self):
@@ -2783,13 +3153,27 @@ class BaseMonitorSet(object):
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.0')
-        self.monitor_install_path_base = "/var/lib/scylla"
-        self.monitor_install_path = os.path.join(self.monitor_install_path_base,
-                                                 "scylla-grafana-monitoring-{}".format(self.monitor_branch))
-        self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
-        self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
+        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.4')
+        self._monitor_install_path_base = None
         self.phantomjs_installed = False
+
+    @property
+    def monitor_install_path_base(self):
+        if not self._monitor_install_path_base:
+            self._monitor_install_path_base = self.nodes[0].remoter.run("echo $HOME").stdout.strip()
+        return self._monitor_install_path_base
+
+    @property
+    def monitor_install_path(self):
+        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-{}".format(self.monitor_branch))
+
+    @property
+    def monitoring_conf_dir(self):
+        return os.path.join(self.monitor_install_path, "config")
+
+    @property
+    def monitoring_data_dir(self):
+        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-data")
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
@@ -2818,17 +3202,23 @@ class BaseMonitorSet(object):
         node.wait_ssh_up()
 
         if Setup.REUSE_CLUSTER:
+            self.configure_scylla_monitoring(node)
+            self.restart_scylla_monitoring(sct_metrics=True)
+            EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
+                "http://{0.external_address}:{1.grafana_port}".format(node, self))
             return
+
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
         try:
             self.start_scylla_monitoring(node)
-        except process.CmdError:
-            self.reconfigure_scylla_monitoring()
+        except (Failure, UnexpectedExit):
+            self.restart_scylla_monitoring()
         # The time will be used in url of Grafana monitor,
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
+        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url("http://{0.external_address}:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
@@ -2837,11 +3227,30 @@ class BaseMonitorSet(object):
 
     def install_scylla_manager(self, node):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m')
-                              , scylla_mgmt_repo=self.params.get('scylla_mgmt_repo')
-                              , manager_backend_client_encrypt=self.params.get('manager_backend_client_encrypt'))
+            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'), scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
+
+    def configure_ngrok(self, ngrok_name):
+        port = self.local_metrics_addr.split(':')[1]
+
+        requests.delete('http://localhost:4040/api/tunnels/sct')
+
+        tunnel = {
+            "addr": port,
+            "proto": "http",
+            "name": "sct",
+            "bind_tls": False
+        }
+        res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
+        assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
+        ngrok_address = res.json()['public_url'].replace('http://', '')
+        return "{}:80".format(ngrok_address)
 
     def set_local_sct_ip(self):
+
+        ngrok_name = self.params.get('sct_ngrok_name', default=None)
+        if ngrok_name:
+            return self.configure_ngrok(ngrok_name)
+
         sct_public_ip = self.params.get('sct_public_ip')
         if sct_public_ip:
             return sct_public_ip + ':' + self.local_metrics_addr.split(':')[1]
@@ -2856,9 +3265,12 @@ class BaseMonitorSet(object):
         if node.is_rhel_like():
             prereqs_script = dedent("""
                 yum install -y epel-release
-                yum install -y python-pip unzip wget docker
+                yum install -y python-pip unzip wget
                 pip install --upgrade pip
                 pip install pyyaml
+                curl -fsSL get.docker.com -o get-docker.sh
+                sh get-docker.sh
+                systemctl start docker
             """)
         elif node.is_ubuntu():
             prereqs_script = dedent("""
@@ -2870,37 +3282,45 @@ class BaseMonitorSet(object):
                 easy_install pip
                 pip install --upgrade pip
                 pip install pyyaml
+                systemctl start docker
             """)
-        elif node.is_debian():
+        elif node.is_debian8():
+            node.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
+            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+            node.remoter.run(cmd="sudo apt-get dist-upgrade -y")
+            node.remoter.run(
+                cmd="sudo echo 'deb https://apt.dockerproject.org/repo debian-jessie main' | sudo tee /etc/apt/sources.list.d/docker.list")
+            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+            node.remoter.run(cmd="sudo apt-get install docker-engine -y --force-yes")
+            node.remoter.run(cmd="sudo apt-get install -y curl")
+            node.remoter.run(cmd="sudo apt-get install software-properties-common -y")
+            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+            node.remoter.run(cmd="sudo apt-get install -y python-setuptools wget")
+            node.remoter.run(cmd="sudo apt-get install -y unzip")
             prereqs_script = dedent("""
-                apt-get update
-                apt-get install -y curl
-                curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
-                apt-get install software-properties-common -y
-                add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-                apt-get update
-                apt-get install -y docker
-                curl -sSL https://get.docker.com/ | sh
-                apt-get install -y python-setuptools unzip wget
                 easy_install pip
                 pip install --upgrade pip
                 pip install pyyaml
+                systemctl start docker
             """)
         else:
             raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
-        node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
+
+        node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
+        node.remoter.run("sudo usermod -aG docker $USER")
+        node.remoter.reconnect()
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{0.monitor_branch}.zip
+            wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip
             unzip {0.monitor_branch}.zip
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % install_script)
+        node.remoter.run("bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):
-        db_targets_list = [n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["db_cluster"].nodes] # node exporter + scylladb
+        db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -2912,25 +3332,36 @@ class BaseMonitorSet(object):
             with open(local_template_tmp) as f:
                 templ_yaml = yaml.load(f, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["%s:9103" % n.ip_address(self.targets["db_cluster"].datacenter) for n in self.targets["loaders"].nodes]
+            loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
+
+            # remove those jobs if exists, for support of 'reuse_cluster: true'
+            def remove_sct_metrics(x):
+                return x['job_name'] not in ['stress_metrics', 'sct_metrics']
+            templ_yaml["scrape_configs"] = filter(remove_sct_metrics, templ_yaml["scrape_configs"])
+
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
+
+            if self.params.get('gemini_cmd', None):
+                gemini_loader_targets_list = ["%s:2112" % n.ip_address for n in self.targets["loaders"].nodes]
+                scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
+                                           static_configs=[dict(targets=gemini_loader_targets_list)]))
+
             if self.sct_ip_port:
                 scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
                                            static_configs=[dict(targets=[self.sct_ip_port])]))
             with open(local_template, "w") as fo:
                 yaml.safe_dump(templ_yaml, fo, default_flow_style=False)  # to remove tag !!python/unicode
-            node.remoter.run("sudo chmod 777 %s" % prometheus_yaml_template)
             node.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True, verbose=True)
-            process.run("rm -rf {temp_dir}".format(**locals()))
+            localrunner.run("rm -rf {temp_dir}".format(**locals()))
         self._monitoring_targets = " ".join(db_targets_list)
         configure_script = dedent("""
             cd {0.monitor_install_path}
             mkdir -p {0.monitoring_conf_dir}
-            ./genconfig.py -ns -d {0.monitoring_conf_dir} {0._monitoring_targets}
+            ./genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
+        node.remoter.run("bash -ce '%s'" % configure_script, verbose=True)
         if alert_manager:
             self.configure_alert_manager(node)
 
@@ -2945,7 +3376,7 @@ class BaseMonitorSet(object):
           ANNOTATIONS {
             summary = "Instance {{ $labels.instance }} root disk low space",
             description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
-          }        
+          }
         # Alert for 99% cassandra stress write spikes
         ALERT CassandraStressWriteTooSlow
           IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
@@ -2959,51 +3390,60 @@ class BaseMonitorSet(object):
         with tempfile.NamedTemporaryFile("w", bufsize=0) as f:
             f.write(conf)
             node.send_files(src=f.name, dst=f.name)
-            node.remoter.run("chmod 777 %s" % f.name)
-            node.remoter.run("sudo bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
+            node.remoter.run("bash -ce 'cat %s >> %s'" % (f.name, alertmanager_conf_file))
 
-    @retrying(n=5, sleep_time=10, allowed_exceptions=(process.CmdError,),
-              message="Waiting for reconfiguring scylla monitoring")
-    def reconfigure_scylla_monitoring(self):
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
+              message="Waiting for restarting scylla monitoring")
+    def restart_scylla_monitoring(self, sct_metrics=False):
         for node in self.nodes:
             self.stop_scylla_monitoring(node)
             # We use sct_metrics=False, alert_manager=False since they should be configured once
-            self.configure_scylla_monitoring(node, sct_metrics=False, alert_manager=False)
+            self.configure_scylla_monitoring(node, sct_metrics=sct_metrics, alert_manager=False)
             self.start_scylla_monitoring(node)
 
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
+              message="Waiting for reconfiguring scylla monitoring")
+    def reconfigure_scylla_monitoring(self):
+        for node in self.nodes:
+            db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+            self._monitoring_targets = " ".join(db_targets_list)
+            configure_script = dedent("""
+                        cd {0.monitor_install_path}
+                        mkdir -p {0.monitoring_conf_dir}
+                        ./genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
+                    """.format(self))
+            node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
+
     def start_scylla_monitoring(self, node):
-        if node.is_rhel_like() or node.is_ubuntu16():
-            run_script = dedent("""
-                cd {0.monitor_install_path}
-                sudo systemctl start docker
-                mkdir -p {0.monitoring_data_dir}
-                chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version}
-            """.format(self))
-        else:
-            run_script = dedent("""
-                cd {0.monitor_install_path}
-                sudo service docker start || true
-                mkdir -p {0.monitoring_data_dir}
-                chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version}
-            """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % run_script, verbose=True)
+        run_script = dedent("""
+            cd {0.monitor_install_path}
+            mkdir -p {0.monitoring_data_dir}
+            ./start-all.sh \
+            -s {0.monitoring_conf_dir}/scylla_servers.yml \
+            -n {0.monitoring_conf_dir}/node_exporter_servers.yml \
+            -d {0.monitoring_data_dir} -l -v master,{0.monitoring_version} -b "-web.enable-admin-api"
+        """.format(self))
+        node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
 
     def add_sct_dashboards_to_grafana(self, node):
         sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         def _register_grafana_json(json_filename):
-            url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
+            url = "http://{0.external_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
             json_path = get_data_dir_path(json_filename)
-            result = process.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
-                                 (url, json_path), ignore_status=True)
-            return result.exit_status == 0
+            result = localrunner.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+                                     (url, json_path))
+            return result.exited == 0
 
         wait.wait_for(_register_grafana_json, step=10,
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
                       json_filename=sct_dashboard_json)
+
+    def get_sct_dashboards_config(self, node):
+        sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
+
+        return get_data_dir_path(sct_dashboard_json_filename)
 
     def download_monitoring_data_dir(self, node):
         try:
@@ -3019,12 +3459,27 @@ class BaseMonitorSet(object):
         self.install_scylla_monitoring_prereqs(node)
         self.download_scylla_monitoring(node)
 
+    def get_grafana_annotations(self, node):
+        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        try:
+            res = requests.get(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port))
+            if res.ok:
+                return res.text
+        except Exception as ex:
+            logger.warning("unable to get grafana annotations [%s]", str(ex))
+
+    def set_grafana_annotations(self, node, annotations_data):
+        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        res = requests.post(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port),
+                            data=annotations_data, headers={'Content-Type': 'application/json'})
+        logger.info("posting annotations result: %s", res)
+
     def stop_scylla_monitoring(self, node):
         kill_script = dedent("""
             cd {0.monitor_install_path}
-            ./kill-all.sh 
+            ./kill-all.sh
         """.format(self))
-        node.remoter.run("sudo bash -ce '%s'" % kill_script)
+        node.remoter.run("bash -ce '%s'" % kill_script)
 
     def install_phantom_js(self):
         if not self.phantomjs_installed:
@@ -3032,20 +3487,17 @@ class BaseMonitorSet(object):
             phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
             phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
             install_phantom_js_script = dedent("""
-                sudo rm -rf {phantomjs_base}*
-                sudo yum install -y bzip2 fontconfig bitmap-fonts
+                rm -rf {phantomjs_base}*
                 curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
-            process.run("bash -ce '%s'" % install_phantom_js_script)
-            process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                        "sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js",
-                        shell=True)
+            localrunner.run("bash -ce '%s'" % install_phantom_js_script)
+            localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js")
             self.phantomjs_installed = True
         else:
             self.log.debug("PhantomJS is already installed!")
 
-    def get_grafana_screenshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
@@ -3055,60 +3507,228 @@ class BaseMonitorSet(object):
         start_time = str(test_start_time).split('.')[0] + '000'
 
         screenshot_names = [
-            'per-server-metrics-nemesis',
-            'overview-metrics'
+            {
+                'name': 'per-server-metrics-nemesis',
+                'path': 'dashboard/db/scylla-{scr_name}-{version}'},
+            {
+                'name': 'overview-metrics',
+                'path': 'd/overview-{version}/scylla-{scr_name}'
+            }
         ]
 
-        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/dashboard/db/{scylla_pkg}-{scr_name}-{version}?from={st}&to=now"
+        screenshot_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
+
         try:
             self.install_phantom_js()
-            scylla_pkg = 'scylla-enterprise' if self.is_enterprise else 'scylla'
             for n, node in enumerate(self.nodes):
                 screenshots = []
-                for i, name in enumerate(screenshot_names):
+                snapshots = []
+                for i, screenshot in enumerate(screenshot_names):
                     version = self.monitoring_version.replace('.', '-')
-                    grafana_url = screenshot_url_tmpl.format(
-                        node_ip=node.public_ip_address,
-                        grafana_port=self.grafana_port,
-                        scylla_pkg=scylla_pkg,
-                        scr_name=name,
+                    path = screenshot['path'].format(
                         version=version,
+                        scr_name=screenshot['name'])
+                    grafana_url = screenshot_url_tmpl.format(
+                        node_ip=node.external_address,
+                        grafana_port=self.grafana_port,
+                        path=path,
                         st=start_time)
                     datetime_now = datetime.now().strftime("%Y%m%d_%H%M%S")
                     snapshot_path = os.path.join(node.logdir,
-                                                 "grafana-screenshot-%s-%s-%s.png" % (name, datetime_now, n))
-                    process.run("cd phantomjs-2.1.1-linux-x86_64 && "
-                                "bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
-                                    grafana_url, snapshot_path), shell=True)
-                # since there is only one monitoring node returning here
-                    screenshots.append(S3Storage.upload_file(snapshot_path))
-                return screenshots
+                                                 "grafana-screenshot-%s-%s-%s.png" % (screenshot['name'], datetime_now, n))
 
-        except Exception, details:
+                    screenshots.append(self._get_screenshot_link(grafana_url, snapshot_path))
+                    snapshots.append(self._get_shared_snapshot_link(grafana_url))
+
+                return {'screenshots': screenshots, 'snapshots': snapshots}
+
+        except Exception as details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
-        return ""
+        return {}
+
+    def upload_annotations_to_s3(self):
+        annotations_url = ''
+        if not self.nodes:
+            return annotations_url
+        try:
+            annotations = self.get_grafana_annotations(self.nodes[0])
+            if annotations:
+                annotations_url = S3Storage().generate_url('annotations.json', Setup.test_id())
+                logger.info("Uploading 'annotations.json' to {s3_url}".format(s3_url=annotations_url))
+                response = requests.put(annotations_url, data=annotations)
+                response.raise_for_status()
+        except Exception:
+            logger.exception("failed to upload annotations to S3")
+
+        return annotations_url
+
+    def _get_screenshot_link(self, grafana_url, snapshot_path):
+        localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs r.js \"%s\" \"%s\" 1920px" % (
+                        grafana_url, snapshot_path))
+        return S3Storage().upload_file(snapshot_path, dest_dir=Setup.test_id())
+
+    def _get_shared_snapshot_link(self, grafana_url):
+        result = localrunner.run("cd phantomjs-2.1.1-linux-x86_64 && bin/phantomjs ../data_dir/share_snapshot.js \"%s\"" % (grafana_url))
+        # since there is only one monitoring node returning here
+        output = result.stdout.strip()
+        if "Error" in output:
+            self.log.info(output)
+            return ""
+        else:
+            self.log.info("Shared grafana snapshot: {}".format(output))
+            return output
 
     @log_run_info
     def download_monitor_data(self):
         for node in self.nodes:
             try:
-                # self.stop_scylla_monitoring(node)
-                monitoring_data_dir_path = self.download_monitoring_data_dir(node)
-                # self.start_scylla_monitoring(node)
-                shutil.make_archive(node.logdir, 'zip', monitoring_data_dir_path)
-                zipped_data_path = '%s.zip' % node.logdir
-                return S3Storage.upload_file(zipped_data_path)
+                snapshot_archive = self.get_prometheus_snapshot(node)
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
+
+                return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception, details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
-        return ""
+                return ""
+
+    def download_scylla_manager_log(self):
+        for node in self.nodes:
+            try:
+                scylla_mgmt_log_path = node.collect_mgmt_log()
+                scylla_manager_local_log_path = os.path.join(node.logdir, 'scylla_manager_log')
+                node.receive_files(src=scylla_mgmt_log_path, dst=scylla_manager_local_log_path)
+                shutil.make_archive(scylla_manager_local_log_path, 'zip', scylla_mgmt_log_path)
+                link = S3Storage().upload_file("{}.zip".format(scylla_manager_local_log_path), dest_dir=Setup.test_id())
+                self.log.info("Scylla manager log uploaded {}".format(link))
+            except Exception, details:
+                self.log.error('Error downloading scylla manager log : %s',
+                               str(details))
+
+    def collect_scylla_monitoring_logs(self, node):
+        log_paths = []
+        monitoring_dockers = self._get_running_monitoring_dockers(node)
+        for m_docker in monitoring_dockers:
+            m_docker_log_path = self._collect_monitoring_docker_log(node, m_docker)
+            if m_docker_log_path:
+                log_paths.append(m_docker_log_path)
+
+        return log_paths
+
+    def _get_running_monitoring_dockers(self, node):
+        monitoring_dockers = []
+        result = node.remoter.run("docker ps -a --format {{.Names}}", ignore_status=True)
+        if result.exit_status == 0:
+            monitoring_dockers = [docker.strip() for docker in result.stdout.split('\n') if docker.strip()]
+        else:
+            self.log.warning("Getting running docker containers failed: {}".format(result))
+
+        self.log.debug("Next monitoring dockers are running: {}".format(monitoring_dockers))
+        return monitoring_dockers
+
+    def _collect_monitoring_docker_log(self, node, docker):
+        log_path = "/tmp/{}.log".format(docker)
+        cmd = "docker logs --details -t {} > {}".format(docker, log_path)
+        result = node.remoter.run(cmd, ignore_status=True)
+        if result.exit_status == 0:
+            return log_path
+        else:
+            self.log.warning("Collecting {} log failed {}".format(docker, result))
+            return ""
+
+    def collect_logs(self, storing_dir):
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        os.mkdir(storing_dir)
+
+        for node in self.nodes:
+            scylla_mgmt_log = node.collect_mgmt_log()
+            node.receive_files(src=scylla_mgmt_log, dst=storing_dir)
+            monitoring_dockers_logs = self.collect_scylla_monitoring_logs(node)
+            node.receive_files(src=monitoring_dockers_logs, dst=storing_dir)
+
+        return storing_dir
+
+    @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, ), message='Create prometheus snapshot')
+    def create_prometheus_snapshot(self, node):
+        ps = PrometheusDBStats(host=node.external_address)
+        result = ps.create_snapshot()
+        if "success" in result['status']:
+            snapshot_dir = os.path.join(self.monitoring_data_dir,
+                                        "snapshots",
+                                        result['data']['name'])
+            return snapshot_dir
+        else:
+            raise PrometheusSnapshotErrorException(result)
+
+    def get_prometheus_snapshot(self, node):
+        try:
+            snapshot_dir = self.create_prometheus_snapshot(node)
+        except PrometheusSnapshotErrorException as details:
+            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(details))
+            snapshot_dir = self.monitoring_data_dir
+
+        archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)
+        result = node.remoter.run('cd {}; tar -czvf {} .'.format(snapshot_dir,
+                                                                 archive_snapshot_name),
+                                  ignore_status=True)
+        if result.exit_status > 0:
+            self.log.warning('Unable to create archive {}'.format(result))
+            return ""
+
+        try:
+            local_snapshot_data_dir = os.path.join(node.logdir, "prometheus_data")
+
+            if not os.path.exists(local_snapshot_data_dir):
+                os.mkdir(local_snapshot_data_dir)
+
+            local_archive_path = os.path.join(local_snapshot_data_dir,
+                                              os.path.basename(archive_snapshot_name))
+            if os.path.exists(local_archive_path):
+                self.log.info('Remove previous file {}'.format(local_archive_path))
+                os.remove(local_archive_path)
+
+            node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
+            return local_archive_path
+
+        except Exception as e:
+            self.log.error("Unable to downlaod Prometheus data: %s" % e)
+            return ""
+
+    def get_monitoring_data_stack(self, node):
+        archive_name = "monitoring_data_stack_{0.monitor_branch}_{0.monitoring_version}.tar.gz".format(self)
+
+        sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
+
+        node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir))
+        sct_dashboard_file = self.get_sct_dashboards_config(node)
+        node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
+
+        annotations_json = self.get_grafana_annotations(node)
+        tmp_dir = tempfile.mkdtemp()
+        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
+            f.write(annotations_json)
+        node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
+
+        node.remoter.run("cd {}; tar -czvf {} {}/".format(self.monitor_install_path_base,
+                                                          archive_name,
+                                                          os.path.basename(self.monitor_install_path)),
+                         ignore_status=True)
+        node.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
+                           dst=self.logdir)
+        return os.path.join(self.logdir, archive_name)
+
+    def download_monitoring_data_stack(self):
+        for node in self.nodes:
+            local_path_to_monitor_stack = self.get_monitoring_data_stack(node)
+            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
+
+            return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
 
 
 class NoMonitorSet(object):
 
     def __init__(self):
-        logger = logging.getLogger('avocado.test')
+
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.nodes = []
 
@@ -3131,4 +3751,7 @@ class NoMonitorSet(object):
         pass
 
     def destroy(self):
+        pass
+
+    def collect_logs(self, storing_dir):
         pass

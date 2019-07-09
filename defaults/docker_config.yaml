@@ -1,0 +1,2 @@
+docker_image: 'scylladb/scylla'
+user_credentials_path: '~/.ssh/scylla-test'

@@ -14,7 +14,7 @@
 # Copyright (c) 2017 ScyllaDB
 
 import os
-from avocado import main
+
 from sdcm.tester import ClusterTester
 
 
@@ -24,6 +24,7 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
 
     :avocado: enable
     """
+
     def __init__(self, *args, **kwargs):
         super(PerformanceRegressionUserProfilesTest, self).__init__(*args, **kwargs)
         self.create_stats = False
@@ -33,8 +34,8 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
             ks = [line.split(':')[-1].strip() for line in fdr.readlines() if line.startswith('keyspace:')]
         if ks:
             self.log.debug('Drop keyspace {}'.format(ks[0]))
-            session = self.cql_connection_patient(self.db_cluster.nodes[0])
-            session.execute('DROP KEYSPACE IF EXISTS {};'.format(ks[0]))
+            with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                session.execute('DROP KEYSPACE IF EXISTS {};'.format(ks[0]))
 
     def test_user_profiles(self):
         """
@@ -58,7 +59,3 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
                     self.update_test_details(scylla_conf=True)
                     self.check_regression()
                     self._clean_keyspace(cs_profile)
-
-
-if __name__ == '__main__':
-    main()

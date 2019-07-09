@@ -12,135 +12,117 @@
 # Copyright (c) 2016 ScyllaDB
 
 import os
-import tempfile
-import shutil
-
-from .collectd import ScyllaCollectdSetup
-
-
-class CassandraStressExporterSetup(object):
-
-    def exporter_install(self):
-        cassandra_stress_exporter = """#!/usr/bin/env python
-#
-# Run cassandra-stress like this:
-#
-#    cassandra-stress (...) -log file=cs.log
-#
-# Run this exporter like this:
-#
-#    tail -f cs.log | sudo ./cassandra_stress_exporter &
-#
-# You don't need to restart exporter across c-s restarts.
-#
-# Exports the following metrics:
-#
-#    cassandra_stress-0/gauge-ops
-#    cassandra_stress-0/gauge-lat_mean
-#    cassandra_stress-0/gauge-lat_perc_50
-#    cassandra_stress-0/gauge-lat_perc_95
-#    cassandra_stress-0/gauge-lat_perc_99
-#    cassandra_stress-0/gauge-lat_perc_99
-#    cassandra_stress-0/gauge-lat_perc_max
-#    cassandra_stress-0/gauge-errors
-#
-
-import sys
-import socket
-import os
 import time
 
-cs_opt = ''
-if len(sys.argv) > 1:
-    cs_opt = '_' + sys.argv[1]
+from sdcm.utils import FileFollowerThread
 
-hostname = socket.gethostname().split('.')[0]
 
-server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-server.connect('/var/run/collectd-unixsock')
+class CassandraStressExporter(FileFollowerThread):
+    METRICS = {}
 
-def readlines(sock, recv_buffer=4096, delim=os.linesep):
-    buffer = ''
-    data = True
-    while data:
-        data = sock.recv(recv_buffer)
-        buffer += data
-        while buffer.find(delim) != -1:
-            line, buffer = buffer.split(os.linesep, 1)
-            yield line
-    return
+    def __init__(self, instance_name, metrics, cs_operation, cs_log_filename, loader_idx, cpu_idx):
+        super(CassandraStressExporter, self).__init__()
+        self.metrics = metrics
+        self.cs_operation = cs_operation
+        self.cs_log_filename = cs_log_filename
+        gauge_name = 'collectd_cassandra_stress_%s_gauge' % self.cs_operation
+        if gauge_name not in self.METRICS:
+            self.METRICS[gauge_name] = self.metrics.create_gauge('collectd_cassandra_stress_%s_gauge' % self.cs_operation,
+                                                                 'Gauge for cassandra stress metrics',
+                                                                 ['cassandra_stress_%s' % self.cs_operation, 'instance', 'loader_idx', 'cpu_idx', 'type'])
+        self.cs_metric = self.METRICS[gauge_name]
+        self.instance_name = instance_name
+        self.loader_idx = loader_idx
+        self.cpu_idx = cpu_idx
 
-class ValuePack:
-    def __init__(self):
-        self.messages = []
-        self.time = time.time()
-    def add(self, plugin, plugin_instance, type, type_instance, val):
-        self.messages.append('PUTVAL "%s/%s-%s/%s-%s" %f:%f%s' % (hostname, plugin, plugin_instance, type, type_instance, self.time, val, os.linesep))
-    def send(self):
-        for msg in self.messages:
-            server.send(msg)
-        lines = readlines(server)
-        for msg in self.messages:
-            reply = next(lines)
-            if not reply.startswith('0 Success'):
-                print('collectd error: ' + reply)
+    def set_metric(self, name, value):
+        self.cs_metric.labels(0, self.instance_name, self.loader_idx, self.cpu_idx, name).set(value)
 
-start_time = time.time()
-plugin = 'cassandra_stress' + cs_opt
-plugin_instance = '0'
+    def clear_metrics(self):
+        if self.cs_metric:
+            for metric_name in ['ops', 'lat_mean', 'lat_med', 'lat_perc_95', 'lat_perc_99', 'lat_perc_999', 'lat_max', 'errors']:
+                self.set_metric(metric_name, 0.0)
 
-with os.fdopen(sys.stdin.fileno(), 'r', 1) as input:
-    while True:
-        line = sys.stdin.readline()
+    def run(self):
+        while not self.stopped():
+            exists = os.path.isfile(self.cs_log_filename)
+            if not exists:
+                time.sleep(0.5)
+                continue
 
-        if not line.startswith('total,'):
-            continue
+            for line in self.follow_file(self.cs_log_filename):
+                if self.stopped():
+                    break
 
-        if time.time() - start_time < 1.0: # Skip existing lines
-            continue
+                if not 'total,' in line:
+                    continue
 
-        cols = [element.strip() for element in line.split(',')]
+                cols = [element.strip() for element in line.split(',')]
 
-        ops = float(cols[2])
-        lat_mean = float(cols[5])
-        lat_med = float(cols[6])
-        lat_perc_95 = float(cols[7])
-        lat_perc_99 = float(cols[8])
-        lat_perc_999 = float(cols[9])
-        lat_max = float(cols[10])
-        errors = int(cols[13])
+                ops = float(cols[2])
+                lat_mean = float(cols[5])
+                lat_med = float(cols[6])
+                lat_perc_95 = float(cols[7])
+                lat_perc_99 = float(cols[8])
+                lat_perc_999 = float(cols[9])
+                lat_max = float(cols[10])
+                errors = int(cols[13])
 
-        pack = ValuePack()
-        pack.add(plugin, plugin_instance, 'gauge', 'ops', ops)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_mean', lat_mean)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_perc_50', lat_med)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_perc_95', lat_perc_95)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_perc_99', lat_perc_99)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_perc_99.9', lat_perc_999)
-        pack.add(plugin, plugin_instance, 'gauge', 'lat_perc_max', lat_max)
-        pack.add(plugin, plugin_instance, 'gauge', 'errors', errors)
-        pack.send()
+                self.set_metric('ops', ops)
+                self.set_metric('lat_mean', lat_mean)
+                self.set_metric('lat_med', lat_med)
+                self.set_metric('lat_perc_95', lat_perc_95)
+                self.set_metric('lat_perc_99', lat_perc_99)
+                self.set_metric('lat_perc_999', lat_perc_999)
+                self.set_metric('lat_max', lat_max)
+                self.set_metric('errors', errors)
 
-    server.close()
-"""
 
-        tmp_dir_exporter = tempfile.mkdtemp(prefix='cassandra-stress-tools')
-        tmp_path_exporter = os.path.join(tmp_dir_exporter, 'cassandra_stress_exporter')
-        tmp_path_remote = '/tmp/cassandra_stress_exporter'
-        system_path_remote = '/usr/bin/cassandra_stress_exporter'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
-            tmp_cfg_prom.write(cassandra_stress_exporter)
-        try:
-            self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
-            self.node.remoter.run('sudo mv %s %s' %
-                                  (tmp_path_remote, system_path_remote))
-            self.node.remoter.run('sudo chmod +x %s' % system_path_remote)
-        finally:
-            shutil.rmtree(tmp_dir_exporter)
+if __name__ == "__main__":
+    import tempfile
+    import logging
+    import requests
+    import unittest
 
-    def install(self, node):
-        self.node = node
-        self.exporter_install()
+    logging.basicConfig(level=logging.DEBUG)
+    from sdcm.prometheus import start_metrics_server
+    from sdcm.prometheus import nemesis_metrics_obj
 
-        collectd_setup = ScyllaCollectdSetup()
-        collectd_setup.install(node)
+    class TestCassandraStressExporter(unittest.TestCase):
+        @classmethod
+        def setUpClass(cls):
+            cls.prom_address = start_metrics_server()
+            cls.metrics = nemesis_metrics_obj()
+
+        def test_01(self):
+            tmp_file = tempfile.NamedTemporaryFile(mode='w+')
+            cs_exporter = CassandraStressExporter("127.0.0.1", self.metrics, 'write', tmp_file.name, loader_idx=1, cpu_idx=0)
+
+            res = cs_exporter.start()
+
+            line = '[34.241.184.166] [stdout] total,      83086089,   70178,   70178,   70178,    14.2,    11.9,    33.2,    53.6,    77.7,   105.4, 1220.0,  0.00868,      0,      0,       0,       0,       0,       0'
+
+            tmp_file.file.write(line + '\n')
+            tmp_file.file.flush()
+
+            tmp_file.file.write(line[:30])
+            tmp_file.file.flush()
+
+            time.sleep(2)
+
+            tmp_file.file.write(line[30:] + '\n')
+            tmp_file.file.flush()
+
+            tmp_file.file.write(line[30:])
+            tmp_file.file.flush()
+
+            time.sleep(2)
+            output = requests.get("http://{}/metrics".format(self.prom_address)).text
+            assert 'collectd_cassandra_stress_write_gauge{cassandra_stress_write="0",cpu_idx="0",instance="127.0.0.1",loader_idx="1",type="ops"} 70178.0' in output
+
+            time.sleep(1)
+            cs_exporter.stop()
+
+            res.result()
+
+    unittest.main()

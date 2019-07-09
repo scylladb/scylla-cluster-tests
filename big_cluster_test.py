@@ -15,21 +15,17 @@
 
 import logging
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_resources_on_exception
+from sdcm.tester import teardown_on_exception
 
 
 class HugeClusterTest(ClusterTester):
 
     """
     Test a huge Scylla cluster
-
-    :avocado: enable
     """
 
-    @clean_resources_on_exception
+    @teardown_on_exception
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
@@ -56,7 +52,3 @@ class HugeClusterTest(ClusterTester):
         Test a huge Scylla cluster
         """
         self.run_stress(stress_cmd=self.params.get('stress_cmd'), duration=20)
-
-
-if __name__ == '__main__':
-    main()

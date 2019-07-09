@@ -15,8 +15,6 @@
 
 import time
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 
 
@@ -24,8 +22,6 @@ class CQLExampleTest(ClusterTester):
 
     """
     Example test of how to establish CQL connections and run commands on them.
-
-    :avocado: enable
     """
 
     def test_cql_example(self):
@@ -33,24 +29,20 @@ class CQLExampleTest(ClusterTester):
         Create a table, run a few sql statements
         """
         node = self.db_cluster.nodes[0]
-        session = self.cql_connection_patient(node)
-        self.create_ks(session, 'ks', 1)
-        session.execute("""
-            CREATE TABLE test1 (
-                k int,
-                c1 int,
-                c2 int,
-                v1 int,
-                v2 int,
-                PRIMARY KEY (k, c1, c2)
-            );
-        """)
-        time.sleep(1)
-        session.execute("INSERT INTO test1 (k, c1, c2, v1, v2) "
-                        "VALUES (1, 2, 3, 4, 5)")
-        res = session.execute("SELECT v1, v2 from test1")
-        self.log.debug(res)
-
-
-if __name__ == '__main__':
-    main()
+        with self.cql_connection_patient(node) as session:
+            self.create_keyspace(session, 'ks', 1)
+            session.execute("""
+                CREATE TABLE test1 (
+                    k int,
+                    c1 int,
+                    c2 int,
+                    v1 int,
+                    v2 int,
+                    PRIMARY KEY (k, c1, c2)
+                );
+            """)
+            time.sleep(1)
+            session.execute("INSERT INTO test1 (k, c1, c2, v1, v2) "
+                            "VALUES (1, 2, 3, 4, 5)")
+            res = session.execute("SELECT v1, v2 from test1")
+            self.log.debug(res)

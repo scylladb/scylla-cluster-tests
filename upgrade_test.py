@@ -12,24 +12,49 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-
-
+import inspect
 import random
 import time
 import re
+import os
 
-from avocado import main
+from pkg_resources import parse_version
 
-from sdcm.nemesis import RollbackNemesis
-from sdcm.nemesis import UpgradeNemesis
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm import wait
+from functools import wraps
+
+
+def truncate_entries(func):
+    @wraps(func)
+    def inner(self, *args, **kwargs):
+        # Perform validation of truncate entries in case the new version is 3.1 or more
+        node = args[0]
+        if self.truncate_entries_flag:
+            base_version = self.params.get('scylla_version', default='')
+            system_truncated = True if base_version.startswith('3.1') else False
+
+            with self.cql_connection_patient(node, keyspace='truncate_ks') as session:
+                self.cql_truncate_simple_tables(session=session, rows=self.insert_rows)
+                self.validate_truncated_entries_for_table(session=session, system_truncated=system_truncated)
+
+        func_result = func(self, *args, **kwargs)
+
+        result = node.remoter.run('scylla --version')
+        new_version = result.stdout
+        if new_version and parse_version(new_version) >= parse_version('3.1'):
+            # re-new connection
+            with self.cql_connection_patient(node, keyspace='truncate_ks') as session:
+                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+                self.read_data_from_truncated_tables(session=session)
+                self.cql_insert_data_to_simple_tables(session=session, rows=self.insert_rows)
+        return func_result
+    return inner
 
 
 class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
-
-    :avocado: enable
     """
     orig_ver = None
     new_ver = None
@@ -39,10 +64,44 @@ class UpgradeTest(FillDatabaseData):
     # `minor_release` (eg: 2.2.1 <-> 2.2.5, 2018.1.0 <-> 2018.1.1)
     upgrade_rollback_mode = None
 
+    # expected format version after upgrade and nodetool upgradesstables called
+    # would be recalculated after all the cluster finish upgrade
+    expected_sstable_format_version = 'mc'
+
+    def read_data_from_truncated_tables(self, session):
+        session.execute("USE truncate_ks")
+        truncate_query = 'SELECT COUNT(*) FROM {}'
+        tables_name = self.get_tables_name_of_keyspace(session=session, keyspace_name='truncate_ks')
+        for table_name in tables_name:
+            count = self.rows_to_list(session.execute(truncate_query.format(table_name)))
+            self.assertEqual(str(count[0][0]), '0',
+                             msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
+                             .format(table_name, count[0][0]))
+
+    def validate_truncated_entries_for_table(self, session, system_truncated=False):
+        tables_id = self.get_tables_id_of_keyspace(session=session, keyspace_name='truncate_ks')
+
+        for table_id in tables_id:
+            if system_truncated:
+                # validate truncation entries in the system.truncated table - expected entry
+                truncated_time = self.get_truncated_time_from_system_truncated(session=session, table_id=table_id)
+                self.assertTrue(truncated_time,
+                                msg='Expected truncated entry in the system.truncated table, but it\'s not found')
+
+            # validate truncation entries in the system.local table - not expected entry
+            truncated_time = self.get_truncated_time_from_system_local(session=session)
+            if system_truncated:
+                self.assertEqual(truncated_time, [[None]],
+                                 msg='Not expected truncated entry in the system.local table, but it\'s found')
+            else:
+                self.assertTrue(truncated_time,
+                                msg='Expected truncated entry in the system.local table, but it\'s not found')
+
+    @truncate_entries
     def upgrade_node(self, node):
-        new_scylla_repo = self.params.get('new_scylla_repo', None,  None)
-        new_version = self.params.get('new_version', None,  '')
-        upgrade_node_packages = self.params.get('upgrade_node_packages')
+        new_scylla_repo = self.params.get('new_scylla_repo', default=None)
+        new_version = self.params.get('new_version', default='')
+        upgrade_node_packages = self.params.get('upgrade_node_packages', default=None)
         self.log.info('Upgrading a Node')
 
         # We assume that if update_db_packages is not empty we install packages from there.
@@ -58,8 +117,8 @@ class UpgradeTest(FillDatabaseData):
             # replace the packages
             node.remoter.run('rpm -qa scylla\*')
             # flush all memtables to SSTables
-            node.remoter.run('sudo nodetool drain')
-            node.remoter.run('sudo nodetool snapshot')
+            node.run_nodetool("drain")
+            node.run_nodetool("snapshot")
             node.stop_scylla_server()
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
@@ -78,8 +137,8 @@ class UpgradeTest(FillDatabaseData):
             assert new_scylla_repo.startswith('http')
             node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
-            node.remoter.run('sudo nodetool drain')
-            node.remoter.run('sudo nodetool snapshot')
+            node.run_nodetool("drain")
+            node.run_nodetool("snapshot")
             node.stop_scylla_server(verify_down=False)
 
             orig_is_enterprise = node.is_enterprise
@@ -113,6 +172,9 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run('sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
         if self.params.get('test_sst3', default=None):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
+        authorization_in_upgrade = self.params.get('authorization_in_upgrade', default=None)
+        if authorization_in_upgrade:
+            node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" % authorization_in_upgrade)
         node.start_scylla_server()
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
@@ -120,16 +182,19 @@ class UpgradeTest(FillDatabaseData):
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
 
+        self.upgradesstables_if_command_available(node)
+
+    @truncate_entries
     def rollback_node(self, node):
         self.log.info('Rollbacking a Node')
-        #fixme: auto identify new_introduced_pkgs, remove this parameter
+        # fixme: auto identify new_introduced_pkgs, remove this parameter
         new_introduced_pkgs = self.params.get('new_introduced_pkgs', default=None)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         # flush all memtables to SSTables
-        node.remoter.run('nodetool drain')
+        node.run_nodetool("drain")
         # backup the data
-        node.remoter.run('nodetool snapshot')
+        node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
 
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
@@ -183,11 +248,79 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
         if self.params.get('test_sst3', default=None):
             node.remoter.run('sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
+        if self.params.get('remove_authorization_in_rollback', default=None):
+            node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         node.start_scylla_server()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
         assert orig_ver != new_ver, "scylla-server version isn't changed"
+
+        self.upgradesstables_if_command_available(node)
+
+    def upgradesstables_if_command_available(self, node, queue=None):
+        upgradesstables_available = False
+        upgradesstables_supported = node.remoter.run(
+            'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
+        if "yes" in upgradesstables_supported.stdout:
+            upgradesstables_available = True
+            self.log.debug("calling upgradesstables")
+            node.run_nodetool(sub_cmd="upgradesstables", args="-a")
+        if queue:
+            queue.put(upgradesstables_available)
+            queue.task_done()
+
+    def get_highest_supported_sstable_version(self):
+        """
+        find the highest sstable format version supported in the cluster
+
+        :return:
+        """
+        sstable_format_regex = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
+
+        versions_set = set()
+
+        for node in self.db_cluster.nodes:
+            if os.path.exists(node.database_log):
+                for line in open(node.database_log).readlines():
+                    match = sstable_format_regex.search(line)
+                    if match:
+                        versions_set.add(match.group(1).lower())
+
+        return max(versions_set)
+
+    def wait_for_sstable_upgrade(self, node, queue=None):
+        all_tables_upgraded = True
+
+        def wait_for_node_to_finish():
+            try:
+                result = node.remoter.run("sudo find /var/lib/scylla/data/system -type f ! -path '*snapshots*' | xargs -I{} basename {}")
+                all_sstable_files = result.stdout.splitlines()
+
+                sstable_version_regex = re.compile(r'(\w+)-\d+-(.+)\.(db|txt|sha1|crc32)')
+
+                sstable_versions = list(
+                    set([sstable_version_regex.search(f).group(1) for f in all_sstable_files if sstable_version_regex.search(f)]))
+
+                assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(sstable_versions)
+                assert sstable_versions[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
+                    self.expected_sstable_format_version, sstable_versions[0])
+            except Exception as ex:
+                self.log.warning(ex)
+                return False
+            else:
+                return True
+
+        try:
+            self.log.debug("Starting to wait for upgardesstables to finish")
+            wait.wait_for(func=wait_for_node_to_finish, step=30, timeout=900, throw_exc=True,
+                          text="Waiting until upgardesstables is finished")
+        except Exception:
+            all_tables_upgraded = False
+        finally:
+            if queue:
+                queue.put(all_tables_upgraded)
+                queue.task_done()
 
     default_params = {'timeout': 650000}
 
@@ -196,6 +329,7 @@ class UpgradeTest(FillDatabaseData):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
+        self.truncate_entries_flag = False  # not perform truncate entries test
         self.log.info('Populate DB with many types of tables and data')
         self.fill_db_data()
         self.log.info('Run some Queries to verify data BEFORE UPGRADE')
@@ -244,6 +378,11 @@ class UpgradeTest(FillDatabaseData):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
+        # In case the target version >= 3.1 we need to perform test for truncate entries
+        target_upgrade_version = self.params.get('target_upgrade_version', default='')
+        self.truncate_entries_flag = False
+        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1'):
+            self.truncate_entries_flag = True
 
         self.log.info('Populate DB with many types of tables and data')
         self.fill_db_data()
@@ -253,13 +392,18 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Re-Populate DB with many types of tables and data')
         self.fill_db_data()
 
-        ### sst3 workload (20m): prepare write
-        self.log.info('Starting c-s sst3 workload for 20m to prepare data')
-        stress_cmd_sst3_prepare = self.params.get('stress_cmd_sst3_prepare')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_prepare, profile='data_dir/sst3_schema.yaml')
+        # write workload during entire test
+        self.log.info('Starting c-s write workload during entire test')
+        write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
+        entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
-        # wait for the 20m sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        # complex workload: prepare write
+        self.log.info('Starting c-s complex workload (5M) to prepare data')
+        stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
+        complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
+
+        # wait for the complex workload to finish
+        self.verify_stress_thread(complex_cs_thread_pool)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -269,32 +413,39 @@ class UpgradeTest(FillDatabaseData):
         # random order
         random.shuffle(indexes)
 
-        ### prepare write workload
+        # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
-        prepare_write_stress_queue = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
-        node = self.db_cluster.nodes[0]
-        cmd = 'ALTER TABLE keyspace1.standard1 with dclocal_read_repair_chance = 0.0 and read_repair_chance =0.0'
-        if self.params.get('disable_read_repair_chance', default=None):
-            node.remoter.run('cqlsh -e "{}" {}'.format(cmd, node.private_ip_address), verbose=True)
+        # Prepare keyspace and tables for truncate test
+        if self.truncate_entries_flag:
+            self.insert_rows = 10
+            self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
 
         # upgrade first node
         self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+        self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the prepare write workload to finish
-        self.verify_stress_thread(prepare_write_stress_queue)
+        self.verify_stress_thread(prepare_write_cs_thread_pool)
 
-        ### read workload
+        # read workload (cl=QUORUM)
+        self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
+        stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
+        read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
+        # wait for the read workload to finish
+        self.verify_stress_thread(read_stress_queue)
+
+        # read workload
         self.log.info('Starting c-s read workload for 10m')
         stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
-        read_10m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+        read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
@@ -304,71 +455,93 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
         self.upgrade_node(self.db_cluster.node_to_upgrade)
         self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-        self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+        self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the 10m read workload to finish
-        self.verify_stress_thread(read_10m_stress_queue)
+        self.verify_stress_thread(read_10m_cs_thread_pool)
 
-        ### read workload (cl=ALL)
-        self.log.info('Starting c-s read workload (cl=ALL n=10000000)')
-        stress_cmd_read_clall = self.params.get('stress_cmd_read_clall')
-        read_clall_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_clall)
-        # wait for the cl=ALL read workload to finish
-        self.verify_stress_thread(read_clall_stress_queue)
-
-        ### read workload (20m)
+        # read workload (20m)
         self.log.info('Starting c-s read workload for 20m')
         stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
-        read_20m_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+        read_20m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
 
         # rollback second node
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
         self.rollback_node(self.db_cluster.nodes[indexes[1]])
         self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
-        self.db_cluster.nodes[indexes[1]].remoter.run("nodetool status")
+        self.db_cluster.nodes[indexes[1]].run_nodetool("status")
 
         for i in indexes[1:]:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
             self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.remoter.run("nodetool status")
+            self.db_cluster.node_to_upgrade.run_nodetool("status")
 
         # wait for the 20m read workload to finish
-        self.verify_stress_thread(read_20m_stress_queue)
+        self.verify_stress_thread(read_20m_cs_thread_pool)
+
+        self.verify_stress_thread(entire_write_cs_thread_pool)
+
+        # figure out what is the last supported sstable version
+        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
+
+        # run 'nodetool upgradesstables' on all nodes and check/wait for all file to be upgraded
+        upgradesstables_available = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+
+        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+        if all(upgradesstables_available):
+            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
+            assert all(tables_upgraded), "Some nodes failed to upgrade the sstable format {}".format(tables_upgraded)
+
+        verify_stress_after_cluster_upgrade = self.params.get('verify_stress_after_cluster_upgrade')
+        verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
+        self.verify_stress_thread(verify_stress_cs_thread_pool)
 
         self.log.info('Run some Queries to verify data AFTER UPGRADE')
         self.verify_db_data()
 
-        ### sst3 workload: verify data by simple read cl=ALL
-        self.log.info('Starting c-s sst3 workload to verify data by simple read')
-        stress_cmd_sst3_verify_read = self.params.get('stress_cmd_sst3_verify_read')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_read, profile='data_dir/sst3_schema.yaml')
+        # complex workload: verify data by simple read cl=ALL
+        self.log.info('Starting c-s complex workload to verify data by simple read')
+        stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
+        complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
+        # wait for the read complex workload to finish
+        self.verify_stress_thread(complex_cs_thread_pool)
 
-        # wait for the read sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching the data lose.
+        # But the execute time of workloads are not exact, so let only use basic prepare write & read verify for complex workloads,
+        # and comment two complex workloads.
+        #
+        # TODO: retest commented workloads and decide to enable or delete them.
+        #
+        # complex workload: verify data by multiple ops
+        #self.log.info('Starting c-s complex workload to verify data by multiple ops')
+        #stress_cmd_complex_verify_more = self.params.get('stress_cmd_complex_verify_more')
+        #complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_more, profile='data_dir/complex_schema.yaml')
 
-        ### sst3 workload: verify data by multiple ops
-        self.log.info('Starting c-s sst3 workload to verify data by multiple ops')
-        stress_cmd_sst3_verify_more = self.params.get('stress_cmd_sst3_verify_more')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_more, profile='data_dir/sst3_schema.yaml')
+        # wait for the complex workload to finish
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
-        # wait for the sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        # complex workload: verify data by delete 1/10 data
+        #self.log.info('Starting c-s complex workload to verify data by delete')
+        #stress_cmd_complex_verify_delete = self.params.get('stress_cmd_complex_verify_delete')
+        #complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_delete, profile='data_dir/complex_schema.yaml')
 
-        ### sst3 workload: verify data by delete 1/10 data
-        self.log.info('Starting c-s sst3 workload to verify data by delete')
-        stress_cmd_sst3_verify_delete = self.params.get('stress_cmd_sst3_verify_delete')
-        sst3_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_sst3_verify_delete, profile='data_dir/sst3_schema.yaml')
+        # wait for the complex workload to finish
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
-        # wait for the sst3 workload to finish
-        self.verify_stress_thread(sst3_stress_queue)
+        error_factor = 2
+        schema_load_error_num = 0
+
+        for node in self.db_cluster.nodes:
+            errors = node.search_database_log(search_pattern='Failed to load schema version',
+                                              start_from_beginning=True,
+                                              publish_events=False)
+            schema_load_error_num += len(errors)
+        self.log.debug('schema_load_error_num: %d' % schema_load_error_num)
+        assert schema_load_error_num <= error_factor * 8 * len(self.db_cluster.nodes), 'Only allowing shards_num * %s schema load errors per host during the entire test' % error_factor
 
         self.log.debug('start sstabledump verify')
-        self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_sst3/ -type f |grep -v manifest.json |grep -v snapshots`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
+        self.db_cluster.nodes[0].remoter.run('for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || exit 1; done', verbose=True)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
-
-
-if __name__ == '__main__':
-    main()

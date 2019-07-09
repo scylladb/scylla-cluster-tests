@@ -4,18 +4,17 @@ import uuid
 import os
 import tempfile
 import yaml
-import getpass
+import json
 
 from botocore.exceptions import WaiterError, ClientError
-import boto3.session
-from avocado.utils import runtime as avocado_runtime
 from textwrap import dedent
 from threading import Thread
+from datetime import datetime
 
 import cluster
 import ec2_client
-from sdcm.utils import retrying
-
+from sdcm.utils import retrying, list_instances_aws
+from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from . import wait
 
 logger = logging.getLogger(__name__)
@@ -28,25 +27,8 @@ SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
 
 
-def _prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = cluster.DEFAULT_USER_PREFIX
-    return '%s-%s' % (user_prefix, base_name)
-
-
-def clean_aws_credential(region_name, credential_key_name, credential_key_file):
-    try:
-        session = boto3.session.Session(region_name=region_name)
-        service = session.resource('ec2')
-        key_pair_info = service.KeyPair(credential_key_name)
-        key_pair_info.delete()
-        cluster.remove_if_exists(credential_key_file)
-    except Exception as details:
-        logger.exception(str(details))
-
-
 def create_tags_list():
-    tags_list = [{'Key': k, 'Value': v} for k,v in cluster.create_common_tags().items()]
+    tags_list = [{'Key': k, 'Value': v} for k, v in cluster.create_common_tags().items()]
     if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
         tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
@@ -68,21 +50,12 @@ class AWSCluster(cluster.BaseCluster):
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None):
+                 node_prefix='node', n_nodes=10, params=None, node_type=None):
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
         for idx, region_name in enumerate(region_names):
             credential = credentials[idx]
-            if credential.type == 'generated':
-                credential_key_name = credential.key_pair_name
-                credential_key_file = credential.key_file
-                if params.get('failure_post_behavior') == 'destroy':
-                    avocado_runtime.CURRENT_TEST.runner_queue.put({'func_at_exit': clean_aws_credential,
-                                                                   'args': (region_name,
-                                                                            credential_key_name,
-                                                                            credential_key_file),
-                                                                   'once': True})
             cluster.CREDENTIALS.append(credential)
 
         self._ec2_ami_id = ec2_ami_id
@@ -97,10 +70,10 @@ class AWSCluster(cluster.BaseCluster):
             ec2_block_device_mappings = []
         self._ec2_block_device_mappings = ec2_block_device_mappings
         self._ec2_user_data = ec2_user_data
-        self._ec2_ami_id = ec2_ami_id
         self.region_names = region_names
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
-
+        self.params = params
+        self.node_type = node_type
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -146,8 +119,9 @@ class AWSCluster(cluster.BaseCluster):
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count,  interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, tags_list=[]):
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
+                                   spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -188,7 +162,7 @@ class AWSCluster(cluster.BaseCluster):
                 if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
                     self.log.debug('Cannot create spot instance(-s): %s.'
                                    'Creating on demand instance(-s) instead.', cl_ex)
-                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
                     instances.extend(instances_i)
                 else:
                     raise
@@ -198,6 +172,7 @@ class AWSCluster(cluster.BaseCluster):
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
 
         tags_list = create_tags_list()
+        tags_list.append({'Key': 'NodeType', 'Value': self.node_type})
 
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -253,8 +228,23 @@ class AWSCluster(cluster.BaseCluster):
         return instances
 
     def _get_instances(self, dc_idx):
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx])
-        return [ec2.get_instance_by_private_ip(ip) for ip in self._node_private_ips]
+
+        test_id = self.params.get('test_id', default=None)
+        if not test_id:
+            raise ValueError("test_id should be configured for using reuse_cluster")
+
+        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
+                                   spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
+        instances = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, region_name=self.region_names[dc_idx])
+
+        def sort_by_index(item):
+            for tag in item['Tags']:
+                if tag['Key'] == 'NodeIndex':
+                    return tag['Value']
+            else:
+                return '0'
+        instances = sorted(instances, key=sort_by_index)
+        return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
     def update_bootstrap(self, ec2_user_data, enable_auto_bootstrap):
         """
@@ -294,9 +284,9 @@ class AWSCluster(cluster.BaseCluster):
     def _create_node(self, instance, ami_username, node_prefix, node_index,
                      base_logdir, dc_idx):
         return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
-                       credentials=self._credentials[dc_idx], ami_username=ami_username,
+                       credentials=self._credentials[dc_idx], parent_cluster=self, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, dc_idx=dc_idx)
+                       base_logdir=base_logdir, dc_idx=dc_idx, node_type=self.node_type)
 
 
 class AWSNode(cluster.BaseNode):
@@ -305,9 +295,9 @@ class AWSNode(cluster.BaseNode):
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, ec2_instance, ec2_service, credentials,
+    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2_service = ec2_service
@@ -319,6 +309,7 @@ class AWSNode(cluster.BaseNode):
                           'key_file': credentials.key_file}
         self._spot_aws_termination_task = None
         super(AWSNode, self).__init__(name=name,
+                                      parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
@@ -326,6 +317,8 @@ class AWSNode(cluster.BaseNode):
         if not cluster.Setup.REUSE_CLUSTER:
             tags_list = create_tags_list()
             tags_list.append({'Key': 'Name', 'Value': name})
+            tags_list.append({'Key': 'NodeIndex', 'Value': str(node_index)})
+            tags_list.append({'Key': 'NodeType', 'Value': node_type})
             if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
                 self.log.info('Test duration set to %s. '
                               'Keep cluster on failure %s. '
@@ -376,8 +369,16 @@ class AWSNode(cluster.BaseNode):
                 retries += 1
 
         if not ok:
-            raise cluster.NodeError('AWS instance %s waiter error after '
-                                    'exponencial backoff wait' % self._instance.id)
+            try:
+                self._instance.reload()
+            except Exception as e:
+                self.log.exception("Error while reloading instance metadata: %s", e)
+            finally:
+                method_name = instance_method.__name__
+                instance_id = self._instance.id
+                self.log.debug(self._instance.meta.data)
+                msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(**locals())
+                raise cluster.NodeError(msg)
 
     @retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
               message="Waiting for instance to get public ip")
@@ -395,7 +396,13 @@ class AWSNode(cluster.BaseNode):
         if self._instance.spot_instance_request_id:
             logger.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
             return
+
+        event_filters = ()
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
+            # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
+            event_filters = DbEventsFilter(type="DATABASE_ERROR"), DbEventsFilter(type="SCHEMA_FAILURE"), \
+                DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type="FILESYSTEM_ERROR")
+
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                 sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
@@ -416,17 +423,33 @@ class AWSNode(cluster.BaseNode):
         self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
-            self.stop_scylla_server(verify_down=False)
-            self.start_scylla_server(verify_up=False)
+            try:
+                self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+                self.stop_scylla_server(verify_down=False)
+                self.start_scylla_server(verify_up=False)
+            finally:
+                if event_filters:
+                    for event_filter in event_filters:
+                        event_filter.cancel_filter()
 
     def reboot(self, hard=True, verify_ssh=True):
+        result = self.remoter.run('uptime -s')
+        pre_uptime = result.stdout
+
+        def uptime_changed():
+            result = self.remoter.run('uptime -s', ignore_status=True)
+            return pre_uptime != result.stdout
+
         if hard:
             self.log.debug('Hardly rebooting node')
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot', ignore_status=True)
+
+        # wait until the reboot is executed
+        wait.wait_for(func=uptime_changed, step=1, timeout=60, throw_exc=True)
+
         if verify_ssh:
             self.wait_ssh_up()
 
@@ -453,21 +476,30 @@ class AWSNode(cluster.BaseNode):
             if '404 - Not Found' not in status:
                 return status
         except Exception as details:
-            self.log.error('Error during getting aws termination notification %s' % details)
+            self.log.warning('Error during getting aws termination notification %s' % details)
         return None
 
     def monitor_aws_termination_thread(self):
         while True:
+            duration = 5
             if self.termination_event.isSet():
                 break
             self.wait_ssh_up(verbose=False)
-            result = self.get_aws_termination_notification()
-            if result:
-                self.log.warning('Got spot termination notification from AWS %s' % result)
-            time.sleep(5)
+            aws_message = self.get_aws_termination_notification()
+            if aws_message:
+                self.log.warning('Got spot termination notification from AWS %s' % aws_message)
+                terminate_action = json.loads(aws_message)
+                terminate_action_timestamp = time.mktime(datetime.strptime(terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
+                duration = terminate_action_timestamp - time.time() - 15
+                if duration <= 0:
+                    duration = 5
+                terminate_action['time-left'] = terminate_action_timestamp - time.time()
+                SpotTerminationEvent(node=self, aws_message=terminate_action)
+            time.sleep(duration)
 
     def start_aws_termination_monitoring(self):
         self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
+        self._spot_aws_termination_task.daemon = True
         self._spot_aws_termination_task.start()
 
     def get_console_output(self):
@@ -476,16 +508,24 @@ class AWSNode(cluster.BaseNode):
         Get console output of instance which is printed during initiating and loading
         Get only last 64KB of output data.
         """
-        output = self._ec2_service.meta.client.get_console_output(
+        result = self._ec2_service.meta.client.get_console_output(
             InstanceId=self._instance.id,
         )
-        return output['Output']
+        console_output = result.get('Output', '')
+
+        if not console_output:
+            self.log.warning('Some error during getting console output')
+        return console_output
 
     def get_console_screenshot(self):
-        imagedata = self._ec2_service.meta.client.get_console_screenshot(
+        result = self._ec2_service.meta.client.get_console_screenshot(
             InstanceId=self._instance.id
         )
-        return imagedata['ImageData']
+        imagedata = result.get('ImageData', '')
+
+        if not imagedata:
+            self.log.warning('Some error during getting console screenshot')
+        return imagedata
 
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
@@ -499,8 +539,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None):
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = cluster.Setup.test_id()
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
+        node_type = 'syclla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -520,8 +561,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
-        self.seed_nodes_private_ips = None
+                                               params=params,
+                                               node_type=node_type)
+        self.seed_nodes_ips = None
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
@@ -531,18 +573,12 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
         if self.nodes:
-            if dc_idx > 0:
-                node_public_ips = [node.public_ip_address for node
-                                   in self.nodes if node.is_seed]
-                seeds = ",".join(node_public_ips)
-                if not seeds:
-                    seeds = self.nodes[0].public_ip_address
-            else:
-                node_private_ips = [node.private_ip_address for node
-                                    in self.nodes if node.is_seed]
-                seeds = ",".join(node_private_ips)
-                if not seeds:
-                    seeds = self.nodes[0].private_ip_address
+            node_ips = [node.ip_address for node in self.nodes if node.is_seed]
+            seeds = ",".join(node_ips)
+
+            if not seeds:
+                seeds = self.nodes[0].ip_address
+
             ec2_user_data += ' --seeds %s ' % seeds
 
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
@@ -560,8 +596,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             server_encrypt=self._param_enabled('server_encrypt'),
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
+            authorizer=self.params.get('authorizer'),
         )
-        if len(self.datacenter) > 1:
+        if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,
@@ -571,10 +608,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if len(self.datacenter) > 1:
-            seed_address = self.get_seed_nodes_by_flag(private_ip=False)
-        else:
-            seed_address = self.get_seed_nodes_by_flag(private_ip=True)
+        seed_address = self.get_seed_nodes_by_flag()
 
         def scylla_ami_setup_done():
             """
@@ -606,7 +640,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
             node.wait_ssh_up(verbose=verbose)
             wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
-            if len(self.datacenter) > 1:
+            node.install_scylla_debuginfo()
+
+            if cluster.Setup.MULTI_REGION:
                 if not endpoint_snitch:
                     endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
@@ -616,8 +652,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.remoter.run('nodetool status', verbose=True, retry=5)
-
+        node.run_nodetool('status')
 
     def destroy(self):
         self.stop_nemesis()
@@ -637,9 +672,10 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = uuid.uuid4()
-        cluster_prefix = _prepend_user_prefix(user_prefix,
-                                              'cs-db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'cs-db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix,
+                                                     'cs-db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'cs-db-node')
+        node_type = 'cs-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
@@ -659,7 +695,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                cluster_prefix=cluster_prefix,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
-                                               params=params)
+                                               params=params,
+                                               node_type=node_type)
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -667,7 +704,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.receive_files(src='/etc/cassandra/cassandra.yaml',
                                    dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
-            conf_dict = yaml.load(yaml_stream)
+            conf_dict = yaml.load(yaml_stream, Loader=yaml.SafeLoader)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
             except:
@@ -714,8 +751,9 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
+        node_type = 'loader'
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseLoaderSet.__init__(self,
@@ -734,7 +772,8 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
-                            params=params)
+                            params=params,
+                            node_type=node_type)
 
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
@@ -744,8 +783,9 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
+        node_type = 'monitor'
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
                      (cluster_prefix, n_nodes))
         cluster.BaseMonitorSet.__init__(self,
@@ -765,4 +805,5 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
-                            params=params)
+                            params=params,
+                            node_type=node_type)

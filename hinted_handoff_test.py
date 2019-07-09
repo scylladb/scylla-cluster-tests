@@ -1,12 +1,9 @@
 import time
-from avocado import main
 from sdcm.tester import ClusterTester
 
 
 class HintedHandoffTest(ClusterTester):
-    """
-       :avocado: enable
-    """
+
     def __init__(self, *args, **kwargs):
         super(HintedHandoffTest, self).__init__(*args, **kwargs)
         self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 -schema 'replication(factor=3)' " \
@@ -39,7 +36,7 @@ class HintedHandoffTest(ClusterTester):
         node2 = self.db_cluster.nodes[1]
         node3 = self.db_cluster.nodes[2]
         self.log.info("Running write stress")
-        stress_queue = self.run_stress_thread(stress_cmd=self.stress_write_cmd, stress_num=1)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.stress_write_cmd, stress_num=1)
         data_set_size = self.get_data_set_size(self.stress_write_cmd)
         self.wait_data_dir_reaching(data_set_size * 0.5, node=node1)  # 50 percent of data set size (approximation)
         self.log.info("Stopping Scylla on node1")
@@ -49,7 +46,7 @@ class HintedHandoffTest(ClusterTester):
         self.log.info("Stopping Scylla on node2")
         node2.stop_scylla()
         self.log.info("Waiting for stress write to finish.")
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.log.info("Starting Scylla on node1 and node2...")
         node1.start_scylla()
         node2.start_scylla()
@@ -57,9 +54,5 @@ class HintedHandoffTest(ClusterTester):
         self.log.info("Stopping Scylla on node3")
         node3.stop_scylla()
         stress_queue = self.run_stress_thread(stress_cmd=self.stress_read_cmd, stress_num=1)
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
         self.verify_no_drops_and_errors(starting_from=self.start_time)
-
-
-if __name__ == '__main__':
-    main()

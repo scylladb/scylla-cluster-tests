@@ -8,7 +8,7 @@ pip install --upgrade pip
 yum install -y libvirt-devel  # needed for libvirt-python PIP package
 
 # Needed for PhantomJS
-yum install -y freetype-devel libpng-devel bzip2
+yum install -y freetype-devel libpng-devel bzip2 bitmap-fonts fontconfig
 
 # Needed for Cassandra Python driver
 yum install -y gcc
@@ -29,7 +29,9 @@ usermod -aG docker $USER || true
 if [ "$1" == "docker" ]; then
     ln -s /sct/sdcm /usr/lib/python2.7/site-packages/sdcm
 else
-    grep -v '^#' requirements-python.txt | xargs -t -L 1 pip install
+    pip install -r requirements-python.txt
+    pre-commit install
+
     ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm
     echo "========================================================="
     echo "Please run 'aws configure' to configure AWS CLI and then"

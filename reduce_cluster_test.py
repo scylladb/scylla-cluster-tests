@@ -16,10 +16,8 @@
 import logging
 import datetime
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
-from sdcm.tester import clean_resources_on_exception
+from sdcm.tester import teardown_on_exception
 from sdcm.nemesis import Nemesis
 from sdcm.nemesis import log_time_elapsed
 import time
@@ -36,11 +34,9 @@ class DecommissionNoAddMonkey(Nemesis):
 class ReduceClusterTest(ClusterTester):
     """
     Test scylla cluster reduction (removing nodes to shrink cluster from initial cluster size to target cluster size).
-
-    :avocado: enable
     """
 
-    @clean_resources_on_exception
+    @teardown_on_exception
     def setUp(self):
         self.credentials = None
         self.db_cluster = None
@@ -95,8 +91,8 @@ class ReduceClusterTest(ClusterTester):
         nodes_to_remove = self._cluster_starting_size - self._cluster_target_size
         # 60 minutes should be long enough for each node to do decommission
         duration = 60 * nodes_to_remove
-        stress_queue = self.run_stress_thread(stress_cmd=self.get_stress_cmd(),
-                                              duration=duration)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.get_stress_cmd(),
+                                                duration=duration)
 
         # Wait for cluster is filled with data
         # Set space_node_threshold in config file for the size
@@ -126,7 +122,7 @@ class ReduceClusterTest(ClusterTester):
         # Kill c-s when decommission is done
         self.kill_stress_thread()
 
-        self.verify_stress_thread(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def test_reduce_4_to_3(self):
         """
@@ -171,7 +167,3 @@ class ReduceClusterTest(ClusterTester):
         4) Keep repeating 3) until we get to the target number of 3 nodes
         """
         self.reduce_cluster(cluster_starting_size=30, cluster_target_size=3)
-
-
-if __name__ == '__main__':
-    main()

@@ -38,11 +38,26 @@ fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
 
-# TODO: remove once avocado will be gone
-# change ownership of avocado directories
-echo "Making sure the ownerships of avocado directories are of the user"
-sudo chown -R `whoami`:`whoami` ~/avocado || echo "~/avocado doesn't exist, ignore error above"
-sudo chown -R `whoami`:`whoami` ${SCT_DIR}/test-results || echo "test-results doesn't exist, ignore error above"
+# change ownership of results directories
+echo "Making sure the ownerships of results directories are of the user"
+sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true
+sudo chown -R `whoami`:`whoami` ${SCT_DIR}/sct-results &> /dev/null || true
+
+subcommand="$1"
+if [[ ${subcommand} == 'bash'* ]] || [[ ${subcommand} == 'python'* ]]; then
+    echo "running  ${subcommand}"
+else
+    CMD="./sct.py $@"
+fi
+
+# export all SCT_* env vars into the docker run
+SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+
+# export all BUILD_* env vars into the docker run
+BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+
+# export all AWS_* env vars into the docker run
+AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
@@ -57,7 +72,10 @@ docker run --rm ${TTY_STDIN} --privileged \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
-    -u $(id -u ${USER}):$(id -g ${USER}) \
+    -u $(id -u ${USER}):$(grep "docker:" /etc/group|cut -d: -f3) \
+    ${SCT_OPTIONS} \
+    ${BUILD_OPTIONS} \
+    ${AWS_OPTIONS} \
     --net=host \
     scylladb/hydra:v${VERSION} \
-    /bin/bash -c "${TERM_SET_SIZE} eval ${CMD}"
+    /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"

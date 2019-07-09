@@ -6,12 +6,6 @@ import cluster
 from libcloud.common.google import ResourceNotFoundError
 
 
-def _prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = cluster.DEFAULT_USER_PREFIX
-    return '%s-%s' % (user_prefix, base_name)
-
-
 class CreateGCENodeError(Exception):
     pass
 
@@ -22,7 +16,7 @@ class GCENode(cluster.BaseNode):
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
 
-    def __init__(self, gce_instance, gce_service, credentials,
+    def __init__(self, gce_instance, gce_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
@@ -34,6 +28,7 @@ class GCENode(cluster.BaseNode):
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
         super(GCENode, self).__init__(name=name,
+                                      parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
@@ -115,12 +110,23 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._instance.reboot)
 
     def reboot(self, hard=True, verify_ssh=True):
+        result = self.remoter.run('uptime -s')
+        pre_uptime = result.stdout
+
+        def uptime_changed():
+            result = self.remoter.run('uptime -s', ignore_status=True)
+            return pre_uptime != result.stdout
+
         if hard:
             self.log.debug('Hardly rebooting node')
             self._instance_wait_safe(self._instance.reboot)
         else:
             self.log.debug('Softly rebooting node')
             self.remoter.run('sudo reboot', ignore_status=True)
+
+        # wait until the reboot is executed
+        wait.wait_for(func=uptime_changed, step=1, timeout=60, throw_exc=True)
+
         if verify_ssh:
             self.wait_ssh_up()
 
@@ -291,6 +297,7 @@ class GCECluster(cluster.BaseCluster):
             return GCENode(gce_instance=instance,
                            gce_service=self._gce_services[dc_idx],
                            credentials=self._credentials[0],
+                           parent_cluster=self,
                            gce_image_username=self._gce_image_username,
                            node_prefix=self.node_prefix,
                            node_index=node_index,
@@ -329,8 +336,8 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=[10], add_disks=None, params=None, gce_datacenter=None):
         # We have to pass the cluster name in advance in user_data
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = _prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
                                                gce_image_type=gce_image_type,
                                                gce_image_size=gce_image_size,
@@ -355,8 +362,8 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'loader-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'loader-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self,
                                        params=params)
         GCECluster.__init__(self,
@@ -382,8 +389,8 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=[1],
                  targets={}, add_disks=None, params=None):
-        node_prefix = _prepend_user_prefix(user_prefix, 'monitor-node')
-        cluster_prefix = _prepend_user_prefix(user_prefix, 'monitor-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
         cluster.BaseMonitorSet.__init__(self,
                                         targets=targets,
                                         params=params)

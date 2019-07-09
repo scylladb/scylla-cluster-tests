@@ -10,9 +10,6 @@ endpoint_snitch: 'GoogleCloudSnitch'
 
 stress_cmd: cassandra-stress write cl=QUORUM duration=20m -schema 'replication(strategy=NetworkTopologyStrategy,us-east1scylla_node_east=3,us-west1scylla_node_west=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..100000000000
 
-# aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration
-instance_provision: 'on_demand'
-
 backends: !mux
     gce: !mux
         cluster_backend: 'gce'
@@ -33,24 +30,7 @@ backends: !mux
         gce_n_local_ssd_disk_monitor: 0
         scylla_repo: 'SCYLLA_REPO_FILE_URL'
         gce_datacenter: 'us-east1-b us-west1-b'
-    aws: !mux
-        cluster_backend: 'aws'
-        instance_type_loader: 'c4.4xlarge'
-        instance_type_monitor: 'c4.2xlarge'
-        us_east_1:
-            region_name: 'us-east-1 us-west-1'
-            security_group_ids: 'sg-c5e1f7a0'
-            subnet_id: 'subnet-d934e980'
-            ami_id_db_scylla: 'ami-29035f52'
-            ami_db_scylla_user: 'centos'
-            ami_id_loader: 'ami-29035f52'
-            ami_loader_user: 'centos'
-            ami_id_db_cassandra: 'ami-3eff0028'
-            ami_db_cassandra_user: 'ubuntu'
-            ami_id_monitor: 'ami-29035f52'
-            ami_monitor_user: 'centos'
 
 databases: !mux
     scylla:
         db_type: scylla
-        instance_type_db: 'i3.4xlarge'

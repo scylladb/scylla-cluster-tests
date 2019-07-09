@@ -2,6 +2,10 @@
 {% block body %}
     <h3>Test: {{ subject }}</h3>
     <h3>
+        <span>Testrun id:</span>
+        <span class="blue">{{ testrun_id }}</span>
+    </h3>
+    <h3>
         <span>Test start time: </span>
         <span class="blue">{{ test_version.run_date_time }}</span>
     </h3>
@@ -17,6 +21,10 @@
         <span> , Hostname: </span>
         <span class="blue"> {{ hostname }}</span>
     </div>
+    <h3>Links:</h3>
+    <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
+    <li><a href={{ build_url }}>Build URL</a></li>
+
     {% if not full_report %}
     <br>
     <div>
@@ -69,6 +77,8 @@
                         {% else %}
                             {% if (stat.startswith("Diff") and cur_stat > 0) %}
                                 <span class="notice green fbold">
+                            {% elif stat.startswith("Diff") and not cur_stat %}
+                                <span class="fnormal black">
                             {% elif stat.startswith("Diff") and cur_stat < -10 %}
                                 <span class="notice red fbold">
                             {% elif stat.startswith("Diff") and cur_stat < -5 %}
@@ -77,12 +87,24 @@
                                 <span>
                             {% endif %}
                             {% if stat == "Best, commit, date" or stat == "Last, commit, date" %}
-                                <div style='text-align: center'>{{ '%g' % cur_stat[0] }}</div>
-                                <div style='text-align: center'>{{ '(#%s, %s)' % (cur_stat[1], cur_stat[2]) }}</div>
+                                {% if cur_stat[0] %}
+                                    <div style='text-align: center'>{{ '%g' % cur_stat[0] }}</div>
+                                    <div style='text-align: center'>{{ '(#%s, %s)' % (cur_stat[1], cur_stat[2]) }}</div>
+                                {% else %}
+                                    <div style='text-align: center'>-</div>
+                                {% endif %}
                             {% elif stat.startswith("Diff") %}
-                                {{ '%.1f' % cur_stat }}
+                                {% if cur_stat %}
+                                    {{ '%.1f' % cur_stat }}
+                                {% else %}
+                                    <div style='text-align: center'>-</div>
+                                {% endif %}
                             {% else %}
-                                {{ '%g' % cur_stat }}
+                                {% if cur_stat %}
+                                    {{ '%g' % cur_stat }}
+                                {% else %}
+                                    <div style='text-align: center'>-</div>
+                                {% endif %}
                             {% endif %}
                                 </span>
                         {% endif %}
@@ -95,6 +117,4 @@
     {% endif %}
     {% endfor %}
 
-    <h3>Dashboard:</h3>
-    <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
 {% endblock %}

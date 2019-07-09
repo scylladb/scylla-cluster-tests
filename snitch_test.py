@@ -13,35 +13,32 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
-from avocado import main
-
 from sdcm.tester import ClusterTester
 
 
 class SnitchTest(ClusterTester):
     """
     Endpoint Snitch Test
-
-    :avocado: enable
     """
 
     def test_google_cloud_snitch(self):
         """
         Verify the snitch setup, and check if system.peers is empty.
         """
-        result = self.db_cluster.nodes[0].remoter.run('nodetool describecluster')
+        result = self.db_cluster.nodes[0].run_nodetool("describecluster")
         assert 'GoogleCloudSnitch' in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 
-        session = self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60)
-        result = list(session.execute('select * from system.peers'))
-        self.log.debug(result)
-        assert result, 'ERROR: system.peers should be not empty.'
+        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+            result = list(session.execute('select * from system.peers'))
+            self.log.debug(result)
+            assert result, 'ERROR: system.peers should be not empty.'
+
         self.log.info("PASS: system.peers isn't empty as expected")
 
-        result = self.db_cluster.nodes[0].remoter.run('nodetool status', verbose=True)
+        result = self.db_cluster.nodes[0].run_nodetool("status")
         assert 'Datacenter: us-east1scylla_node_east' in result.stdout
         assert 'Datacenter: us-west1scylla_node_west' in result.stdout
 
         stress_cmd = self.params.get('stress_cmd')
-        stress = self.run_stress_thread(stress_cmd=stress_cmd)
-        self.verify_stress_thread(queue=stress)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd)
+        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)

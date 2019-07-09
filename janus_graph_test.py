@@ -14,15 +14,12 @@
 # Copyright (c) 2017 ScyllaDB
 
 import os
-from avocado import main
 from performance_regression_test import PerformanceRegressionTest
 
 
 class JanusGraphTest(PerformanceRegressionTest):
     """
     Run Janus Graph tests against scylla as backend storage
-
-    :avocado: enable
     """
 
     # https://github.com/scylladb/scylla/issues/2497
@@ -45,8 +42,4 @@ class JanusGraphTest(PerformanceRegressionTest):
         self.loaders.nodes[0].remoter.receive_files(src='~/janusgraph/janusgraph-cql/target/',
                                                     dst=dest, ssh_timeout=300)
         self.loaders.nodes[0].remoter.run('cat janusgraph/janusgraph-cql/target/surefire-reports/*.txt')
-        self.loaders.nodes[0].remoter.run_output_check('cat janusgraph/janusgraph-cql/target/surefire-reports/*.txt',300, False, 'Failures: 0, Errors: 0', 'FAILURE!')
-
-
-if __name__ == '__main__':
-    main()
+        self.loaders.nodes[0].remoter.run_output_check('cat janusgraph/janusgraph-cql/target/surefire-reports/*.txt', 300, False, 'Failures: 0, Errors: 0', 'FAILURE!')
