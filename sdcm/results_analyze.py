@@ -24,7 +24,7 @@ class QueryFilter(object):
         self.test_doc = test_doc
         self.test_name = test_doc["_source"]["test_details"]["test_name"]
         self.is_gce = is_gce
-        self.date_re = '/2018-*/'
+        self.date_re = '/.*/'
 
     def setup_instance_params(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
@@ -150,7 +150,7 @@ class BaseResultsAnalyzer(object):
         """
         self.log.info("Rendering results to html using '%s' template...", self._email_template_fp)
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
-        env = jinja2.Environment(loader=loader, autoescape=True)
+        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
         template = env.get_template(self._email_template_fp)
         html = template.render(results)
         if html_file_path:
@@ -306,13 +306,13 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 assert float(cur_test_param_result) < deviation_limit, "Current test performance for: {} exceeds allowed deviation ({})".format(param, deviation_limit)
         return True
 
-
+    
 class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     """
     Get performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    PARAMS = ['op rate', 'latency mean', 'latency 99th percentile']
+    PARAMS = TestStatsMixin.STRESS_STATS
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):
         super(PerformanceResultsAnalyzer, self).__init__(
@@ -357,8 +357,25 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return None
 
     def _get_grafana_snapshot(self, test_doc):
-        grafana_snapshot = test_doc['_source']['test_details'].get('grafana_snapshot')
-        return grafana_snapshot if isinstance(grafana_snapshot, list) else [grafana_snapshot]
+        grafana_snapshots = test_doc['_source']['test_details'].get('grafana_snapshots')
+        if grafana_snapshots and isinstance(grafana_snapshots, list):
+            return grafana_snapshots
+        elif grafana_snapshots and isinstance(grafana_snapshots, str):
+            return [grafana_snapshots]
+        else:
+            return []
+
+    def _get_grafana_screenshot(self, test_doc):
+        grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshot')
+        if not grafana_screenshots:
+            grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshots')
+
+        if grafana_screenshots and isinstance(grafana_screenshots, list):
+            return grafana_screenshots
+        elif grafana_screenshots and isinstance(grafana_screenshots, str):
+            return [grafana_screenshots]
+        else:
+            return []
 
     def _get_setup_details(self, test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
@@ -495,7 +512,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             for k in self.PARAMS:
                 if k in curr_test_stats and k in old_best and\
                         group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
-                            group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
+                    group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
 
         res_list = list()
         # compare with the best in the test version and all the previous versions
@@ -526,7 +543,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        setup_details=self._get_setup_details(doc, is_gce),
                        prometheus_stats={stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS},
                        prometheus_stats_units=TestStatsMixin.PROMETHEUS_STATS_UNITS,
-                       grafana_snapshot=self._get_grafana_snapshot(doc),
+                       grafana_snapshots=self._get_grafana_snapshot(doc),
+                       grafana_screenshots=self._get_grafana_screenshot(doc),
                        cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
                        job_url=doc['_source']['test_details'].get('job_url', ""),
                        dashboard_master=self.gen_kibana_dashboard_url(dashboard_path),
