@@ -229,7 +229,7 @@ class AWSCluster(cluster.BaseCluster):
 
     def _get_instances(self, dc_idx):
 
-        test_id = self.params.get('test_id', default=None)
+        test_id = cluster.Setup.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 

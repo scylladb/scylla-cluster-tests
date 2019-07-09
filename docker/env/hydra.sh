@@ -8,6 +8,7 @@ PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
+export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
 
 # if running on Build server
 if [[ ${USER} == "jenkins" ]]; then
@@ -77,5 +78,6 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${BUILD_OPTIONS} \
     ${AWS_OPTIONS} \
     --net=host \
+    --name=${SCT_TEST_ID} \
     scylladb/hydra:v${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"

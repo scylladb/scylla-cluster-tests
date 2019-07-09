@@ -174,20 +174,24 @@ class Setup(object):
 
     @classmethod
     def test_id(cls):
-        if not cls._test_id:
-            cls._test_id = uuid.uuid4()
         return cls._test_id
 
     @classmethod
-    def set_test_id(cls, new_test_id):
-        if new_test_id:
-            cls._test_id = new_test_id
+    def set_test_id(cls, test_id):
+        if not cls._test_id:
+            cls._test_id = test_id
+            test_id_file_path = os.path.join(cls.logdir(), "test_id")
+            with open(test_id_file_path, "w") as test_id_file:
+                test_id_file.write(test_id)
+        else:
+            logger.warning("TestID already set!")
 
     @classmethod
     def logdir(cls):
         if not cls._logdir:
             sct_base = os.path.expanduser(os.environ.get('_SCT_LOGDIR', '~/sct-results'))
-            cls._logdir = os.path.join(sct_base, str(cls.test_id()))
+            date_time_formatted = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            cls._logdir = os.path.join(sct_base, str(date_time_formatted))
             os.makedirs(cls._logdir)
 
             latest_symlink = os.path.join(sct_base, 'latest')
