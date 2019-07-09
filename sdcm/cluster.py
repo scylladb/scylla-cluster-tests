@@ -1815,8 +1815,8 @@ server_encryption_options:
         status : expected values: "start" or "finish"
         """
         patt = re.compile('RESHARD')
-        out = self.run_nodetool("compactionstats")
-        found = patt.search(out)
+        result = self.run_nodetool("compactionstats")
+        found = patt.search(result.stdout)
         # wait_for_status=='finish': If 'RESHARD' is not found in the compactionstats output, return True -
         # means resharding was finished
         # wait_for_status=='start: If 'RESHARD' is found in the compactionstats output, return True -
