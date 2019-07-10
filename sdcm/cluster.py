@@ -2654,6 +2654,11 @@ class BaseLoaderSet(object):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
 
+        # fix https://github.com/scylladb/scylla-cluster-tests/issues/1080
+        self.log.debug("enlarge sshd MaxSessions to 100")
+        node.remoter.run(r"sed -i 's/#MaxSessions \(.*\)$/MaxSessions 100/' /etc/ssh/sshd_config", ignore_status=True)
+        node.remoter.reconnect()
+
         if Setup.REUSE_CLUSTER:
             self.kill_stress_thread()
             return
