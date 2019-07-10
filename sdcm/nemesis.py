@@ -369,12 +369,14 @@ class Nemesis(object):
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-            test_keyspaces = self.cluster.get_test_keyspaces()
-            for node in self.cluster.nodes:
-                for keyspace in test_keyspaces:
-                    node.run_nodetool(sub_cmd='cleanup', args=keyspace)
-            if new_node:
-                new_node.running_nemesis = None
+            try:
+                test_keyspaces = self.cluster.get_test_keyspaces()
+                for node in self.cluster.nodes:
+                    for keyspace in test_keyspaces:
+                        node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+            finally:
+                if new_node:
+                    new_node.running_nemesis = None
 
     def disrupt_terminate_and_replace_node(self):
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
@@ -382,8 +384,10 @@ class Nemesis(object):
         old_node_ip = self.target_node.ip_address
         self._terminate_cluster_node(self.target_node)
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
-        self.repair_nodetool_repair(new_node)
-        new_node.running_nemesis = None
+        try:
+            self.repair_nodetool_repair(new_node)
+        finally:
+            new_node.running_nemesis = None
 
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
