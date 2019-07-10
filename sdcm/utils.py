@@ -537,8 +537,8 @@ def clean_instances_aws(tags_dict):
                 assert instance['CurrentState']['Name'] in ['terminated', 'shutting-down']
 
 
-def measure_time(func, *args, **kwargs):
-    @wraps
+def measure_time(func):
+    @wraps(func)
     def wrapped(*args, **kwargs):
         start = time.time()
         func_res = func(*args, **kwargs)
