@@ -1471,7 +1471,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         except Exception as ex:
             self.log.exception('Failed to check regression: %s', ex)
 
-    def check_specific_regression(self, dict_specific_tested_stats):
+    def check_specified_stats_regression(self, dict_specific_tested_stats):
 
         ra = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                send_email=self.params.get('send_email', default=True),
