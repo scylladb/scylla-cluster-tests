@@ -185,16 +185,17 @@ class InfoEvent(SctEvent):
 
 
 class CoreDumpEvent(SctEvent):
-    def __init__(self, corefile_urls, download_instructions, backtrace):
+    def __init__(self, corefile_urls, download_instructions, backtrace, node):
         super(CoreDumpEvent, self).__init__()
         self.corefile_urls = corefile_urls
         self.download_instructions = download_instructions
         self.backtrace = backtrace
         self.severity = Severity.CRITICAL
+        self.node = str(node)
         self.publish()
 
     def __str__(self):
-        return "{0}:\ncorefile_urls=\n{2}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
+        return "{0}: node={1.node}\ncorefile_urls=\n{2}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
             super(CoreDumpEvent, self).__str__(), self,  "\n".join(self.corefile_urls))
 
 

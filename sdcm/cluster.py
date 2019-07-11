@@ -734,7 +734,7 @@ class BaseNode(object):
                         download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
                         self.log.info(download_instructions)
                 finally:
-                    CoreDumpEvent(corefile_urls=urls, download_instructions=download_instructions, backtrace=output)
+                    CoreDumpEvent(corefile_urls=urls, download_instructions=download_instructions, backtrace=output, node=self)
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
