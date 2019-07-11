@@ -52,7 +52,7 @@ class SctEventsTests(unittest.TestCase):
 
     def test_coredump_event(self):
         str(CoreDumpEvent(corefile_urls=['http://', "fsdfs", "sdsfgfg"], backtrace="asfasdfsdf",
-                          download_instructions=""))
+                          download_instructions="", node="node xy"))
 
     def test_scylla_log_event(self):
         str(DatabaseLogEvent(type="A", regex="B"))
