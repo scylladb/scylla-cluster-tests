@@ -147,11 +147,12 @@ class SystemEvent(SctEvent):
 
 
 class DbEventsFilter(SystemEvent):
-    def __init__(self, type, line=None):
+    def __init__(self, type, line=None, node=None):
         super(DbEventsFilter, self).__init__()
         self.id = id(self)
         self.type = type
         self.line = line
+        self.node = str(node) if node else None
         self.clear_filter = False
         self.publish()
 
@@ -168,9 +169,17 @@ class DbEventsFilter(SystemEvent):
     def eval_filter(self, event):
         line = getattr(event, 'line', '')
         _type = getattr(event, 'type', '')
+        node = getattr(event, 'node', '')
         is_name_matching = self.type and _type and self.type == _type
         is_line_matching = self.line and line and self.line in line
-        return (is_name_matching and is_line_matching) if self.line else is_name_matching
+        is_node_matching = self.node and node and self.node == node
+
+        result = is_name_matching
+        if self.line:
+            result = result and is_line_matching
+        if self.node:
+            result = result and is_node_matching
+        return result
 
 
 class InfoEvent(SctEvent):

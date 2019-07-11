@@ -18,6 +18,25 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 class SctEventsTests(unittest.TestCase):
 
+    def get_event_logs(self):
+        log_file = os.path.join(self.temp_dir, 'events.log')
+
+        data = ""
+        if os.path.exists(log_file):
+            data = open(log_file, 'r').read()
+        return data
+
+    def wait_for_event_log_change(self, log_content_before):
+        for _ in range(10):
+            log_content_after = self.get_event_logs()
+            if log_content_before == log_content_after:
+                logging.debug("logs haven't changed yet")
+                time.sleep(0.05)
+            else:
+                break
+        else:
+            raise AssertionError("log file wasn't update with new events")
+
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
@@ -91,6 +110,24 @@ class SctEventsTests(unittest.TestCase):
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
 
+    def test_filter_by_node(self):
+
+        log_content_before = self.get_event_logs()
+
+        with DbEventsFilter(type="NO_SPACE_ERROR", node="A"):
+
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                    line="this is filtered")
+
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
+                                                                                    line="not filtered")
+
+        self.wait_for_event_log_change(log_content_before)
+
+        log_content_after = self.get_event_logs()
+        self.assertIn("not filtered", log_content_after)
+        self.assertNotIn("this is filtered", log_content_after)
+
     def test_stall_severity(self):
         event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
         event.add_info_and_publish(node="A", line_number=22,
@@ -106,11 +143,7 @@ class SctEventsTests(unittest.TestCase):
         str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
 
     def test_default_filters(self):
-        log_file = os.path.join(self.temp_dir, 'events.log')
-
-        log_content_before = ""
-        if os.path.exists(log_file):
-            log_content_before = open(log_file, 'r').read()
+        log_content_before = self.get_event_logs()
 
         DatabaseLogEvent(type="BACKTRACE",
                          regex="backtrace").add_info_and_publish(node="A",
@@ -123,24 +156,13 @@ class SctEventsTests(unittest.TestCase):
         DatabaseLogEvent(type="BACKTRACE",
                          regex="backtrace").add_info_and_publish(node="A",
                                                                  line_number=22,
-                                                                 line="other back trace that should be filtered")
+                                                                 line="other back trace that shouldn't be filtered")
 
-        for _ in range(10):
-            if os.path.exists(log_file):
-                log_content_after = open(log_file, 'r').read()
-            else:
-                log_content_after = ""
-            if log_content_before == log_content_after:
-                logging.debug("logs haven't changed yet")
-                time.sleep(0.05)
-            else:
-                break
-        else:
-            raise AssertionError("log file wasn't update with new events")
+        self.wait_for_event_log_change(log_content_before)
 
-        if os.path.exists(log_file):
-            with open(log_file) as f:
-                self.assertNotIn('supressed', f.read())
+        log_content_after = self.get_event_logs()
+        self.assertIn('other back trace', log_content_after)
+        self.assertNotIn('supressed', log_content_after)
 
     def test_failed_stall_during_filter(self):
 
@@ -162,5 +184,4 @@ class SctEventsTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
     unittest.main(verbosity=2)
