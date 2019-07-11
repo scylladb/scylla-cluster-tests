@@ -48,7 +48,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         result = node.run_nodetool(sub_cmd='repair')
         return result
 
-    def _pre_create_large_scale_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
+    def _pre_create_schema_large_scale(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -59,9 +59,44 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             keyspace_name = 'keyspace{}'.format(i)
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
             self.log.debug('{} Created'.format(keyspace_name))
-            self.create_table(name='standard1', key_type='blob', read_repair=0.0, compact_storage=True,
+            table_name = "{}.standard1".format(keyspace_name)
+            self.create_table(name=table_name, key_type='blob', read_repair=0.0, compact_storage=True,
                               columns={'"C0"': 'blob'},
                               in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
+
+    def preload_data(self):
+        # if test require a pre-population of data
+        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        if prepare_write_cmd:
+            self.create_test_stats(sub_type='write-prepare')
+            stress_queue = list()
+            params = {'prefix': 'preload-'}
+            # Check if the prepare_cmd is a list of commands
+            if not isinstance(prepare_write_cmd, basestring) and len(prepare_write_cmd) > 1:
+                # Check if it should be round_robin across loaders
+                if self.params.get('round_robin', default='').lower() == 'true':
+                    self.log.debug('Populating data using round_robin')
+                    params.update({'stress_num': 1, 'round_robin': True})
+
+                for stress_cmd in prepare_write_cmd:
+                    params.update({'stress_cmd': stress_cmd})
+
+                    # Run all stress commands
+                    params.update(dict(stats_aggregate_cmds=False))
+                    self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+                    stress_queue.append(self.run_stress_thread(**params))
+
+            # One stress cmd command
+            else:
+                stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
+                                                           prefix='preload-', stats_aggregate_cmds=False))
+
+            for stress in stress_queue:
+                self.get_stress_results(queue=stress, store_results=False)
+
+            self.update_test_details()
+        else:
+            self.log.warning("No prepare command defined in YAML!")
 
     # Util functions ===============================================================================================
 
@@ -207,34 +242,45 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         dict_specific_tested_stats['repair_runtime'] = repair_time
         self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
 
-        self.check_specific_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
-    def test_row_level_repair_large_scale(self):
+    def test_row_level_repair_single_node_diff(self):
         """
         Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
+        requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
         dict_specific_tested_stats = {'repair_runtime': -1}
         self.create_test_stats(specific_tested_stats=dict_specific_tested_stats)
 
-        self._pre_create_large_scale_schema()
+        self._pre_create_schema_large_scale()
         node1, node2, node3 = self.db_cluster.nodes
         self.log.info('Stopping node-3 ({}) before updating cluster data'.format(node3.name))
         node3.stop_scylla_server()
         self.log.info('Updating cluster data when node3 ({}) is down'.format(node3.name))
         self.log.info('Starting c-s/s-b write workload')
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        prepare_cmd_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd)
+        self.preload_data()
+        # prepare_write_cmd = self.params.get('prepare_write_cmd')
+        # prepare_cmd_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd)
         self.wait_no_compactions_running()
 
         self.log.info('Starting node-3 ({}) after updated cluster data'.format(node3.name))
         node3.start_scylla_server()
 
-        self.log.info('Run Repair on node: {}'.format(node3.name))
+        self.log.info('Run Repair on node: {} , 0% synced'.format(node3.name))
         repair_time, res = self._run_repair(node=node3)
-        self.log.info('Repair time on node: {} is: {}'.format(node3.name, repair_time))
+        self.log.info('Repair (0% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
-        dict_specific_tested_stats['repair_runtime'] = repair_time
+        dict_specific_tested_stats['repair_runtime_all_diff'] = repair_time
+        # self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+
+        self.wait_no_compactions_running()
+
+        self.log.info('Run Repair on node: {} , 100% synced'.format(node3.name))
+        repair_time, res = self._run_repair(node=node3)
+        self.log.info('Repair (100% synced) time on node: {} is: {}'.format(node3.name, repair_time))
+
+        dict_specific_tested_stats['repair_runtime_no_diff'] = repair_time
         self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
 
-
+        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
