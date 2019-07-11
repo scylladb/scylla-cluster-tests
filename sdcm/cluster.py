@@ -1505,6 +1505,15 @@ server_encryption_options:
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nalternator_port: %s\n" % alternator_port
+
+        # system_key must be pre-created, kmip keys will be used for kmip server auth
+        if append_conf and ('system_key_directory' in append_conf or 'system_info_encryption' in append_conf or 'kmip_hosts:' in append_conf):
+            self.remoter.send_files(src='./data_dir/encrypt_conf',
+                                    dst='/tmp/')
+            self.remoter.run('sudo mv /tmp/encrypt_conf /etc/')
+            self.remoter.run('sudo mkdir /etc/encrypt_conf/system_key_dir/')
+            self.remoter.run('sudo chown -R scylla:scylla /etc/encrypt_conf/')
+
         if append_conf:
             scylla_yaml_contents += append_conf
 
