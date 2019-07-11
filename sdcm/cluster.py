@@ -67,8 +67,6 @@ DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
 TEST_DURATION = 60
-# max limit of coredump file can be uploaded(5 GB)
-COREDUMP_MAX_SIZE = 1024 * 1024 * 1024 * 5
 IP_SSH_CONNECTIONS = 'private'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
@@ -675,14 +673,6 @@ class BaseNode(object):
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         return download_url
 
-    def _get_coredump_size(self, coredump):
-        try:
-            res = self.remoter.run('stat -c %s {}'.format(coredump))
-            return int(res.stdout.strip())
-        except Exception as ex:
-            self.log.error('Failed getting coredump file size: %s', ex)
-        return None
-
     def _try_split_coredump(self, coredump):
         """
         Compress coredump file, try to split the compressed file if it's too big
@@ -690,20 +680,19 @@ class BaseNode(object):
         :param coredump: coredump file path
         :return: coredump files list
         """
+        # max limit of coredump file can be uploaded (5 GB)
+        COREDUMP_MAX_SIZE = '5G'
+
         core_files = []
         try:
             self.remoter.run('sudo yum install -y pigz')
             self.remoter.run('sudo pigz --fast {}'.format(coredump))
             file_name = '{}.gz'.format(coredump)
             core_files.append(file_name)
-            file_size = self._get_coredump_size(file_name)
-            if file_size and file_size > COREDUMP_MAX_SIZE:
-                cnt = file_size / COREDUMP_MAX_SIZE
-                cnt += 1 if file_size % COREDUMP_MAX_SIZE > 0 else cnt
-                self.log.debug('Splitting coredump to {} files'.format(cnt))
-                res = self.remoter.run('sudo split -n {} {} {}.;ls {}.*'.format(
-                    cnt, file_name, file_name, file_name))
-                core_files = [f.strip() for f in res.stdout.split()]
+            self.log.debug('Splitting coredump to {} files'.format(COREDUMP_MAX_SIZE))
+            res = self.remoter.run('sudo split -b {} {} {}.;ls {}.*'.format(
+                COREDUMP_MAX_SIZE, file_name, file_name, file_name))
+            core_files = [f.strip() for f in res.stdout.split()]
         except Exception as ex:
             self.log.error('Failed splitting coredump file: %s', ex)
         return core_files or [coredump]
