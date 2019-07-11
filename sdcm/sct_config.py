@@ -800,6 +800,9 @@ class SCTConfiguration(dict):
 
         dict(name="scylla_encryption_options", env="SCT_SCYLLA_ENCRYPTION_OPTIONS",  type=str_or_list,
              help="options will be used for enable encryption at-rest for tables"),
+
+        dict(name="logs_transport", env="SCT_LOGS_TRANSPORT",  type=str,
+             help="How to transport logs: rsyslog or ssh"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',

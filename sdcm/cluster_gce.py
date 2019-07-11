@@ -10,6 +10,12 @@ class CreateGCENodeError(Exception):
     pass
 
 
+def gce_create_metadata():
+    tags = cluster.create_common_tags()
+    tags['startup-script'] = cluster.Setup.get_startup_script()
+    return tags
+
+
 class GCENode(cluster.BaseNode):
 
     """
@@ -272,7 +278,7 @@ class GCECluster(cluster.BaseCluster):
                                                           image=self._gce_image,
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=cluster.create_common_tags())
+                                                          ex_metadata=gce_create_metadata())
         self.log.info('Created instance %s', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)

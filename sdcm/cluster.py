@@ -37,11 +37,13 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from datetime import datetime
+
+from sdcm.rsyslog_daemon import start_rsyslog
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner, CmdExecTimeoutExceeded
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version
+    get_latest_gemini_version, get_my_ip
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
 
@@ -166,6 +168,7 @@ class Setup(object):
     MULTI_REGION = False
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
+    RSYSLOG_ADDRESS = None
 
     _test_id = None
     _test_name = None
@@ -182,7 +185,7 @@ class Setup(object):
             cls._test_id = test_id
             test_id_file_path = os.path.join(cls.logdir(), "test_id")
             with open(test_id_file_path, "w") as test_id_file:
-                test_id_file.write(test_id)
+                test_id_file.write(str(test_id))
         else:
             logger.warning("TestID already set!")
 
@@ -235,6 +238,40 @@ class Setup(object):
     @classmethod
     def tags(cls, key, value):
         cls.TAGS[key] = value
+
+    @classmethod
+    def configure_rsyslog(cls, enable_ngrok=False):
+
+        port = start_rsyslog(cls.test_id(), cls.logdir())
+
+        if enable_ngrok:
+            requests.delete('http://localhost:4040/api/tunnels/rsyslogd')
+
+            tunnel = {
+                "addr": port,
+                "proto": "tcp",
+                "name": "rsyslogd",
+                "bind_tls": False
+            }
+            res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
+            assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
+            ngrok_address = res.json()['public_url'].replace('tcp://', '')
+
+            address, port = ngrok_address.split(':')
+        else:
+            address = get_my_ip()
+
+        cls.RSYSLOG_ADDRESS = (address, port)
+
+    @classmethod
+    def get_startup_script(cls):
+        post_boot_script = '#!/bin/bash'
+        if cls.RSYSLOG_ADDRESS:
+            post_boot_script += dedent('''
+                   sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
+                   sudo systemctl restart rsyslog
+                   '''.format(*cls.RSYSLOG_ADDRESS))
+        return post_boot_script
 
 
 def create_common_tags():
@@ -319,7 +356,8 @@ class BaseNode(object):
         self._scylla_manager_journal_thread = None
         self._init_system = None
 
-        self.database_log = os.path.join(self.logdir, 'database.log')
+        self._short_hostname = None
+
         self._database_log_errors_index = []
         self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
@@ -348,6 +386,27 @@ class BaseNode(object):
         self._distro = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
+
+    @property
+    def short_hostname(self):
+        if not self._short_hostname:
+            try:
+                self._short_hostname = self.remoter.run('hostname -s').stdout.strip()
+            except Exception:
+                return "no_booted_yet"
+        return self._short_hostname
+
+    @property
+    def database_log(self):
+        orig_log_path = os.path.join(self.logdir, 'database.log')
+
+        if Setup.RSYSLOG_ADDRESS:
+            rsys_log_path = os.path.join(Setup.logdir(), 'hosts', self.short_hostname, 'messages.log')
+            if os.path.exists(rsys_log_path) and (not os.path.islink(orig_log_path)):
+                os.symlink(os.path.relpath(rsys_log_path, self.logdir), orig_log_path)
+            return rsys_log_path
+        else:
+            return orig_log_path
 
     @property
     def cassandra_stress_version(self):
@@ -643,9 +702,15 @@ class BaseNode(object):
             read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     def start_journal_thread(self):
-        self._journal_thread = threading.Thread(target=self.journal_thread)
-        self._journal_thread.daemon = True
-        self._journal_thread.start()
+        logs_transport = self.parent_cluster.params.get("logs_transport")
+        if logs_transport == "rsyslog":
+            self.log.info("Using rsyslog as log transport")
+        elif logs_transport == "ssh":
+            self._journal_thread = threading.Thread(target=self.journal_thread)
+            self._journal_thread.daemon = True
+            self._journal_thread.start()
+        else:
+            raise Exception("Unknown logs transport: %s" % logs_transport)
 
     def _get_coredump_backtraces(self, last=True):
         """
@@ -1093,6 +1158,9 @@ class BaseNode(object):
             if start_search_from_byte:
                 f.seek(start_search_from_byte)
             for index, line in enumerate(f, start=last_line_no):
+                if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
+                    logger.debug(line)
+
                 m = backtrace_regex.search(line)
                 if m and backtraces:
                     data = m.groupdict()

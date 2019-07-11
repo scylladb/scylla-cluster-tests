@@ -34,6 +34,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from keystore import KeyStore
+from sdcm.rsyslog_daemon import stop_rsyslog
 from . import cluster
 from . import nemesis
 from .cluster_libvirt import LoaderSetLibvirt
@@ -176,6 +177,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
+
+        if self.params.get("logs_transport") == 'rsyslog':
+            cluster.Setup.configure_rsyslog(self.params.get('sct_ngrok_name', default=False))
 
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
@@ -1329,9 +1333,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             stop_events_device()
             self.collect_events_log()
             self.zip_and_upload_job_log()
+            stop_rsyslog()
 
     def zip_and_upload_job_log(self):
-        job_log_dir = os.path.dirname(self.logdir)
+        job_log_dir = self.logdir
         event_log_dir_tmp = os.path.join(job_log_dir, 'job_log')
         if not os.path.exists(event_log_dir_tmp):
             os.mkdir(event_log_dir_tmp)

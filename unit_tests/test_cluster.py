@@ -9,6 +9,8 @@ from sdcm.sct_events import start_events_device, stop_events_device
 
 
 class DummyNode(BaseNode):
+    _database_log = None
+
     @property
     def private_ip_address(self):
         return '127.0.0.1'
@@ -20,6 +22,14 @@ class DummyNode(BaseNode):
     def start_task_threads(self):
         # disable all background threads
         pass
+
+    @property
+    def database_log(self):
+        return self._database_log
+
+    @database_log.setter
+    def database_log(self, x):
+        self._database_log = x
 
 
 class DummeyOutput(object):
