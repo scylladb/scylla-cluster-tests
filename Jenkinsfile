@@ -56,29 +56,6 @@ pipeline {
             }
         }
     }
-    stage("test microbenchmarking.py") {
-        steps {
-            script {
-                try {
-                    sh './docker/env/hydra.sh python sdcm/microbenchmarking.py --help'
-                    if (env.CHANGE_ID) {
-                        pullRequest.createStatus(status: 'success',
-                                         context: 'jenkins/microbenchmarking',
-                                         description: 'microbenchmarking.py is runnable',
-                                         targetUrl: "${env.JOB_URL}/workflow-stage")
-                    }
-                } catch(Exception ex) {
-                    if (env.CHANGE_ID) {
-                        pullRequest.createStatus(status: 'failure',
-                                         context: 'jenkins/microbenchmarking',
-                                         description: 'microbenchmarking.py failed to run',
-                                         targetUrl: "${env.JOB_URL}/workflow-stage")
-                    }
-                    currentBuild.result = 'UNSTABLE'
-                }
-            }
-        }
-    }
     stage("lint test-cases") {
         steps {
             script {
