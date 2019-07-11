@@ -260,8 +260,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Updating cluster data when node3 ({}) is down'.format(node3.name))
         self.log.info('Starting c-s/s-b write workload')
         self.preload_data()
-        # prepare_write_cmd = self.params.get('prepare_write_cmd')
-        # prepare_cmd_queue = self.run_stress_thread(stress_cmd=prepare_write_cmd)
         self.wait_no_compactions_running()
 
         self.log.info('Starting node-3 ({}) after updated cluster data'.format(node3.name))
@@ -281,6 +279,57 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Repair (100% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
         dict_specific_tested_stats['repair_runtime_no_diff'] = repair_time
+        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+
+        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+
+    def _stop_all_nodes_except_for(self, node):
+        self.log.debug("Stopping all nodes except for: {}".format(node.name))
+
+        for c_node in [n for n in self.db_cluster.nodes if n != node]:
+            c_node.stop_scylla_server()
+
+    def _start_all_nodes_except_for(self, node):
+        self.log.debug("Starting all nodes except for: {}".format(node.name))
+        for c_node in [n for n in self.db_cluster.nodes if n != node]:
+            c_node.stop_scylla_server()
+
+    def test_row_level_repair_3_nodes_small_diff(self):
+        """
+        Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
+        requires: export SCT_HINTED_HANDOFF_DISABLED=true
+        :return:
+        """
+
+        base_distinct_write_cmd = "cassandra-stress write no-warmup cl=ONE n=1000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"
+        sequence_current_index = 1000000000
+        sequence_range = 1000000
+        dict_specific_tested_stats = {'repair_runtime': -1}
+        self.create_test_stats(specific_tested_stats=dict_specific_tested_stats)
+
+        self._pre_create_schema_large_scale()
+        node1, node2, node3 = self.db_cluster.nodes
+        for node in [node1, node2, node3]:
+            self.log.info('Stopping all other nodes before updating {}'.format(node.name))
+            self._stop_all_nodes_except_for(node=node)
+            self.log.info('Updating cluster data only for {}'.format(node.name))
+            distinct_write_cmd = "{} -pop seq={}..{}".format(base_distinct_write_cmd, sequence_current_index+1, sequence_current_index+sequence_range)
+            prepare_cmd_queue = self.run_stress(stress_cmd=distinct_write_cmd)
+            self._start_all_nodes_except_for(node=node)
+            sequence_current_index += sequence_range
+
+
+        self.log.info('Starting c-s/s-b write workload')
+        self.preload_data()
+        self.wait_no_compactions_running()
+
+        self.log.info('Run Repair on node: {} , 99.8% synced'.format(node3.name))
+        repair_time, res = self._run_repair(node=node3)
+        self.log.info('Repair (99.8% synced) time on node: {} is: {}'.format(node3.name, repair_time))
+
+        dict_specific_tested_stats['repair_runtime_small_diff'] = repair_time
+        # self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+
         self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
 
         self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
