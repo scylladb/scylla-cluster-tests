@@ -5,6 +5,7 @@ import os
 import tempfile
 import yaml
 import json
+import base64
 
 from botocore.exceptions import WaiterError, ClientError
 from textwrap import dedent
@@ -263,6 +264,15 @@ class AWSCluster(cluster.BaseCluster):
         return ec2_user_data
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
+
+        if cluster.Setup.RSYSLOG_ADDRESS:
+            post_boot_script = cluster.Setup.get_startup_script()
+
+            if 'clustername' in ec2_user_data:
+                ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
+            else:
+                ec2_user_data = post_boot_script
+
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
         else:
@@ -791,8 +801,6 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
-        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
-                     (cluster_prefix, n_nodes))
         cluster.BaseMonitorSet.__init__(self,
                                         targets=targets,
                                         params=params)
@@ -803,7 +811,6 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                             ec2_security_group_ids=ec2_security_group_ids,
                             ec2_instance_type=ec2_instance_type,
                             ec2_ami_username=ec2_ami_username,
-                            ec2_user_data=user_data,
                             services=services,
                             ec2_block_device_mappings=ec2_block_device_mappings,
                             credentials=credentials,

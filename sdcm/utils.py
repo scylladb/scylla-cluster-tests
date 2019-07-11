@@ -14,6 +14,7 @@
 import os
 import logging
 import logging.config
+import socket
 import time
 import datetime
 import requests
@@ -888,3 +889,18 @@ class version(object):
                     cls_self.version,
                     cls_self.__class__.__name__))
         return inner
+
+
+def get_free_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('', 0))
+    addr = s.getsockname()
+    port = addr[1]
+    s.close()
+    return port
+
+
+def get_my_ip():
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
+    return ip

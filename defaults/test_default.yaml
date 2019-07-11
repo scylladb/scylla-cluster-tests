@@ -33,3 +33,5 @@ failure_post_behavior: destroy
 cloud_credentials_path: '~/.ssh/support'
 
 backtrace_decoding: false
+
+logs_transport: "rsyslog"
