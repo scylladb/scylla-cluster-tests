@@ -717,7 +717,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
             alternator_port=self.params.get('alternator_port'),
-            seed_address=seed_address
+            seed_address=seed_address,
+            append_conf=self.params.get('append_conf'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
