@@ -3255,7 +3255,7 @@ class BaseMonitorSet(object):
                 sudo systemctl start docker
                 mkdir -p {0.monitoring_data_dir}
                 chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version},master -b "-web.enable-admin-api"
             """.format(self))
         else:
             run_script = dedent("""
@@ -3263,7 +3263,7 @@ class BaseMonitorSet(object):
                 sudo service docker start || true
                 mkdir -p {0.monitoring_data_dir}
                 chmod 777 {0.monitoring_data_dir}
-                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version} -b "-web.enable-admin-api"
+                ./start-all.sh -s {0.monitoring_conf_dir}/scylla_servers.yml -n {0.monitoring_conf_dir}/node_exporter_servers.yml -d {0.monitoring_data_dir} -l -v {0.monitoring_version},master -b "-web.enable-admin-api"
             """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
