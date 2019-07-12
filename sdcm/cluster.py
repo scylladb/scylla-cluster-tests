@@ -751,9 +751,11 @@ class BaseNode(object):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
-        while not self.termination_event.isSet():
-            self.termination_event.wait(15)
+        while True:
+            if self.termination_event.isSet():
+                break
             self.get_backtraces()
+            time.sleep(30)
 
     def start_backtrace_thread(self):
         self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
@@ -1226,6 +1228,7 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
+
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -1384,6 +1387,7 @@ server_encryption_options:
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+
 
             install_transport_backports = dedent("""
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
@@ -1636,10 +1640,10 @@ server_encryption_options:
         self.start_scylla()
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
-                                           text="Wait for re-sharding to be started", status='start')
+                                            text="Wait for re-sharding to be started", status='start')
         if not resharding_started:
             logger.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
-                         'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
+                             'Check the log for the detailes'.format(murmur3_partitioner_ignore_msb_bits))
             return
 
         resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
