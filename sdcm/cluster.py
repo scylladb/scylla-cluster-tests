@@ -1340,9 +1340,9 @@ server_encryption_options:
                                 dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
-        with open(yaml_file, 'r') as f:
-            self.log.debug("Scylla YAML configuration read from: {} is:", yaml_file)
-            self.log.debug(f.read())
+        self.log.debug("Scylla YAML configuration read from: {} {} is:".format(self.public_ip_address, yaml_file))
+        res = self.remoter.run('sudo cat {}'.format(yaml_file))
+        self.log.debug(res)
 
         if append_scylla_args:
             if self.is_rhel_like():
