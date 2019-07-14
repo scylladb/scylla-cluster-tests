@@ -830,26 +830,38 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
 
-        return CassandraStressThread(loader_set=self.loaders,
-                                     stress_cmd=stress_cmd,
-                                     timeout=timeout,
-                                     output_dir=cluster.Setup.logdir(),
-                                     stress_num=stress_num,
-                                     keyspace_num=keyspace_num,
-                                     profile=profile,
-                                     node_list=self.db_cluster.nodes,
-                                     round_robin=round_robin,
-                                     client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
-                                     keyspace_name=keyspace_name).run()
+        cs_thread = CassandraStressThread(loader_set=self.loaders,
+                                          stress_cmd=stress_cmd,
+                                          timeout=timeout,
+                                          output_dir=cluster.Setup.logdir(),
+                                          stress_num=stress_num,
+                                          keyspace_num=keyspace_num,
+                                          profile=profile,
+                                          node_list=self.db_cluster.nodes,
+                                          round_robin=round_robin,
+                                          client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
+                                          keyspace_name=keyspace_name).run()
+        scylla_encryption_options = self.params.get('scylla_encryption_options')
+        if scylla_encryption_options and 'write' in stress_cmd:
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            time.sleep(60)
+            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+        return cs_thread
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
 
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
-        return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                    cluster.Setup.logdir(),
-                                                    node_list=self.db_cluster.nodes)
+        bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
+                                                            cluster.Setup.logdir(),
+                                                            node_list=self.db_cluster.nodes)
+        scylla_encryption_options = self.params.get('scylla_encryption_options')
+        if scylla_encryption_options and 'write' in stress_cmd:
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            time.sleep(60)
+            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+        return bench_thread
 
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments,unused-argument
                         round_robin=False, stats_aggregate_cmds=True,  # pylint: disable=too-many-arguments,unused-argument
