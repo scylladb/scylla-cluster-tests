@@ -211,7 +211,32 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                                                                        )
                 session.execute(stmt)
 
+    def get_used_capacity(self, node):
+        # (sum(node_filesystem_size{mountpoint="/var/lib/scylla"})-sum(node_filesystem_avail{mountpoint="/var/lib/scylla"}))
+        filesystem_capacity_query = 'sum(node_filesystem_size{{mountpoint="{0.scylla_dir}", ' \
+                                    'instance=~"{1.private_ip_address}"}})'.format(self, node)
 
+        self.log.debug("filesystem_capacity_query: {}".format(filesystem_capacity_query))
+
+        fs_size_res = self.prometheusDB.query(query=filesystem_capacity_query, start=time.time(), end=time.time())
+        kb_size = 2 ** 10
+        mb_size = kb_size * 1024
+        gb_size = mb_size * 1024
+        fs_size_gb = int(fs_size_res[0]["values"][0][1]) / gb_size
+        self.log.debug("fs_cap_res: {}".format(fs_size_res))
+        used_capacity_query = '(sum(node_filesystem_size{{mountpoint="{0.scylla_dir}", ' \
+                              'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
+                              'instance=~"{1.private_ip_address}"}}))'.format(self, node)
+
+        self.log.debug("used_capacity_query: {}".format(used_capacity_query))
+
+        used_cap_res = self.prometheusDB.query(query=used_capacity_query, start=time.time(), end=time.time())
+        self.log.debug("used_cap_res: {}".format(used_cap_res))
+
+        assert used_cap_res, "No results from Prometheus"
+        used_size_mb = int(used_cap_res[0]["values"][0][1]) / mb_size
+        self.log.debug("The used filesystem capacity is: {} MB/ {} GB".format(used_size_mb, fs_size_gb))
+        return used_size_mb
 
         # Util functions ===============================================================================================
 
@@ -255,6 +280,19 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self._pre_create_schema_large_scale()
         node1, node2, node3 = self.db_cluster.nodes
+
+        for node in self.db_cluster.nodes:
+            used_capacity = self.get_used_capacity(node=node)
+            self.log.debug("Node {} initial used capacity is: {}".format(node.public_ip_address, used_capacity))
+
+        yaml_file = "/etc/scylla/scylla.yaml"
+        for node in self.db_cluster.nodes: # disable hinted handoff
+            res = node.remoter.run('sudo echo hinted_handoff_enabled: true >> {}'.format(yaml_file))
+            self.log.debug("Scylla YAML configuration read from: {} {} is:".format(node.public_ip_address, yaml_file))
+            res = node.remoter.run('sudo cat {}'.format(yaml_file))
+            node.stop_scylla_server()
+            node.start_scylla_server()
+
         self.log.info('Stopping node-3 ({}) before updating cluster data'.format(node3.name))
         node3.stop_scylla_server()
         self.log.info('Updating cluster data when node3 ({}) is down'.format(node3.name))
@@ -264,6 +302,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Starting node-3 ({}) after updated cluster data'.format(node3.name))
         node3.start_scylla_server()
+
+        for node in self.db_cluster.nodes:
+            used_capacity = self.get_used_capacity(node=node)
+            self.log.debug("Node {} used capacity after pre-load data is: {}".format(node.public_ip_address, used_capacity))
 
         self.log.info('Run Repair on node: {} , 0% synced'.format(node3.name))
         repair_time, res = self._run_repair(node=node3)
