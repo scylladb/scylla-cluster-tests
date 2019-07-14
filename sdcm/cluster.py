@@ -1333,6 +1333,7 @@ server_encryption_options:
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
 
+        self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
         self.remoter.send_files(src=yaml_dst_path,
                                 dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
