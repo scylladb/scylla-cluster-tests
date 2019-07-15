@@ -1276,7 +1276,7 @@ class ClusterTester(db_stats.TestStatsMixin, Test):
         compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
         cql_cmd = "ALTER table {key_space_name}.{table_name} " \
                   "WITH in_memory=true AND compaction={compaction_strategy}".format(**locals())
-        node.remoter.run('cqlsh -e "{}" {}'.format(cql_cmd, node.private_ip_address), verbose=True)
+        self.db_cluster.run_cqlsh(node=node, cql_cmd=cql_cmd)
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),

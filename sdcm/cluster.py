@@ -2942,9 +2942,12 @@ class BaseLoaderSet(object):
             loader_node {BaseNode} -- LoaderNoder to send request
             db_node_ip {str} -- ip of db_node
         """
+        cql_auth = self.get_cql_auth()
+        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
+
         cmd = 'SELECT keyspace_name, table_name from system_schema.tables'
-        result = loader_node.remoter.run('cqlsh --request-timeout={} --no-color --execute "{}" {}'
-                                         .format(request_timeout, cmd, db_node_ip), verbose=False)
+        result = loader_node.remoter.run('cqlsh --request-timeout={} --no-color {} --execute "{}" {}'
+                                         .format(request_timeout, cql_auth, cmd, db_node_ip), verbose=False)
 
         avaialable_ks_cf = []
         for row in result.stdout.split('\n'):
@@ -2966,6 +2969,8 @@ class BaseLoaderSet(object):
         Returns:
             object -- object with result of remoter.run command
         """
+        cql_auth = self.get_cql_auth()
+        cql_auth = '-u {} -p {}'.format(*cql_auth) if cql_auth else ''
 
         ks_cf_list = self.get_non_system_ks_cf_list(loader_node, db_node_ip)
         if ks_cf not in ks_cf_list:
@@ -2977,7 +2982,7 @@ class BaseLoaderSet(object):
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
         cmd = 'select count(*) from {}'.format(ks_cf)
-        result = loader_node.remoter.run('cqlsh --no-color --execute "{}" {}'.format(cmd, db_node_ip), verbose=False)
+        result = loader_node.remoter.run('cqlsh --no-color {} --execute "{}" {}'.format(cql_auth, cmd, db_node_ip), verbose=False)
 
         return result
 
