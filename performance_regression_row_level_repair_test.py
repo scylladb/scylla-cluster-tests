@@ -287,7 +287,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         yaml_file = "/etc/scylla/scylla.yaml"
         for node in self.db_cluster.nodes: # disable hinted handoff
-            res = node.remoter.run('sudo echo hinted_handoff_enabled: true >> {}'.format(yaml_file))
+            res = node.remoter.run('sudo echo hinted_handoff_enabled: false >> {}'.format(yaml_file))
             self.log.debug("Scylla YAML configuration read from: {} {} is:".format(node.public_ip_address, yaml_file))
             res = node.remoter.run('sudo cat {}'.format(yaml_file))
             node.stop_scylla_server()
