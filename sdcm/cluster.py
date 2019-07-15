@@ -706,6 +706,8 @@ class BaseNode(object):
         :param last: Whether to show only the last backtrace.
         """
         result = self._get_coredump_backtraces(last=last)
+        if result.exit_status == 127:  # coredumpctl command not found
+            return
         log_file = os.path.join(self.logdir, 'coredump.log')
         output = result.stdout + result.stderr
         for line in output.splitlines():
@@ -745,7 +747,7 @@ class BaseNode(object):
         """
         n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1'
         result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
-        if "No coredumps found" in result.stdout:
+        if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
             return 0
         return len(result.stdout.splitlines())
 
