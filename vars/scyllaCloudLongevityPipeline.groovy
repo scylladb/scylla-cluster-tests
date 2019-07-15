@@ -100,6 +100,14 @@ def call(Map pipelineParams) {
         post {
             always {
                 script {
+                    if (currentBuild.result != 'SUCCESS') {
+                         wrap([$class: 'BuildUser']) {
+                            mail to: 'siren@scylladb.com',
+                                 subject: "SCT ${currentBuild.result}: Job ${env.JOB_NAME} ([${env.BUILD_NUMBER}])",
+                                 body: "Check console output at ${env.BUILD_URL}"
+                         }
+                    }
+
                     if (pipelineParams.params.post_behaviour == 'destroy') {
                         dir('siren-tests') {
                                 sh '''
