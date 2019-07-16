@@ -38,7 +38,7 @@ from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from datetime import datetime
 from .log import SDCMAdapter
-from .remote import RemoteCmdRunner, LocalCmdRunner
+from .remote import RemoteCmdRunner, LocalCmdRunner, CmdExecTimeoutExceeded
 from . import wait
 from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, get_latest_gemini_version
 from .collectd import ScyllaCollectdSetup
@@ -1890,7 +1890,8 @@ server_encryption_options:
                                   host=self.ip_address if not target_db_node else target_db_node.ip_address,
                                   port=port if port else self.CQL_PORT,
                                   connect_timeout=connect_timeout)
-        cqlsh_out = self.remoter.run(cmd, timeout=timeout + 1, verbose=verbose)
+        cqlsh_out = self.remoter.run(cmd, timeout=timeout + 5,  # we give 5 seconds to cqlsh timeout mechanism to work
+                                     verbose=verbose)
         # stdout of cqlsh example:
         #      pk
         #      ----
@@ -3096,7 +3097,7 @@ class BaseLoaderSet(object):
         try:
             result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
                                            timeout=3600, verbose=False, target_db_node=db_node, connect_timeout=10)
-        except (UnexpectedExit, Failure) as details:
+        except (UnexpectedExit, Failure, CmdExecTimeoutExceeded) as details:
             self.log.error('Fullscan command finished with errors: {}'.format(details))
             result = details.result
 
