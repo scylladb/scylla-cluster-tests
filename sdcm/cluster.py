@@ -53,7 +53,7 @@ from .db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, FullScanEvent, \
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
-
+from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -270,10 +270,17 @@ class Setup(object):
     def get_startup_script(cls):
         post_boot_script = '#!/bin/bash'
         if cls.RSYSLOG_ADDRESS:
-            post_boot_script += dedent('''
-                   sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
-                   sudo systemctl restart rsyslog
-                   '''.format(*cls.RSYSLOG_ADDRESS))
+            if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+                post_boot_script += dedent('''
+                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
+                       sudo systemctl restart rsyslog
+                       '''.format('127.0.0.1', RSYSLOG_SSH_TUNNEL_LOCAL_PORT))
+            else:
+                post_boot_script += dedent('''
+                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
+                       sudo systemctl restart rsyslog
+                       '''.format(*cls.RSYSLOG_ADDRESS))
+
         return post_boot_script
 
 
@@ -416,6 +423,9 @@ class BaseNode(object):
         self._distro = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
+
+        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+            start_auto_ssh(Setup.test_id(), self, Setup.RSYSLOG_ADDRESS[1], RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
 
     @property
     def short_hostname(self):
@@ -2191,10 +2201,18 @@ class BaseCluster(object):
     def destroy(self):
         self.log.info('Destroy nodes')
         for node in self.nodes:
+            if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+                from sdcm.auto_ssh import stop_auto_ssh
+                stop_auto_ssh(Setup.test_id(), node)
+
             node.destroy()
 
     def terminate_node(self, node):
         self.nodes.remove(node)
+        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+            from sdcm.auto_ssh import stop_auto_ssh
+            stop_auto_ssh(Setup.test_id(), node)
+
         node.destroy()
 
     def get_db_auth(self):
