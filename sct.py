@@ -13,7 +13,8 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
-                               list_logs_by_test_id, restore_monitoring_stack, gce_meta_to_dict, aws_tags_to_dict)
+                               list_logs_by_test_id, restore_monitoring_stack, get_branched_ami, gce_meta_to_dict,
+                               aws_tags_to_dict)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 
@@ -164,6 +165,25 @@ def list_ami_versions(region):
         x.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
 
     click.echo(x.get_string(title="Scylla AMI versions"))
+
+
+@cli.command('list-ami-branch', help="""list Amazon Scylla branched AMI versions
+    \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
+@click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
+@click.argument('version', type=str, default='branch-3.1:all')
+def list_ami_branch(region, version):
+    def get_tags(ami):
+        return {i['Key']: i['Value'] for i in ami.tags}
+
+    amis = get_branched_ami(version, region_name=region)
+
+    x = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId"])
+    x.align = "l"
+
+    for ami in amis:
+        x.add_row([ami.name, ami.id, ami.creation_date, get_tags(ami)['build-id']])
+
+    click.echo(x.get_string(title="Scylla AMI branch versions"))
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')

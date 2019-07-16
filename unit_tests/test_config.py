@@ -198,6 +198,25 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(conf.get('scylla_repo'), "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
         self.assertEqual(conf.get('scylla_repo_loader'), "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.0.repo")
 
+    def test_13_scylla_version_ami_branch(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:60'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0fd79a6f4ca83b0d6 ami-03d6caf668ad59911')
+
+    def test_13_scylla_version_ami_branch_latest(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:latest'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertIsNotNone(conf.get('ami_id_db_scylla'))
+        self.assertEqual(len(conf.get('ami_id_db_scylla').split(' ')), 2)
+
     def test_config_dupes(self):
         def get_dupes(c):
             '''sort/tee/izip'''
