@@ -2697,6 +2697,14 @@ class BaseScyllaCluster(object):
             node.replacement_node_ip = None
             self.node_config_setup(node, seed_address, endpoint_snitch)
 
+    @staticmethod
+    def verify_logging_from_nodes(nodes_list):
+        for node in nodes_list:
+            if not os.path.exists(node.database_log):
+                error_msg = "No db log from node [%s] " % node
+                logger.critical(error_msg)
+                raise Exception(error_msg)
+
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
         """
@@ -2712,6 +2720,8 @@ class BaseScyllaCluster(object):
         self.get_seed_nodes()
         self.get_scylla_version()
         self.set_traffic_control()
+        self.verify_logging_from_nodes(node_list)
+
         self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].check_node_health())
 
     def restart_scylla(self, nodes=None):
