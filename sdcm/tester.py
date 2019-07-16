@@ -181,7 +181,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self._logs = {}
 
         if self.params.get("logs_transport") == 'rsyslog':
-            cluster.Setup.configure_rsyslog(self.params.get('sct_ngrok_name', default=False))
+            cluster.Setup.configure_rsyslog(enable_ngrok=False)
 
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
