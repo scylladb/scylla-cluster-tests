@@ -981,3 +981,31 @@ def get_my_ip():
     hostname = socket.gethostname()
     ip = socket.gethostbyname(hostname)
     return ip
+
+
+def get_branched_ami(ami_version, region_name):
+    """
+    Get a list of AMIs, based on version match
+
+    :param ami_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
+    :param region_name: the region to look AMIs in
+    :return: list of ec2.images
+    """
+    branch, build_id = ami_version.split(':')
+    ec2 = boto3.resource('ec2', region_name=region_name)
+
+    logger.info("Looking for AMI match [%s]", ami_version)
+    if build_id == 'latest' or build_id == 'all':
+        filters = [{'Name': 'tag:branch', 'Values': [branch]}]
+    else:
+        filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
+
+    amis = list(ec2.images.filter(Filters=filters))
+
+    amis = sorted(amis, key=lambda x: x.creation_date, reverse=True)
+
+    assert amis, "AMI matching [{}] wasn't found on {}".format(ami_version, region_name)
+    if build_id == 'all':
+        return amis
+    else:
+        return amis[:1]

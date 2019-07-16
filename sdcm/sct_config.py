@@ -12,7 +12,7 @@ from distutils.util import strtobool
 
 import anyconfig
 
-from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions
+from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami
 from sdcm.utils.version_utils import get_branch_version
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
@@ -921,6 +921,11 @@ class SCTConfiguration(dict):
             if 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
+                    if ':' in scylla_version:
+                        amis = get_branched_ami(scylla_version, region_name=region)
+                        ami_list.append(amis[0].id)
+                        continue
+
                     amis = get_scylla_ami_versions(region)
                     for ami in amis:
                         if scylla_version in ami['Name']:
@@ -941,7 +946,7 @@ class SCTConfiguration(dict):
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
 
-            if 'scylla_repo_loader' not in self:
+            if 'scylla_repo_loader' not in self and ':' not in scylla_version:
                 scylla_linux_distro_loader = self.get('scylla_linux_distro_loader', '')
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
@@ -953,7 +958,7 @@ class SCTConfiguration(dict):
                         self['scylla_repo_loader'] = repo_map[key]
                         break
                 else:
-                    raise ValueError("repo for scylla version {} wasn't found".format(scylla_version))
+                    raise ValueError("repo for scylla version {} wasn't found in []".format(scylla_version))
 
         # 6) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version', None)
