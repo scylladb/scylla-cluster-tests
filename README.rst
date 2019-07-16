@@ -442,6 +442,20 @@ FAQ
     # http://fruch.ngrok.io
 
 
+**Q:** How to use SCT_UPDATE_DB_PACKAGES on my job, and what does it do ?
+
+**A:** SCT has the ability to run an upgrade to a given RPM, that will happen either after a regular installation or a deployment of an instance. The desired RPM must be placed somewhere in the builder, that will copy it to the DB node and run a rpm command to upgrade the installed package (be sure that your RPM has a version bigger than the one installed).::
+
+    # from your environment variables set like this:
+    # be sure to put a slash after the path !
+    export SCT_UPDATE_DB_PACKAGES=<path_to_my_rpm>/
+
+    # from your jenkinsfile file you could set like this (inside your pipeline settings):
+    update_db_packages: '<path_to_my_rpm>/'
+
+    # from your yaml file set like this:
+    update_db_packages: '<path_to_my_rpm>/'
+
 TODO
 ====
 
