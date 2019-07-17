@@ -236,6 +236,18 @@ class ConfigurationTests(unittest.TestCase):
         conf.verify_configuration()
         self.assertEqual(conf.get('security_group_ids'), 'sg-c5e1f7a0')
 
+    def test_15_new_scylla_repo(self):
+        centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_REPO'] = centos_repo
+        os.environ['SCT_NEW_SCYLLA_REPO'] = centos_repo
+        os.environ['SCT_USER_PREFIX'] = 'testing'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
+
 
 if __name__ == "__main__":
     unittest.main()

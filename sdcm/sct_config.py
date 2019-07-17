@@ -13,6 +13,7 @@ from distutils.util import strtobool
 import anyconfig
 
 from sdcm.utils import get_s3_scylla_repos_mapping, get_scylla_ami_versions
+from sdcm.version_utils import get_branch_version
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
 
@@ -979,6 +980,10 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
+        # 8) update target_upgrade_version automaticlly
+        new_scylla_repo = self.get('new_scylla_repo', None)
+        if new_scylla_repo and 'target_upgrade_version' not in self:
+            self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
         LOGGER.info(self.dump_config())
 
     @classmethod
