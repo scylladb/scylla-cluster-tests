@@ -952,7 +952,7 @@ class Nemesis(object):
                                    msg="Wrong expected and actual top partitions number for {} sampler".format(sampler))
             self.tester.assertTrue(toppartition_result[sampler]['capacity'] == args['capacity'],
                                    msg="Wrong expected and actual capacity number for {} sampler".format(sampler))
-            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), args['top_partition'],
+            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), args['toppartition'],
                                         msg="Wrong number of requested and expected toppartitions for {} sampler".format(sampler))
 
 
