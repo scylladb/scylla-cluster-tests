@@ -14,7 +14,7 @@ from math import sqrt
 from requests import ConnectionError
 
 from es import ES
-from utils import get_job_name, retrying, remove_comments
+from utils.common import get_job_name, retrying, remove_comments
 
 
 logger = logging.getLogger(__name__)

@@ -32,7 +32,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
 
-from .utils import get_data_dir_path, retrying, remote_get_file
+from .utils.common import get_data_dir_path, retrying, remote_get_file
 from .log import SDCMAdapter
 from .keystore import KeyStore
 from . import prometheus

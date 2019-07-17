@@ -15,7 +15,7 @@
 
 
 from sdcm.tester import ClusterTester
-from sdcm.utils import get_data_dir_path
+from sdcm.utils.common import get_data_dir_path
 from sdcm.nemesis import UpgradeNemesis
 from sdcm.nemesis import log_time_elapsed
 

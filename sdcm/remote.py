@@ -27,7 +27,7 @@ from invoke.watchers import StreamWatcher, Responder
 import six.moves
 
 from .log import SDCMAdapter
-from .utils import retrying
+from .utils.common import retrying
 
 
 class OutputCheckError(Exception):

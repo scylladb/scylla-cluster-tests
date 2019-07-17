@@ -1,7 +1,7 @@
 from invoke.exceptions import UnexpectedExit, Failure
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils import log_run_info, retrying
+from sdcm.utils.common import log_run_info, retrying
 
 
 class InMemoryPerformanceRegressionTest(PerformanceRegressionTest):

@@ -12,8 +12,8 @@ from distutils.util import strtobool
 
 import anyconfig
 
-from sdcm.utils import get_s3_scylla_repos_mapping, get_scylla_ami_versions
-from sdcm.version_utils import get_branch_version
+from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions
+from sdcm.utils.version_utils import get_branch_version
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
 

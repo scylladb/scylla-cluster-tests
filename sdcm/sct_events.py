@@ -14,7 +14,7 @@ from enum import Enum
 import zmq
 import requests
 
-from sdcm.utils import safe_kill, pid_exists, _fromtimestamp
+from sdcm.utils.common import safe_kill, pid_exists, _fromtimestamp
 from sdcm.prometheus import nemesis_metrics_obj
 
 LOGGER = logging.getLogger(__name__)
