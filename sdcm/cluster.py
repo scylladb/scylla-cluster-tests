@@ -743,7 +743,7 @@ class BaseNode(object):
         :return: Number of coredumps
         :rtype: int
         """
-        n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1 ||true'
+        n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1'
         result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
         if "No coredumps found" in result.stdout:
             return 0
