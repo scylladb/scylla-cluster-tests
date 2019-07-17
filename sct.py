@@ -3,11 +3,11 @@ import logging
 import os
 import sys
 import unittest
+import pytest
 
 import click
 import click_completion
 from prettytable import PrettyTable
-import xmlrunner
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -288,11 +288,7 @@ cli.add_command(investigate)
 @click.option("-t", "--test", required=False, default="test*.py",
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    import unittest
-
-    test_suite = unittest.TestLoader().discover('unit_tests', pattern=test, top_level_dir='.')
-    result = unittest.TextTestRunner(verbosity=2).run(test_suite)
-    sys.exit(not result.wasSuccessful())
+    pytest.main(['-v', '-p', 'no:warnings', 'unit_tests'])
 
 
 class OutputLogger(object):
@@ -307,6 +303,9 @@ class OutputLogger(object):
     def flush(self):
         self.terminal.flush()
         self.log.flush()
+
+    def isatty(self):
+        return False
 
 
 @cli.command('run-test', help="Run SCT test using unittest")
@@ -323,12 +322,12 @@ def run_test(argv, backend, config, logdir):
 
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
+
     logfile = os.path.join(Setup.logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
     unittest.main(module=None, argv=['python -m unittest', argv],
-                  testRunner=xmlrunner.XMLTestRunner(stream=sys.stderr, output=os.path.join(Setup.logdir(), 'test-reports')),
                   failfast=False, buffer=False, catchbreak=True)
 
 
