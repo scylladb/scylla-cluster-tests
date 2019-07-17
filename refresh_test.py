@@ -19,7 +19,7 @@ import json
 import subprocess
 
 from sdcm.tester import ClusterTester
-from sdcm.utils import remote_get_file
+from sdcm.utils.common import remote_get_file
 
 
 class RefreshTest(ClusterTester):

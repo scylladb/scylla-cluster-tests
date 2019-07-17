@@ -10,9 +10,9 @@ import xmlrunner
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils import (list_instances_aws, list_instances_gce, clean_cloud_instances,
-                        aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
-                        list_logs_by_test_id, restore_monitoring_stack)
+from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
+                               aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
+                               list_logs_by_test_id, restore_monitoring_stack)
 from sdcm.cluster import Setup
 
 click_completion.init()

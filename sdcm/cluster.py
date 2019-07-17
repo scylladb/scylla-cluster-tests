@@ -42,7 +42,7 @@ from sdcm.rsyslog_daemon import start_rsyslog
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner, CmdExecTimeoutExceeded
 from . import wait
-from .utils import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
+from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats

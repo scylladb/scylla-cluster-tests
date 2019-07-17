@@ -14,7 +14,7 @@ from datetime import datetime
 
 import cluster
 import ec2_client
-from sdcm.utils import retrying, list_instances_aws
+from sdcm.utils.common import retrying, list_instances_aws
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from . import wait
 

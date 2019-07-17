@@ -14,7 +14,7 @@
 import os
 import time
 
-from sdcm.utils import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread
 
 
 class CassandraStressExporter(FileFollowerThread):

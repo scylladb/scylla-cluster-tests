@@ -1,6 +1,6 @@
 import unittest
 
-from sdcm.version_utils import get_branch_version_from_list, get_branch_version_from_repo, get_branch_version
+from sdcm.utils.version_utils import get_branch_version_from_list, get_branch_version_from_repo, get_branch_version
 
 deb_url = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/deb/unstable/stretch/9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-525a0255f73d454f8f97f32b8bdd71c8dec35d3d/68/scylladb-2019.1/scylla.list'
 rpm_url = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'

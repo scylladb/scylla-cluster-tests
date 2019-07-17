@@ -13,7 +13,7 @@ import time
 import datetime
 
 from sdcm import wait
-from sdcm.utils import Distro
+from sdcm.utils.common import Distro
 
 logger = logging.getLogger(__name__)
 

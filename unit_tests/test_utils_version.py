@@ -1,6 +1,6 @@
 import random
 from unittest import TestCase
-from sdcm.utils import version
+from sdcm.utils.common import version
 
 
 class VersionedClass(object):
@@ -51,7 +51,7 @@ class TestUtilsVersionDecorator(TestCase):
         self.assertRaises(AttributeError, vc.setup)
 
     def test_version_not_found(self):
-        from sdcm.utils import MethodVersionNotFound
+        from sdcm.utils.common import MethodVersionNotFound
         vc = VersionedClass("1")
         self.assertRaises(MethodVersionNotFound, vc.setup)
 

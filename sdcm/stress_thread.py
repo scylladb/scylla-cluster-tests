@@ -22,7 +22,7 @@ from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
-from sdcm.utils import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events import CassandraStressLogEvent, Severity
 
 LOGGER = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ import logging
 import os
 
 import cluster
-from sdcm.utils import retrying
+from sdcm.utils.common import retrying
 from remote import LocalCmdRunner
 
 logger = logging.getLogger(__name__)
