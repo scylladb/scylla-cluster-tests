@@ -1953,11 +1953,8 @@ server_encryption_options:
         # Validate nodes health
         node_type = 'target' if self.running_nemesis else 'regular'
         # TODO: improve this part (using get_nodetool_status function from ScyllaCluster)
-        ClusterHealthValidatorEvent(type='start', name='NodesStatus', status=True, node=self.name)
         try:
             self.log.info('Status for %snode %s: %s' % (node_type, self.name, self.run_nodetool('status')))
-
-            ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=True, node=self.name)
 
         except Exception as ex:
             ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=False,
@@ -1966,7 +1963,6 @@ server_encryption_options:
 
     def check_schema_version(self):
         # Get schema version
-        ClusterHealthValidatorEvent(type='start', name='NodeSchemaVersion', status=True, node=self.name)
         errors = []
         try:
             result = self.run_nodetool('gossipinfo')
@@ -1998,9 +1994,6 @@ server_encryption_options:
             ClusterHealthValidatorEvent(type='end', name='NodeSchemaVersion', status=False,
                                         node=self.name,
                                         error='; '.join(errors))
-        else:
-            ClusterHealthValidatorEvent(type='end', name='NodeSchemaVersion', status=True,
-                                        node=self.name)
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
@@ -2525,12 +2518,10 @@ class BaseScyllaCluster(object):
         return status
 
     def check_cluster_health(self):
-        ClusterHealthValidatorEvent(type='start', name='ClusterHealthCheck', status=True)
-
         for node in self.nodes:
             node.check_node_health()
 
-        ClusterHealthValidatorEvent(type='end', name='ClusterHealthCheck', status=True)
+        ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=True)
 
     def check_nodes_up_and_normal(self, nodes=[]):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
