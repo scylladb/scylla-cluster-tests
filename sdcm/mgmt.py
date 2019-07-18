@@ -167,7 +167,10 @@ class ManagerTask(ScyllaManagerBase):
         cmd = "task list -c {}".format(self.cluster_id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         str_status = self.get_property(parsed_table=res, column_name='status')
-        return TaskStatus.from_str(str_status)
+        str_accurate_status = str_status.split()[0]
+        # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
+        # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
+        return TaskStatus.from_str(str_accurate_status)
 
         # expecting output of:
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
