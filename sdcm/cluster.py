@@ -1193,7 +1193,6 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
-
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -1321,7 +1320,6 @@ server_encryption_options:
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-
 
             install_transport_backports = dedent("""
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
@@ -2960,9 +2958,9 @@ class BaseMonitorSet(object):
         self.monitor_branch = self.params.get('monitor_branch', default='branch-2.2')
         self.monitor_install_path_base = "/var/lib/scylla"
         self.monitor_install_path = os.path.join(self.monitor_install_path_base,
-                                                 "scylla-grafana-monitoring-{}".format(self.monitor_branch))
+                                                 "scylla-monitoring-{}".format(self.monitor_branch))
         self.monitoring_conf_dir = os.path.join(self.monitor_install_path, "config")
-        self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-grafana-monitoring-data")
+        self.monitoring_data_dir = os.path.join(self.monitor_install_path_base, "scylla-monitoring-data")
         self.phantomjs_installed = False
 
     @staticmethod
@@ -3069,7 +3067,7 @@ class BaseMonitorSet(object):
         install_script = dedent("""
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
-            wget https://github.com/scylladb/scylla-grafana-monitoring/archive/{0.monitor_branch}.zip
+            wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip
             unzip {0.monitor_branch}.zip
         """.format(self))
         node.remoter.run("sudo bash -ce '%s'" % install_script)

@@ -478,4 +478,4 @@ Footnotes
 * [3] https://prometheus.io/
 * [4] http://grafana.org/
 
-.. _repo: https://github.com/scylladb/scylla-grafana-monitoring
+.. _repo: https://github.com/scylladb/scylla-monitoring
