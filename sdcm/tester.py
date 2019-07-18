@@ -23,6 +23,7 @@ import libvirt
 import shutil
 import random
 import unittest
+import zipfile
 
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
@@ -1336,19 +1337,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             stop_rsyslog()
 
     def zip_and_upload_job_log(self):
-        job_log_dir = self.logdir
-        event_log_dir_tmp = os.path.join(job_log_dir, 'job_log')
+
+        event_log_dir_tmp = os.path.join(self.logdir, 'job_log')
         if not os.path.exists(event_log_dir_tmp):
             os.mkdir(event_log_dir_tmp)
         for f in ['sct.log', 'output.log']:
-            f_path = os.path.join(job_log_dir, f)
+            f_path = os.path.join(self.logdir, f)
             if os.path.isfile(f_path):
                 shutil.copy(f_path, event_log_dir_tmp)
 
         archive_name = os.path.basename(event_log_dir_tmp)
 
         try:
-            joblog_archive = shutil.make_archive(archive_name, 'zip', event_log_dir_tmp)
+            cur_dir = os.getcwd()
+            joblog_archive = os.path.join(self.logdir, archive_name + ".zip")
+            with zipfile.ZipFile(joblog_archive, "w", allowZip64=True) as arch:
+                os.chdir(event_log_dir_tmp)
+                for root, _, files in os.walk(event_log_dir_tmp):
+                    for log_file in files:
+                        arch.write(log_file)
+                os.chdir(cur_dir)
             s3_link = S3Storage().upload_file(file_path=joblog_archive, dest_dir=cluster.Setup.test_id())
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
