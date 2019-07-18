@@ -387,7 +387,7 @@ def list_logs_by_test_id(test_id):
 
 
 def restore_monitoring_stack(test_id):
-    from .remote import LocalCmdRunner
+    from sdcm.remote import LocalCmdRunner
 
     lr = LocalCmdRunner()
     logger.info("Checking that docker is available...")
@@ -547,7 +547,7 @@ def clean_instances_gce(tags_dict):
     """
 
     # avoid cyclic dependency issues, since too many things import utils.py
-    from .keystore import KeyStore
+    from sdcm.keystore import KeyStore
 
     gcp_credentials = KeyStore().get_gcp_credentials()
     compute_engine = get_driver(Provider.GCE)
@@ -603,7 +603,7 @@ def list_instances_gce(tags_dict, region_name=None):
     """
 
     # avoid cyclic dependency issues, since too many things import utils.py
-    from .keystore import KeyStore
+    from sdcm.keystore import KeyStore
 
     instances = []
     gcp_credentials = KeyStore().get_gcp_credentials()
