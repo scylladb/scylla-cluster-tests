@@ -2382,7 +2382,7 @@ class BaseScyllaCluster(object):
         self.log.debug('User requested to update DB packages...')
 
         seed_nodes = self.get_seed_nodes()
-        non_seed_nodes = [n for n in self.nodes if not n.is_seed]
+        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]
 
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB packages')
