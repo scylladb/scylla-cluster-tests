@@ -890,7 +890,7 @@ class SCTConfiguration(dict):
                 for k, v in regions_data[region].items():
                     if k not in self.keys():
                         self[k] = v
-                    else:
+                    elif len(self[k].split()) < len(region_names):
                         self[k] += " {}".format(v)
 
         # 3) overwrite with environment variables
