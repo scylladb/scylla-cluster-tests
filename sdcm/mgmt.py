@@ -348,6 +348,19 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE, SSL_USER_KEY_FILE)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
+    def delete_task(self, task_id):
+        cmd = "-c {} task delete {}".format(self.id, task_id)
+        logger.debug("Task Delete command to execute is: {}".format(cmd))
+        stdout, stderr = self.sctool.run(cmd=cmd, parse_table_res=False)
+        if stderr:
+            logger.warning("stderr:\n" + stderr)
+            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(cmd))
+        logger.debug("Deleted the task '{}' successfully!". format(task_id))
+
+    def delete_automatic_repair_task(self):
+        repair_task = self.repair_task_list[0]
+        self.delete_task(repair_task.id)
+
     @property
     def _cluster_list(self):
         """
@@ -573,7 +586,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None, single_node=False):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None,
+                    single_node=False, disable_automatic_repair=False):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -610,14 +624,16 @@ class ScyllaManagerTool(ScyllaManagerBase):
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         user = user or self.DEFAULT_USER
         logger.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        res_ssh_setup, ssh_identity_file = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user, single_node=single_node)
+        res_ssh_setup, ssh_identity_file = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user,
+                                                                     single_node=single_node)
         ssh_user = create_user or 'scylla-manager'
         cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, ssh_identity_file,
                                                                                             ssh_user, name)
         # Adding client-encryption parameters if required
-        if client_encrypt != False:
+        if client_encrypt:
             if not db_cluster:
-                logger.warning("db_cluster is not given. Scylla-Manager connection to cluster may fail since not using client-encryption parameters.")
+                logger.warning("db_cluster is not given. Scylla-Manager connection to cluster may "
+                               "fail since not using client-encryption parameters.")
             else:  # check if scylla-node has client-encrypt
                 db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
@@ -625,9 +641,15 @@ class ScyllaManagerTool(ScyllaManagerBase):
                                                                                     SSL_USER_KEY_FILE)
         res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
         if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:
-            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(res_cluster_add))
-        cluster_id = res_cluster_add.stdout.split('\n')[0]  # return ManagerCluster instance with the manager's new cluster-id
-        return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt, ssh_identity_file=ssh_identity_file)
+            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(
+                res_cluster_add))
+        cluster_id = res_cluster_add.stdout.split('\n')[0]
+        # return ManagerCluster instance with the manager's new cluster-id
+        manager_cluster = ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id,
+                                         client_encrypt=client_encrypt, ssh_identity_file=ssh_identity_file)
+        if disable_automatic_repair:
+            manager_cluster.delete_automatic_repair_task()
+        return manager_cluster
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):
         manager_from_version = self.version
