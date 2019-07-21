@@ -80,6 +80,11 @@ def boolean(value):
         raise ValueError("{} isn't a boolean".format(type(value)))
 
 
+def sct_abs_path(relative_filename):
+    sct_root = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(sct_root, relative_filename)
+
+
 class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
@@ -842,13 +847,13 @@ class SCTConfiguration(dict):
     }
 
     defaults_config_files = {
-        "aws": ['defaults/aws_config.yaml'],
-        "gce": ['defaults/gce_config.yaml'],
-        "docker": ['defaults/docker_config.yaml'],
-        "libvirt": ['defaults/libvirt_config.yaml'],
-        "baremetal": ['defaults/baremetal_config.yaml'],
-        "openstack": ['defaults/openstack_config.yaml'],
-        "aws-siren": ['defaults/aws_config.yaml']
+        "aws": [sct_abs_path('defaults/aws_config.yaml')],
+        "gce": [sct_abs_path('defaults/gce_config.yaml')],
+        "docker": [sct_abs_path('defaults/docker_config.yaml')],
+        "libvirt": [sct_abs_path('defaults/libvirt_config.yaml')],
+        "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
+        "openstack": [sct_abs_path('defaults/openstack_config.yaml')],
+        "aws-siren": [sct_abs_path('defaults/aws_config.yaml')]
     }
 
     multi_region_params = [
@@ -860,10 +865,11 @@ class SCTConfiguration(dict):
 
         env = self._load_environment_variables()
         config_files = env.get('config_files', [])
+        config_files = [sct_abs_path(f) for f in config_files]
 
         # prepend to the config list the defaults the config files
         backend = env.get('cluster_backend')
-        backend_config_files = ['defaults/test_default.yaml']
+        backend_config_files = [sct_abs_path('defaults/test_default.yaml')]
         if backend:
             backend_config_files += self.defaults_config_files[str(backend)]
 
@@ -992,7 +998,7 @@ class SCTConfiguration(dict):
 
     def get_default_value(self, key, include_backend=False):
 
-        default_config_files = ['defaults/test_default.yaml']
+        default_config_files = [sct_abs_path('defaults/test_default.yaml')]
         backend = self['cluster_backend']
         if backend and include_backend:
             default_config_files += self.defaults_config_files[str(backend)]
