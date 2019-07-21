@@ -764,8 +764,7 @@ class Nemesis(object):
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
                 Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0])
-
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0], disable_automatic_repair=True)
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status()
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(mgr_task.id, str(mgr_task.status))
@@ -774,6 +773,7 @@ class Nemesis(object):
         self.log.debug("sctool version is : {}".format(manager_tool.version))
 
     def disrupt_mgmt_repair_api(self):
+        self.log.warning("If ever used, add the deletion of the automatic repair task first")  # TODO
         self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
             self.log.warning('Scylla-manager configuration is not defined!')
