@@ -503,10 +503,6 @@ def restore_monitoring_stack(test_id):
     return status
 
 
-aws_regions = ['us-east-1', 'eu-west-1', 'us-west-2']
-gce_regions = ['us-east1-b', 'us-west1-b', 'us-east4-b']
-
-
 def all_aws_regions():
     client = boto3.client('ec2')
     return [region['RegionName'] for region in client.describe_regions()['Regions']]
@@ -566,13 +562,15 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
-def list_instances_aws(tags_dict=None, region_name=None, running=False):
+def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False):
     """
     list all instances with specific tags AWS
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :param region_name: name of the region to list
     :param running: get all running instances
+    :param group_as_region: if True the results would be grouped into regions
+
     :return: instances dict where region is a key
     """
     instances = {}
@@ -591,12 +589,17 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False):
         logger.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100).run(get_instances)
-    instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
-    if running:
-        instances = [i for i in instances if i['State']['Name'] == 'running']
+
+    for region_name in instances.keys():
+        if running:
+            instances[region_name] = [i for i in instances[region_name] if i['State']['Name'] == 'running']
+        else:
+            instances[region_name] = [i for i in instances[region_name] if not i['State']['Name'] == 'terminated']
+    if not group_as_region:
+        instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
+        logger.info("Found total of %s instances.", len(instances))
     else:
-        instances = [i for i in instances if not i['State']['Name'] == 'terminated']
-    logger.info("Found total of %s instances.", len(instances))
+        logger.info("Found total of %s instances.", sum([len(value) for _, value in instances.items()]))
     return instances
 
 
@@ -608,15 +611,18 @@ def clean_instances_aws(tags_dict):
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    aws_instances = list_instances_aws(tags_dict=tags_dict)
+    aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
 
-    for instance in aws_instances:
-        tags = aws_tags_to_dict(instance.get('Tags'))
-        name = tags.get("Name", "N/A")
-        instance_id = instance['InstanceId']
-        logger.info("Going to delete '{instance_id}' [name={name}] ".format(**locals()))
-        response = instance.terminate()
-        logger.debug("Done. Result: %s\n", response['TerminatingInstances'])
+    print aws_instances.keys()
+    for region, instance_list in aws_instances.items():
+        client = boto3.client('ec2', region_name=region)
+        for instance in instance_list:
+            tags = aws_tags_to_dict(instance.get('Tags'))
+            name = tags.get("Name", "N/A")
+            instance_id = instance['InstanceId']
+            logger.info("Going to delete '{instance_id}' [name={name}] ".format(**locals()))
+            response = client.terminate_instances(InstanceIds=[instance_id])
+            logger.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
 def get_all_gce_regions():
