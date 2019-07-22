@@ -267,8 +267,9 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("used_cap_res: {}".format(used_cap_res))
 
         assert used_cap_res, "No results from Prometheus"
-        used_size_mb = int(used_cap_res[0]["values"][0][1]) / mb_size
-        self.log.debug("The used filesystem capacity is: {} MB/ {} GB".format(used_size_mb, fs_size_gb))
+        used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(mb_size)
+        used_size_gb = float(used_size_mb/1024)
+        self.log.debug("The used filesystem capacity on node {} is: {} MB/ {} GB".format(node.public_ip_address , used_size_mb, used_size_gb))
         return used_size_mb
 
     @retrying(n=40, sleep_time=60, allowed_exceptions=(AssertionError,))
@@ -376,7 +377,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.log.info('Stopping all other nodes before updating {}'.format(node.name))
             self._stop_all_nodes_except_for(node=node)
             self.log.info('Updating cluster data only for {}'.format(node.name))
-            distinct_write_cmd = "{} -pop seq={}..{}".format(base_distinct_write_cmd, sequence_current_index+1, sequence_current_index+sequence_range)
+            distinct_write_cmd = "{} -pop seq={}..{} -node {}".format(base_distinct_write_cmd, sequence_current_index+1, sequence_current_index+sequence_range, node.private_ip_address)
             prepare_cmd_queue = self.run_stress(stress_cmd=distinct_write_cmd)
             self._start_all_nodes_except_for(node=node)
             sequence_current_index += sequence_range
@@ -390,6 +391,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._wait_no_compactions_running()
 
         for node in self.db_cluster.nodes:
+            node.run_nodetool(sub_cmd='status')
             used_capacity = self.get_used_capacity(node=node)
             self.log.debug("Node {} total used capacity before starting repair is: {}".format(node.public_ip_address, used_capacity))
 
