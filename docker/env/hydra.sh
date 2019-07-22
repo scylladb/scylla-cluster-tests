@@ -3,7 +3,7 @@ set -e
 CMD=$@
 DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
-VERSION=$(cat ${DOCKER_ENV_DIR}/version)
+VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
 PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
@@ -24,7 +24,7 @@ if ! docker --version; then
     exit 1
 fi
 
-if docker images |grep scylladb/hydra.*${VERSION}; then
+if [[ ! -z "`docker images scylladb/hydra:${VERSION} -q`" ]]; then
     echo "Image up-to-date"
 else
     echo "Image with version $VERSION not found. Building..."
@@ -32,7 +32,7 @@ else
     cd ${DOCKER_ENV_DIR}
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     cp -f ${SCT_DIR}/${CENTOS_PREREQS_FILE} .
-    docker build -t scylladb/hydra:v${VERSION} .
+    docker build -t scylladb/hydra:${VERSION} .
     rm -f ${PY_PREREQS_FILE} ${CENTOS_PREREQS_FILE}
     cd -
 fi
@@ -80,5 +80,5 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${AWS_OPTIONS} \
     --net=host \
     --name=${SCT_TEST_ID} \
-    scylladb/hydra:v${VERSION} \
+    scylladb/hydra:${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"
