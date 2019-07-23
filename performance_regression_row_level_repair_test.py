@@ -293,6 +293,32 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             node.stop_scylla_server()
             node.start_scylla_server()
 
+    def _stop_all_nodes_except_for(self, node):
+        self.log.debug("Stopping all nodes except for: {}".format(node.name))
+
+        for c_node in [n for n in self.db_cluster.nodes if n != node]:
+            self.log.debug("Stopping node: {}".format(c_node.name))
+            c_node.stop_scylla_server()
+
+    def _start_all_nodes_except_for(self, node):
+        self.log.debug("Starting all nodes except for: {}".format(node.name))
+        node_list = [n for n in self.db_cluster.nodes if n != node]
+
+        # Start down seed nodes first, if exists
+        for c_node in [n for n in node_list if n.is_seed]:
+            self.log.debug("Starting seed node: {}".format(c_node.name))
+            c_node.start_scylla_server()
+
+        for c_node in [n for n in node_list if not n.is_seed]:
+            self.log.debug("Starting non-seed node: {}".format(c_node.name))
+            c_node.start_scylla_server()
+
+        node.wait_db_up()
+
+    def _print_nodes_used_capacity(self):
+        for node in self.db_cluster.nodes:
+            used_capacity = self.get_used_capacity(node=node)
+            self.log.debug("Node {} ({}) used capacity is: {}".format(node.name, node.private_ip_address, used_capacity))
     # Global Util functions ===============================================================================================
 
 
@@ -346,28 +372,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
-    def _stop_all_nodes_except_for(self, node):
-        self.log.debug("Stopping all nodes except for: {}".format(node.name))
-
-        for c_node in [n for n in self.db_cluster.nodes if n != node]:
-            self.log.debug("Stopping node: {}".format(node.name))
-            c_node.stop_scylla_server()
-
-    def _start_all_nodes_except_for(self, node):
-        self.log.debug("Starting all nodes except for: {}".format(node.name))
-        node_list = [n for n in self.db_cluster.nodes if n != node]
-
-        # Start down seed nodes first, if exists
-        for c_node in [n for n in node_list if n.is_seed]:
-            self.log.debug("Starting seed node: {}".format(node.name))
-            c_node.start_scylla_server()
-
-        for c_node in [n for n in node_list if not n.is_seed]:
-            self.log.debug("Starting non-seed node: {}".format(node.name))
-            c_node.start_scylla_server()
-
-        node.wait_db_up()
-
     def test_row_level_repair_3_nodes_small_diff(self):
         """
         Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
@@ -384,6 +388,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._pre_create_schema_large_scale()
         node1, node2, node3 = self.db_cluster.nodes
         self._disable_hinted_handoff()
+        self._print_nodes_used_capacity()
         for node in [node1, node2, node3]:
             self.log.info('Stopping all other nodes before updating {}'.format(node.name))
             self._stop_all_nodes_except_for(node=node)
@@ -393,18 +398,16 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self._start_all_nodes_except_for(node=node)
             sequence_current_index += sequence_range
 
-        for node in self.db_cluster.nodes:
-            used_capacity = self.get_used_capacity(node=node)
-            self.log.debug("Node {} distinct used capacity is: {}".format(node.public_ip_address, used_capacity))
+        time.sleep(60) # wait for capacity metrics to be fully updated for all nodes.
+        self.log.debug("Nodes distinct used capacity is")
+        self._print_nodes_used_capacity()
 
         self.log.info('Starting c-s/s-b write workload')
         self.preload_data()
         self._wait_no_compactions_running()
 
-        for node in self.db_cluster.nodes:
-            node.run_nodetool(sub_cmd='status')
-            used_capacity = self.get_used_capacity(node=node)
-            self.log.debug("Node {} total used capacity before starting repair is: {}".format(node.public_ip_address, used_capacity))
+        self.log.debug("Nodes total used capacity before starting repair is:")
+        self._print_nodes_used_capacity()
 
         self.log.info('Run Repair on node: {} , 99.8% synced'.format(node3.name))
         repair_time, res = self._run_repair(node=node3)
