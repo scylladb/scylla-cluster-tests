@@ -9,6 +9,7 @@ CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
+export GIT_USER_EMAIL=$(git config --get user.email)
 
 # if running on Build server
 if [[ ${USER} == "jenkins" ]]; then
@@ -74,6 +75,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
     -e _SCT_BASE_DIR=${SCT_DIR} \
+    -e GIT_USER_EMAIL \
     -u $(id -u ${USER}):$(grep "docker:" /etc/group|cut -d: -f3) \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
