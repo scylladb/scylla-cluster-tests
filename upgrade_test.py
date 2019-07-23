@@ -23,6 +23,7 @@ from pkg_resources import parse_version
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
 from functools import wraps
+from sdcm.utils.version_utils import is_enterprise
 
 
 def truncate_entries(func):
@@ -32,7 +33,7 @@ def truncate_entries(func):
         node = args[0]
         if self.truncate_entries_flag:
             base_version = self.params.get('scylla_version', default='')
-            system_truncated = True if base_version.startswith('3.1') else False
+            system_truncated = True if parse_version(base_version) >= parse_version('3.1') and not is_enterprise(base_version) else False
 
             with self.cql_connection_patient(node, keyspace='truncate_ks') as session:
                 self.cql_truncate_simple_tables(session=session, rows=self.insert_rows)
@@ -381,7 +382,8 @@ class UpgradeTest(FillDatabaseData):
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
         self.truncate_entries_flag = False
-        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1'):
+        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
+                not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
         self.log.info('Populate DB with many types of tables and data')
