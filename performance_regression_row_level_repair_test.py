@@ -272,7 +272,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("The used filesystem capacity on node {} is: {} MB/ {} GB".format(node.public_ip_address , used_size_mb, used_size_gb))
         return used_size_mb
 
-    @retrying(n=40, sleep_time=60, allowed_exceptions=(AssertionError,))
+    @retrying(n=80, sleep_time=60, allowed_exceptions=(AssertionError,))
     def _wait_no_compactions_running(self):
         q = "sum(scylla_compaction_manager_compactions{})"
         now = time.time()
@@ -412,9 +412,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Run Repair on node: {} , 99.8% synced'.format(node3.name))
         repair_time, res = self._run_repair(node=node3)
 
-        for node in self.db_cluster.nodes:
-            used_capacity = self.get_used_capacity(node=node)
-            self.log.debug("Node {} total used capacity after repair complete is: {}".format(node.public_ip_address, used_capacity))
+        self.log.debug("Nodes total used capacity after repair end is:")
+        self._print_nodes_used_capacity()
 
         self.log.info('Repair (99.8% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
