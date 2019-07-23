@@ -148,7 +148,8 @@ class LocalCmdRunner(CommandRunner):
                                            encoding='utf-8',
                                            hide=True,
                                            watchers=watchers,
-                                           command_timeout=timeout)
+                                           command_timeout=timeout,
+                                           env=os.environ, replace_env=True)
 
         except (Failure, UnexpectedExit) as details:
             if hasattr(details, "result"):
