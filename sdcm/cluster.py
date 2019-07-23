@@ -277,10 +277,37 @@ class Setup(object):
         return post_boot_script
 
 
+def get_username():
+
+    def is_email_in_scylladb_domain(email_addr):
+        return True if email_addr and "@scylladb.com" in email_addr else False
+
+    def get_email_user(email_addr):
+        return email_addr.strip().split("@")[0]
+
+    # First check that we running on Jenkins try to get user email
+    email = os.environ.get('BUILD_USER_EMAIL')
+    if is_email_in_scylladb_domain(email):
+        return get_email_user(email)
+    current_linux_user = getpass.getuser()
+    if current_linux_user == "jenkins":
+        return current_linux_user
+    # We are not on Jenkins and running in Hydra, try to get email from Git
+    # when running in Hydra there are env issues so we pass it using SCT_GIT_USER_EMAIL variable before docker run
+    git_user_email = os.environ.get('GIT_USER_EMAIL')
+    if is_email_in_scylladb_domain(git_user_email):
+        return get_email_user(git_user_email)
+    # we are outside of Hydra
+    res = localrunner.run(cmd="git config --get user.email", ignore_status=True)
+    if is_email_in_scylladb_domain(res.stdout):
+        return get_email_user(res.stdout)
+    # we didn't find email, fallback to current user with unknown email user identifier
+    return "linux_user={}".format(current_linux_user)
+
+
 def create_common_tags():
-    username = os.environ.get('BUILD_USER', getpass.getuser())
     build_tag = os.environ.get('BUILD_TAG', None)
-    tags = dict(RunByUser=username,
+    tags = dict(RunByUser=get_username(),
                 TestName=str(Setup.test_name()),
                 TestId=str(Setup.test_id()))
 
