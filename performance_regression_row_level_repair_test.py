@@ -350,12 +350,23 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
 
         for c_node in [n for n in self.db_cluster.nodes if n != node]:
+            self.log.debug("Stopping node: {}".format(node.name))
             c_node.stop_scylla_server()
 
     def _start_all_nodes_except_for(self, node):
         self.log.debug("Starting all nodes except for: {}".format(node.name))
-        for c_node in [n for n in self.db_cluster.nodes if n != node]:
+        node_list = [n for n in self.db_cluster.nodes if n != node]
+
+        # Start down seed nodes first, if exists
+        for c_node in [n for n in node_list if n.is_seed]:
+            self.log.debug("Starting seed node: {}".format(node.name))
             c_node.start_scylla_server()
+
+        for c_node in [n for n in node_list if not n.is_seed]:
+            self.log.debug("Starting non-seed node: {}".format(node.name))
+            c_node.start_scylla_server()
+
+        node.wait_db_up()
 
     def test_row_level_repair_3_nodes_small_diff(self):
         """
