@@ -69,7 +69,7 @@ def _scp_remote_escape(filename):
 def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # pylint: disable=too-many-arguments
                       key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
     assert isinstance(connect_timeout, (int, long))
-    ssh_full_path = LocalCmdRunner().run('which ssh').stdout
+    ssh_full_path = LocalCmdRunner().run('which ssh').stdout.strip()
     base_command = ssh_full_path
     base_command += " " + extra_ssh_options
     base_command += (" -a -x %s -o StrictHostKeyChecking=no "
@@ -105,14 +105,14 @@ class CommandRunner(object):
 
     def _print_command_results(self, result, verbose=True):
 
-        if verbose:
+        if verbose and not result.failed:
             if result.stderr:
                 self.log.info('STDERR: {}'.format(result.stderr.encode('utf-8')))
 
             self.log.info('Command "{}" finished with status {}'.format(result.command, result.exited))
             return
 
-        if result.failed:
+        if verbose and result.failed:
             self.log.error('Error executing command: "{}"; Exit status: {}'.format(result.command, result.exited))
             if result.stdout:
                 self.log.debug('STDOUT: {}'.format(result.stdout[-240:].encode('utf-8')))
@@ -168,7 +168,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         self.port = port
         self.extra_ssh_options = extra_ssh_options
         self.connect_timeout = connect_timeout
-        self._use_rsync = False
+        self._use_rsync = None
         self.known_hosts_file = tempfile.mkstemp()[1]
         self.ssh_config = Config(overrides={
                                  'load_ssh_config': False,
@@ -287,12 +287,13 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 local_dest = six.moves.shlex_quote(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
-                result = self.connection.local(rsync, encoding='utf-8')
+                result = LocalCmdRunner().run(rsync)
                 self.log.info(result.exited)
                 try_scp = False
             except (Failure, UnexpectedExit) as ex:
                 self.log.warning("Trying scp, rsync failed: %s", ex)
                 # Make sure master ssh available
+                files_received = False
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -307,24 +308,14 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                                           escape=False)
                 local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                try:
-                    result = self.connection.local(scp, hide=True)
-                    self.log.info("Command {} with status {}".format(result.command, result.exited))
-
-                    if result.exited:
-                        files_received = False
-
-                    # Avoid "already printed" message without real error
-                    if result.stderr:
-                        self.log.info("Stderr: {}".format(result.stderr))
-                        files_received = False
-                except UnexpectedExit as details:
-                    if not details.result.exited and not details.result.stderr:
-                        pass
-                    else:
-                        pass
-                else:
-                    self.log.info("Command {} with status {}".format(result.command, result.exited))
+                result = LocalCmdRunner().run(scp)
+                self.log.info("Command {} with status {}".format(result.command, result.exited))
+                if result.exited:
+                    files_received = False
+                # Avoid "already printed" message without real error
+                if result.stderr:
+                    self.log.info("Stderr: {}".format(result.stderr))
+                    files_received = False
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -379,10 +370,11 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 local_sources = [six.moves.shlex_quote(path) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
-                self.connection.local(rsync, encoding='utf-8')
+                LocalCmdRunner().run(rsync)
                 try_scp = False
             except (Failure, UnexpectedExit) as details:
                 self.log.warning("Trying scp, rsync failed: %s", details)
+                files_sent = False
 
         if try_scp:
             # scp has no equivalent to --delete, just drop the entire dest dir
@@ -423,17 +415,10 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                try:
-                    result = self.connection.local(scp)
-                except UnexpectedExit as details:
-                    if not details.result.exited and not details.result.stderr:
-                        pass
-                    else:
-                        pass
-                else:
-                    self.log.info('Command {} with status {}'.format(result.command, result.exited))
-                    if result.exited:
-                        files_sent = False
+                result = LocalCmdRunner().run(scp)
+                self.log.info('Command {} with status {}'.format(result.command, result.exited))
+                if result.exited:
+                    files_sent = False
         return files_sent
 
     def use_rsync(self):

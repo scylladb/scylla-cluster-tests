@@ -16,6 +16,13 @@
 import os
 import re
 import time
+import string
+import tempfile
+import itertools
+
+import yaml
+from cassandra import AlreadyExists, InvalidRequest
+
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.alternator import create_table as alternator_create_table
@@ -190,20 +197,23 @@ class LongevityTest(ClusterTester):
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
                 self._run_all_stress_cmds(stress_queue, params)
 
-        customer_profiles = self.params.get('cs_user_profiles')
+        customer_profiles = self.params.get('cs_user_profiles', default=[])
         if customer_profiles:
             cs_duration = self.params.get('cs_duration', default='50m')
-            for cs_profile in customer_profiles.split():
+            for cs_profile in customer_profiles:
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
                 with open(cs_profile) as pconf:
                     cont = pconf.readlines()
-                    for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
-                        stress_cmd = (cmd.format(profile_dst, cs_duration))
-                        params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
-                        self.log.debug('Stress cmd: {}'.format(stress_cmd))
-                        self._run_all_stress_cmds(stress_queue, params)
+                    user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+                        'user_profile_table_count', default=1)
+                    for i in range(user_profile_table_count):
+                        for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
+                            stress_cmd = (cmd.format(profile_dst, cs_duration))
+                            params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
+                            self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                            self._run_all_stress_cmds(stress_queue, params)
 
         fullscan = self._get_fullscan_params()
         if fullscan:
@@ -234,7 +244,7 @@ class LongevityTest(ClusterTester):
 
     def test_batch_custom_time(self):
         """
-        The test runs like test_custom_time but desgined for running multiple stress commands in batches.
+        The test runs like test_custom_time but designed for running multiple stress commands in batches.
         It take the keyspace_num and calculates the number of batches to run based on batch_size.
         For every batch, it runs the stress and verify them and only then moves to the next batch.
 
@@ -243,7 +253,7 @@ class LongevityTest(ClusterTester):
         - round_robin
         - No nemesis during prepare
 
-        :param keyspace_num: Number of keyspaces to be batched (in future it can be enahnced with number of tables).
+        :param keyspace_num: Number of keyspaces to be batched (in future it can be enhanced with number of tables).
         :param batch_size: Number of stress commands to run together in a batch.
         """
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
@@ -262,9 +272,102 @@ class LongevityTest(ClusterTester):
         self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
                                     stress_cmd=stress_cmd)
 
+    def test_user_batch_custom_time(self):
+        """
+        The test runs like test_custom_time but designed for running multiple stress commands on user profile with multiple
+        tables in one keyspace
+
+        It uses batches of `batch_size` size, until it reach `user_profile_table_count`
+        For every batch, it runs the stress command in parallel and verify them and only then moves to the next batch.
+
+        Test assumes:
+        - pre_create_schema (The test pre-creating the schema for all batches)
+        - round_robin
+        - No nemesis during prepare
+
+        :param user_profile_table_count: Number of tables to be batched.
+        :param batch_size: Number of stress commands to run together in a batch.
+        """
+
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+
+        batch_size = self.params.get('batch_size', default=1)
+
+        if not self.params.get('reuse_cluster', default=False):
+            self._pre_create_templated_user_schema()
+
+            # Start new nodes
+            # we are starting this test case with only one db to make creating of the tables quicker
+            # gossip with multiple node cluster make this painfully slower
+            add_node_cnt = self.params.get('add_node_cnt', default=1)
+
+            for _ in range(add_node_cnt):
+                new_nodes = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)
+                self.monitors.reconfigure_scylla_monitoring()
+                self.db_cluster.wait_for_init(node_list=new_nodes)
+
+        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+
+        stress_params_list = list()
+
+        customer_profiles = self.params.get('cs_user_profiles', default=[])
+
+        templated_table_counter = itertools.count()
+
+        if customer_profiles:
+            cs_duration = self.params.get('cs_duration', default='50m')
+            for cs_profile in customer_profiles:
+                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+
+                user_profile_table_count = self.params.get('user_profile_table_count',  # pylint: disable=invalid-name
+                                                           default=1)
+                for _ in range(user_profile_table_count):
+                    stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
+                                                                                   cs_profile)
+
+            self._run_user_stress_in_batches(batch_size=batch_size,
+                                             stress_params_list=stress_params_list)
+
+    def _run_user_stress_in_batches(self, batch_size, stress_params_list):
+        """
+        run user profile in batches, while adding 4 stress-commands which are not with precreated tables
+        and wait for them to finish
+
+        :param batch_size: size of the batch
+        :param stress_params_list: the list of all stress commands
+        :return:
+        """
+        def chunks(_list, chunk_size):
+            """Yield successive n-sized chunks from _list."""
+            for i in xrange(0, len(_list), chunk_size):
+                yield _list[i:i + chunk_size], i, i+chunk_size, len(_list) + i * 2
+
+        for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
+
+            stress_queue = list()
+            batch_params = dict(round_robin=True, stress_cmd=[])
+
+            # add few stress threads with tables that weren't pre-created
+            customer_profiles = self.params.get('cs_user_profiles', default=[])
+            for cs_profile in customer_profiles:
+                for i in range(4):
+                    batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)
+
+            for params in batch:
+                batch_params['stress_cmd'] += [params['stress_cmd']]
+
+            self._run_all_stress_cmds(stress_queue, params=batch_params)
+            for stress in stress_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
+
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
         stress_queue = list()
-        self._pre_create_schema(keyspace_num=total_stress)
+        pre_create_schema = self.params.get('pre_create_schema', default=True)
+
+        if pre_create_schema:
+            self._pre_create_schema(keyspace_num=total_stress,
+                                    scylla_encryption_options=self.params.get('scylla_encryption_options', None))
 
         num_of_batches = int(total_stress / batch_size)
         for batch in xrange(0, num_of_batches):
@@ -326,6 +429,45 @@ class LongevityTest(ClusterTester):
                               columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
                               in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
 
+    def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
+        # pylint: disable=too-many-locals
+        user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+            'user_profile_table_count', default=0)
+        cs_user_profiles = self.params.get('cs_user_profiles', default=[])
+        # read user-profile
+        for profile_file in cs_user_profiles:
+            profile_yaml = yaml.load(open(profile_file), Loader=yaml.SafeLoader)
+            keyspace_definition = profile_yaml['keyspace_definition']
+            keyspace_name = profile_yaml['keyspace']
+            table_template = string.Template(profile_yaml['table_definition'])
+
+            with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+                try:
+                    session.execute(keyspace_definition)  # pylint: disable=no-member
+                except AlreadyExists:
+                    self.log.debug("keyspace [{}] exists".format(keyspace_name))
+
+                if batch_start is not None and batch_end is not None:
+                    table_range = range(batch_start, batch_end)
+                else:
+                    table_range = range(user_profile_table_count)
+                self.log.debug('Pre Creating Schema for c-s with {} user tables'.format(user_profile_table_count))
+                for i in table_range:
+                    table_name = 'table{}'.format(i)
+                    query = table_template.substitute(table_name=table_name)
+                    try:
+                        session.execute(query)  # pylint: disable=no-member
+                    except AlreadyExists:
+                        self.log.debug('table [{}] exists'.format(table_name))
+                    self.log.debug('{} Created'.format(table_name))
+
+                    for definition in profile_yaml.get('extra_definitions', []):
+                        query = string.Template(definition).substitute(table_name=table_name)
+                        try:
+                            session.execute(query)  # pylint: disable=no-member
+                        except (AlreadyExists, InvalidRequest) as exc:
+                            self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
+
     def _flush_all_nodes(self):
         """
         This function will connect all db nodes in the cluster and run "nodetool flush" command.
@@ -360,3 +502,31 @@ class LongevityTest(ClusterTester):
             'test_id': self.test_id,
             'document_id': self.get_doc_id()
         }
+
+    def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
+        # pylint: disable=too-many-locals
+        params_list = []
+        cs_duration = self.params.get('cs_duration', default='50m')
+
+        with open(cs_profile) as pconf:
+            cont = pconf.readlines()
+            pconf.seek(0)
+            template = string.Template(pconf.read())
+            prefix, suffix = os.path.splitext(os.path.basename(cs_profile))
+            table_name = "table%s" % idx
+
+            with tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False) as file_obj:
+                output = template.substitute(table_name=table_name)
+                file_obj.write(output)
+                profile_dst = file_obj.name
+
+            # collect stress command from the comment in the end of the profile yaml
+            # example:
+            # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
+            for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
+                stress_cmd = (cmd.format(profile_dst, cs_duration))
+                params = {'stress_cmd': stress_cmd, 'profile': profile_dst}
+                self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                params_list.append(params)
+
+        return params_list

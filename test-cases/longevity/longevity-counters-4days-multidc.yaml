@@ -2,7 +2,7 @@ test_duration: 5760
 
 #stress_cmd: Inside the user-profile file.
 cs_user_profiles:
-    scylla-qa-internal/cust_g/data_by_tracking_id.yaml
+    - scylla-qa-internal/cust_g/data_by_tracking_id.yaml
 cs_duration: '5500m'
 
 n_db_nodes: '6 6 6'

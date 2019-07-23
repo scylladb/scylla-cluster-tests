@@ -17,21 +17,21 @@ space_node_threshold: 644245094
 
 cs_duration: '60m'
 cs_user_profiles:
-    cust_a/analytics/counters.yaml
-    cust_a/analytics/timeseries.yaml
-    cust_a/features/doc1.yaml
-    cust_a/offline/ctrs.yaml
-    cust_a/online/doc1.yaml
-    cust_a/online/doc2.yaml
-    cust_a/online/doc3.yaml
-    cust_a/users/users1.yaml
-    cust_a/users/users2.yaml
-    cust_b/events.yaml
-    cust_c/group.yaml
-    cust_d/short.yaml
-    cust_e/events.yaml
-    cust_s/case1.yaml
-    cust_s/case2.yaml
+    - cust_a/analytics/counters.yaml
+    - cust_a/analytics/timeseries.yaml
+    - cust_a/features/doc1.yaml
+    - cust_a/offline/ctrs.yaml
+    - cust_a/online/doc1.yaml
+    - cust_a/online/doc2.yaml
+    - cust_a/online/doc3.yaml
+    - cust_a/users/users1.yaml
+    - cust_a/users/users2.yaml
+    - cust_b/events.yaml
+    - cust_c/group.yaml
+    - cust_d/short.yaml
+    - cust_e/events.yaml
+    - cust_s/case1.yaml
+    - cust_s/case2.yaml
 
 append_scylla_args: '--blocked-reactor-notify-ms 4'
 
