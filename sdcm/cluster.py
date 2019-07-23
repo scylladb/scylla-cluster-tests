@@ -1959,7 +1959,7 @@ server_encryption_options:
         except Exception as ex:
             ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=False,
                                         node=self.name,
-                                        error="Unable to get nodetool status from '{node}': {ex}".format(**locals()))
+                                        error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex, node=self.name))
 
     def check_schema_version(self):
         # Get schema version
