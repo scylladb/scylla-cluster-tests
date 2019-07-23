@@ -1,5 +1,7 @@
-import requests
 import re
+
+import requests
+from pkg_resources import parse_version
 from repodataParser.RepoParser import Parser
 
 
@@ -53,3 +55,11 @@ def get_branch_version_from_repo(url):
     major_versions = [package['version'][1]['ver'] for package in p.getList()]
 
     return max(set(major_versions), key=major_versions.count)
+
+
+def is_enterprise(version):
+    """
+    :param version: version string
+    :return: True if this version string passed is a scylla enterprise version
+    """
+    return parse_version(version) > parse_version('2000')
