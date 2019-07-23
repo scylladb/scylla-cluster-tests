@@ -8,7 +8,7 @@ import re
 import time
 
 from sdcm.sct_events import GeminiEvent, GeminiLogEvent, Severity
-from sdcm.common.utils import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread
 
 LOGGER = logging.getLogger(__name__)
 
