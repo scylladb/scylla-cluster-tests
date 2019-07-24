@@ -1322,6 +1322,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def tearDown(self):
         self.log.info('TearDown is starting...')
+        self.print_failure_to_log()
         InfoEvent('TEST_END')
         try:
             self.finalize_test()
@@ -1546,3 +1547,40 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         archive_path = shutil.make_archive(path, 'zip', root_dir=path)
         self.log.info('Path to archive file: %s' % archive_path)
         return archive_path
+
+    def print_failure_to_log(self):
+        """
+        Print to logging in case of failure or error in unittest
+        since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
+
+        applied the idea from
+        https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
+
+        :return: None
+        """
+        def list2reason(exc_list):
+            """
+            Gets last backtrace string from `exc_list`
+
+            :param exc_list: unittest list of failures or errors
+            :return: string of backtrace
+            """
+            if exc_list and exc_list[-1][0] is self:
+                return exc_list[-1][1]
+
+        if hasattr(self, '_outcome'):  # Python 3.4+
+            result = self.defaultTestResult()  # these 2 methods have no side effects
+            self._feedErrorsToResult(result, self._outcome.errors)
+        else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
+            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)
+        error = list2reason(result.errors)
+        failure = list2reason(result.failures)
+        ok = not error and not failure
+
+        if not ok:
+            typ, text = ('ERROR', error) if error else ('FAIL', failure)
+            TEST_LOG.error("=" * 70)
+            TEST_LOG.error("%s: %s" % (typ, self.id()))
+            TEST_LOG.error("-" * 70)
+            TEST_LOG.error(text)
+            TEST_LOG.error("-" * 70)
