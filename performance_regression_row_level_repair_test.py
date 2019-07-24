@@ -378,10 +378,12 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-
+        thousand = 1000
+        million = thousand ** 2
+        billion = thousand ** 3
         base_distinct_write_cmd = "cassandra-stress write no-warmup cl=ONE n=1000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"
-        sequence_current_index = 1000000000
-        sequence_range = 1000000
+        sequence_current_index = billion
+        sequence_range = million
         dict_specific_tested_stats = {'repair_runtime': -1}
         self.create_test_stats(specific_tested_stats=dict_specific_tested_stats)
 
