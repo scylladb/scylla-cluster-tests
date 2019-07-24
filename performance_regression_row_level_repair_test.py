@@ -300,6 +300,18 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.log.debug("Stopping node: {}".format(c_node.name))
             c_node.stop_scylla_server()
 
+    def _start_all_nodes(self):
+
+        self.log.debug("Starting all nodes")
+        # restarting all nodes twice in order to pervent no-seed node issues
+        for c_node in self.db_cluster.nodes * 2:
+            self.log.debug("Starting node: {} ({})".format(c_node.name, c_node.public_ip_address))
+            c_node.start_scylla_server(verify_up=False)
+            time.sleep(10)
+        self.log.debug("Wait DB is up after all nodes were started")
+        for c_node in self.db_cluster.nodes:
+            c_node.wait_db_up()
+
     def _start_all_nodes_except_for(self, node):
         self.log.debug("Starting all nodes except for: {}".format(node.name))
         node_list = [n for n in self.db_cluster.nodes if n != node]
@@ -397,7 +409,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.log.info('Updating cluster data only for {}'.format(node.name))
             distinct_write_cmd = "{} -pop seq={}..{} -node {}".format(base_distinct_write_cmd, sequence_current_index+1, sequence_current_index+sequence_range, node.private_ip_address)
             prepare_cmd_queue = self.run_stress(stress_cmd=distinct_write_cmd)
-            self._start_all_nodes_except_for(node=node)
+            self._start_all_nodes()
             sequence_current_index += sequence_range
 
         time.sleep(60) # wait for capacity metrics to be fully updated for all nodes.
