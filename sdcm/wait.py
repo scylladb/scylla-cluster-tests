@@ -42,11 +42,17 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
 
     res = None
 
+    def retry_logger(retry_state):
+        LOGGER.debug('wait_for: Retrying {}: attempt {} ended with: {}'.format(text if text else retry_state.fn.__name__,
+                                                                               retry_state.attempt_number,
+                                                                               str(retry_state.outcome._exception) if retry_state.outcome._exception else retry_state.outcome._result))
+
     try:
         r = tenacity.Retrying(
             reraise=throw_exc,
             stop=tenacity.stop_after_delay(timeout),
             wait=tenacity.wait_fixed(step),
+            before_sleep=retry_logger,
             retry=(retry_if_result(lambda value: not value) | retry_if_exception_type())
         )
         res = r.call(func, **kwargs)
