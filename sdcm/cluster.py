@@ -2698,8 +2698,9 @@ class BaseScyllaCluster(object):
         for node in nodes_list:
             if not os.path.exists(node.database_log):
                 error_msg = "No db log from node [%s] " % node
-                logger.critical(error_msg)
+                logger.warning(error_msg)
                 raise Exception(error_msg)
+        return True
 
     @wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):
@@ -2716,7 +2717,8 @@ class BaseScyllaCluster(object):
         self.get_seed_nodes()
         self.get_scylla_version()
         self.set_traffic_control()
-        self.verify_logging_from_nodes(node_list)
+        wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
+                      text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
         self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" % self.nodes[0].check_node_health())
 
