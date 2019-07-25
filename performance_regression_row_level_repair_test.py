@@ -408,7 +408,9 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self._stop_all_nodes_except_for(node=node)
             self.log.info('Updating cluster data only for {}'.format(node.name))
             distinct_write_cmd = "{} -pop seq={}..{} -node {}".format(base_distinct_write_cmd, sequence_current_index+1, sequence_current_index+sequence_range, node.private_ip_address)
-            prepare_cmd_queue = self.run_stress(stress_cmd=distinct_write_cmd)
+            self.log.info("Run stress command of: {}".format(distinct_write_cmd))
+            stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
+            self.verify_stress_thread(cs_thread_pool=stress_thread)
             self._start_all_nodes()
             sequence_current_index += sequence_range
 
