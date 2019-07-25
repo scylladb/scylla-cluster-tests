@@ -25,17 +25,15 @@ manager = Manager()
 
 class EventsDevice(Process):
 
-    def __init__(self):
+    def __init__(self, log_dir):
         super(EventsDevice, self).__init__()
         self.ready_event = Event()
         self.pub_port = Value('d', 0)
         self.sub_port = Value('d', 0)
 
-        self.raw_events_filename = None
-
-    def start(self, log_dir):
-        self.raw_events_filename = os.path.join(log_dir, 'raw_events.log')
-        super(EventsDevice, self).start()
+        self.event_log_base_dir = os.path.join(log_dir, 'events_log')
+        os.makedirs(self.event_log_base_dir)
+        self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
 
     def run(self):
         try:
@@ -403,15 +401,14 @@ class TestKiller(Process):
 
 
 class EventsFileLogger(Process):
-    def __init__(self):
+    def __init__(self, log_dir):
         super(EventsFileLogger, self).__init__()
         self._test_pid = os.getpid()
-        self.events_filename = None
-        self.raw_events_filename = None
-
-    def start(self, log_dir):
-        self.events_filename = os.path.join(log_dir, 'events.log')
-        super(EventsFileLogger, self).start()
+        self.event_log_base_dir = os.path.join(log_dir, 'events_log')
+        self.events_filename = os.path.join(self.event_log_base_dir, 'events.log')
+        self.critical_events_filename = os.path.join(self.event_log_base_dir, 'critical.log')
+        with open(self.critical_events_filename, 'a'):
+            pass
 
     def run(self):
         LOGGER.info("writing to %s", self.events_filename)
@@ -420,6 +417,12 @@ class EventsFileLogger(Process):
             msg = "{}: {}".format(message_data.formatted_timestamp(), str(message_data).strip())
             with open(self.events_filename, 'a+') as log_file:
                 log_file.write(msg + '\n')
+
+            if (message_data.severity == Severity.CRITICAL or message_data.severity == Severity.ERROR) \
+                    and not event_type == 'ClusterHealthValidatorEvent':
+                with open(self.critical_events_filename, 'a+') as critical_file:
+                    critical_file.write(msg + '\n')
+
             LOGGER.info(msg)
 
 
@@ -504,14 +507,14 @@ EVENTS_PROCESSES = dict()
 
 
 def start_events_device(log_dir, timeout=5):
-    EVENTS_PROCESSES['MainDevice'] = EventsDevice()
-    EVENTS_PROCESSES['MainDevice'].start(log_dir)
+    EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
+    EVENTS_PROCESSES['MainDevice'].start()
     EVENTS_PROCESSES['MainDevice'].ready_event.wait(timeout=timeout)
 
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger()
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
 
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start(log_dir)
+    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
 
     # default filters
