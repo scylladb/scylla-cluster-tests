@@ -19,7 +19,7 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 class SctEventsTests(unittest.TestCase):
 
     def get_event_logs(self):
-        log_file = os.path.join(self.temp_dir, 'events.log')
+        log_file = os.path.join(self.temp_dir, 'events_log', 'events.log')
 
         data = ""
         if os.path.exists(log_file):
@@ -109,6 +109,28 @@ class SctEventsTests(unittest.TestCase):
 
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)")
+
+    def test_filter_repair(self):
+
+        log_content_before = self.get_event_logs()
+
+        failed_repaired_line = '2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)'
+
+        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception"), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='is aborted'):
+
+            DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                   line=failed_repaired_line)
+            DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                   line=failed_repaired_line)
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
+                                                                                    line="not filtered")
+
+        self.wait_for_event_log_change(log_content_before)
+        log_content_after = self.get_event_logs()
+        self.assertIn("not filtered", log_content_after)
+        self.assertNotIn("repair id 1", log_content_after)
 
     def test_filter_by_node(self):
 
