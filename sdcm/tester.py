@@ -60,7 +60,7 @@ from . import db_stats
 from db_stats import PrometheusDBStats
 from results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, EVENTS_PROCESSES
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm import wait
@@ -1239,7 +1239,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         db_cluster_coredumps = None
 
         if self.db_cluster is not None:
-            db_cluster_errors = self.db_cluster.get_node_database_errors()
+            db_cluster_errors = open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r').read()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
@@ -1271,11 +1271,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         if db_cluster_errors:
             self.log.error('Errors found on DB node logs:')
-            for node_name, node_errors in db_cluster_errors.items():
-                for (index, line) in node_errors:
-                    self.log.error('%s: L%s -> %s',
-                                   node_name, index + 1, line.strip())
-            # TODO: remove this failure once we have the event analyzer inplace, cause not every error here should fail the test
+            self.log.error(db_cluster_errors)
             self.fail('Errors found on DB node logs (see test logs)')
 
     def clean_resources(self):
@@ -1366,13 +1362,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info("ES document id: {}".format(self.get_doc_id()))
 
     def collect_events_log(self):
-        event_log_base_dir = self.logdir
-        event_log_dir = os.path.join(event_log_base_dir, 'events_log')
-        if not os.path.exists(event_log_dir):
-            os.mkdir(event_log_dir)
-        for f in ['events.log', 'raw_events.log']:
-            f_path = os.path.join(event_log_base_dir, f)
-            shutil.copy(f_path, event_log_dir)
+
+        event_log_dir = EVENTS_PROCESSES['MainDevice'].event_log_base_dir
+
         archive_name = os.path.basename(event_log_dir)
         try:
             event_log_archive = shutil.make_archive(archive_name, 'zip', event_log_dir)
