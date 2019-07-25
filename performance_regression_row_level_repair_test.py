@@ -414,7 +414,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self._start_all_nodes()
             sequence_current_index += sequence_range
 
-        time.sleep(60) # wait for capacity metrics to be fully updated for all nodes.
+        self._wait_no_compactions_running()
         self.log.debug("Nodes distinct used capacity is")
         self._print_nodes_used_capacity()
 
