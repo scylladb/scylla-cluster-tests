@@ -40,4 +40,4 @@ authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
-use_mgmt: false
+use_mgmt: true
