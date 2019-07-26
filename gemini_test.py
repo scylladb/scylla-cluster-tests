@@ -49,7 +49,7 @@ class GeminiTest(ClusterTester):
         if result['status'] == 'FAILED':
             self.fail(result['results'])
 
-    def test_random_load_with_nemesis(self):
+    def test_load_random_with_nemesis(self):
         prepared_results = self._prepare_test_results()
 
         cmd = self.params.get('gemini_cmd')
@@ -63,8 +63,8 @@ class GeminiTest(ClusterTester):
         prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
 
-        # sleep before run nemesis test_duration * .15
-        sleep_before_start = float(self.params.get('test_duration', 5)) * 60 * .15
+        # sleep before run nemesis test_duration * .25
+        sleep_before_start = float(self.params.get('test_duration', 5)) * 60 * .25
         self.log.info('Sleep interval {}'.format(sleep_before_start))
         time.sleep(sleep_before_start)
 
