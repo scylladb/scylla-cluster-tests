@@ -265,13 +265,12 @@ class AWSCluster(cluster.BaseCluster):
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
 
-        if cluster.Setup.RSYSLOG_ADDRESS:
-            post_boot_script = cluster.Setup.get_startup_script()
+        post_boot_script = cluster.Setup.get_startup_script()
 
-            if 'clustername' in ec2_user_data:
-                ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
-            else:
-                ec2_user_data = post_boot_script
+        if 'clustername' in ec2_user_data:
+            ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
+        else:
+            ec2_user_data = post_boot_script
 
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
