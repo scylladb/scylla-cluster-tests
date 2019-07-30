@@ -9,7 +9,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/features/longevity-2mv-backpressure-4d.yaml',
+    test_config: 'test-cases/features/2mv-backpressure-4d.yaml',
 
     timeout: [time: 6610, unit: 'MINUTES']
 )
