@@ -281,6 +281,13 @@ class Setup(object):
                        sudo systemctl restart rsyslog
                        '''.format(*cls.RSYSLOG_ADDRESS))
 
+        post_boot_script += dedent('''
+               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+               sudo systemctl restart sshd
+               sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
+               /etc/security/limits.d/20-nproc.conf
+               echo -e '*\t\thard\tnproc\t\tunlimited/' >> /etc/security/limits.d/20-nproc.conf
+               ''')
         return post_boot_script
 
 
