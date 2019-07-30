@@ -1,4 +1,4 @@
-test_duration: 600
+test_duration: 900
 
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=125000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..125000000",
                     "cassandra-stress write no-warmup cl=QUORUM n=125000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=125000001..250000000",
