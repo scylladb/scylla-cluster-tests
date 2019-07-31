@@ -246,12 +246,12 @@ class DisruptionEvent(SctEvent):
 
 
 class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, name, status, node=None, message=None, error=None, **kwargs):
+    def __init__(self, type, name, status=Severity.CRITICAL, node=None, message=None, error=None, **kwargs):
         super(ClusterHealthValidatorEvent, self).__init__()
         self.name = name
         self.type = type
         self.node = str(node)
-        self.severity = Severity.NORMAL if status else Severity.CRITICAL
+        self.severity = status
         self.error = error if error else ''
         self.message = message if message else ''
 
@@ -262,7 +262,7 @@ class ClusterHealthValidatorEvent(SctEvent):
         if self.severity == Severity.NORMAL:
             return "{0}: type={1.type} name={1.name} node={1.node} message={1.message}".format(
                 super(ClusterHealthValidatorEvent, self).__str__(), self)
-        elif self.severity == Severity.CRITICAL:
+        elif self.severity in (Severity.CRITICAL, Severity.ERROR):
             return "{0}: type={1.type} name={1.name} node={1.node} error={1.error}".format(
                 super(ClusterHealthValidatorEvent, self).__str__(), self)
 
