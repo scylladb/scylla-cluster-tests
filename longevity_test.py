@@ -61,16 +61,6 @@ class LongevityTest(ClusterTester):
         if 'counter_' in stress_cmd:
             self._create_counter_table()
 
-        # When using cassandra-stress with "user profile" the profile yaml should be provided
-        if 'profile' in stress_cmd:
-            if 'profile' not in params:
-                cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
-                cs_profile = os.path.join(os.path.dirname(__file__), 'data_dir', os.path.basename(cs_profile))
-                with open(cs_profile, 'r') as yaml_stream:
-                    profile = yaml.safe_load(yaml_stream)
-                    keyspace_name = profile['keyspace']
-                params.update({'profile': cs_profile, 'keyspace_name': keyspace_name})
-
         if 'compression' in stress_cmd:
             if 'keyspace_name' not in params:
                 compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
