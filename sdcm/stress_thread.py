@@ -18,6 +18,8 @@ import time
 import logging
 import concurrent.futures
 
+import yaml
+
 from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
@@ -77,6 +79,16 @@ class CassandraStressThread(object):
         stress_cmd = self.stress_cmd
         if node.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
             stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
+
+        # When using cassandra-stress with "user profile" the profile yaml should be provided
+        if 'profile' in stress_cmd and not self.profile:
+            cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
+            cs_profile = os.path.join(os.path.dirname(__file__), '../', 'data_dir', os.path.basename(cs_profile))
+            with open(cs_profile, 'r') as yaml_stream:
+                profile = yaml.safe_load(yaml_stream)
+                keyspace_name = profile['keyspace']
+            self.profile = cs_profile
+            self.keyspace_name = keyspace_name
 
         if self.keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
