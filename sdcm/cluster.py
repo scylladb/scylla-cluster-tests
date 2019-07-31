@@ -1961,7 +1961,7 @@ server_encryption_options:
             options += '-u {} -pw {} '.format(*credentials)
         return "nodetool {options} {sub_cmd} {args}".format(**locals())
 
-    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False):
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True):
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -1978,7 +1978,7 @@ server_encryption_options:
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-        result = self.remoter.run(cmd, ignore_status=ignore_status)
+        result = self.remoter.run(cmd, ignore_status=ignore_status, verbose=verbose)
         self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
         return result
@@ -1992,21 +1992,75 @@ server_encryption_options:
         node_type = 'target' if self.running_nemesis else 'regular'
         # TODO: improve this part (using get_nodetool_status function from ScyllaCluster)
         try:
-            self.log.info('Status for %snode %s: %s' % (node_type, self.name, self.run_nodetool('status')))
+            self.log.info('Status for %s node %s: %s' % (node_type, self.name, self.run_nodetool('status')))
 
         except Exception as ex:
-            ClusterHealthValidatorEvent(type='end', name='NodesStatus', status=False,
+            ClusterHealthValidatorEvent(type='error', name='NodesStatus', status=Severity.CRITICAL,
                                         node=self.name,
-                                        error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex, node=self.name))
+                                        error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex,
+                                                                                                         node=self.name))
+
+    def validate_gossip_nodes_info(self):
+        result = self.run_nodetool('gossipinfo', verbose=False)
+        gossip_node_schemas = {}
+        schema, ip, status = '', '', ''
+        for line in result.stdout.split():
+            if line.startswith('SCHEMA:'):
+                schema = line.replace('SCHEMA:', '')
+            elif line.startswith('RPC_ADDRESS:'):
+                ip = line.replace('RPC_ADDRESS:', '')
+            elif line.startswith('STATUS:'):
+                status = line.replace('STATUS:', '').split(',')[0]
+            # STATUS is "LEFT": in case the node was decommissioned
+            # STATUS is "removed": in case the node was removed by nodetool removenode
+            # and they will remain in the gossipinfo 3 days.
+            # It's expected behaviour and we won't send the error in this case
+            if schema and ip and status:
+                if status not in ['LEFT', 'removed']:
+                    gossip_node_schemas[ip] = {'schema': schema, 'status': status}
+                schema, ip, status = '', '', ''
+
+        self.log.info('Gossipinfo schema version and status of all nodes: {}'.format(gossip_node_schemas))
+
+        # Validate that ALL existent nodes in the gossip
+        cluster_nodes = [node.private_ip_address for node in self.parent_cluster.nodes]
+
+        not_in_gossip = list(set(cluster_nodes) - set(gossip_node_schemas.keys()))
+        if not_in_gossip:
+            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
+                                        node=self.name,
+                                        error='Node(s) %s exists in the cluster, but doesn\'t exist in the gossip'
+                                              % ', '.join(ip for ip in not_in_gossip))
+
+        # Validate that JUST existent nodes in the gossip
+        not_in_cluster = list(set(gossip_node_schemas.keys()) - set(cluster_nodes))
+        if not_in_cluster:
+            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
+                                        node=self.name,
+                                        error='Node(s) %s exists in the gossip, but doesn\'t exist in the cluster'
+                                              % ', '.join(ip for ip in not_in_cluster))
+            for ip in not_in_cluster:
+                gossip_node_schemas.pop(ip)
+
+        # Validate that same schema on all nodes
+        if len(set(node_info['schema'] for node_info in gossip_node_schemas.values())) > 1:
+            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.CRITICAL,
+                                        node=self.name,
+                                        error='Schema version is not same on all nodes in gossip info: {}'
+                                        .format('\n'.join('{}: {}'.format(ip, schema_version['schema'])
+                                                          for ip, schema_version in gossip_node_schemas.iteritems())))
+
+        return gossip_node_schemas
 
     def check_schema_version(self):
         # Get schema version
         errors = []
         try:
-            result = self.run_nodetool('gossipinfo')
-            schema_version = list(set([line.replace('SCHEMA:', '')
-                                       for line in result.stdout.split() if line.startswith('SCHEMA:')]))[0]
-            self.log.info('Gossipinfo schema_version: %s' % (schema_version))
+            gossip_node_schemas = self.validate_gossip_nodes_info()
+            status = gossip_node_schemas[self.private_ip_address]['status']
+            if status != 'NORMAL':
+                self.log.debug('Node status is {status}. Schema version can\'t be validated'. format(status=status))
+                return
 
             # Search for nulls in system.peers
             peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
@@ -2021,17 +2075,17 @@ server_encryption_options:
                 if nulls:
                     errors.append('Found nulls in system.peers on the node %s: %s' % (current_node_ip, peers_details))
 
-                actual_schema_version = line_splitted[6].strip()
-                if actual_schema_version != schema_version:
+                peer_schema_version = line_splitted[6].strip()
+                gossip_node_schema_version = gossip_node_schemas[self.private_ip_address]['schema']
+                if gossip_node_schema_version and peer_schema_version != gossip_node_schema_version:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
-                                  'node %s: %s' % (schema_version, current_node_ip, actual_schema_version))
+                                  'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
         except Exception as e:
             errors.append('Validate schema version failed. Error: {}'.format(e.message))
 
         if errors:
-            ClusterHealthValidatorEvent(type='end', name='NodeSchemaVersion', status=False,
-                                        node=self.name,
-                                        error='; '.join(errors))
+            ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.CRITICAL,
+                                        node=self.name, error='\n'.join(errors))
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
@@ -2567,7 +2621,8 @@ class BaseScyllaCluster(object):
         for node in self.nodes:
             node.check_node_health()
 
-        ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=True)
+        ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=Severity.NORMAL,
+                                    message='Cluster health check finished')
 
     def check_nodes_up_and_normal(self, nodes=[]):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
