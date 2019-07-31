@@ -12,7 +12,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-import inspect
 import random
 import time
 import re
@@ -24,6 +23,7 @@ from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
 from functools import wraps
 from sdcm.utils.version_utils import is_enterprise
+from sdcm.sct_events import DbEventsFilter
 
 
 def truncate_entries(func):
@@ -379,6 +379,14 @@ class UpgradeTest(FillDatabaseData):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
+
+        filter_errors = [{'line': 'Failed to load schema', 'type': 'DATABASE_ERROR'},
+                         {'line': 'Failed to load schema', 'type': 'SCHEMA_FAILURE'},
+                         {'line': 'Failed to pull schema', 'type': 'DATABASE_ERROR'}]
+
+        for error in filter_errors:
+            DbEventsFilter(type=error['type'], line=error['line'])
+
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
         self.truncate_entries_flag = False
