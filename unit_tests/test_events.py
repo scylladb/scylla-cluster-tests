@@ -132,6 +132,23 @@ class SctEventsTests(unittest.TestCase):
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("repair id 1", log_content_after)
 
+    def test_filter_upgrade(self):
+        log_content_before = self.get_event_logs()
+
+        known_failure_line = '!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with 10.142.0.56: std::runtime_error (Failed to load schema version b40e405f-462c-38f2-a90c-6f130ddbf6f3)'
+        with DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+            DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                   line=known_failure_line)
+            DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                   line=known_failure_line)
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
+                                                                                    line="not filtered")
+
+        self.wait_for_event_log_change(log_content_before)
+        log_content_after = self.get_event_logs()
+        self.assertIn("not filtered", log_content_after)
+        self.assertNotIn("Exception when communicating", log_content_after)
+
     def test_filter_by_node(self):
 
         log_content_before = self.get_event_logs()
