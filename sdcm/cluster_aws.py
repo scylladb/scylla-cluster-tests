@@ -614,6 +614,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             append_scylla_args=self.get_scylla_args(),
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
+            alternator_port=self.params.get('alternator_port'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(

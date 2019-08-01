@@ -283,6 +283,9 @@ class SCTConfiguration(dict):
         dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF",  type=str,
              help="Replication factor will be set to system_auth"),
 
+        dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
+             help="Port to configure for alternator in scylla.yaml"),
+
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS",  type=str,
              help="More arguments to append to scylla command line"),
 
