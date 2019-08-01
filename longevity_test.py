@@ -19,6 +19,7 @@ import time
 import yaml
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.alternator import create_table as alternator_create_table
 
 
 class LongevityTest(ClusterTester):
@@ -43,8 +44,10 @@ class LongevityTest(ClusterTester):
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             if stress_cmd.startswith('cassandra-stress'):
                 stress_queue.append(self.run_stress_thread(**params))
-            else:
+            elif stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False))
+            elif stress_cmd.startswith('bin/ycsb'):
+                stress_queue.append(self.run_ycsb_thread(**params))
             time.sleep(10)
 
             # Remove "user profile" param for the next command
@@ -99,13 +102,21 @@ class LongevityTest(ClusterTester):
         # prepare write workload
         prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
         keyspace_num = self.params.get('keyspace_num', default=1)
+
         pre_create_schema = self.params.get('pre_create_schema', default=False)
+
+        alternator_port = self.params.get('alternator_port', default=None)
+        if alternator_port:
+            endpoint_url = 'http://{}:{}'.format(self.db_cluster.nodes[0].external_address, alternator_port)
+            dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type', default='HASH')
+            alternator_create_table(endpoint_url, dynamodb_primarykey_type)
 
         if prepare_write_cmd:
             # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
             # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
             if pre_create_schema:
                 self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get('scylla_encryption_options', None))
+
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
             if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':

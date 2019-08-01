@@ -69,6 +69,7 @@ from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, 
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm import wait
+from sdcm.ycsb_thread import YcsbStressThread
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -819,6 +820,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                                     cluster.Setup.logdir(),
                                                     node_list=self.db_cluster.nodes)
 
+    def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+                        round_robin=False, stats_aggregate_cmds=True,
+                        keyspace_num=None, keyspace_name=None, profile=None):
+
+        timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ycsb", aggregate=stats_aggregate_cmds)
+
+        return YcsbStressThread(loader_set=self.loaders,
+                                stress_cmd=stress_cmd,
+                                timeout=timeout,
+                                output_dir=cluster.Setup.logdir(),
+                                stress_num=stress_num,
+                                node_list=self.db_cluster.nodes,
+                                round_robin=round_robin, params=self.params).run()
+
     def run_gemini(self, cmd, duration=None):
 
         timeout = self.get_duration(duration)
@@ -839,6 +857,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 self.loaders.kill_stress_thread()
             if self.params.get('gemini_cmd', default=False):
                 self.loaders.kill_gemini_thread()
+            self.loaders.kill_ycsb_thread()
 
     def verify_stress_thread(self, cs_thread_pool):
         if isinstance(cs_thread_pool, dict):

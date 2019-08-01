@@ -285,6 +285,8 @@ class SCTConfiguration(dict):
 
         dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
              help="Port to configure for alternator in scylla.yaml"),
+        dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,
+             help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE"),
 
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS",  type=str,
              help="More arguments to append to scylla command line"),

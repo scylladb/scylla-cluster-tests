@@ -329,6 +329,24 @@ class CassandraStressEvent(SctEvent):
                 super(CassandraStressEvent, self).__str__(), self, "\n".join(self.errors))
 
 
+class YcsbStressEvent(SctEvent):
+    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):
+        super(YcsbStressEvent, self).__init__()
+        self.type = type
+        self.node = str(node)
+        self.stress_cmd = stress_cmd
+        self.log_file_name = log_file_name
+        self.severity = severity
+        self.errors = errors
+        self.publish()
+
+    def __str__(self):
+        fmt = "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
+            super(YcsbStressEvent, self).__str__(), self)
+        if self.errors:
+            return "{0}\nerrors:\n\n{1}".format(fmt, "\n".join(self.errors))
+
+
 class DatabaseLogEvent(SctEvent):
     def __init__(self, type, regex, severity=Severity.CRITICAL):
         super(DatabaseLogEvent, self).__init__()

@@ -765,6 +765,27 @@
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "F"
+                            },
+                            {
+                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_95\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "G"
+                            },
+                            {
+                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_95\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "H"
+                            },
+                            {
+                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_95\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "I"
                             }
                         ],
                         "thresholds": [],
@@ -879,6 +900,27 @@
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "F"
+                            },
+                            {
+                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_99\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "G"
+                            },
+                            {
+                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_99\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "H"
+                            },
+                            {
+                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_99\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "I"
                             }
                         ],
                         "thresholds": [],

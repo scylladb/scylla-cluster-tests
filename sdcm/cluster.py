@@ -1183,7 +1183,7 @@ class BaseNode(object):
                 f.seek(start_search_from_byte)
             for index, line in enumerate(f, start=last_line_no):
                 if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
-                    logger.debug(line)
+                    logger.debug(line.strip())
 
                 m = backtrace_regex.search(line)
                 if m and backtraces:
@@ -2967,6 +2967,14 @@ class BaseLoaderSet(object):
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
+        # install ycsb
+        ycsb_install = dedent("""
+            cd ~/
+            curl -O --location https://github.com/brianfrankcooper/YCSB/releases/download/0.15.0/ycsb-0.15.0.tar.gz
+            tar xfvz ycsb-0.15.0.tar.gz
+        """)
+        node.remoter.run('bash -cxe "%s"' % ycsb_install)
+
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
@@ -2987,6 +2995,13 @@ class BaseLoaderSet(object):
                 loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
             except Exception as ex:
                 self.log.warning("failed to kill stress-command on [%s]: [%s]", str(loader), str(ex))
+
+    def kill_ycsb_thread(self):
+        for loader in self.nodes:
+            try:
+                loader.remoter.run(cmd='pgrep -f ycsb | xargs -I{}  kill -TERM -{}', ignore_status=True)
+            except Exception as ex:
+                self.log.warning("failed to kill ycsb stress command on [%s]: [%s]", str(loader), str(ex))
 
     @staticmethod
     def _parse_cs_summary(lines):
