@@ -1,0 +1,19 @@
+test_duration: 180
+stress_cmd: ["bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p recordcount=20000000 -p fieldcount=10 -p fieldlength=1024 -s",
+             "bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=20000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=10000 -s"]
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+n_loaders: 1
+instance_type_db: 'i3.2xlarge'
+n_monitor_nodes: 1
+n_db_nodes: 3
+
+nemesis_class_name: NoOpMonkey # ChaosMonkey
+nemesis_interval: 5
+
+user_prefix: 'alternator-3h'
+
+alternator_port: 8080
+
+store_results_in_elasticsearch: false

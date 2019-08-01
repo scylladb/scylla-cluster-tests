@@ -207,21 +207,20 @@ class RemoteCmdRunner(CommandRunner):
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None, watch_stdout_pattern=None, retry=0):
+            args=None, log_file=None, watch_stdout_pattern=None, retry=0, watchers=[]):
 
         self.connection.connect_timeout = connect_timeout
 
+        watchers.append(OutputWatcher(self, verbose))
+        if log_file:
+            watchers.append(LogWriteWatcher(log_file))
+
         for i in range(retry + 1):
-            watchers = []
             try:
                 if verbose:
                     self.log.debug('Running command "{}"...'.format(cmd))
-                watchers.append(OutputWatcher(self, verbose))
 
                 start_time = time.time()
-                if log_file:
-                    watchers.append(LogWriteWatcher(log_file))
-
                 result = self.connection.run(cmd, warn=ignore_status,
                                              encoding='utf-8', hide=True,
                                              watchers=watchers, timeout=timeout)
@@ -677,4 +676,35 @@ class LogWriteWatcher(StreamWatcher):
             f.write(stream_buffer.encode('utf-8'))
 
         self.len = len(stream)
+        return []
+
+
+class FailuresWatcher(Responder):
+
+    def __init__(self, sentinel, callback=None):
+        super(FailuresWatcher, self).__init__(None, None)
+        self.sentinel = sentinel
+        self.failure_index = 0
+        self.callback = callback
+
+    def first_matching_line(self, stream, index):
+        new_ = stream[index:]
+        for line in new_.splitlines():
+            if re.findall(self.sentinel, line, re.S):
+                return line
+
+    def submit(self, stream):
+        index = getattr(self, "failure_index")
+
+        # Also check stream for our failure sentinel
+        failed = self.pattern_matches(stream, self.sentinel, "failure_index")
+        # Error out if we seem to have failed after a previous response.
+
+        if failed:
+            line = self.first_matching_line(stream, index)
+            err = 'command failed found {!r} in \n{!r}'.format(self.sentinel, line)
+            if callable(self.callback):
+                self.callback(self.sentinel, line)
+            raise OutputCheckError(err)
+
         return []

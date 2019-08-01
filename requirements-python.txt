@@ -3,8 +3,7 @@ libvirt-python==4.9.0
 fabric==2.5.0
 invoke==1.3.0
 unittest-xml-reporting==2.5.1
-boto3==1.6.5
-botocore==1.9.5
+boto3==1.9.200
 awscli==1.16.180
 aexpect==1.2.0
 cassandra-driver==3.13
