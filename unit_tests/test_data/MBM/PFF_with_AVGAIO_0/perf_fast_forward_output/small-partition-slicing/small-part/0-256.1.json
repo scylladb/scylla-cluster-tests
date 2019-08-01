@@ -1,0 +1,52 @@
+{
+	"results" :
+	{
+		"parameters" :
+		{
+			"offset" : "0",
+			"offset,read,test_run_count" : "0,256,1",
+			"read" : "256",
+			"test_run_count" : 1
+		},
+		"stats" :
+		{
+			"(KiB)" : 72,
+			"aio" : 3,
+			"avg aio" : 0.0,
+			"blocked" : 2,
+			"c blk" : 256,
+			"c hit" : 0,
+			"c miss" : 256,
+			"cpu" : 81.305854797363281,
+			"dropped" : 0,
+			"frag/s" : 211048.73082218322,
+			"frags" : 256,
+			"idx blk" : 1,
+			"idx hit" : 0,
+			"idx miss" : 1,
+			"iterations" : 818,
+			"mad f/s" : 3797.4778975515801,
+			"max f/s" : 229505.22796772223,
+			"min f/s" : 113327.99157123062,
+			"time (s)" : 0.0012129899999999999
+		}
+	},
+	"test_group_properties" :
+	{
+		"dataset" : "small-part",
+		"message" : "Testing slicing small partitions",
+		"name" : "small-partition-slicing",
+		"needs_cache" : false,
+		"partition_type" : "small"
+	},
+	"versions" :
+	{
+		"scylla-server" :
+		{
+			"commit_id" : "7d14514b8",
+			"date" : "20190618",
+			"run_date_time" : "2019-06-21 15:00:26",
+			"version" : "3.1.0.rc2"
+		}
+	}
+}
