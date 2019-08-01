@@ -142,6 +142,35 @@ class TestMBM(unittest.TestCase):
         self.assertIn('large-partition-forwarding', report_html)
         self.assertIn('large-partition-slicing-single-key-reader', report_html)
 
+    def test_generate_html_report_for_avg_aio_with_zero_value(self):
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO_0')
+        result_obj = self.mbra.get_results(results_path=result_path, update_db=False)
+        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        report_results = self.mbra.check_regression(result_obj)
+
+        self.assertEqual(report_results['small-partition-slicing_0-256.1']['avg aio']['Current'], 0.0)
+        self.assertEqual(report_results['small-partition-slicing_0-256.1']['avg aio']['Diff best [%]'], None)
+        self.assertEqual(report_results['small-partition-slicing_0-256.1']['avg aio']['Diff last [%]'], None)
+        self.assertEqual(report_results['large-partition-forwarding_no.1']['avg aio']['Current'], 0.0)
+        self.assertEqual(report_results['large-partition-forwarding_no.1']['avg aio']['Diff best [%]'], None)
+        self.assertEqual(report_results['large-partition-forwarding_no.1']['avg aio']['Diff last [%]'], None)
+        self.assertEqual(report_results['large-partition-forwarding_yes.1']['avg aio']['Current'], 0.0)
+        self.assertEqual(report_results['large-partition-forwarding_yes.1']['avg aio']['Diff best [%]'], None)
+        self.assertEqual(report_results['large-partition-forwarding_yes.1']['avg aio']['Diff last [%]'], None)
+        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg aio']['Current'], 0.0)
+        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg aio']['Diff best [%]'], None)
+        self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg aio']['Diff last [%]'], None)
+
+        html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        report_file, report_html = self.mbra.send_html_report(report_results, html_report_path=html_report, send=False)
+
+        self.assertTrue(os.path.exists(report_file))
+        self.assertGreater(os.path.getsize(report_file), 0)
+        self.assertTrue(report_html)
+        self.assertIn('large-partition-forwarding', report_html)
+        # no regression for small-partition-slicing tests
+        self.assertNotIn('small-partition-slicing', report_html)
+
     def test_empty_current_result(self):
         result_obj = {}
         report_results = self.mbra.check_regression(result_obj)

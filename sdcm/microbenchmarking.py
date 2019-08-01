@@ -158,7 +158,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                     return list_of_results_from_db[0]
 
             def count_diff(cur_val, dif_val):
-                if cur_val is None or dif_val is None:
+                try:
+                    cur_val = float(cur_val) if cur_val else None
+                except ValueError:
+                    cur_val = None
+
+                if not cur_val:
+                    return None
+
+                if dif_val is None:
                     return None
 
                 ret_dif = ((cur_val - dif_val) / dif_val) * 100 if dif_val > 0 else cur_val * 100
