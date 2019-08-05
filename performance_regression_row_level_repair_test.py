@@ -64,8 +64,16 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                               columns={'"C0"': 'blob'},
                               in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
 
-    def preload_data(self):
+    def _update_cl_in_stress_cmd(self, str_stress_cmd, cl):
+        for param in str_stress_cmd.split():
+            if param.startswith('cl='):
+                return str_stress_cmd.replace(param,"cl={}".format(cl))
+        self.log.debug("Could not find a 'cl' parameter in stress command: {}".format(str_stress_cmd))
+        return str_stress_cmd
+
+    def preload_data(self, cl=None):
         # if test require a pre-population of data
+
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
             self.create_test_stats(sub_type='write-prepare')
@@ -79,6 +87,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                     params.update({'stress_num': 1, 'round_robin': True})
 
                 for stress_cmd in prepare_write_cmd:
+                    if cl:
+                        stress_cmd = self._update_cl_in_stress_cmd(str_stress_cmd=stress_cmd, cl=cl)
                     params.update({'stress_cmd': stress_cmd})
 
                     # Run all stress commands
@@ -88,7 +98,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
             # One stress cmd command
             else:
-                stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
+                stress_cmd = prepare_write_cmd if not cl else self._update_cl_in_stress_cmd(str_stress_cmd=prepare_write_cmd, cl=cl)
+                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1,
                                                            prefix='preload-', stats_aggregate_cmds=False))
 
             for stress in stress_queue:
@@ -101,7 +112,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     # Util functions ===============================================================================================
 
     # row-level-repair Test - measuring node-repair-time
-    def test_row_level_repair(self):
+    def _test_row_level_repair(self):
         """
         Test steps:
 
@@ -396,8 +407,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         base_distinct_write_cmd = "cassandra-stress write no-warmup cl=ONE n=1000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"
         sequence_current_index = billion
         sequence_range = million
-        dict_specific_tested_stats = {'repair_runtime': -1}
-        self.create_test_stats(specific_tested_stats=dict_specific_tested_stats)
 
         self._pre_create_schema_large_scale()
         node1, node2, node3 = self.db_cluster.nodes
@@ -419,7 +428,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._print_nodes_used_capacity()
 
         self.log.info('Starting c-s/s-b write workload')
-        self.preload_data()
+        self.preload_data(cl='ALL')
         self._wait_no_compactions_running()
 
         self.log.debug("Nodes total used capacity before starting repair is:")
