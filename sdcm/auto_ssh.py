@@ -25,7 +25,7 @@ def start_auto_ssh(docker_name, node, local_port, remote_port):
 
     local_runner = LocalCmdRunner()
     res = local_runner.run('''
-           docker run --rm -d --network=host \
+           docker run -d --network=host \
            -e SSH_HOSTNAME={host_name} \
            -e SSH_HOSTUSER={user_name} \
            -e SSH_TUNNEL_HOST=127.0.0.1 \
