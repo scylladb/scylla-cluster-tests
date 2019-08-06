@@ -406,6 +406,8 @@ class TestStatsMixin(Stats):
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
     def create_test_stats(self, sub_type=None):
+        if not self.create_stats:
+            return
         self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id()
         self._stats = self._init_stats()
