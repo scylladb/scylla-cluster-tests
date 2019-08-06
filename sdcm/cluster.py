@@ -425,7 +425,7 @@ class BaseNode(object):
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
 
-        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+        if (IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION) and Setup.RSYSLOG_ADDRESS:
             start_auto_ssh(Setup.test_id(), self, Setup.RSYSLOG_ADDRESS[1], RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
 
     @property
