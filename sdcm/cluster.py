@@ -2112,6 +2112,22 @@ server_encryption_options:
         #      (10 rows)
         return cqlsh_out if not split else map(str.strip, cqlsh_out.stdout.splitlines())
 
+    def run_startup_script(self):
+        startup_script_remote_path = '/tmp/sct-startup.sh'
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(Setup.get_startup_script())
+            tmp_file.flush()
+            self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)
+
+        cmds = dedent("""
+                chmod +x {0}
+                {0}
+            """.format(startup_script_remote_path))
+
+        result = self.remoter.run("sudo bash -ce '%s'" % cmds)
+        logger.debug(result.stdout)
+
 
 class BaseCluster(object):
 
