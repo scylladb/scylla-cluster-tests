@@ -148,7 +148,8 @@ class LocalCmdRunner(CommandRunner):
                                            encoding='utf-8',
                                            hide=True,
                                            watchers=watchers,
-                                           command_timeout=timeout)
+                                           timeout=timeout,
+                                           env=os.environ, replace_env=True)
 
         except (Failure, UnexpectedExit) as details:
             if hasattr(details, "result"):
@@ -223,7 +224,7 @@ class RemoteCmdRunner(CommandRunner):
 
                 result = self.connection.run(cmd, warn=ignore_status,
                                              encoding='utf-8', hide=True,
-                                             watchers=watchers, command_timeout=timeout)
+                                             watchers=watchers, timeout=timeout)
 
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
