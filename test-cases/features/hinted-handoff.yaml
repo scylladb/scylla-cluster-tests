@@ -11,7 +11,8 @@ instance_type_db: 'i3.2xlarge'
 # Options
 user_prefix: 'hinted-handoff'
 
-hinted_handoff_disabled: false
+hinted_handoff: 'enabled'
+
 space_node_threshold: 644245094
 server_encrypt: 'true'
 

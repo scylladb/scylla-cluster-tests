@@ -28,7 +28,9 @@ store_results_in_elasticsearch: false
 # if enabling sst3 feature during upgrade test
 test_sst3: False
 
-hinted_handoff_disabled: false
+# Enable/disable hinted handoff feature (it is enabled by default in Scylla)
+# Expected valued: enabled/disabled
+hinted_handoff: 'disabled'
 
 # Authenticator configuration
 # authenticator: 'PasswordAuthenticator'

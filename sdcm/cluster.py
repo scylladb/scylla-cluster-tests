@@ -1303,10 +1303,9 @@ class BaseNode(object):
         self.remoter.run(cmd)
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
-                     yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None,
-                     server_encrypt=None, client_encrypt=None, append_conf=None, append_scylla_args=None,
-                     debug_install=False, hinted_handoff_disabled=False, murmur3_partitioner_ignore_msb_bits=None,
-                     authorizer=None):
+                     yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
+                     client_encrypt=None, append_conf=None, append_scylla_args=None, debug_install=False,
+                     hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1342,18 +1341,11 @@ class BaseNode(object):
             p = re.compile('[# ]*cluster_name:.*')
             scylla_yaml_contents = p.sub('cluster_name: {0}'.format(cluster_name),
                                          scylla_yaml_contents)
-        if hinted_handoff_disabled:  # disable hinted handoff (it is enabled by default in Scylla)
-            p = re.compile('[# ]*hinted_handoff_enabled:.*')
-            scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents)
 
-        if murmur3_partitioner_ignore_msb_bits:
-            self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
-            p = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
-            if p.findall(scylla_yaml_contents):
-                scylla_yaml_contents = p.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
-                                             scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(murmur3_partitioner_ignore_msb_bits)
+        # disable hinted handoff (it is enabled by default in Scylla). Expected values: "enabled"/"disabled"
+        if hinted_handoff == 'disabled':
+            p = re.compile('[# ]*hinted_handoff_enabled:.*')
+            scylla_yaml_contents = p.sub('hinted_handoff_enabled: false', scylla_yaml_contents, count=1)
 
         if murmur3_partitioner_ignore_msb_bits:
             self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(murmur3_partitioner_ignore_msb_bits))
@@ -2740,16 +2732,13 @@ class BaseScyllaCluster(object):
         self.nemesis_threads = []
 
     def node_config_setup(self, node, seed_address, endpoint_snitch):
-        node.config_setup(seed_address=seed_address,
-                          cluster_name=self.name,
-                          enable_exp=self._param_enabled('experimental'),
-                          endpoint_snitch=endpoint_snitch,
+        node.config_setup(seed_address=seed_address, cluster_name=self.name,
+                          enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,
                           authenticator=self.params.get('authenticator'),
                           server_encrypt=self._param_enabled('server_encrypt'),
                           client_encrypt=self._param_enabled('client_encrypt'),
-                          append_conf=self.params.get('append_conf'),
-                          hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'),
-                          append_scylla_args=self.get_scylla_args(),
+                          append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),
+                          hinted_handoff=self.params.get('hinted_handoff'),
                           authorizer=self.params.get('authorizer'))
 
     def node_setup(self, node, verbose=False, timeout=3600):

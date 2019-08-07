@@ -214,7 +214,7 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):
                           cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'),
                           append_conf=self.params.get('append_conf'),
-                          hinted_handoff_disabled=self._param_enabled('hinted_handoff_disabled'))
+                          hinted_handoff=self.params.get('hinted_handoff'))
 
         node.remoter.run(
             'sudo /usr/lib/scylla/scylla_setup --nic eth0 --no-raid-setup')
