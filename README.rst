@@ -190,12 +190,10 @@ Reuse Cluster (AWS)
 Running a test with already provisioned cluster, you can get the test_id in the AWS console of the one of the nodes tags tab::
 
     # add the following to your config yaml
-    test_id: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
-    reuse_cluster: true
+    reuse_cluster: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
 
     # or with using the new configuration, before the run test command
-    export SCT_TEST_ID=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
-    export SCT_REUSE_CLUSTER=true
+    export SCT_REUSE_CLUSTER=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
 
 
 Libvirt
