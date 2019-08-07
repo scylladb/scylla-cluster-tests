@@ -667,6 +667,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
             node.stop_scylla_server(verify_down=False)
             node.start_scylla_server(verify_up=False)
+        else:
+            # for reconfigure rsyslog
+            node.run_startup_script()
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.check_nodes_status()
@@ -749,6 +752,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.wait_db_up(verbose=verbose)
 
         if cluster.Setup.REUSE_CLUSTER:
+            # for reconfigure rsyslog
+            node.run_startup_script()
             return
 
         node.wait_apt_not_running()

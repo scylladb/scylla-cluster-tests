@@ -351,7 +351,7 @@ class TestStatsMixin(Stats):
         return versions
 
     def get_setup_details(self):
-        exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password']
+        exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password', 'reuse_cluster']
         setup_details = {}
         is_gce = self.params.get('cluster_backend') == 'gce'
 
