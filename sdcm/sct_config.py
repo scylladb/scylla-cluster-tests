@@ -265,8 +265,8 @@ class SCTConfiguration(dict):
         dict(name="client_encrypt", env="SCT_CLIENT_ENCRYPT",  type=boolean,
              help="when enable scylla will use encryption on the client side"),
 
-        dict(name="hinted_handoff_disabled", env="SCT_HINTED_HANDOFF_DISABLED",  type=boolean,
-             help="when enable scylla will disable hinted handoffs"),
+        dict(name="hinted_handoff", env="SCT_HINTED_HANDOFF",  type=str,
+             help="when enable or disable scylla hinted handoff (enabled/disabled)"),
 
         dict(name="authenticator", env="SCT_AUTHENTICATOR",  type=str,
              help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator"),
