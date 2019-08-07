@@ -351,8 +351,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-        dict_specific_tested_stats = {'repair_runtime': -1}
-        self.create_test_stats(specific_tested_stats=dict_specific_tested_stats)
+        dict_specific_tested_stats = {}
 
         self._pre_create_schema_large_scale()
         node1, node2, node3 = self.db_cluster.nodes
@@ -382,7 +381,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Repair (0% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
         dict_specific_tested_stats['repair_runtime_all_diff'] = repair_time
-        # self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
 
         self.wait_no_compactions_running()
 
@@ -442,8 +440,53 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Repair (99.8% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
-        dict_specific_tested_stats['repair_runtime_small_diff'] = repair_time
-        # self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+        dict_specific_tested_stats ={'repair_runtime_small_diff': repair_time}
+
+        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+
+        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+
+    def test_row_level_repair_during_load(self, preload_data=True):
+        """
+        Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
+        requires: export SCT_HINTED_HANDOFF_DISABLED=true
+        :return:
+        """
+        background_stress_cmds = ["cassandra-stress write no-warmup cl=QUORUM duration=2h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'",
+                                    "cassandra-stress read no-warmup cl=QUORUM duration=2h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -col 'size=FIXED(1024) n=FIXED(1)'"]
+
+        node1, node2, node3 = self.db_cluster.nodes
+        self._disable_hinted_handoff()
+        self._print_nodes_used_capacity()
+
+        if preload_data:
+            self._pre_create_schema_large_scale()
+            self.log.info('Starting c-s/s-b write workload')
+            self.preload_data(cl='ALL')
+
+        self.log.debug("Nodes total used capacity before starting repair is:")
+        self._print_nodes_used_capacity()
+
+        self.log.debug("Start a background stress load")
+        stress_queue = list()
+        params = {'prefix': 'background-load-'}
+        params.update({'stress_num': 1, 'round_robin': True})
+        for stress_cmd in background_stress_cmds:
+            params.update({'stress_cmd': stress_cmd})
+            # Run stress command
+            params.update(dict(stats_aggregate_cmds=False))
+            self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+            stress_queue.append(self.run_stress_thread(**params))
+
+        self.log.info('Run Repair on node: {} , during r/w load'.format(node3.name))
+        repair_time, res = self._run_repair(node=node3)
+
+        self.log.debug("Nodes total used capacity after repair end is:")
+        self._print_nodes_used_capacity()
+
+        self.log.info('Repair (during r/w load) time on node: {} is: {}'.format(node3.name, repair_time))
+
+        dict_specific_tested_stats ={'repair_runtime_during_load': repair_time}
 
         self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
 
