@@ -36,7 +36,7 @@
 | **<a name="enable_tc">enable_tc</a>**  | when enable scylla will use traffic control | N/A | SCT_ENABLE_TC
 | **<a name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
 | **<a name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
-| **<a name="hinted_handoff_disabled">hinted_handoff_disabled</a>**  | when enable scylla will disable hinted handoffs | N/A | SCT_HINTED_HANDOFF_DISABLED
+| **<a name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff | N/A | SCT_HINTED_HANDOFF
 | **<a name="authenticator">authenticator</a>**  | which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator | N/A | SCT_AUTHENTICATOR
 | **<a name="append_scylla_args">append_scylla_args</a>**  | More arguments to append to scylla command line | N/A | SCT_APPEND_SCYLLA_ARGS
 | **<a name="nemesis_class_name">nemesis_class_name</a>**  | Nemesis class to use (possible types in sdcm.nemesis). | NoOpMonkey | SCT_NEMESIS_CLASS_NAME

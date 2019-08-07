@@ -614,6 +614,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             client_encrypt=self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
             authorizer=self.params.get('authorizer'),
+            hinted_handoff=self.params.get('hinted_handoff'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(

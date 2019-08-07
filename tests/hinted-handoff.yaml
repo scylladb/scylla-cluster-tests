@@ -8,7 +8,7 @@ n_monitor_nodes: 1
 # Options
 user_prefix: 'hinted-handoff-VERSION'
 
-hinted_handoff_disabled: false
+hinted_handoff: 'enabled'
 failure_post_behavior: 'keep'
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
