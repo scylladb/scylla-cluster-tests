@@ -342,6 +342,36 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         for node in self.db_cluster.nodes:
             used_capacity = self.get_used_capacity(node=node)
             self.log.debug("Node {} ({}) used capacity is: {}".format(node.name, node.private_ip_address, used_capacity))
+
+    def _pre_create_schema_scylla_bench(self):
+        node = self.db_cluster.nodes[0]
+        with self.cql_connection_patient(node) as session:
+            session.execute("""
+                    CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
+            """)
+            session.execute("""
+                    CREATE TABLE IF NOT EXISTS scylla_bench.test (
+                    pk bigint,
+                    ck bigint,
+                    v blob,
+                    PRIMARY KEY (pk, ck)
+                ) WITH CLUSTERING ORDER BY (ck ASC)
+                    AND bloom_filter_fp_chance = 0.01
+                    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+                    AND comment = ''
+                    AND compression = {}
+                    AND crc_check_chance = 1.0
+                    AND dclocal_read_repair_chance = 0.0
+                    AND default_time_to_live = 0
+                    AND gc_grace_seconds = 864000
+                    AND max_index_interval = 2048
+                    AND memtable_flush_period_in_ms = 0
+                    AND min_index_interval = 128
+                    AND read_repair_chance = 0.0
+                    AND speculative_retry = 'NONE';
+                            """)
+
+
     # Global Util functions ===============================================================================================
 
 
@@ -457,11 +487,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._disable_hinted_handoff()
         self._print_nodes_used_capacity()
 
-        if preload_data:
-            self._pre_create_schema_large_scale()
+        self._pre_create_schema_scylla_bench()
 
         self.log.info('Starting scylla-bench large-partitions write workload')
-        # TODO: scylla-bench large-partitions write workload
+        # TODO: scylla-bench large-partitions write workload: consistencyLevel = "All"
+        # prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 -replication-factor=3 -partition-count=100 -clustering-row-count=10000000 -clustering-row-size=5120 -concurrency=7 -rows-per-request=30"]
 
         self._wait_no_compactions_running()
 
@@ -507,8 +537,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-        background_stress_cmds = ["cassandra-stress write no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'",
-                                    "cassandra-stress read no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"]
+        background_stress_cmds = ["cassandra-stress write no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -col 'size=FIXED(1024) n=FIXED(1)'",
+                                    "cassandra-stress read no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=6 -col 'size=FIXED(1024) n=FIXED(1)'"]
 
         node1, node2, node3 = self.db_cluster.nodes
         self._disable_hinted_handoff()
