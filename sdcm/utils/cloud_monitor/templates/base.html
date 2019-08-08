@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ subject }}</title>
+    <style>
+        .blue   { color: blue; }
+        .fbold  { font-weight: bold; }
+        .red    { color: red; }
+        .green  { color: green; }
+        .orange { color: orange; }
+        .black  { color: black; }
+        .fnormal { font-weight: normal; }
+        .notice { font-size:120%; }
+        .small { font-size:80%; }
+        #results_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 60%;
+        }
+
+
+        #results_table td, #results_table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #results_table tr:nth-child(even){background-color: #f2f2f2;}
+
+        #results_table tr:hover {background-color: #ddd;}
+
+        #results_table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #85C1E9;
+            color: white;
+        }
+
+
+    </style>
+</head>
+<body>
+{{ body|safe }}
+
+</body>
+</html>

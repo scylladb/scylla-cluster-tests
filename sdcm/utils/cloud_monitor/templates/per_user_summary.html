@@ -1,0 +1,17 @@
+    <h3>Per user report</h3>
+
+    <table id="results_table">
+        <tr>
+            <th>User</th>
+            <th>Running</th>
+            <th>Stopped</th>
+        </tr>
+        {% for user, stat in report|dictsort %}
+        <tr>
+            <td>{{ user }}</td>
+            <td>{{ stat.num_running_instances }}</td>
+            <td>{{ stat.num_stopped_instances }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>For detailed report download and open attached html</h2>

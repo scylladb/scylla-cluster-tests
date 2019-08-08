@@ -1,0 +1,28 @@
+    <h2>Cloud resources</h2>
+    {% for user, instances in report|dictsort %}
+    <h3>{{ user }}</h3>
+    <table id="results_table">
+        <tr>
+            <th>Cloud</th>
+            <th>Name</th>
+            <th>Region-AZ</th>
+            <th>State</th>
+            <th>Lifecycle</th>
+            <th>Instance type</th>
+            <th>Owner</th>
+            <th>Launch time</th>
+        </tr>
+        {% for instance in instances %}
+        <tr>
+            <td>{{ instance.cloud }}</td>
+            <td>{{ instance.name }}</td>
+            <td>{{ instance.region_az }}</td>
+            <td>{{ instance.state }}</td>
+            <td>{{ instance.lifecycle }}</td>
+            <td>{{ instance.instance_type }}</td>
+            <td>{{ instance.owner }}</td>
+            <td>{{ instance.create_time }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endfor %}

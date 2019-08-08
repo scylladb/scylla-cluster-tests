@@ -11,6 +11,7 @@ import xmlrunner
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, restore_monitoring_stack, get_branched_ami, gce_meta_to_dict,
@@ -331,6 +332,15 @@ def run_test(argv, backend, config, logdir):
     unittest.main(module=None, argv=['python -m unittest', argv],
                   testRunner=xmlrunner.XMLTestRunner(stream=sys.stderr, output=os.path.join(Setup.logdir(), 'test-reports')),
                   failfast=False, buffer=False, catchbreak=True)
+
+
+@cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
+@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
+def cloud_usage_report(emails):
+    email_list = emails.split(",")
+    click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
+    cloud_report(mail_to=email_list)
+    click.secho(message="Done." % email_list, fg="yellow")
 
 
 if __name__ == '__main__':
