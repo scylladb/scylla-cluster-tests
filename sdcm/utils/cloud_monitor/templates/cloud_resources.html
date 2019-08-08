@@ -1,0 +1,16 @@
+    <h3>Cloud resources</h3>
+
+    <table id="results_table">
+        <tr>
+            <th>Cloud</th>
+            <th>Running</th>
+            <th>Stopped</th>
+        </tr>
+        {% for cloud_provider in report %}
+        <tr>
+            <td>{{ cloud_provider }}</td>
+            <td>{{ report[cloud_provider].num_running_instances }}</td>
+            <td>{{ report[cloud_provider].num_stopped_instances }}</td>
+        </tr>
+        {% endfor %}
+    </table>

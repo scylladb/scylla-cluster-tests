@@ -658,7 +658,7 @@ def filter_gce_by_tags(tags_dict, instances):
     return filtered_instances
 
 
-def list_instances_gce(tags_dict, running=False):
+def list_instances_gce(tags_dict=None, running=False):
     """
     list all instances with specific tags GCE
 
