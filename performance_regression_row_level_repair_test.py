@@ -446,14 +446,69 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
+    def test_row_level_repair_large_partitions(self, preload_data=True):
+        """
+        Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
+        requires: export SCT_HINTED_HANDOFF_DISABLED=true
+        :return:
+        """
+
+        node1, node2, node3 = self.db_cluster.nodes
+        self._disable_hinted_handoff()
+        self._print_nodes_used_capacity()
+
+        if preload_data:
+            self._pre_create_schema_large_scale()
+
+        self.log.info('Starting scylla-bench large-partitions write workload')
+        # TODO: scylla-bench large-partitions write workload
+
+        self._wait_no_compactions_running()
+
+        thousand = 1000
+        million = thousand ** 2
+        billion = thousand ** 3
+        # TODO: scylla-bench update cmd: base_distinct_write_cmd
+        sequence_current_index = billion
+        sequence_range = million
+        for node in [node1, node2, node3]:
+            self.log.info('Stopping all other nodes before updating {}'.format(node.name))
+            self._stop_all_nodes_except_for(node=node)
+            self.log.info('Updating cluster data only for {}'.format(node.name))
+            # TODO: scylla-bench large-partitions write workload on node
+            distinct_write_cmd = "TBD"
+            self.log.info("Run stress command of: {}".format(distinct_write_cmd))
+            stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
+            self.verify_stress_thread(cs_thread_pool=stress_thread)
+            self._start_all_nodes()
+            sequence_current_index += sequence_range
+
+        self._wait_no_compactions_running()
+        self.log.debug("Nodes total used capacity before starting repair is:")
+        self._print_nodes_used_capacity()
+
+        self.log.info('Run Repair on node: {}'.format(node3.name))
+        repair_time, res = self._run_repair(node=node3)
+
+        self.log.debug("Nodes total used capacity after repair end is:")
+        self._print_nodes_used_capacity()
+
+        self.log.info('Repair (with large partitions) time on node: {} is: {}'.format(node3.name, repair_time))
+
+        dict_specific_tested_stats ={'repair_runtime_large_partitions': repair_time}
+
+        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+
+        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+
     def test_row_level_repair_during_load(self, preload_data=True):
         """
         Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-        background_stress_cmds = ["cassandra-stress write no-warmup cl=QUORUM duration=2h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'",
-                                    "cassandra-stress read no-warmup cl=QUORUM duration=2h -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -col 'size=FIXED(1024) n=FIXED(1)'"]
+        background_stress_cmds = ["cassandra-stress write no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'",
+                                    "cassandra-stress read no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"]
 
         node1, node2, node3 = self.db_cluster.nodes
         self._disable_hinted_handoff()
