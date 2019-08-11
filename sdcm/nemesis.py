@@ -576,7 +576,7 @@ class Nemesis(object):
             self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
 
         # do the actual truncation
-        self.target_node.run_cqlsh('TRUNCATE {}.{}'.format(keyspace_truncate, table))
+        self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
