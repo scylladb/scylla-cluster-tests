@@ -3239,7 +3239,9 @@ class BaseLoaderSet(object):
         return avaialable_ks_cf.keys()
 
     def run_fullscan(self, ks_cf, loader_node, db_node):
-        """Run cql select count(*) request
+        """Run cql random choice between:
+        select count(*) from <ks_cf> OR
+        select * from  <ks_cf> bypass cache
 
         if ks_cf is not random, use value from config
         if ks_cf is random, choose random from not system
@@ -3264,9 +3266,13 @@ class BaseLoaderSet(object):
 
         self.log.info('Fullscan for ks.cf: {}'.format(ks_cf))
 
+        cmd_count_star = 'select count(*) from {}'
+        cmd_bypass_cache = 'select * from {} bypass cache'
+        cmd = random.choice([cmd_count_star, cmd_bypass_cache]).format(ks_cf)
+        self.log.info('Will run command {}'.format(cmd))
         try:
-            result = loader_node.run_cqlsh(cmd='select count(*) from {}'.format(ks_cf),
-                                           timeout=3600, verbose=False, target_db_node=db_node, connect_timeout=10)
+            result = loader_node.run_cqlsh(cmd=cmd, timeout=3600, verbose=False, target_db_node=db_node,
+                                           connect_timeout=10)
         except (UnexpectedExit, Failure, CmdExecTimeoutExceeded) as details:
             self.log.error('Fullscan command finished with errors: {}'.format(details))
             result = details.result
