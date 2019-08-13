@@ -14,7 +14,7 @@ append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 
 scylla_linux_distro: 'centos'
 scylla_linux_distro_loader: 'centos'
 
-monitor_branch: 'branch-2.4'
+monitor_branch: 'branch-3.0'
 store_results_in_elasticsearch: true
 
 space_node_threshold: 0
