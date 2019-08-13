@@ -476,6 +476,32 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
+    def _populate_scylla_bench_data_in_parallel(self, base_cmd, partition_count, clustering_row_count, consistency_level="ALL", blocking=True):
+
+        n_loaders = int(self.params.get('n_loaders'))
+        partitions_per_loader = partition_count / n_loaders
+        per_loader_rows_range = partitions_per_loader * clustering_row_count
+        str_partitions_per_node = "-partition-count={}".format(partitions_per_loader)
+        str_clustering_row_size = "-clustering-row-count={}".format(clustering_row_count)
+        str_consistency_level = "-consistency-level={}".format(consistency_level)
+
+        write_queue = list()
+        offset = 0
+        for i in range(n_loaders):
+
+            str_offset = "-partition-offset {}".format(offset)
+            stress_cmd = " ".join([base_cmd, str_partitions_per_node, str_clustering_row_size, str_offset, str_consistency_level])
+
+            offset += per_loader_rows_range
+            write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
+            time.sleep(0.2)
+
+        if blocking:
+            for stress in write_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
+
+        return write_queue
+
     def test_row_level_repair_large_partitions(self, preload_data=True):
         """
         Start 3 nodes, create keyspace with rf = 3, disable hinted hand off
@@ -491,7 +517,14 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Starting scylla-bench large-partitions write workload')
         # TODO: scylla-bench large-partitions write workload: consistencyLevel = "All"
-        # prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 -replication-factor=3 -partition-count=100 -clustering-row-count=10000000 -clustering-row-size=5120 -concurrency=7 -rows-per-request=30"]
+        partition_count = 1000
+        clustering_row_count = 528
+        clustering_row_size = 1024
+
+
+        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 "\
+                                "-replication-factor=3 -clustering-row-size={} -concurrency=10 -rows-per-request=30".format(clustering_row_size)
+        write_queue = self._populate_scylla_bench_data_in_parallel(base_cmd=scylla_bench_base_cmd, partition_count=partition_count, clustering_row_count=clustering_row_count)
 
         self._wait_no_compactions_running()
 
@@ -501,12 +534,21 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         # TODO: scylla-bench update cmd: base_distinct_write_cmd
         sequence_current_index = billion
         sequence_range = million
+        offset = 0 # partition_count * clustering_row_count
+        consistency_level = "ALL"
+        str_consistency_level = "-consistency-level={}".format(consistency_level)
+
         for node in [node1, node2, node3]:
             self.log.info('Stopping all other nodes before updating {}'.format(node.name))
             self._stop_all_nodes_except_for(node=node)
             self.log.info('Updating cluster data only for {}'.format(node.name))
             # TODO: scylla-bench large-partitions write workload on node
-            distinct_write_cmd = "TBD"
+            distinct_write_cmd = scylla_bench_base_cmd
+            str_offset = "-partition-offset {}".format(offset)
+            stress_cmd = " ".join(
+                [scylla_bench_base_cmd, partition_count/100, clustering_row_count/100, str_offset, str_consistency_level])
+
+            # offset += per_loader_rows_range # TODO: complete this
             self.log.info("Run stress command of: {}".format(distinct_write_cmd))
             stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
             self.verify_stress_thread(cs_thread_pool=stress_thread)
