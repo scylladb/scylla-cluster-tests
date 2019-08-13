@@ -825,6 +825,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                      profile=profile,
                                      node_list=self.db_cluster.nodes,
                                      round_robin=round_robin,
+                                     client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
                                      keyspace_name=keyspace_name).run()
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
@@ -1029,6 +1030,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             auth_provider = None
 
+        if ssl_opts is None and self.params.get('client_encrypt', default=None):
+            ssl_opts = {'ca_certs': './data_dir/ssl_conf/unittest/catest.pem'}
+        self.log.debug(str(ssl_opts))
         cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
                                        compression=compression,
                                        protocol_version=protocol_version,
