@@ -808,6 +808,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                      profile=profile,
                                      node_list=self.db_cluster.nodes,
                                      round_robin=round_robin,
+                                     client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
                                      keyspace_name=keyspace_name).run()
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
@@ -997,14 +998,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             auth_provider = None
 
-        cluster = ClusterDriver(node_ips, auth_provider=auth_provider,
-                                compression=compression,
-                                protocol_version=protocol_version,
-                                load_balancing_policy=load_balancing_policy,
-                                default_retry_policy=FlakyRetryPolicy(),
-                                port=port, ssl_options=ssl_opts,
-                                connect_timeout=100)
-        session = cluster.connect()
+        if ssl_opts is None and self.params.get('client_encrypt', default=None):
+            ssl_opts = {'ca_certs': './data_dir/ssl_conf/unittest/catest.pem'}
+        self.log.debug(str(ssl_opts))
+        cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
+                                       compression=compression,
+                                       protocol_version=protocol_version,
+                                       load_balancing_policy=load_balancing_policy,
+                                       default_retry_policy=FlakyRetryPolicy(),
+                                       port=port, ssl_options=ssl_opts,
+                                       connect_timeout=100)
+        session = cluster_driver.connect()
 
         # temporarily increase client-side timeout to 1m to determine
         # if the cluster is simply responding slowly to requests
@@ -1016,7 +1020,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         # override driver default consistency level of LOCAL_QUORUM
         session.default_consistency_level = ConsistencyLevel.ONE
 
-        return ScyllaCQLSession(session, cluster)
+        return ScyllaCQLSession(session, cluster_driver)
 
     def cql_connection(self, node, keyspace=None, user=None,
                        password=None, compression=True, protocol_version=None,

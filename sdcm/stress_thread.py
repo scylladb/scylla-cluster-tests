@@ -57,9 +57,11 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                         event.add_info_and_publish(node=self.node, line=line, line_number=line_number)
 
 
-class CassandraStressThread(object):
-    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',
-                 profile=None, node_list=[], round_robin=False):
+class CassandraStressThread(object):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
+                 profile=None, node_list=None, round_robin=False, client_encrypt=False):
+        if not node_list:
+            node_list = []
         self.loader_set = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
@@ -70,6 +72,7 @@ class CassandraStressThread(object):
         self.profile = profile
         self.node_list = node_list
         self.round_robin = round_robin
+        self.client_encrypt = client_encrypt
 
         self.executor = None
         self.results_futures = []
@@ -99,6 +102,8 @@ class CassandraStressThread(object):
         if credentials and 'user=' not in stress_cmd:
             # put the credentials into the right place into -mode section
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
+        if self.client_encrypt and 'transport' not in stress_cmd:
+            stress_cmd += ' -transport "truststore=/etc/scylla/ssl_conf/unittest/cacerts.jks truststore-password=cassandra"'
 
         if self.node_list and '-node' not in stress_cmd:
             first_node = [n for n in self.node_list if n.dc_idx == loader_idx % 3]  # make sure each loader is targeting on datacenter/region
