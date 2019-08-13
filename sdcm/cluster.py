@@ -1436,25 +1436,23 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                                                scylla_yaml_contents)
 
         if server_encrypt or client_encrypt:
-            self.remoter.send_files(src='./data_dir/ssl_conf',
-                                    dst='/tmp/')
-            self.remoter.run('sudo mv /tmp/ssl_conf/*.* /etc/scylla/')
-
+            self.config_client_encrypt()
         if server_encrypt:
             scylla_yaml_contents += """
 server_encryption_options:
    internode_encryption: all
-   certificate: /etc/scylla/db.crt
-   keyfile: /etc/scylla/db.key
-   truststore: /etc/scylla/cadb.pem
+   certificate: /etc/scylla/ssl_conf/db.crt
+   keyfile: /etc/scylla/ssl_conf/db.key
+   truststore: /etc/scylla/ssl_conf/cadb.pem
 """
 
         if client_encrypt:
             client_encrypt_conf = dedent("""
-                            client_encryption_options:          # <client_encrypt>
-                               enabled: true                    # <client_encrypt>
-                               certificate: /etc/scylla/db.crt  # <client_encrypt>
-                               keyfile: /etc/scylla/db.key      # <client_encrypt>
+                            client_encryption_options:                               # <client_encrypt>
+                               enabled: true                                         # <client_encrypt>
+                               certificate: /etc/scylla/ssl_conf/unittest/test.crt   # <client_encrypt>
+                               keyfile: /etc/scylla/ssl_conf/unittest/test.key       # <client_encrypt>
+                               truststore: /etc/scylla/ssl_conf/unittest/catest.pem  # <client_encrypt>
             """)
             scylla_yaml_contents += client_encrypt_conf
 
@@ -1490,6 +1488,16 @@ server_encryption_options:
 
         if debug_install and self.is_rhel_like():
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
+
+    def config_client_encrypt(self):
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
+        setup_script = dedent("""
+            mkdir -p ~/.cassandra/
+            cp /tmp/ssl_conf/unittest/cqlshrc ~/.cassandra/
+            sudo mkdir -p /etc/scylla/
+            sudo mv /tmp/ssl_conf/ /etc/scylla/
+        """)
+        self.remoter.run('bash -cxe "%s"' % setup_script)
 
     def download_scylla_repo(self, scylla_repo):
         if not scylla_repo:
@@ -2168,8 +2176,9 @@ server_encryption_options:
         credentials = self.parent_cluster.get_db_auth()
         auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
         use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
-        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout}".format(
-            auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout, connect_timeout=connect_timeout)
+        ssl_params = '--ssl' if self.is_client_encrypt else ''
+        options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout} {ssl_params}".format(
+            auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout, connect_timeout=connect_timeout, ssl_params=ssl_params)
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host, port=port)
 
     def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=60, verbose=True, split=False, target_db_node=None, connect_timeout=5):
@@ -3002,6 +3011,9 @@ class BaseLoaderSet(object):
         collectd_setup = ScyllaCollectdSetup()
         collectd_setup.install(node)
         self.install_gemini(node=node)
+        if self.params.get('client_encrypt'):
+            node.config_client_encrypt()
+
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')  # pylint: disable=no-member
