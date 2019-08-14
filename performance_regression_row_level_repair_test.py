@@ -476,7 +476,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
 
-    def _populate_scylla_bench_data_in_parallel(self, base_cmd, partition_count, clustering_row_count, consistency_level="ALL", blocking=True):
+    def _populate_scylla_bench_data_in_parallel(self, base_cmd, partition_count, clustering_row_count, consistency_level="all", blocking=True):
 
         n_loaders = int(self.params.get('n_loaders'))
         partitions_per_loader = partition_count / n_loaders
@@ -484,17 +484,20 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         str_partitions_per_node = "-partition-count={}".format(partitions_per_loader)
         str_clustering_row_count = "-clustering-row-count={}".format(clustering_row_count)
         str_consistency_level = "-consistency-level={}".format(consistency_level)
-
+        self.log.debug(n_loaders, partitions_per_loader, per_loader_rows_range, str_partitions_per_node,
+                       str_clustering_row_count, str_consistency_level)
         write_queue = list()
         offset = 0
         for i in range(n_loaders):
 
             str_offset = "-partition-offset {}".format(offset)
             stress_cmd = " ".join([base_cmd, str_partitions_per_node, str_clustering_row_count, str_offset, str_consistency_level])
-
+            self.log.debug('Scylla-bench stress command to execute: {}'.format(stress_cmd))
+            write_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
+                                                            use_single_loader=True))
             offset += per_loader_rows_range
-            write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
             time.sleep(0.2)
+        results = self.get_stress_results_bench(queue=write_queue)
 
         if blocking:
             for stress in write_queue:
@@ -524,7 +527,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         str_partition_count_per_node = "-partition-count={}".format(partition_count_per_node)
         str_clustering_row_count_per_node = "-clustering-row-count={}".format(clustering_row_count_per_node)
 
-        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 " \
+        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -max-rate=300 " \
                                 "-replication-factor=3 -clustering-row-size={} -concurrency=10 -rows-per-request=30".format(clustering_row_size)
         write_queue = self._populate_scylla_bench_data_in_parallel(base_cmd=scylla_bench_base_cmd, partition_count=partition_count, clustering_row_count=clustering_row_count)
 
