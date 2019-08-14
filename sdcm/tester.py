@@ -790,14 +790,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                      round_robin=round_robin,
                                      keyspace_name=keyspace_name).run()
 
-    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
+    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True, use_single_loader=False):
 
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                                     self.outputdir,
-                                                    node_list=self.db_cluster.nodes)
+                                                    node_list=self.db_cluster.nodes,
+                                                    use_single_loader=use_single_loader)
 
     def run_gemini(self, cmd, duration=None):
 

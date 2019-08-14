@@ -516,7 +516,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._pre_create_schema_scylla_bench()
 
         self.log.info('Starting scylla-bench large-partitions write workload')
-        # TODO: scylla-bench large-partitions write workload: consistencyLevel = "All"
         partition_count = 1000
         clustering_row_count = 528
         clustering_row_size = 1024
@@ -525,14 +524,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         str_partition_count_per_node = "-partition-count={}".format(partition_count_per_node)
         str_clustering_row_count_per_node = "-clustering-row-count={}".format(clustering_row_count_per_node)
 
-
         scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 " \
                                 "-replication-factor=3 -clustering-row-size={} -concurrency=10 -rows-per-request=30".format(clustering_row_size)
         write_queue = self._populate_scylla_bench_data_in_parallel(base_cmd=scylla_bench_base_cmd, partition_count=partition_count, clustering_row_count=clustering_row_count)
 
         self._wait_no_compactions_running()
 
-        offset = 0 # per node increased with range of: partition_count_per_node * clustering_row_count_per_node * 10
+        offset = 0 # per node increased with interval of: partition_count_per_node * clustering_row_count_per_node * 10
         consistency_level = "ALL"
         str_consistency_level = "-consistency-level={}".format(consistency_level)
 
@@ -545,9 +543,9 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                 stress_cmd = " ".join(
                     [scylla_bench_base_cmd, str_partition_count_per_node, str_clustering_row_count_per_node, str_offset, str_consistency_level])
                 self.log.info("Run stress command of: {}".format(stress_cmd))
-                stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True)
+                stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False, use_single_loader=True)
+                results = self.get_stress_results_bench(queue=stress_queue)
                 offset += partition_count_per_node * clustering_row_count_per_node
-                # TODO: wait and verify writes end
             self._start_all_nodes()
 
         self._wait_no_compactions_running()
