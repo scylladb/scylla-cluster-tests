@@ -497,11 +497,9 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                                                             use_single_loader=True))
             offset += per_loader_rows_range
             time.sleep(0.2)
-        results = self.get_stress_results_bench(queue=write_queue)
 
         if blocking:
-            for stress in write_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+            results = self.get_stress_results_bench(queue=write_queue)
 
         return write_queue
 
