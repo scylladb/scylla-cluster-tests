@@ -482,7 +482,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         partitions_per_loader = partition_count / n_loaders
         per_loader_rows_range = partitions_per_loader * clustering_row_count
         str_partitions_per_node = "-partition-count={}".format(partitions_per_loader)
-        str_clustering_row_size = "-clustering-row-count={}".format(clustering_row_count)
+        str_clustering_row_count = "-clustering-row-count={}".format(clustering_row_count)
         str_consistency_level = "-consistency-level={}".format(consistency_level)
 
         write_queue = list()
@@ -490,7 +490,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         for i in range(n_loaders):
 
             str_offset = "-partition-offset {}".format(offset)
-            stress_cmd = " ".join([base_cmd, str_partitions_per_node, str_clustering_row_size, str_offset, str_consistency_level])
+            stress_cmd = " ".join([base_cmd, str_partitions_per_node, str_clustering_row_count, str_offset, str_consistency_level])
 
             offset += per_loader_rows_range
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
@@ -520,21 +520,19 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         partition_count = 1000
         clustering_row_count = 528
         clustering_row_size = 1024
+        partition_count_per_node = partition_count/100
+        clustering_row_count_per_node = clustering_row_count / 100
+        str_partition_count_per_node = "-partition-count={}".format(partition_count_per_node)
+        str_clustering_row_count_per_node = "-clustering-row-count={}".format(clustering_row_count_per_node)
 
 
-        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 "\
+        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -consistencyLevel=all -max-rate=300 " \
                                 "-replication-factor=3 -clustering-row-size={} -concurrency=10 -rows-per-request=30".format(clustering_row_size)
         write_queue = self._populate_scylla_bench_data_in_parallel(base_cmd=scylla_bench_base_cmd, partition_count=partition_count, clustering_row_count=clustering_row_count)
 
         self._wait_no_compactions_running()
 
-        thousand = 1000
-        million = thousand ** 2
-        billion = thousand ** 3
-        # TODO: scylla-bench update cmd: base_distinct_write_cmd
-        sequence_current_index = billion
-        sequence_range = million
-        offset = 0 # partition_count * clustering_row_count
+        offset = 0 # per node increased with range of: partition_count_per_node * clustering_row_count_per_node * 10
         consistency_level = "ALL"
         str_consistency_level = "-consistency-level={}".format(consistency_level)
 
@@ -542,18 +540,15 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.log.info('Stopping all other nodes before updating {}'.format(node.name))
             self._stop_all_nodes_except_for(node=node)
             self.log.info('Updating cluster data only for {}'.format(node.name))
-            # TODO: scylla-bench large-partitions write workload on node
-            distinct_write_cmd = scylla_bench_base_cmd
-            str_offset = "-partition-offset {}".format(offset)
-            stress_cmd = " ".join(
-                [scylla_bench_base_cmd, partition_count/100, clustering_row_count/100, str_offset, str_consistency_level])
-
-            # offset += per_loader_rows_range # TODO: complete this
-            self.log.info("Run stress command of: {}".format(distinct_write_cmd))
-            stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
-            self.verify_stress_thread(cs_thread_pool=stress_thread)
+            for i in range(10):
+                str_offset = "-partition-offset {}".format(offset)
+                stress_cmd = " ".join(
+                    [scylla_bench_base_cmd, str_partition_count_per_node, str_clustering_row_count_per_node, str_offset, str_consistency_level])
+                self.log.info("Run stress command of: {}".format(stress_cmd))
+                stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True)
+                offset += partition_count_per_node * clustering_row_count_per_node
+                # TODO: wait and verify writes end
             self._start_all_nodes()
-            sequence_current_index += sequence_range
 
         self._wait_no_compactions_running()
         self.log.debug("Nodes total used capacity before starting repair is:")
