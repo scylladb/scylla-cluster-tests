@@ -9,7 +9,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-1TB-7days-authorization-and-tls-ssl-1dis-2nondis-nemesis.yaml',
+    test_config: 'test-cases/longevity/longevity-2TB-4days-authorization-and-tls-ssl-1dis-2nondis-nemesis.yaml',
 
     timeout: [time: 10960, unit: 'MINUTES'],
     post_behaviour: 'destroy'
