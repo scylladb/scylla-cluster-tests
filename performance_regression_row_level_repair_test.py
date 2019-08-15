@@ -480,22 +480,18 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         n_loaders = int(self.params.get('n_loaders'))
         partitions_per_loader = partition_count / n_loaders
-        per_loader_rows_range = partitions_per_loader * clustering_row_count
-        str_partitions_per_node = "-partition-count={}".format(partitions_per_loader)
+        str_partitions_per_loader = "-partition-count={}".format(partitions_per_loader)
         str_clustering_row_count = "-clustering-row-count={}".format(clustering_row_count)
         str_consistency_level = "-consistency-level={}".format(consistency_level)
-        self.log.debug(n_loaders, partitions_per_loader, per_loader_rows_range, str_partitions_per_node,
-                       str_clustering_row_count, str_consistency_level)
         write_queue = list()
         offset = 0
         for i in range(n_loaders):
-
             str_offset = "-partition-offset {}".format(offset)
-            stress_cmd = " ".join([base_cmd, str_partitions_per_node, str_clustering_row_count, str_offset, str_consistency_level])
+            stress_cmd = " ".join([base_cmd, str_partitions_per_loader, str_clustering_row_count, str_offset, str_consistency_level])
             self.log.debug('Scylla-bench stress command to execute: {}'.format(stress_cmd))
             write_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
                                                             use_single_loader=True))
-            offset += per_loader_rows_range
+            offset += partitions_per_loader
             time.sleep(0.2)
 
         if blocking:
