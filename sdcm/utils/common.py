@@ -552,7 +552,7 @@ def clean_cloud_instances(tags_dict):
     """
     Remove all instances with specific tags from both AWS/GCE
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: a dict of the tag to select the instances,e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
     clean_instances_aws(tags_dict)
