@@ -521,8 +521,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         partition_count = 2000
         clustering_row_count = 20480
         clustering_row_size = 2048
-        partition_count_per_node = partition_count/100
-        clustering_row_count_per_node = clustering_row_count / 100
+        partition_count_per_node = partition_count/10/3
+        clustering_row_count_per_node = clustering_row_count / 100 * 3
         str_partition_count_per_node = "-partition-count={}".format(partition_count_per_node)
         str_clustering_row_count_per_node = "-clustering-row-count={}".format(clustering_row_count_per_node)
 
@@ -540,14 +540,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.log.info('Stopping all other nodes before updating {}'.format(node.name))
             self._stop_all_nodes_except_for(node=node)
             self.log.info('Updating cluster data only for {}'.format(node.name))
-            for i in range(10):
-                str_offset = "-partition-offset {}".format(offset)
-                stress_cmd = " ".join(
-                    [scylla_bench_base_cmd, str_partition_count_per_node, str_clustering_row_count_per_node, str_offset, str_consistency_level])
-                self.log.info("Run stress command of: {}".format(stress_cmd))
-                stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False, use_single_loader=True)
-                results = self.get_stress_results_bench(queue=stress_queue)
-                offset += partition_count_per_node * clustering_row_count_per_node
+            str_offset = "-partition-offset {}".format(offset)
+            stress_cmd = " ".join(
+                [scylla_bench_base_cmd, str_partition_count_per_node, str_clustering_row_count_per_node, str_offset, str_consistency_level])
+            self.log.info("Run stress command of: {}".format(stress_cmd))
+            stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False, use_single_loader=True)
+            results = self.get_stress_results_bench(queue=stress_queue)
+            offset += partition_count_per_node
             self._start_all_nodes()
 
         self._wait_no_compactions_running()
