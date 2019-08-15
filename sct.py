@@ -94,13 +94,11 @@ def clean_resources(ctx, user, test_id):
 def list_resources(ctx, user, test_id, get_all, get_all_running):
     params = dict()
 
-    if get_all or get_all_running:
-        params = None
-    elif user:
+    if user:
         params['RunByUser'] = user
-    elif test_id:
+    if test_id:
         params['TestId'] = test_id
-    else:
+    if all([not get_all, not get_all_running, not user, not test_id]):
         click.echo(list_resources.get_help(ctx))
 
     if get_all_running:
