@@ -26,8 +26,9 @@ click_completion.init()
 
 def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
+    multimple_use = kwargs.pop('multiple', False)
     sct_opt.update(kwargs)
-    return click.option(name, type=sct_opt['type'], help=sct_opt['help'])
+    return click.option(name, type=sct_opt['type'], help=sct_opt['help'], multiple=multimple_use)
 
 
 def install_callback(ctx, _, value):
@@ -68,21 +69,26 @@ def provision(**kwargs):
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
 @click.option('--user', type=str, help='user name to filter instances by')
-@sct_option('--test-id', 'test_id', help='test id to filter by')
+@sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.pass_context
 def clean_resources(ctx, user, test_id):
     params = dict()
 
+    if not (user or test_id):
+        click.echo(clean_resources.get_help(ctx))
+
     if user:
         params['RunByUser'] = user
-    if test_id:
-        params['TestId'] = test_id
 
-    if params:
+    if not test_id:
         clean_cloud_instances(params)
         click.echo('cleaned instances for {}'.format(params))
-    else:
-        click.echo(clean_resources.get_help(ctx))
+
+    if test_id:
+        for _test_id in test_id:
+            params['TestId'] = _test_id
+            clean_cloud_instances(params)
+            click.echo('cleaned instances for {}'.format(params))
 
 
 @cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
