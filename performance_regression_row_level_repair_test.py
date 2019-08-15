@@ -518,9 +518,9 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self._pre_create_schema_scylla_bench()
 
         self.log.info('Starting scylla-bench large-partitions write workload')
-        partition_count = 1000
-        clustering_row_count = 528
-        clustering_row_size = 1024
+        partition_count = 2000
+        clustering_row_count = 20480
+        clustering_row_size = 2048
         partition_count_per_node = partition_count/100
         clustering_row_count_per_node = clustering_row_count / 100
         str_partition_count_per_node = "-partition-count={}".format(partition_count_per_node)
