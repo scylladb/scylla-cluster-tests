@@ -499,7 +499,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             time.sleep(0.2)
 
         if blocking:
-            results = self.get_stress_results_bench(queue=write_queue)
+            for stress_queue in write_queue:
+                results = self.get_stress_results_bench(queue=stress_queue)
 
         return write_queue
 
