@@ -268,19 +268,16 @@ class ClusterHealthValidatorEvent(SctEvent):
 
 
 class FullScanEvent(SctEvent):
-    def __init__(self, type, loader_node, ks_cf, db_node_ip, result=None):
+    def __init__(self, type, ks_cf, db_node_ip, severity=Severity.NORMAL, message=None):
         super(FullScanEvent, self).__init__()
         self.type = type
-        self.loader_node = str(loader_node)
         self.ks_cf = ks_cf
         self.db_node_ip = db_node_ip
-        self.msg = "{0}: type={1.type} loader_node={1.loader_node} select_from={1.ks_cf} on db_node={1.db_node_ip}"
-        self.result = result
-        if result:
-            if result['exit_code'] != 0 or result['stderr']:
-                self.severity = Severity.ERROR
-                self.type = 'error'
-            self.msg += " {1.result}"
+        self.severity = severity
+        self.msg = "{0}: type={1.type} select_from={1.ks_cf} on db_node={1.db_node_ip}"
+        if message:
+            self.message = message
+            self.msg += " {1.message}"
         self.publish()
 
     def __str__(self):
