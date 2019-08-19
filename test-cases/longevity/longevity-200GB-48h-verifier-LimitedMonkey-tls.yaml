@@ -23,7 +23,8 @@ space_node_threshold: 644245094
 
 use_mgmt: true
 
-server_encrypt: 'true'
+server_encrypt: true
+client_encrypt: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
