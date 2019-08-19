@@ -351,10 +351,7 @@ class ManagerCluster(ScyllaManagerBase):
     def delete_task(self, task_id):
         cmd = "-c {} task delete {}".format(self.id, task_id)
         logger.debug("Task Delete command to execute is: {}".format(cmd))
-        stdout, stderr = self.sctool.run(cmd=cmd, parse_table_res=False)
-        if stderr:
-            logger.warning("stderr:\n" + stderr)
-            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(cmd))
+        self.sctool.run(cmd=cmd, parse_table_res=False)
         logger.debug("Deleted the task '{}' successfully!". format(task_id))
 
     def delete_automatic_repair_task(self):
