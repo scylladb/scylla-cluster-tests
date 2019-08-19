@@ -1058,7 +1058,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def create_table(self, name, key_type="varchar",
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None,
-                     compact_storage=False, in_memory=False, scylla_encryption_options=None):
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None):
 
         additional_columns = ""
         if columns is not None:
@@ -1096,6 +1096,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if compact_storage:
             query += ' AND COMPACT STORAGE'
         with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            if keyspace_name:
+                session.execute('USE %s' % keyspace_name)
             session.execute(query)
         time.sleep(0.2)
 
