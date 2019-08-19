@@ -286,7 +286,7 @@ class Setup(object):
                sudo systemctl restart sshd
                sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
                /etc/security/limits.d/20-nproc.conf
-               echo -e '*\t\thard\tnproc\t\tunlimited/' >> /etc/security/limits.d/20-nproc.conf
+               echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
                ''')
         return post_boot_script
 
