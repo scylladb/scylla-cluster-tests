@@ -1095,9 +1095,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-        with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
-            if keyspace_name:
-                session.execute('USE %s' % keyspace_name)
+        with self.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
         time.sleep(0.2)
 
