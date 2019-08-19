@@ -555,7 +555,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         cluster_uuid = cluster.Setup.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
-        node_type = 'syclla-db'
+        node_type = 'scylla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
         user_data = ('--clustername %s '
