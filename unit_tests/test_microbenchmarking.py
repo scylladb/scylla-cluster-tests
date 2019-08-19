@@ -130,17 +130,24 @@ class TestMBM(unittest.TestCase):
         self.assertIn('large-partition-forwarding', report_html)
         self.assertIn('small-partition-slicing', report_html)
 
-    def test_generate_html_report_file_and_email_body_for_results_without_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
-        report_obj = self.get_report_obj(result_path)
+    def verify_html_report_correctness(self, report_results):
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        report_file, report_html = self.mbra.send_html_report(report_obj, html_report_path=html_report, send=False)
+        report_file, report_html = self.mbra.send_html_report(report_results, html_report_path=html_report, send=False)
 
         self.assertTrue(os.path.exists(report_file))
         self.assertGreater(os.path.getsize(report_file), 0)
         self.assertTrue(report_html)
-        self.assertIn('large-partition-forwarding', report_html)
-        self.assertIn('large-partition-slicing-single-key-reader', report_html)
+        for key in report_results.keys():
+            if report_results[key].get('has_diff', False) or report_results[key].get('has_improve', False):
+                self.assertIn(key, report_results)
+        self.assertIn('Kibana dashboard', report_html)
+        self.assertIn('Build URL', report_html)
+
+    def test_generate_html_report_file_and_email_body_for_results_without_aio(self):
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
+        report_obj = self.get_report_obj(result_path)
+
+        self.verify_html_report_correctness(report_obj)
 
     def test_generate_html_report_for_avg_aio_with_zero_value(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO_0')
@@ -161,15 +168,7 @@ class TestMBM(unittest.TestCase):
         self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg aio']['Diff best [%]'], None)
         self.assertEqual(report_results['small-partition-slicing_500000-4096.1']['avg aio']['Diff last [%]'], None)
 
-        html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        report_file, report_html = self.mbra.send_html_report(report_results, html_report_path=html_report, send=False)
-
-        self.assertTrue(os.path.exists(report_file))
-        self.assertGreater(os.path.getsize(report_file), 0)
-        self.assertTrue(report_html)
-        self.assertIn('large-partition-forwarding', report_html)
-        # no regression for small-partition-slicing tests
-        self.assertNotIn('small-partition-slicing', report_html)
+        self.verify_html_report_correctness(report_results)
 
     def test_empty_current_result(self):
         result_obj = {}
