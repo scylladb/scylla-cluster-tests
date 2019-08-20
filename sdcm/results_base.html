@@ -17,11 +17,19 @@
             border-collapse: collapse;
             width: 50%;
         }
-
-
         #results_table td, #results_table th {
             border: 1px solid #ddd;
             padding: 8px;
+
+        }
+        #results_table tr:nth-child(even){background-color: #f2f2f2;}
+        #results_table tr:hover {background-color: #ddd;}
+        #results_table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #85C1E9;
+            color: white;
         }
 
         .gemini_result_table {
@@ -32,18 +40,56 @@
             border: 1px solid #ddd;
             padding: 8px;
         }
-        #results_table tr:nth-child(even){background-color: #f2f2f2;}
 
-        #results_table tr:hover {background-color: #ddd;}
+        .longevity_result_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            vertical-align: top;
+            width: 50%;
+        }
 
-        #results_table th {
-            padding-top: 12px;
-            padding-bottom: 12px;
-            text-align: left;
+        .longevity_run_failure_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .longevity_result_table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .longevity_run_failure_table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .longevity_result_runs {
+            vertical-align: top;
+        }
+
+        .longevity_result_table td, .longevity_result_table th {
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .longevity_result_table th {
+            padding: 8px;
+            text-align: center;
             background-color: #85C1E9;
             color: white;
         }
 
+        .longevity_critical_errors_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .longevity_critical_errors_table td {
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
         .divRow
         {
            display: block;

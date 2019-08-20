@@ -20,6 +20,9 @@ import yaml
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.alternator import create_table as alternator_create_table
+from sdcm.utils.common import format_timestamp
+from sdcm.send_email import LongevityEmailReporter
+from sdcm.sct_events import EVENTS_PROCESSES
 
 
 class LongevityTest(ClusterTester):
@@ -329,3 +332,34 @@ class LongevityTest(ClusterTester):
         """
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
+
+    def get_email_data(self):
+        self.log.info('Prepare data for email')
+        email_recipients = self.params.get('email_recipients', default=None)
+        self.email_reporter = LongevityEmailReporter(email_recipients=email_recipients, logdir=self.logdir)
+
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time)
+        start_time = format_timestamp(self.start_time)
+
+        return {
+            'subject': 'Longevity results {}: {}'.format(self.id(), start_time),
+            'grafana_screenshots': grafana_dataset.get('screenshots', []),
+            'grafana_snapshots': grafana_dataset.get('snapshots', []),
+            'test_status': self._get_critical_errors(),
+            'test_name': self.id(),
+            'start_time': start_time,
+            'end_time': format_timestamp(time.time()),
+            'build_url': os.environ.get('BUILD_URL', None),
+            'scylla_version': self.db_cluster.nodes[0].scylla_version,
+            'scylla_ami_id': self.params.get('ami_id_db_scylla', '-'),
+            "scylla_instance_type": self.params.get('instance_type_db'),
+            "number_of_db_nodes": self.params.get('n_db_nodes'),
+            'nemesis_name': self.params.get('nemesis_class_name'),
+            'nemesis_details': self.get_nemesises_stats(),
+            'test_id': self.test_id,
+            'document_id': self.get_doc_id()
+        }
+
+    def _get_critical_errors(self):
+        critical = open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r').readlines()
+        return ("No critical errors in critical.log", None) if not critical else ("FAILED", critical)

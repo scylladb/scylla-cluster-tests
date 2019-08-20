@@ -57,7 +57,7 @@ from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
 from .utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    configure_logging, get_non_system_ks_cf_list, remove_files
+    configure_logging, get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -186,6 +186,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
+        self.email_reporter = None
+        self.start_time = time.time()
 
         if self.params.get("logs_transport") == 'rsyslog':
             cluster.Setup.configure_rsyslog(enable_ngrok=False)
@@ -193,6 +195,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
+
+    @property
+    def test_id(self):
+        return cluster.Setup.test_id()
 
     @property
     def test_duration(self):
@@ -256,6 +262,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cluster.Setup.reuse_cluster(False)
         if self.monitors.nodes:
             self.prometheusDB = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        self.start_time = time.time()
 
     def get_nemesis_class(self):
         """
@@ -897,7 +904,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def verify_gemini_results(self, queue):
         results = queue.get_gemini_results()
 
-        stats = {'status': None, 'results': [], 'errors': {}}
+        stats = {'status': None, 'results': [], 'errors': {}, 'cmd': queue.gemini_commands}
         if not results:
             self.log.error('Gemini results are not found')
             stats['status'] = 'FAILED'
@@ -1315,6 +1322,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         try:
             self.stop_resources()
         finally:
+            self.send_email()
             self.collect_logs()
         self.clean_resources()
 
@@ -1401,6 +1409,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 self.credentials = []
 
     def tearDown(self):
+
         self.log.info('TearDown is starting...')
         self.print_failure_to_log()
         InfoEvent('TEST_END')
@@ -1603,7 +1612,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "monitoring_stack": ""}
 
         storing_dir = os.path.join(self.logdir, "collected_logs")
-        os.makedirs(storing_dir)
+        makedirs(storing_dir)
 
         self.log.info("Storing dir is {}".format(storing_dir))
         if self.db_cluster:
@@ -1672,3 +1681,49 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             TEST_LOG.error("-" * 70)
             TEST_LOG.error(text)
             TEST_LOG.error("-" * 70)
+
+    def get_nemesises_stats(self):
+        nemesis_stats = {}
+        if self.create_stats:
+            nemesis_stats = self.get_doc_data(key='nemesis')
+        else:
+            for nem in self.db_cluster.nemesis:
+                nemesis_stats.update(nem.stats)
+
+        for name, detail in nemesis_stats.items():
+            for run in detail.get('runs', []):
+                run['start'] = format_timestamp(float(run['start']))
+                run['end'] = format_timestamp(float(run['end']))
+            for failure in detail.get('failures', []):
+                failure['start'] = format_timestamp(float(failure['start']))
+                failure['end'] = format_timestamp(float(failure['end']))
+        return nemesis_stats
+
+    def send_email(self):
+        """Send email with test results on teardown
+
+        The method is used to send email with test results.
+        Child class should implement the method get_mail_data
+        which return the dict with 2 required fields:
+        email_template, email_subject
+        """
+        send_email = self.params.get('send_email', default=False)
+        if send_email:
+            try:
+                email_data = self.get_email_data()
+                self.email_reporter.send_report(email_data)
+
+            except Exception as details:
+                self.log.error("Error during sending email: {}".format(details))
+
+    def get_email_data(self):
+        """prepare data to generate and send via email
+
+        Have to return the dict which is used to build the
+        html content with email template.
+        Required field:
+        - email_template: path to file with html template
+        - email_subject: subject of email
+        have to be implemented in child class.
+        """
+        raise NotImplementedError("Should be implemented in child class")

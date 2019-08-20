@@ -48,7 +48,7 @@ from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version, get_my_ip
+    get_latest_gemini_version, get_my_ip, makedirs
 from .collectd import ScyllaCollectdSetup
 from .db_stats import PrometheusDBStats
 
@@ -200,7 +200,7 @@ class Setup(object):
             sct_base = os.path.expanduser(os.environ.get('_SCT_LOGDIR', '~/sct-results'))
             date_time_formatted = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             cls._logdir = os.path.join(sct_base, str(date_time_formatted))
-            os.makedirs(cls._logdir)
+            makedirs(cls._logdir)
 
             latest_symlink = os.path.join(sct_base, 'latest')
             if os.path.islink(latest_symlink):
@@ -381,7 +381,7 @@ class BaseNode(object):
         self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
         self.logdir = os.path.join(base_logdir, self.name)
-        os.makedirs(self.logdir)
+        makedirs(self.logdir)
 
         self._public_ip_address = None
         self._private_ip_address = None
@@ -2171,7 +2171,7 @@ class BaseCluster(object):
 
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'],
                                    self.name)
-        os.makedirs(self.logdir)
+        makedirs(self.logdir)
 
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.log.info('Init nodes')
@@ -3211,10 +3211,7 @@ class BaseLoaderSet(object):
             CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
             logdir = os.path.join(output_dir, self.name)
-            try:
-                os.makedirs(logdir)
-            except OSError:
-                pass
+            makedirs(logdir)
 
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
@@ -3602,6 +3599,7 @@ class BaseMonitorSet(object):
                 return res.text
         except Exception as ex:
             logger.warning("unable to get grafana annotations [%s]", str(ex))
+            return ""
 
     def set_grafana_annotations(self, node, annotations_data):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
@@ -3638,7 +3636,7 @@ class BaseMonitorSet(object):
         """
         if not test_start_time:
             self.log.error("No start time for test")
-            return
+            return {}
         start_time = str(test_start_time).split('.')[0] + '000'
 
         screenshot_names = [
@@ -3683,7 +3681,7 @@ class BaseMonitorSet(object):
         except Exception as details:
             self.log.error('Error taking monitor snapshot: %s',
                            str(details))
-        return {}
+            return {}
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
@@ -3894,3 +3892,6 @@ class NoMonitorSet(object):
 
     def collect_logs(self, storing_dir):
         pass
+
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
+        return {}

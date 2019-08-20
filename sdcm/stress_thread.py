@@ -24,7 +24,7 @@ from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
-from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread, makedirs
 from sdcm.sct_events import CassandraStressLogEvent, Severity
 
 LOGGER = logging.getLogger(__name__)
@@ -119,7 +119,10 @@ class CassandraStressThread(object):
 
         LOGGER.info('Stress command:\n%s' % stress_cmd)
 
-        log_file_name = os.path.join(node.logdir, 'cassandra-stress-l%s-c%s-k%s-%s.log' % (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
+        log_dir = os.path.join(self.output_dir, self.loader_set.name)
+        if not os.path.exists(log_dir):
+            makedirs(log_dir)
+        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-k%s-%s.log' % (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
