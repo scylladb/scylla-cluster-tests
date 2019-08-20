@@ -2231,9 +2231,6 @@ class BaseCluster(object):
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
 
-    def get_node_external_ips(self):
-        return [node.external_address for node in self.nodes]
-
     def get_node_database_errors(self):
         errors = {}
         for node in self.nodes:
