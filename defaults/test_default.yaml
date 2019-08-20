@@ -15,7 +15,7 @@ scylla_linux_distro: 'centos'
 scylla_linux_distro_loader: 'centos'
 
 monitor_branch: 'branch-2.4'
-store_results_in_elasticsearch: true
+store_results_in_elasticsearch: false
 
 space_node_threshold: 0
 
