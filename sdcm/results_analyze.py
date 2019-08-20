@@ -153,6 +153,7 @@ class BaseResultsAnalyzer(object):
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
         template = env.get_template(self._email_template_fp)
         html = template.render(results)
+        self.log.info("Results has been rendered to html")
         if html_file_path:
             with open(html_file_path, "w") as f:
                 f.write(html)

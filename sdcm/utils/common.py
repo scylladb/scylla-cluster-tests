@@ -1087,3 +1087,23 @@ def remove_files(path):
             os.remove(path)
     except Exception as details:
         logger.error("Error during remove archived logs %s", details)
+
+
+def format_timestamp(timestamp):
+    return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def makedirs(path):
+    """
+
+    TODO: when move to python3, this function will be replaced
+    with os.makedirs function:
+        os.makedirs(name, mode=0o777, exist_ok=False)
+
+    """
+    try:
+        os.makedirs(path)
+    except OSError:
+        if os.path.exists(path):
+            return
+        raise

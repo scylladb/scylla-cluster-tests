@@ -13,12 +13,13 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
-import datetime
+
 import time
 import os
 
 from sdcm.tester import ClusterTester
-from sdcm.results_analyze import BaseResultsAnalyzer
+from sdcm.utils.common import format_timestamp
+from sdcm.send_email import GeminiEmailReporter
 
 
 class GeminiTest(ClusterTester):
@@ -32,35 +33,26 @@ class GeminiTest(ClusterTester):
         """
         Run gemini tool
         """
-        prepared_results = self._prepare_test_results()
 
         cmd = self.params.get('gemini_cmd')
 
         self.log.debug('Start gemini benchmark')
-        prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
-        result = self.verify_gemini_results(queue=test_queue)
 
-        prepared_results['gemini_cmd'] = test_queue.gemini_commands
-        prepared_results.update(result)
+        self.gemini_results = self.verify_gemini_results(queue=test_queue)
 
-        prepared_results['end_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self._send_email(prepared_results)
-
-        if result['status'] == 'FAILED':
-            self.fail(result['results'])
+        if self.gemini_results['status'] == 'FAILED':
+            self.fail(self.gemini_results['results'])
 
     def test_load_random_with_nemesis(self):
-        prepared_results = self._prepare_test_results()
+        self.gemini_results = None
 
         cmd = self.params.get('gemini_cmd')
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
-        prepared_results['nemesis_name'] = self.params.get('nemesis_class_name')
 
         self.log.debug('Start gemini benchmark')
-        prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
 
         # sleep before run nemesis test_duration * .25
@@ -70,51 +62,37 @@ class GeminiTest(ClusterTester):
 
         self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
-        result = self.verify_gemini_results(queue=test_queue)
+        self.gemini_results = self.verify_gemini_results(queue=test_queue)
 
         self.db_cluster.stop_nemesis(timeout=1600)
-        nemesises = self.get_doc_data(key='nemesis')
 
-        prepared_results['gemini_cmd'] = test_queue.gemini_commands
-        prepared_results.update(result)
-        prepared_results['nemesis_details'] = nemesises
-        prepared_results['end_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if self.gemini_results['status'] == 'FAILED':
+            self.fail(self.gemini_results['results'])
 
-        self._send_email(prepared_results)
+    def get_email_data(self):
+        email_recipients = self.params.get('email_recipients', default=None)
+        self.email_reporter = GeminiEmailReporter(email_recipients=email_recipients, logdir=self.logdir)
+        scylla_version = self.db_cluster.nodes[0].scylla_version
+        start_time = format_timestamp(self.start_time)
 
-        if result['status'] == 'FAILED':
-            self.fail(result['results'])
-
-    def _prepare_test_results(self):
         return {
-            "test_name": self.id(),
-            "build_url": os.getenv('BUILD_URL', "#"),
-            "start_time": "",
-            "end_time": "",
-            "gemini_cmd": "",
+            "subject": 'Gemini - test results: {}'.format(start_time),
+            "gemini_cmd": self.gemini_results['cmd'],
             "gemini_version": self.loaders.gemini_version,
-            "scylla_version": self.db_cluster.nodes[0].scylla_version,
+            "scylla_version": scylla_version,
             "scylla_ami_id": self.params.get('ami_id_db_scylla'),
             "scylla_instance_type": self.params.get('instance_type_db'),
             "number_of_db_nodes": self.params.get('n_db_nodes'),
             "number_of_oracle_nodes": self.params.get('n_test_oracle_db_nodes', 1),
-            "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version,
+            "oracle_db_version": scylla_version,
             "oracle_ami_id": self.params.get('ami_id_db_oracle'),
             "oracle_instance_type": self.params.get('instance_type_db_oracle'),
-            "nemesis_name": '-',
-            "nemesis_details": {},
-            "results": [],
-            'status': None
+            "results": self.gemini_results['results'],
+            "status": self.gemini_results['status'],
+            'test_name': self.id(),
+            'start_time': start_time,
+            'end_time': format_timestamp(time.time()),
+            'build_url': os.environ.get('BUILD_URL', None),
+            'nemesis_name': self.params.get('nemesis_class_name'),
+            'nemesis_details': self.get_nemesises_stats(),
         }
-
-    def _send_email(self, results):
-        email_recipients = self.params.get('email_recipients', default=None)
-        self.log.info('Send email with results to {}'.format(email_recipients))
-        em = BaseResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                 email_template_fp="results_gemini.html",
-                                 send_email=self.params.get('send_email', default=True),
-                                 email_recipients=email_recipients)
-
-        html = em.render_to_html(results)
-
-        em.send_email(subject='Gemini - test results: {}'.format(results['start_time']), content=html)

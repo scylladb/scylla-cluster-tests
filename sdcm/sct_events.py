@@ -14,7 +14,7 @@ from enum import Enum
 import zmq
 import requests
 
-from sdcm.utils.common import safe_kill, pid_exists, _fromtimestamp
+from sdcm.utils.common import safe_kill, pid_exists, _fromtimestamp, makedirs
 from sdcm.prometheus import nemesis_metrics_obj
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class EventsDevice(Process):
         self.sub_port = Value('d', 0)
 
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
-        os.makedirs(self.event_log_base_dir)
+        makedirs(self.event_log_base_dir)
         self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
 
     def run(self):
