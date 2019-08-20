@@ -38,7 +38,7 @@ class JanusGraphTest(PerformanceRegressionTest):
         self.loaders.nodes[0].remoter.run('git clone https://github.com/JanusGraph/janusgraph.git')
         self.loaders.nodes[0].remoter.run('cd janusgraph && mvn clean install -DskipTests -pl janusgraph-cql -am')
         self.loaders.nodes[0].remoter.run(
-            'cd janusgraph && mvn verify -pl janusgraph-cql -Dstorage.hostname={0} -Dtest=CQLGraphTest'.format(
+            'cd janusgraph && mvn -X -e verify -pl janusgraph-cql -Dstorage.hostname={0} -Dtest=CQLGraphTest'.format(
                 self.db_cluster.nodes[0].private_ip_address), ignore_status=True)
         dest = os.path.join(self.logdir, 'janusgraph-cql')
         os.mkdir(dest)
