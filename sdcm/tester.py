@@ -59,7 +59,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, ScyllaCQLSession, \
     get_non_system_ks_cf_list, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, \
-    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -245,6 +245,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # download rpms for update_db_packages
         update_db_packages = self.params.get('update_db_packages', default=None)
         self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
+
+        append_conf = self.params.get('append_conf')
+        if append_conf and ('system_key_directory' in append_conf or 'system_info_encryption' in append_conf or 'kmip_hosts:' in append_conf):
+            download_encrypt_keys()
 
         self.init_resources()
 
