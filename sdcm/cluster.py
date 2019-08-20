@@ -1450,9 +1450,9 @@ server_encryption_options:
             client_encrypt_conf = dedent("""
                             client_encryption_options:                               # <client_encrypt>
                                enabled: true                                         # <client_encrypt>
-                               certificate: /etc/scylla/ssl_conf/unittest/test.crt   # <client_encrypt>
-                               keyfile: /etc/scylla/ssl_conf/unittest/test.key       # <client_encrypt>
-                               truststore: /etc/scylla/ssl_conf/unittest/catest.pem  # <client_encrypt>
+                               certificate: /etc/scylla/ssl_conf/client/test.crt   # <client_encrypt>
+                               keyfile: /etc/scylla/ssl_conf/client/test.key       # <client_encrypt>
+                               truststore: /etc/scylla/ssl_conf/client/catest.pem  # <client_encrypt>
             """)
             scylla_yaml_contents += client_encrypt_conf
 
@@ -1493,7 +1493,7 @@ server_encryption_options:
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
         setup_script = dedent("""
             mkdir -p ~/.cassandra/
-            cp /tmp/ssl_conf/unittest/cqlshrc ~/.cassandra/
+            cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
             sudo mkdir -p /etc/scylla/
             sudo mv /tmp/ssl_conf/ /etc/scylla/
         """)

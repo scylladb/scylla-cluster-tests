@@ -104,7 +104,7 @@ class CassandraStressThread(object):  # pylint: disable=too-many-instance-attrib
             # put the credentials into the right place into -mode section
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
         if self.client_encrypt and 'transport' not in stress_cmd:
-            stress_cmd += ' -transport "truststore=/etc/scylla/ssl_conf/unittest/cacerts.jks truststore-password=cassandra"'
+            stress_cmd += ' -transport "truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra"'
 
         if self.node_list and '-node' not in stress_cmd:
             first_node = [n for n in self.node_list if n.dc_idx == loader_idx %
