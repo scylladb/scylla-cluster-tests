@@ -1560,7 +1560,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if upgradesstables:
                 self.log.debug('upgrade sstables after encryption update')
                 for node in self.db_cluster.nodes:
-                    node.remoter.run('nodetool upgradesstables', verbose=True)
+                    node.remoter.run('nodetool upgradesstables', verbose=True, ignore_status=True)
 
     def disable_table_encryption(self, table, upgradesstables=True):
         self.alter_table_encryption(
