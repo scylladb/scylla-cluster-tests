@@ -954,7 +954,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None):
 
-        wlrr = WhiteListRoundRobinPolicy(self.db_cluster.get_node_external_ips())
+        wlrr = WhiteListRoundRobinPolicy(self.db_cluster.get_node_public_ips())
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts)
