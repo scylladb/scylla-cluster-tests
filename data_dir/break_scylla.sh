@@ -22,7 +22,9 @@ done
 
 for f in $files
 do
-        f="$f-*"
+    # Changed because of name format seems was changed.
+    # And now there is no db files named as ".db-*"
+    f="$f*"
 	echo "About to delete $f"
         rm -f $f
         echo "Deletion exit code is" $?
