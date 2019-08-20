@@ -3280,11 +3280,11 @@ class BaseLoaderSet(object):
             self.log.error('Fullscan command finished with errors: {}'.format(details))
             result = details.result
 
-        FullScanEvent(type='finish', loader_node=loader_node,
-                      db_node_ip=db_node.ip_address, ks_cf=ks_cf,
-                      result={'exit_code': result.exited,
-                              'stdout': result.stdout,
-                              'stderr': result.stderr})
+        # FullScanEvent(type='finish', loader_node=loader_node,
+        #               db_node_ip=db_node.ip_address, ks_cf=ks_cf,
+        #               result={'exit_code': result.exited,
+        #                       'stdout': result.stdout,
+        #                       'stderr': result.stderr})
         return result
 
     def run_fullscan_thread(self, ks_cf, db_nodes, interval=60, duration=60):
