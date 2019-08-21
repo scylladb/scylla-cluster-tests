@@ -1,8 +1,8 @@
 test_duration: 6550
-prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..536870912",
-                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=536870913..1073741824",
-                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1073741825..1610612736",
-                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1610612737..2147483648",
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..536870912",
+                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=536870913..1073741824",
+                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1073741825..1610612736",
+                    "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1610612737..2147483648",
                     "cassandra-stress counter_write cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10000000"]
 
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=50 -pop seq=1..2147483648  -log interval=5 -col 'size=FIXED(64) n=FIXED(16)' ",
