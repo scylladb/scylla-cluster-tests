@@ -915,6 +915,7 @@ client_encryption_options:
             self.remoter.run('sudo yum update -y --skip-broken', retry=3)
         self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
         self.download_scylla_repo(scylla_repo)
+        self.remoter.run('sudo yum install -y python36-PyYAML')
         self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
         self.remoter.run('sudo yum install -y {}-gdb'.format(self.scylla_pkg()), ignore_status=True)
 
