@@ -584,13 +584,16 @@ class Nemesis(object):
 
         ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
                                                         db_node=self.target_node,
-                                                        filter_out_table_with_counter=filter_out_table_with_counter)
-        keyspace_table = random.choice(ks_cfs[0]) if ks_cfs else ks_cfs
+                                                        filter_out_table_with_counter=filter_out_table_with_counter,
+                                                        filter_out_mv=True)  # not allowed to modify MV
+
+        keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         if not keyspace_table:
             raise ValueError('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(**locals())
-        self.target_node.run_cqlsh(cmd)
+        with self.tester.cql_connection_patient(self.target_node) as session:
+            session.execute(cmd)
 
     def modify_table_comment(self):
         # default: comment = ''
