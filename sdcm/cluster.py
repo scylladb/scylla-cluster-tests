@@ -1464,6 +1464,7 @@ server_encryption_options:
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
             self.remoter.run('sudo yum clean all')
+            self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
@@ -1488,6 +1489,7 @@ server_encryption_options:
         if self.is_rhel_like():
             self.remoter.run('sudo yum remove -y scylla\*')
             self.remoter.run('sudo yum clean all')
+            self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
             self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
@@ -3385,6 +3387,8 @@ class BaseMonitorSet(object):
         if node.is_rhel_like():
             prereqs_script = dedent("""
                 yum install -y epel-release
+                yum clean all
+                rm -rf /var/cache/yum/*
                 yum install -y python-pip unzip wget
                 pip install --upgrade pip
                 pip install pyyaml
