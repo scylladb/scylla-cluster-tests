@@ -1014,6 +1014,7 @@ client_encryption_options:
             self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
+            self.is_enterprise = 'enterprise' in result.stdout
             self.remoter.run('sudo yum clean all')
             self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
