@@ -2958,6 +2958,11 @@ class BaseLoaderSet(object):
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
+            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
         else:
@@ -3386,6 +3391,11 @@ class BaseMonitorSet(object):
 
     def install_scylla_monitoring_prereqs(self, node):
         if node.is_rhel_like():
+            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
             prereqs_script = dedent("""
                 yum install -y epel-release
                 yum clean all
