@@ -982,6 +982,8 @@ class Nemesis(object):
 
         def generate_random_parameters_values():
             ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
+            if not ks_cf_list:
+                raise Exception("No user defined keyspace.columnfamily")
             ks, cf = random.choice(ks_cf_list).split('.')
             return {
                 'toppartition': str(random.randint(5, 20)),
@@ -998,6 +1000,7 @@ class Nemesis(object):
 
         args = generate_random_parameters_values()
         sub_cmd_args = "{ks} {cf} {duration} -s {capacity} -k {toppartition} -a {samplers}".format(**args)
+
         result = self.target_node.run_nodetool(sub_cmd='toppartitions', args=sub_cmd_args)
 
         toppartition_result = _parse_toppartitions_output(result.stdout)
