@@ -289,7 +289,7 @@ class BaseNode(object):
         # enable bootstrap.
         self.enable_auto_bootstrap = False
         self.scylla_version = ''
-        self.is_enterprise = None
+        self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self.distro = None
 
@@ -395,15 +395,6 @@ class BaseNode(object):
         return self.__class__.__name__ == "GCENode"
 
     def scylla_pkg(self):
-        if self.is_enterprise is None:
-            if self.is_rhel_like():
-                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
-                self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
-                                              'No matches found' not in result.stdout) else False
-            else:
-                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                self.is_enterprise = True if 'scylla-enterprise' in result.stdout else False
-
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
     def file_exists(self, file_path):
@@ -414,6 +405,23 @@ class BaseNode(object):
         except Exception as details:
             self.log.error('Error checking if file %s exists: %s',
                            file_path, details)
+
+    @property
+    def is_enterprise(self):
+        if self._is_enterprise is None:
+            if self.is_rhel_like():
+                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result.stdout:
+                    result = self.remoter.run("sudo cat /etc/yum.repos.d/scylla.repo")
+                    self._is_enterprise = 'enterprise' in result.stdout
+                else:
+                    self._is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                                   'No matches found' not in result.stdout) else False
+            else:
+                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
+                self._is_enterprise = True if 'scylla-enterprise' in result.stdout else False
+
+        return self._is_enterprise
 
     @property
     def public_ip_address(self):
@@ -1014,7 +1022,6 @@ client_encryption_options:
             self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
-            self.is_enterprise = 'enterprise' in result.stdout
             self.remoter.run('sudo yum clean all')
             self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
