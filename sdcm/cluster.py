@@ -613,6 +613,7 @@ class BaseNode(object):
         if self.is_enterprise is None:
             if self.is_rhel_like():
                 result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                assert 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' not in result.stdout
                 self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
                                               'No matches found' not in result.stdout) else False
             else:
