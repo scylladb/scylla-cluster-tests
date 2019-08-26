@@ -56,7 +56,8 @@ from .cluster_aws import CassandraAWSCluster
 from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
-from .utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, configure_logging
+from .utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
+    configure_logging, get_non_system_ks_cf_list
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -905,7 +906,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         Returns:
             object -- object with result of remoter.run command
         """
-        ks_cf_list = self.loaders.get_non_system_ks_cf_list(loader_node, db_node)
+        ks_cf_list = get_non_system_ks_cf_list(loader_node, db_node)
         if ks_cf not in ks_cf_list:
             ks_cf = 'random'
 

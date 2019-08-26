@@ -32,7 +32,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
 
-from .utils.common import get_data_dir_path, retrying, remote_get_file
+from .utils.common import get_data_dir_path, retrying, remote_get_file, get_non_system_ks_cf_list
 from .log import SDCMAdapter
 from .keystore import KeyStore
 from . import prometheus
@@ -582,10 +582,10 @@ class Nemesis(object):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
-        ks_cfs = self.loaders.get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                                        db_node=self.target_node,
-                                                        filter_out_table_with_counter=filter_out_table_with_counter,
-                                                        filter_out_mv=True)  # not allowed to modify MV
+        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                           db_node=self.target_node,
+                                           filter_out_table_with_counter=filter_out_table_with_counter,
+                                           filter_out_mv=True)  # not allowed to modify MV
 
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         if not keyspace_table:
@@ -932,7 +932,7 @@ class Nemesis(object):
             return toppartitions
 
         def generate_random_parameters_values():
-            ks_cf_list = self.loaders.get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
+            ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
             ks, cf = random.choice(ks_cf_list).split('.')
             return {
                 'toppartition': str(random.randint(5, 20)),
