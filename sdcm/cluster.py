@@ -43,7 +43,7 @@ from datetime import datetime
 
 from sdcm.rsyslog_daemon import start_rsyslog
 from .log import SDCMAdapter
-from .remote import RemoteCmdRunner, LocalCmdRunner, CmdExecTimeoutExceeded
+from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip
@@ -3315,54 +3315,6 @@ class BaseLoaderSet(object):
                 kill_result = loader.remoter.run('pkill -f -TERM gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
-
-    def get_non_system_ks_cf_list(self, loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,
-                                  filter_out_mv=False):
-        """Get all not system keyspace.tables pairs
-
-        Arguments:
-            loader_node {BaseNode} -- LoaderNoder to send request
-            db_node_ip {str} -- ip of db_node
-        """
-        def get_tables_columns_list(entity_type):
-            if entity_type == 'view':
-                cmd = "paging off; SELECT keyspace_name, view_name FROM system_schema.views"
-            else:
-                cmd = "paging off; SELECT keyspace_name, table_name, type FROM system_schema.columns"
-            result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
-                                           split=True, connect_timeout=request_timeout)
-            splitter_result = []
-            for row in result[4:]:
-                if '|' not in row:
-                    continue
-                if row.startswith('system'):
-                    continue
-                splitter_result.append(row.split('|'))
-            return splitter_result
-
-        views_list = set()
-        if filter_out_mv:
-            tables = get_tables_columns_list('view')
-            for table in tables:
-                views_list.add('.'.join([name.strip() for name in table[:2]]))
-            views_list = list(views_list)
-
-        result = get_tables_columns_list('column')
-        avaialable_ks_cf = defaultdict(list)
-        for row in result:
-            ks_cf_name = '.'.join([name.strip() for name in row[:2]])
-
-            if filter_out_mv and ks_cf_name in views_list:
-                continue
-
-            column_type = row[2].strip()
-            avaialable_ks_cf[ks_cf_name].append(column_type)
-
-        if filter_out_table_with_counter:
-            for ks_cf, column_types in avaialable_ks_cf.items():
-                if 'counter' in column_types:
-                    avaialable_ks_cf.pop(ks_cf)
-        return avaialable_ks_cf.keys()
 
 
 class BaseMonitorSet(object):
