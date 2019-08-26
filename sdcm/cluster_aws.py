@@ -381,11 +381,11 @@ class AWSNode(cluster.BaseNode):
             try:
                 self._instance.reload()
             except Exception as e:
-                self.log.exception("Error while reloading instance metadata: %s", e)
+                logger.exception("Error while reloading instance metadata: %s", e)
             finally:
                 method_name = instance_method.__name__
                 instance_id = self._instance.id
-                self.log.debug(self._instance.meta.data)
+                logger.debug(self._instance.meta.data)
                 msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(**locals())
                 raise cluster.NodeError(msg)
 
