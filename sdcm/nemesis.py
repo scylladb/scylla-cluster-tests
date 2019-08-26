@@ -826,6 +826,7 @@ class Nemesis(object):
 
             self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)
+            time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
