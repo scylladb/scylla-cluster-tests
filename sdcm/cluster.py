@@ -812,7 +812,7 @@ class BaseNode(object):
                                        ignore_status=True, verbose=verbose)
         if uuid_result.exit_status == 0 and mark_result.exit_status != 0:
             result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
-            self.remoter.run(cmd % result.stdout.strip())
+            self.remoter.run(cmd % result.stdout.strip(), ignore_status=True)
             self.remoter.run('sudo -u scylla touch %s' % mark_path,
                              verbose=verbose)
 
