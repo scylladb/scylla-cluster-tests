@@ -561,7 +561,8 @@ class Nemesis(object):
 
         # if keyspace doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces:
-            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
+            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 ' \
+                         '-schema keyspace="{}"'.format(ks)
             # create with stress tool
             cql_auth = self.cluster.get_db_auth()
             if cql_auth and 'user=' not in stress_cmd:
