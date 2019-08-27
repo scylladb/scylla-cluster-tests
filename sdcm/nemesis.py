@@ -415,7 +415,8 @@ class Nemesis(object):
                             hash_expected=sstable_md5, retries=2,
                             user_agent=creds['user_agent'])
 
-        self.log.debug('Make sure keyspace1.standard1 exists')
+        self.log.debug('Prepare keyspace1.standard1 if it does not exist')
+        self._prepare_test_table(ks='keyspace1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
         if result is not None and result.exit_status == 0:
             result = self.target_node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
