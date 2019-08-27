@@ -1112,7 +1112,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def create_table(self, name, key_type="varchar",
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None,
-                     compact_storage=False, in_memory=False, scylla_encryption_options=None):
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None):
 
         additional_columns = ""
         if columns is not None:
@@ -1149,7 +1149,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-        with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+        with self.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
         time.sleep(0.2)
 
