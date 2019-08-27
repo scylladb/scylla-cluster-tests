@@ -395,9 +395,14 @@ class Nemesis(object):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
         if big_sstable:
             # 100G, the big file will be saved to GCE image
+            # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
+            #        currently we actually uploaded a small file (3.6 K) to S3.
+            #        We had a solution to save the file in GCE image, it requires bigger boot disk.
+            #        In my old test, the instance init is easy to fail. We can try to use a
+            #        split shared disk to save the 100GB file.
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.tar.gz'
             sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-            sstable_md5 = 'f64ab85111e817f22f93653a4a791b1f'
+            sstable_md5 = '76cca3135e175d859c0efb67c6a7b233'
         else:
             # 100M (300000 rows)
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
@@ -410,7 +415,8 @@ class Nemesis(object):
                             hash_expected=sstable_md5, retries=2,
                             user_agent=creds['user_agent'])
 
-        self.log.debug('Make sure keyspace1.standard1 exists')
+        self.log.debug('Prepare keyspace1.standard1 if it does not exist')
+        self._prepare_test_table(ks='keyspace1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
         if result is not None and result.exit_status == 0:
             result = self.target_node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
@@ -549,6 +555,21 @@ class Nemesis(object):
             for keyspace in test_keyspaces:
                 node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
+    def _prepare_test_table(self, ks='keyspace1'):
+        # get the count of the truncate table
+        test_keyspaces = self.cluster.get_test_keyspaces()
+
+        # if keyspace doesn't exist, create it by cassandra-stress
+        if ks not in test_keyspaces:
+            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
+            # create with stress tool
+            cql_auth = self.cluster.get_db_auth()
+            if cql_auth and 'user=' not in stress_cmd:
+                # put the credentials into the right place into -mode section
+                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
+
+            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
+
     def disrupt_truncate(self):
         self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
 
@@ -569,14 +590,7 @@ class Nemesis(object):
 
         # if key space doesn't exist or the table is empty, create it using c-s
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
-            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
-            # create with stress tool
-            cql_auth = self.cluster.get_db_auth()
-            if cql_auth and 'user=' not in stress_cmd:
-                # put the credentials into the right place into -mode section
-                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
-
-            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
+            self._prepare_test_table(ks=keyspace_truncate)
 
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
