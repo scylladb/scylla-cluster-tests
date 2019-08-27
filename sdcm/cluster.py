@@ -1514,6 +1514,33 @@ server_encryption_options:
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
 
+    def update_repo_cache(self):
+        try:
+            if self.is_rhel_like():
+                # try to avoid ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
+                self.remoter.run('sudo yum clean all')
+                self.remoter.run('sudo rm -rf /var/cache/yum/')
+                self.remoter.run('sudo yum makecache', retry=3)
+            else:
+                self.remoter.run('sudo apt-get clean all')
+                self.remoter.run('sudo rm -rf /var/cache/apt/')
+                self.remoter.run('sudo apt-get update', retry=3)
+        except Exception as ex:
+            self.log.error('Failed to update repo cache: %s', ex)
+
+    def upgrade_system(self):
+        if self.is_rhel_like():
+            # update system to latest
+            result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
+            if result.exit_status == 0:
+                self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
+            else:
+                self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+        else:
+            self.remoter.run('sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
+        # update repo cache after upgrade
+        self.update_repo_cache()
+
     def install_scylla(self, scylla_repo):
         """
         Download and install scylla on node
