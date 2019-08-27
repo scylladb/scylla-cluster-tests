@@ -395,9 +395,14 @@ class Nemesis(object):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
         if big_sstable:
             # 100G, the big file will be saved to GCE image
+            # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
+            #        currently we actually uploaded a small file (3.6 K) to S3.
+            #        We had a solution to save the file in GCE image, it requires bigger boot disk.
+            #        In my old test, the instance init is easy to fail. We can try to use a
+            #        split shared disk to save the 100GB file.
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.tar.gz'
             sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-            sstable_md5 = 'f64ab85111e817f22f93653a4a791b1f'
+            sstable_md5 = '76cca3135e175d859c0efb67c6a7b233'
         else:
             # 100M (300000 rows)
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
