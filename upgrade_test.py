@@ -381,7 +381,8 @@ class UpgradeTest(FillDatabaseData):
 
         filter_errors = [{'line': 'Failed to load schema', 'type': 'DATABASE_ERROR'},
                          {'line': 'Failed to load schema', 'type': 'SCHEMA_FAILURE'},
-                         {'line': 'Failed to pull schema', 'type': 'DATABASE_ERROR'}]
+                         {'line': 'Failed to pull schema', 'type': 'DATABASE_ERROR'},
+                         {'line': 'Backtrace:', 'type': 'BACKTRACE'}]
 
         for error in filter_errors:
             DbEventsFilter(type=error['type'], line=error['line'])
