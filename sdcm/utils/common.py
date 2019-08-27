@@ -986,6 +986,31 @@ def get_ami_tags(ami_id, region_name):
         return {}
 
 
+def measure_time(func):
+    """
+    For an input given function, it returns a wrapper function that returns how long it takes to execute, and the function's result.
+
+    Example:
+
+    @measure_time
+    def _run_repair(self, node):
+        result = node.run_nodetool(sub_cmd='repair')
+        return result
+
+    repair_time, res = self._run_repair(node=node3)
+    :param func:
+    :return:
+    """
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        start = time.time()
+        func_res = func(*args, **kwargs)
+        end = time.time()
+        return end - start, func_res
+
+    return wrapped
+
+
 def tag_ami(ami_id, tags_dict, region_name):
     tags = [{'Key': key, 'Value': value} for key, value in tags_dict.items()]
 

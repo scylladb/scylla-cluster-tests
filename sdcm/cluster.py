@@ -3542,7 +3542,7 @@ class BaseLoaderSet():
 
         return ret
 
-    def run_stress_thread_bench(self, stress_cmd, timeout, node_list=None):
+    def run_stress_thread_bench(self, stress_cmd, timeout, node_list=None, use_single_loader=False):
         _queue = {TASK_QUEUE: queue.Queue(), RES_QUEUE: queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
@@ -3567,7 +3567,8 @@ class BaseLoaderSet():
             _queue[RES_QUEUE].put((node, result))
             _queue[TASK_QUEUE].task_done()
 
-        for loader_idx, loader in enumerate(self.nodes):
+        loaders_to_use = self.nodes if not use_single_loader else self.nodes[:1]  # pylint: disable=no-member
+        for loader_idx, loader in enumerate(loaders_to_use):
             setup_thread = threading.Thread(target=node_run_stress_bench,
                                             args=(loader, loader_idx,
                                                   stress_cmd, node_list))

@@ -14,9 +14,9 @@ import threading
 
 # pylint: disable=too-many-lines
 
-import re
-import os
 import logging
+import os
+import re
 import time
 import random
 import unittest
@@ -54,7 +54,7 @@ from sdcm.utils.common import log_run_info, retrying, ScyllaCQLSession, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.results_analyze import PerformanceResultsAnalyzer
+from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
     TestFrameworkEvent
@@ -706,13 +706,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return cs_thread
 
-    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
+    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True, use_single_loader=False):
 
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                            node_list=self.db_cluster.nodes)
+                                                            node_list=self.db_cluster.nodes,
+                                                            use_single_loader=use_single_loader)
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
             # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
@@ -1477,8 +1478,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
-        query = '(sum(node_filesystem_size{{mountpoint="{0.scylla_dir}", ' \
-            'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
+        query = '(sum(node_filesystem_size_bytes{{mountpoint="{0.scylla_dir}", ' \
+            'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail_bytes{{mountpoint="{0.scylla_dir}", ' \
             'instance=~"{1.private_ip_address}"}}))'.format(self, node)
         res = self.prometheus_db.query(query=query, start=time.time(), end=time.time())
         assert res, "No results from Prometheus"
@@ -1493,6 +1494,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self.test_id, is_gce)
+        except Exception as ex:  # pylint: disable=broad-except
+            self.log.exception('Failed to check regression: %s', ex)
+
+    def check_specified_stats_regression(self, dict_specific_tested_stats):
+
+        perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                                                          send_email=self.params.get('send_email', default=True),
+                                                          email_recipients=self.params.get('email_recipients', default=None))
+        try:
+            perf_analyzer.check_regression(
+                self._test_id, dict_specific_tested_stats=dict_specific_tested_stats)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
@@ -1598,6 +1610,90 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             TEST_LOG.error("-" * 70)
 
         return error, failure
+
+    def stop_all_nodes_except_for(self, node):
+        self.log.debug("Stopping all nodes except for: {}".format(node.name))
+
+        for c_node in [n for n in self.db_cluster.nodes if n != node]:
+            self.log.debug("Stopping node: {}".format(c_node.name))
+            c_node.stop_scylla_server()
+
+    def start_all_nodes(self):
+
+        self.log.debug("Starting all nodes")
+        # restarting all nodes twice in order to pervent no-seed node issues
+        for c_node in self.db_cluster.nodes * 2:
+            self.log.debug("Starting node: {} ({})".format(c_node.name, c_node.public_ip_address))
+            c_node.start_scylla_server(verify_up=False)
+            time.sleep(10)
+        self.log.debug("Wait DB is up after all nodes were started")
+        for c_node in self.db_cluster.nodes:
+            c_node.wait_db_up()
+
+    def start_all_nodes_except_for(self, node):
+        self.log.debug("Starting all nodes except for: {}".format(node.name))
+        node_list = [n for n in self.db_cluster.nodes if n != node]
+
+        # Start down seed nodes first, if exists
+        for c_node in [n for n in node_list if n.is_seed]:
+            self.log.debug("Starting seed node: {}".format(c_node.name))
+            c_node.start_scylla_server()
+
+        for c_node in [n for n in node_list if not n.is_seed]:
+            self.log.debug("Starting non-seed node: {}".format(c_node.name))
+            c_node.start_scylla_server()
+
+        node.wait_db_up()
+
+    def get_used_capacity(self, node) -> float:  # pylint: disable=too-many-locals
+        # node_filesystem_size_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
+        fs_size_metric = 'node_filesystem_size_bytes'
+        fs_size_metric_old = 'node_filesystem_size'
+        avail_size_metric = 'node_filesystem_avail_bytes'
+        avail_size_metric_old = 'node_filesystem_avail'
+
+        instance_filter = f'instance=~".*?{node.private_ip_address}.*?"'
+
+        capacity_query_postfix = f'{{mountpoint="{self.scylla_dir}", {instance_filter}}}'
+        filesystem_capacity_query = f'{fs_size_metric}{capacity_query_postfix}'
+
+        used_capacity_query = f'{filesystem_capacity_query}-{avail_size_metric}{capacity_query_postfix}'
+
+        self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+
+        fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query,
+                                               start=int(time.time())-5, end=int(time.time()))
+        assert fs_size_res, "No results from Prometheus"
+        if not fs_size_res[0]:  # if no returned values - try the old metric names.
+            filesystem_capacity_query = f'{fs_size_metric_old}{capacity_query_postfix}'
+            used_capacity_query = f'{filesystem_capacity_query}-{avail_size_metric_old}{capacity_query_postfix}'
+            self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+            fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
+                                                   end=int(time.time()))
+
+        assert fs_size_res[0], "Could not resolve capacity query result."
+        kb_size = 2 ** 10
+        mb_size = kb_size * 1024
+        self.log.debug("fs_size_res: {}".format(fs_size_res))
+        self.log.debug("used_capacity_query: {}".format(used_capacity_query))
+
+        used_cap_res = self.prometheus_db.query(
+            query=used_capacity_query, start=int(time.time())-5, end=int(time.time()))
+        self.log.debug("used_cap_res: {}".format(used_cap_res))
+
+        assert used_cap_res, "No results from Prometheus"
+        used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(mb_size)
+        used_size_gb = float(used_size_mb / 1024)
+        self.log.debug(
+            "The used filesystem capacity on node {} is: {} MB/ {} GB".format(node.public_ip_address, used_size_mb,
+                                                                              used_size_gb))
+        return used_size_mb
+
+    def print_nodes_used_capacity(self):
+        for node in self.db_cluster.nodes:
+            used_capacity = self.get_used_capacity(node=node)
+            self.log.debug(
+                "Node {} ({}) used capacity is: {}".format(node.name, node.private_ip_address, used_capacity))
 
     def get_nemesises_stats(self):
         nemesis_stats = {}
