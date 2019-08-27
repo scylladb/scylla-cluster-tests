@@ -177,7 +177,7 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     while retries > 0 and _remote_get_hash(remoter, dst) != hash_expected:
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
-    #assert _remote_get_hash(remoter, dst) == hash_expected
+    assert _remote_get_hash(remoter, dst) == hash_expected
 
 
 class retrying(object):
