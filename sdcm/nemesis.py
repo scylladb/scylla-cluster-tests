@@ -422,6 +422,9 @@ class Nemesis(object):
             self.target_node.run_cqlsh(cmd)
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
+        self.log.info(r"Nemesis disabled due to https://github.com/scylladb/scylla/issues/4877")
+        return
+
         if all_nodes:
             nodes = self.cluster.nodes
         else:
