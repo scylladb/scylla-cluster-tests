@@ -52,4 +52,4 @@ def stop_auto_ssh(docker_name, node):
 
     LOGGER.debug("killing {docker_name}-{host_name}-autossh".format(**locals()))
     local_runner = LocalCmdRunner()
-    local_runner.run("docker kill {docker_name}-{host_name}-autossh".format(**locals()), ignore_status=True)
+    local_runner.run("docker rm -f {docker_name}-{host_name}-autossh".format(**locals()), ignore_status=True)
