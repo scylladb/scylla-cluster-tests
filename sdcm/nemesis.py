@@ -42,6 +42,18 @@ from . import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 
 
+class NoFilesFoundToDestroy(Exception):
+    pass
+
+
+class NoKeyspaceFound(Exception):
+    pass
+
+
+class FilesNotCorrupted(Exception):
+    pass
+
+
 class Nemesis(object):
 
     disruptive = False
@@ -251,20 +263,56 @@ class Nemesis(object):
         self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
         self.target_node.restart_node_with_resharding()
 
-    def _destroy_data(self):
-        # Send the script used to corrupt the DB
-        break_scylla = get_data_dir_path('break_scylla.sh')
-        self.target_node.remoter.send_files(break_scylla,
-                                            "/tmp/break_scylla.sh")
+    @retrying(n=10, allowed_exceptions=(NoKeyspaceFound, NoFilesFoundToDestroy))
+    def _choose_file_for_destroy(self, ks_cfs):
+        file_for_destroy = ''
+
+        ks_cf_for_destroy = random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
+
+        ks_cf_for_destroy = ks_cf_for_destroy.replace('.', '/')
+        files = self.target_node.remoter.run("sudo find /var/lib/scylla/data/%s-* -type f" % ks_cf_for_destroy)
+        if files.stderr:
+            raise NoFilesFoundToDestroy('Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
+                                                                                                       files.stderr))
+
+        for file in files.stdout.split():
+            if not file or '/' not in file:
+                continue
+            file_path_splitted = file.split('/')
+            # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
+            # For corruption we need to remove all files that their names are started from "mc-220-"
+            file_name = '-'.join(file_path_splitted[-1].split('-')[:2]) + '-*'
+            file_for_destroy = '/'.join(file_path_splitted[:-1] + [file_name])
+            self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
+            if file_for_destroy:
+                break
+
+        if not file_for_destroy:
+            raise NoFilesFoundToDestroy('Data file for destroy is not found in {}'.format(ks_cf_for_destroy))
+
+        return file_for_destroy
+
+    def _destroy_data_and_restart_scylla(self):
+
+        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                           db_node=self.target_node)
+        if not ks_cfs:
+            raise NoKeyspaceFound('Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
-        # corrupt the DB
-        self.target_node.remoter.run('chmod +x /tmp/break_scylla.sh')
-        self.target_node.remoter.run('sudo /tmp/break_scylla.sh')  # corrupt the DB
+        try:
+            file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
-        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+            result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
+            if result.stderr:
+                raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
+                                        'Error: {}'.format(result))
+            self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+
+        finally:
+            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
@@ -288,13 +336,13 @@ class Nemesis(object):
 
     def disrupt_destroy_data_then_repair(self):
         self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
-        self._destroy_data()
+        self._destroy_data_and_restart_scylla()
         # try to save the node
         self.repair_nodetool_repair()
 
     def disrupt_destroy_data_then_rebuild(self):
         self._set_current_disruption('CorruptThenRebuild %s' % self.target_node)
-        self._destroy_data()
+        self._destroy_data_and_restart_scylla()
         # try to save the node
         self.repair_nodetool_rebuild()
 
