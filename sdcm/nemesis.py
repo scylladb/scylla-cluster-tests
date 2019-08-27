@@ -551,6 +551,21 @@ class Nemesis(object):
             for keyspace in test_keyspaces:
                 node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
+    def _prepare_test_table(self, ks='keyspace1'):
+        # get the count of the truncate table
+        test_keyspaces = self.cluster.get_test_keyspaces()
+
+        # if keyspace doesn't exist, create it by cassandra-stress
+        if ks not in test_keyspaces:
+            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
+            # create with stress tool
+            cql_auth = self.cluster.get_db_auth()
+            if cql_auth and 'user=' not in stress_cmd:
+                # put the credentials into the right place into -mode section
+                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
+
+            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
+
     def disrupt_truncate(self):
         self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
 
@@ -571,14 +586,7 @@ class Nemesis(object):
 
         # if key space doesn't exist or the table is empty, create it using c-s
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
-            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema keyspace="{}"'.format(keyspace_truncate)
-            # create with stress tool
-            cql_auth = self.cluster.get_db_auth()
-            if cql_auth and 'user=' not in stress_cmd:
-                # put the credentials into the right place into -mode section
-                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
-
-            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
+            self._prepare_test_table(ks=keyspace_truncate)
 
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
