@@ -1480,14 +1480,12 @@ server_encryption_options:
             self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
-            self.remoter.run('sudo yum clean all')
-            self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+        self.update_repo_cache()
 
     def download_scylla_manager_repo(self, scylla_repo):
         if self.is_rhel_like():
@@ -1505,12 +1503,10 @@ server_encryption_options:
         self.stop_scylla_server(verify_down=False, ignore_status=True)
         if self.is_rhel_like():
             self.remoter.run('sudo yum remove -y scylla\*')
-            self.remoter.run('sudo yum clean all')
-            self.remoter.run('sudo rm -rf /var/cache/yum/*')
         else:
             self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.run('sudo apt-get remove -y scylla\*', ignore_status=True)
-            self.remoter.run('sudo apt-get clean all')
+        self.update_repo_cache()
         self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
         self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
 
@@ -1547,11 +1543,6 @@ server_encryption_options:
         :param scylla_repo: scylla repo file URL
         """
         if self.is_rhel_like():
-            result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-            if result.exit_status == 0:
-                self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-            else:
-                self.remoter.run('sudo yum update -y --skip-broken', retry=3)
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
@@ -2805,6 +2796,9 @@ class BaseScyllaCluster(object):
         :param verbose:
         """
         node.wait_ssh_up(verbose=verbose)
+        # update repo cache and system after system is up
+        node.update_repo_cache()
+        node.upgrade_system()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
             node.remoter.run('sudo systemctl disable apt-daily.timer')
             node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
@@ -2958,6 +2952,9 @@ class BaseLoaderSet(object):
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
+        # update repo cache and system after system is up
+        node.update_repo_cache()
+        node.upgrade_system()
 
         if Setup.REUSE_CLUSTER:
             self.kill_stress_thread()
@@ -3004,11 +3001,6 @@ class BaseLoaderSet(object):
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
-            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-            if result.exit_status == 0:
-                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-            else:
-                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
         else:
@@ -3348,6 +3340,9 @@ class BaseMonitorSet(object):
     def node_setup(self, node, **kwargs):
         self.log.info('Setup in BaseMonitorSet')
         node.wait_ssh_up()
+        # update repo cache and system after system is up
+        node.update_repo_cache()
+        node.upgrade_system()
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
@@ -3411,15 +3406,9 @@ class BaseMonitorSet(object):
 
     def install_scylla_monitoring_prereqs(self, node):
         if node.is_rhel_like():
-            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-            if result.exit_status == 0:
-                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-            else:
-                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
+            node.remoter.run("sudo yum install -y epel-release")
+            node.update_repo_cache()
             prereqs_script = dedent("""
-                yum install -y epel-release
-                yum clean all
-                rm -rf /var/cache/yum/*
                 yum install -y unzip wget
                 yum install -y python36
                 yum install -y python36-pip

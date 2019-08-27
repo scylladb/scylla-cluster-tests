@@ -203,13 +203,11 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-            node.remoter.run('sudo yum clean all')
         else:
             node.remoter.run('sudo cp ~/scylla.list-backup /etc/apt/sources.list.d/scylla.list')
             node.remoter.run('sudo chown root.root /etc/apt/sources.list.d/scylla.list')
             node.remoter.run('sudo chmod 644 /etc/apt/sources.list.d/scylla.list')
-            node.remoter.run('sudo apt-get clean all')
-            node.remoter.run('sudo apt-get update')
+        node.update_repo_cache()
 
         if re.findall('\d+.\d+', self.orig_ver)[0] == re.findall('\d+.\d+', self.new_ver)[0]:
             self.upgrade_rollback_mode = 'minor_release'
