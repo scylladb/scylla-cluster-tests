@@ -1,8 +1,4 @@
 import unittest
-import tempfile
-import logging
-import shutil
-import os.path
 
 from sdcm.utils.common import get_non_system_ks_cf_list
 
