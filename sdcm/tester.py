@@ -1284,8 +1284,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return truncated_time[0]
 
     def finalize_test(self):
-        self.stop_resources()
-        self.collect_logs()
+        try:
+            self.stop_resources()
+        finally:
+            self.collect_logs()
         self.clean_resources()
 
     def stop_resources(self):
