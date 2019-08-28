@@ -532,6 +532,7 @@ class Nemesis(object):
             error_msg = "Exception in random_disrupt_method %s: %s", disrupt_method_name, exc
             self.log.error(error_msg)
             self.error_list.append(error_msg)
+            raise
         else:
             self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
         finally:
@@ -1014,27 +1015,30 @@ def log_time_elapsed_and_status(method):
         if class_name.find('Chaos') < 0:
             args[0].metrics_srv.event_start(class_name)
         result = None
-        error = None
         status = True
-        target_node = str(args[0].target_node)
-
+        log_info = {
+            'operation': args[0].current_disruption,
+            'start': int(start_time),
+            'end': 0,
+            'duration': 0,
+            'node': str(args[0].target_node),
+        }
         try:
             result = method(*args, **kwargs)
         except Exception as details:
             details = str(details)
             args[0].error_list.append(details)
             args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
-            full_traceback = traceback.format_exc()
-            error = details
+            log_info.update({'error': details, 'full_traceback': traceback.format_exc()})
+            status = False
         finally:
             end_time = time.time()
             time_elapsed = int(end_time - start_time)
+            log_info.update({
+                'end': int(end_time),
+                'duration': time_elapsed,
+            })
             args[0].duration_list.append(time_elapsed)
-            log_info = {'operation': args[0].current_disruption,
-                        'start': int(start_time),
-                        'end': int(end_time),
-                        'duration': time_elapsed,
-                        'node': target_node}
             args[0].operation_log.append(log_info)
             args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
 
@@ -1042,10 +1046,6 @@ def log_time_elapsed_and_status(method):
                 args[0].metrics_srv.event_stop(class_name)
             disrupt = args[0].get_disrupt_name()
             del log_info['operation']
-
-            if error:
-                log_info.update({'error': error, 'full_traceback': full_traceback})
-                status = False
 
             args[0].update_stats(disrupt, status, log_info)
             DisruptionEvent(type='end', name=disrupt, status=status, **log_info)
