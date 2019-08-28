@@ -7,7 +7,7 @@ scyllaCloudLongevityPipeline(
     params: params,
 
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml',
+    test_config: 'test-cases/longevity/longevity-100GB-48h-cloud-CloudLimitedChaosMonkey-tls.yaml',
     n_db_nodes: '3',
 
     timeout: [time: 3060, unit: 'MINUTES'],
