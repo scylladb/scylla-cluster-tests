@@ -192,9 +192,9 @@ class InfoEvent(SctEvent):
 
 
 class CoreDumpEvent(SctEvent):
-    def __init__(self, corefile_urls, download_instructions, backtrace, node):
+    def __init__(self, corefile_url, download_instructions, backtrace, node):
         super(CoreDumpEvent, self).__init__()
-        self.corefile_urls = corefile_urls
+        self.corefile_url = corefile_url
         self.download_instructions = download_instructions
         self.backtrace = backtrace
         self.severity = Severity.CRITICAL
@@ -202,8 +202,8 @@ class CoreDumpEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{0}: node={1.node}\ncorefile_urls=\n{2}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
-            super(CoreDumpEvent, self).__str__(), self,  "\n".join(self.corefile_urls))
+        return "{0}: node={1.node}\ncorefile_url=\n{1.corefile_url}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
+            super(CoreDumpEvent, self).__str__(), self)
 
 
 class KillTestEvent(SctEvent):

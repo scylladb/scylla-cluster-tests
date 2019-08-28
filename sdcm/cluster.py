@@ -793,31 +793,8 @@ class BaseNode(object):
                          "'%s' '%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        return download_url
-
-    def _try_split_coredump(self, coredump):
-        """
-        Compress coredump file, try to split the compressed file if it's too big
-
-        :param coredump: coredump file path
-        :return: coredump files list
-        """
-        # max limit of coredump file can be uploaded (5 GB)
-        COREDUMP_MAX_SIZE = '5G'
-
-        core_files = []
-        try:
-            self.remoter.run('sudo yum install -y pigz')
-            self.remoter.run('sudo pigz --fast {}'.format(coredump))
-            file_name = '{}.gz'.format(coredump)
-            core_files.append(file_name)
-            self.log.debug('Splitting coredump to {} files'.format(COREDUMP_MAX_SIZE))
-            res = self.remoter.run('sudo split -b {} {} {}.;ls {}.*'.format(
-                COREDUMP_MAX_SIZE, file_name, file_name, file_name))
-            core_files = [f.strip() for f in res.stdout.split()]
-        except Exception as ex:
-            self.log.error('Failed splitting coredump file: %s', ex)
-        return core_files or [coredump]
+        download_instructions = 'gsutil cp gs://%s .' % upload_url
+        return download_url, download_instructions
 
     def _notify_backtrace(self, last):
         """
@@ -833,25 +810,14 @@ class BaseNode(object):
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
-                urls = []
-                download_instructions = ''
+                url = ""
+                download_instructions = "failed to upload"
                 try:
                     coredump = line.split()[-1]
                     self.log.debug('Found coredump file: {}'.format(coredump))
-                    coredump_files = self._try_split_coredump(coredump)
-                    for f in coredump_files:
-                        urls.append(self._upload_coredump(f))
-                    if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
-                        for url in urls:
-                            download_instructions += 'wget {}\n'.format(url)
-                        base_name = os.path.basename(coredump)
-                        if len(coredump_files) > 1:
-                            download_instructions += "\n# To join coredump pieces, you may use:\n"
-                            download_instructions += "cat {}.gz.* > {}.gz\n".format(base_name, base_name)
-                        download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
-                        self.log.info(download_instructions)
+                    url, download_instructions = self._upload_coredump(coredump)
                 finally:
-                    CoreDumpEvent(corefile_urls=urls, download_instructions=download_instructions, backtrace=output, node=self)
+                    CoreDumpEvent(corefile_url=url, download_instructions=download_instructions, backtrace=output, node=self)
 
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(output)
