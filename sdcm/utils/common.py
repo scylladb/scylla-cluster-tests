@@ -1033,7 +1033,7 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
                                        split=True, connect_timeout=request_timeout)
         if not result:
-            return None
+            return []
 
         splitter_result = []
         for row in result[4:]:
@@ -1047,8 +1047,6 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
     views_list = set()
     if filter_out_mv:
         tables = get_tables_columns_list('view')
-        if not tables:
-            return []
 
         for table in tables:
             views_list.add('.'.join([name.strip() for name in table[:2]]))
