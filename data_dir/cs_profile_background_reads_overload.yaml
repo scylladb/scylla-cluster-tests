@@ -1,0 +1,39 @@
+keyspace: keyspace1
+keyspace_definition: |
+  CREATE KEYSPACE keyspace1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+table: standard3
+table_definition: |
+  CREATE TABLE standard3 (
+        name int,
+        choice boolean,
+        date timestamp,
+        address inet,
+        dbl double,
+        lval bigint,
+        ival int,
+        uid timeuuid,
+        value blob,
+        PRIMARY KEY((name,choice), date, address, dbl, lval, ival, uid)
+  ) WITH COMPACT STORAGE
+    AND compaction = {'class': 'DateTieredCompactionStrategy', 'base_time_seconds':'3600', 'max_sstable_age_days':'365'}
+    AND comment='A table of many types to test wide rows'
+columnspec:
+  - name: name
+    size: uniform(1..10)
+    population: uniform(1..10)
+  - name: date
+    cluster: uniform(20..40)
+  - name: lval
+    population: gaussian(1..1000)
+    cluster: uniform(1..30)
+insert:
+  partitions: uniform(1..50)
+  batchtype: UNLOGGED
+  select: uniform(1..10)/10
+queries:
+   simple1:
+      cql: select * from standard3 where name = ? and choice = ? LIMIT 30
+      fields: samerow
+   range1:
+      cql: select * from standard3 where name = ? and choice = ? and date >= ? LIMIT 30
+      fields: multirow
