@@ -457,7 +457,7 @@ class AWSNode(cluster.BaseNode):
             self.remoter.run('sudo reboot', ignore_status=True)
 
         # wait until the reboot is executed
-        wait.wait_for(func=uptime_changed, step=1, timeout=60, throw_exc=True)
+        wait.wait_for(func=uptime_changed, step=3, timeout=180, throw_exc=True)
 
         if verify_ssh:
             self.wait_ssh_up()
