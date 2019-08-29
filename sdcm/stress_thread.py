@@ -119,10 +119,7 @@ class CassandraStressThread(object):
 
         LOGGER.info('Stress command:\n%s' % stress_cmd)
 
-        log_dir = os.path.join(self.output_dir, self.loader_set.name)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-k%s-%s.log' % (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
+        log_file_name = os.path.join(node.logdir, 'cassandra-stress-l%s-c%s-k%s-%s.log' % (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
