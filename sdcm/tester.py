@@ -1574,6 +1574,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def collect_logs(self):
         self.log.info('Start collect logs...')
         logs_dict = {"db_cluster_log": "",
+                     "loader_log": "",
                      "monitoring_log": "",
                      "prometheus_data": "",
                      "monitoring_stack": ""}
@@ -1586,6 +1587,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             db_cluster_log_path = self.db_cluster.collect_logs(storing_dir)
             logs_dict["db_cluster_log"] = S3Storage().upload_file(file_path=self.archive_logs(db_cluster_log_path),
                                                                   dest_dir=cluster.Setup.test_id())
+        if self.loaders:
+            loader_log_path = self.loaders.collect_logs(storing_dir)
+            logs_dict["loader_log"] = S3Storage().upload_file(file_path=self.archive_logs(loader_log_path),
+                                                              dest_dir=cluster.Setup.test_id())
         if self.monitors.nodes:
             monitoring_log_path = self.monitors.collect_logs(storing_dir)
             logs_dict["monitoring_log"] = S3Storage().upload_file(file_path=self.archive_logs(monitoring_log_path),
