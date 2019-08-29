@@ -3771,10 +3771,11 @@ class BaseMonitorSet(object):
         node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
 
         annotations_json = self.get_grafana_annotations(node)
-        tmp_dir = tempfile.mkdtemp()
-        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
-            f.write(annotations_json)
-        node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
+        if annotations_json:
+            tmp_dir = tempfile.mkdtemp()
+            with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
+                f.write(annotations_json)
+            node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'), dst=sct_monitoring_addons_dir)
 
         node.remoter.run("cd {}; tar -czvf {} {}/".format(self.monitor_install_path_base,
                                                           archive_name,
