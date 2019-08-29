@@ -3196,6 +3196,16 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
 
+    def collect_logs(self, storing_dir):
+        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
+        os.mkdir(storing_dir)
+
+        for node in self.nodes:
+            storing_dir_for_node = os.path.join(storing_dir, node.name)
+            if os.path.exists(node.logdir):
+                shutil.copytree(node.logdir, storing_dir_for_node)
+        return storing_dir
+
 
 class BaseMonitorSet(object):
     # This is a Mixin for monitoring cluster and should not be inherited
