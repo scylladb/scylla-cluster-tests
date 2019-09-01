@@ -279,6 +279,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         dst = os.path.abspath(dst)
 
         # If rsync is disabled or fails, try scp.
+        files_received = True
         try_scp = True
         if self.use_rsync():
             try:
@@ -308,9 +309,12 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 result = self.connection.local(scp, hide=True)
                 self.log.info("Command {} with status {}".format(result.command, result.exited))
+                if result.exited:
+                    files_received = False
                 # Avoid "already printed" message without real error
                 if result.stderr:
                     self.log.info("Stderr: {}".format(result.stderr))
+                    files_received = False
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -318,6 +322,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             # for rsync we could use "--no-p --chmod=ugo=rwX" but those
             # options are only in very recent rsync versions
             self._set_umask_perms(dst)
+        return files_received
 
     def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
                    preserve_symlinks=False, verbose=False):
@@ -358,6 +363,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
         # If rsync is disabled or fails, try scp.
         try_scp = True
+        files_sent = True
         if self.use_rsync():
             try:
                 local_sources = [six.moves.shlex_quote(path) for path in src]
@@ -409,6 +415,9 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 result = self.connection.local(scp)
                 self.log.info('Command {} with status {}'.format(result.command, result.exited))
+                if result.exited:
+                    files_sent = False
+        return files_sent
 
     def use_rsync(self):
         if self._use_rsync is not None:

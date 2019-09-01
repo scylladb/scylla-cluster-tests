@@ -320,6 +320,9 @@ class SCTConfiguration(dict):
         dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=boolean,
              help="""Run nemesis during prepare stage of the test"""),
 
+        dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
+             help="""Used for scale test: max size of the cluster"""),
+
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD", type=int,
              help="""
                  Space node threshold before starting nemesis (bytes)
@@ -327,6 +330,7 @@ class SCTConfiguration(dict):
                  This value is supposed to reproduce
                  https://github.com/scylladb/scylla/issues/1140
              """),
+
         dict(name="nemesis_filter_seeds", env="SCT_NEMESIS_FILTER_SEEDS", type=boolean,
              help="""If true runs the nemesis only on non seed nodes"""),
 

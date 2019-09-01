@@ -571,7 +571,8 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     def extract_seeds_from_scylla_yaml(self):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
-        self.remoter.receive_files(src=SCYLLA_YAML_PATH, dst=yaml_dst_path)
+        wait.wait_for(func=self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml', timeout=300,
+                      throw_exc=True, src=SCYLLA_YAML_PATH, dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
             try:
                 conf_dict = yaml.safe_load(yaml_stream)
@@ -1388,7 +1389,8 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
                      alternator_port=None, listen_on_all_interfaces=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-        self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
+        wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
+                      timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
 
         with open(yaml_dst_path, 'r') as scylla_yaml_file:
             scylla_yaml_contents = scylla_yaml_file.read()
@@ -1543,8 +1545,8 @@ server_encryption_options:
             scylla_yaml_file.write(scylla_yaml_contents)
 
         self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
-        self.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
+        wait.wait_for(self.remoter.send_files, step=10, text='Waiting for copying scylla.yaml to node',
+                      timeout=300, throw_exc=True, src=yaml_dst_path, dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
         if append_scylla_args:
