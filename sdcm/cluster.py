@@ -1231,16 +1231,18 @@ class BaseNode(object):
                             self._database_log_errors_index.append(index)
                             e = event.clone_with_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=e, backtrace=[]))
+                            matches.append((index, line))
 
-                            if e.severity == Severity.CRITICAL:
-                                matches.append((index, line))
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
                 self.last_log_position = f.tell() + 1
 
         if publish_events:
+            traces_count = 0
             for b in backtraces:
                 b['event'].add_backtrace_info(raw_backtrace="\n".join(b['backtrace']))
+                if b['event'].type == 'BACKTRACE':
+                    traces_count += 1
 
             # filter function to attach the backtrace to the correct error and not to the back traces
             # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
@@ -1248,16 +1250,18 @@ class BaseNode(object):
                 last_error = filter_backtraces.last_error
                 try:
                     if (last_error and
-                            backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 10
-                            and not filter_backtraces.last_error.type == 'BACKTRACE'):
+                            backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
+                            and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
                         last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
                         return False
                     return True
                 finally:
                     filter_backtraces.last_error = backtrace['event']
-            filter_backtraces.last_error = None
 
-            backtraces = filter(filter_backtraces, backtraces)
+            # support interlaced reactor stalled
+            for _ in range(traces_count):
+                filter_backtraces.last_error = None
+                backtraces = filter(filter_backtraces, backtraces)
 
             for backtrace in backtraces:
                 if Setup.BACKTRACE_DECODING:
