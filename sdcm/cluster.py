@@ -41,6 +41,7 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from datetime import datetime
+from paramiko import SSHException
 
 from sdcm.rsyslog_daemon import start_rsyslog
 from .log import SDCMAdapter
@@ -903,8 +904,15 @@ class BaseNode(object):
         pre_uptime = result.stdout
 
         def uptime_changed():
-            result = self.remoter.run('uptime -s', ignore_status=True)
-            return pre_uptime != result.stdout
+            try:
+                result = self.remoter.run('uptime -s', ignore_status=True)
+                return pre_uptime != result.stdout
+            except SSHException as ex:
+                self.log.debug("Network isn't available, reboot might already start, %s" % ex)
+                return False
+            except Exception as ex:
+                self.log.debug('Failed to get uptime during reboot, %s' % ex)
+                return False
 
         if hard:
             self.log.debug('Hardly rebooting node')
@@ -914,7 +922,7 @@ class BaseNode(object):
             self.remoter.run('sudo reboot', ignore_status=True)
 
         # wait until the reboot is executed
-        wait.wait_for(func=uptime_changed, step=1, timeout=60, throw_exc=True)
+        wait.wait_for(func=uptime_changed, step=10, timeout=500, throw_exc=True)
 
         if verify_ssh:
             self.wait_ssh_up()
