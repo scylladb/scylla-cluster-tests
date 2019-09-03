@@ -57,7 +57,7 @@ from .cluster_aws import ScyllaAWSCluster
 from .cluster_aws import LoaderSetAWS
 from .cluster_aws import MonitorSetAWS
 from .utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    configure_logging, get_non_system_ks_cf_list
+    configure_logging, get_non_system_ks_cf_list, remove_files
 from . import docker
 from . import cluster_baremetal
 from . import db_stats
@@ -1444,6 +1444,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info('Link to job.log archive {}'.format(s3_link))
         except Exception as details:
             self.log.warning('Errors during creating and uploading archive of sct.log {}'.format(details))
+        finally:
+            remove_files(event_log_dir_tmp)
+            remove_files(joblog_archive)
         self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
         if self.create_stats:
             self.log.info("ES document id: {}".format(self.get_doc_id()))
@@ -1461,6 +1464,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.info('Link to events log archive {}'.format(s3_link))
         except Exception as details:
             self.log.warning('Errors during creating and uploading archive of events log. {}'.format(details))
+        remove_files(event_log_archive)
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
         base_cmd = "cassandra-stress write cl=QUORUM "
@@ -1623,6 +1627,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
                       format(cluster.Setup.test_id()))
+
+        remove_files(storing_dir)
 
     def archive_logs(self, path):
         self.log.info('Creating archive....')

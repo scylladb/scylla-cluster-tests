@@ -28,6 +28,7 @@ import select
 import sys
 import math
 import json
+import shutil
 
 from textwrap import dedent
 from functools import wraps
@@ -1071,3 +1072,14 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
             if 'counter' in column_types:
                 avaialable_ks_cf.pop(ks_cf)
     return avaialable_ks_cf.keys()
+
+
+def remove_files(path):
+    logger.debug("Remove path %s", path)
+    try:
+        if os.path.isdir(path):
+            shutil.rmtree(path=path, ignore_errors=True)
+        if os.path.isfile(path):
+            os.remove(path)
+    except Exception as details:
+        logger.error("Error during remove archived logs %s", details)
