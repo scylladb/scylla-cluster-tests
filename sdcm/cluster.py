@@ -2085,7 +2085,7 @@ server_encryption_options:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
                                   'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
         except Exception as e:
-            errors.append('Validate schema version failed. Error: {}'.format(e.message))
+            errors.append('Validate schema version failed. Error: {}'.format(str(e)))
 
         if errors:
             ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.CRITICAL,
