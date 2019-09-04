@@ -474,6 +474,8 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Starting c-s read workload for 20m')
         stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
         read_20m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
+        time.sleep(60)
 
         # rollback second node
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
