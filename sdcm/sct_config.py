@@ -407,6 +407,9 @@ class SCTConfiguration(dict):
         dict(name="aws_extra_network_interface", env="SCT_AWS_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
 
+        dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
+             help="If True, would tag the ami with the test final result"),
+
         # GCE config options
 
         dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str,

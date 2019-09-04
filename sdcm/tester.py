@@ -42,7 +42,7 @@ import libvirt
 from sdcm.keystore import KeyStore
 from sdcm import cluster, nemesis, docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster_libvirt import LoaderSetLibvirt
-from sdcm.cluster_openstack import LoaderSetOpenStack
+from sdcm.cluster_openstack import LoaderSetOpenStack, get_openstack_service
 from sdcm.cluster_libvirt import MonitorSetLibvirt
 from sdcm.cluster_openstack import MonitorSetOpenStack
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
@@ -57,7 +57,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available
+    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available, tag_ami
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -308,14 +308,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         service_type = self.params.get('openstack_service_type', None)
         service_name = self.params.get('openstack_service_name', None)
         service_region = self.params.get('openstack_service_region', None)
-        service_cls = get_driver(Provider.OPENSTACK)
-        service = service_cls(user, password,
-                              ex_force_auth_version=auth_version,
-                              ex_force_auth_url=auth_url,
-                              ex_force_service_type=service_type,
-                              ex_force_service_name=service_name,
-                              ex_force_service_region=service_region,
-                              ex_tenant_name=tenant)
+        service = get_openstack_service(user=user, password=password,
+                                        auth_version=auth_version,
+                                        auth_url=auth_url,
+                                        service_type=service_type,
+                                        service_name=service_name,
+                                        service_region=service_region,
+                                        tenant=tenant)
         user_credentials = self.params.get('user_credentials_path', None)
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
@@ -1436,7 +1435,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def tearDown(self):
 
         self.log.info('TearDown is starting...')
-        self.print_failure_to_log()
+        test_errors, test_failures = self.print_failure_to_log()
+        try:
+            self.tag_ami_with_result(test_errors, test_failures)
+        except Exception:  # pylint: disable=broad-except
+            self.log.exception("Failed to tag ami")
+
         InfoEvent('TEST_END')
         try:
             self.finalize_test()
@@ -1712,6 +1716,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             TEST_LOG.error(text)
             TEST_LOG.error("-" * 70)
 
+        return error, failure
+
     def get_nemesises_stats(self):
         nemesis_stats = {}
         if self.create_stats:
@@ -1757,3 +1763,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         have to be implemented in child class.
         """
         return {}
+
+    def tag_ami_with_result(self, test_error, test_failure):
+        if self.params.get('cluster_backend', '') == 'aws' and self.params.get('tag_ami_with_result', False):
+
+            test_result = 'PASSED'
+            if test_error:
+                test_result = 'ERROR'
+            if test_failure:
+                test_result = 'FAILURE'
+
+            job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
+            ami_id = self.params.get('ami_id_db_scylla').split()[0]
+            region_name = self.params.get('aws_region').split()[0]
+
+            tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})

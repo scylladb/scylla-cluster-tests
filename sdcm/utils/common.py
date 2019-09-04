@@ -957,6 +957,17 @@ def get_branched_ami(ami_version, region_name):
         return amis[:1]
 
 
+def tag_ami(ami_id, tags_dict, region_name):
+    tags = [{'Key': key, 'Value': value} for key, value in tags_dict.items()]
+
+    ec2 = boto3.resource('ec2', region_name=region_name)
+    test_image = ec2.Image(ami_id)
+    tags += test_image.tags
+    test_image.create_tags(Tags=tags)
+
+    LOGGER.info("tagged %s with %s", ami_id, tags)
+
+
 def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,
                               filter_out_mv=False):
     """Get all not system keyspace.tables pairs

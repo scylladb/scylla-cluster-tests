@@ -347,11 +347,11 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                     v blob,
                     PRIMARY KEY (pk, ck)
                 ) WITH CLUSTERING ORDER BY (ck ASC)
+                    AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60',
+                    'compaction_window_unit': 'MINUTES'}
                     AND bloom_filter_fp_chance = 0.01
                     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
                     AND comment = ''
-                    AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '60',
-                    'compaction_window_unit': 'MINUTES'}
                     AND compression = {}
                     AND crc_check_chance = 1.0
                     AND dclocal_read_repair_chance = 0.1
