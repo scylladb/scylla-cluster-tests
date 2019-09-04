@@ -47,6 +47,7 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
         ssh_login_info = {'hostname': None,
                           'user': 'scylla-test',
                           'key_file': credentials.key_file}
+        self._public_ip_address = None
         super(DockerNode, self).__init__(name=name,
                                          parent_cluster=parent_cluster,
                                          base_logdir=base_logdir,

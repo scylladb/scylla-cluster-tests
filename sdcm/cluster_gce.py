@@ -78,34 +78,6 @@ class GCENode(cluster.BaseNode):
             raise cluster.NodeError('GCE instance %s method call error after '
                                     'exponential backoff wait' % self._instance.id)
 
-    @property
-    def public_ip_address(self):
-        return self._get_public_ip_address()
-
-    @property
-    def private_ip_address(self):
-        return self._get_private_ip_address()
-
-    def _get_public_ip_address(self):
-        public_ips, _ = self._refresh_instance_state()
-        if public_ips:
-            return public_ips[0]
-        else:
-            return None
-
-    def _get_private_ip_address(self):
-        _, private_ips = self._refresh_instance_state()
-        if private_ips:
-            return private_ips[0]
-        else:
-            return None
-
-    def _wait_public_ip(self):
-        public_ips, _ = self._refresh_instance_state()
-        while not public_ips:
-            time.sleep(1)
-            public_ips, _ = self._refresh_instance_state()
-
     def _refresh_instance_state(self):
         node_name = self._instance.name
         instance = self._instance_wait_safe(self._gce_service.ex_get_node, node_name)

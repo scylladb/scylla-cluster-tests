@@ -80,6 +80,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.aws_extra_network_interface = aws_extra_network_interface
         self.params = params
         self.node_type = node_type
+
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
@@ -367,6 +368,7 @@ class AWSNode(cluster.BaseNode):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
         self._eth1_private_ip_address = None
+        self.eip_allocation_id = None
         if len(self._instance.network_interfaces) == 2:
             self.allocate_and_attach_elastic_ip()
 
@@ -375,6 +377,7 @@ class AWSNode(cluster.BaseNode):
                           'user': ami_username,
                           'key_file': credentials.key_file}
         self._spot_aws_termination_task = None
+
         super(AWSNode, self).__init__(name=name,
                                       parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
@@ -421,6 +424,9 @@ class AWSNode(cluster.BaseNode):
             return self._eth1_private_ip_address
 
         return self._instance.private_ip_address
+
+    def _refresh_instance_state(self):
+        raise NotImplementedError()
 
     def allocate_and_attach_elastic_ip(self):
         primary_interface = [

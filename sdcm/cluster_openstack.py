@@ -1,4 +1,3 @@
-import time
 import logging
 import atexit
 
@@ -67,34 +66,6 @@ class OpenStackNode(cluster.BaseNode):  # pylint: disable=abstract-method
                                             ssh_login_info=ssh_login_info,
                                             base_logdir=base_logdir,
                                             node_prefix=node_prefix)
-
-    @property
-    def public_ip_address(self):
-        return self._get_public_ip_address()
-
-    @property
-    def private_ip_address(self):
-        return self._get_private_ip_address()
-
-    def _get_public_ip_address(self):
-        public_ips, _ = self._refresh_instance_state()
-        if public_ips:
-            return public_ips[0]
-        else:
-            return None
-
-    def _get_private_ip_address(self):
-        _, private_ips = self._refresh_instance_state()
-        if private_ips:
-            return private_ips[0]
-        else:
-            return None
-
-    def _wait_private_ip(self):
-        _, private_ips = self._refresh_instance_state()
-        while not private_ips:
-            time.sleep(1)
-            _, private_ips = self._refresh_instance_state()
 
     def _refresh_instance_state(self):
         node_name = self._instance.name

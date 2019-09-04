@@ -8,7 +8,7 @@ def call(Map pipelineParams) {
                 label getJenkinsLabels(params.backend, params.aws_region)
             }
         }
-         parameters {
+        parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
@@ -28,6 +28,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behaviour', 'destroy')}",
                    description: 'keep|destroy',
                    name: 'post_behaviour')
+
+            string(defaultValue: "${pipelineParams.get('tag_ami_with_result', 'false')}",
+                   description: 'true|false',
+                   name: 'tag_ami_with_result')
         }
         options {
             timestamps()
@@ -83,6 +87,8 @@ def call(Map pipelineParams) {
                                 export SCT_INSTANCE_PROVISION="${pipelineParams.params.get('provision_type', '')}"
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+
+                                export SCT_TAG_AMI_WITH_RESULT=${params.tag_ami_with_result}"
 
                                 echo "start test ......."
                                 ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct

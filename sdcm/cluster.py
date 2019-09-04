@@ -386,8 +386,6 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         self.logdir = os.path.join(base_logdir, self.name)
         makedirs(self.logdir)
 
-        self._public_ip_address = None
-        self._private_ip_address = None
         ssh_login_info['hostname'] = self.external_address
 
         self.remoter = RemoteCmdRunner(**ssh_login_info)
@@ -648,11 +646,40 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     @property
     def public_ip_address(self):
-        return self._public_ip_address
+        return self._get_public_ip_address()
 
     @property
     def private_ip_address(self):
-        return self._private_ip_address
+        return self._get_private_ip_address()
+
+    def _get_public_ip_address(self):
+        public_ips, _ = self._refresh_instance_state()
+        if public_ips:
+            return public_ips[0]
+        else:
+            return None
+
+    def _get_private_ip_address(self):
+        _, private_ips = self._refresh_instance_state()
+        if private_ips:
+            return private_ips[0]
+        else:
+            return None
+
+    def _wait_public_ip(self):
+        public_ips, _ = self._refresh_instance_state()
+        while not public_ips:
+            time.sleep(1)
+            public_ips, _ = self._refresh_instance_state()
+
+    def _wait_private_ip(self):
+        _, private_ips = self._refresh_instance_state()
+        while not private_ips:
+            time.sleep(1)
+            _, private_ips = self._refresh_instance_state()
+
+    def _refresh_instance_state(self):
+        raise NotImplementedError()
 
     @property
     def ip_address(self):

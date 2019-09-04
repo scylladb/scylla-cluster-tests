@@ -197,12 +197,16 @@ def list_ami_branch(region, version):
         return {i['Key']: i['Value'] for i in ami.tags}
 
     amis = get_branched_ami(version, region_name=region)
-
-    tbl = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId"])
+    tbl = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId", "Test Status"])
     tbl.align = "l"
 
     for ami in amis:
-        tbl.add_row([ami.name, ami.id, ami.creation_date, get_tags(ami)['build-id']])
+        tags = get_tags(ami)
+        test_status = [(k, v) for k, v in tags.items() if k.startswith('JOB:')]
+        test_status = [click.style(k, fg='green') for k, v in test_status if v == 'PASSED'] + \
+                      [click.style(k, fg='red') for k, v in test_status if not v == 'PASSED']
+        test_status = ", ".join(test_status) if test_status else click.style('Unknown', fg='yellow')
+        tbl.add_row([ami.name, ami.id, ami.creation_date, tags['build-id'], test_status])
 
     click.echo(tbl.get_string(title="Scylla AMI branch versions"))
 
