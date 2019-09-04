@@ -839,28 +839,6 @@ class Nemesis(object):
 
         self.log.debug("sctool version is : {}".format(manager_tool.version))
 
-    def disrupt_mgmt_repair_api(self):
-        self.log.warning("If ever used, add the deletion of the automatic repair task first")  # TODO
-        self._set_current_disruption('ManagementRepair')
-        if not self.cluster.params.get('use_mgmt', default=None):
-            self.log.warning('Scylla-manager configuration is not defined!')
-            return
-        server = self.monitoring_set.nodes[0].public_ip_address
-        port = self.cluster.params.get('mgmt_port', default=10090)
-        try:
-            mgmt_client = mgmt.ScyllaMgmt(server=server, port=port)
-            cluster_name = self.cluster.name
-            cluster_id = mgmt_client.get_cluster(cluster_name)
-            if not cluster_id:
-                ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                    Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
-                targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-                cluster_id = mgmt_client.add_cluster(cluster_name=cluster_name, hosts=targets)
-            repair_timeout = 36 * 60 * 60  # 36 hours
-            mgmt_client.run_repair(cluster_id, timeout=repair_timeout)
-        except Exception as ex:
-            self.log.error('Failed to execute scylla-manager repair, error: %s', ex)
-
     def disrupt_abort_repair(self):
         """
         Start repair target_node in background, then try to abort the repair streaming.
