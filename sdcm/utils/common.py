@@ -458,6 +458,7 @@ def clean_cloud_instances(tags_dict):
     :return: None
     """
     clean_instances_aws(tags_dict)
+    clean_elastic_ips_aws(tags_dict)
     clean_instances_gce(tags_dict)
 
 
@@ -469,7 +470,7 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
-def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False):
+def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False):
     """
     list all instances with specific tags AWS
 
@@ -477,6 +478,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     :param region_name: name of the region to list
     :param running: get all running instances
     :param group_as_region: if True the results would be grouped into regions
+    :param verbose: if True will log progress information
 
     :return: instances dict where region is a key
     """
@@ -484,7 +486,8 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     aws_regions = [region_name] if region_name else AWS_REGIONS
 
     def get_instances(region):
-        LOGGER.info('Going to list aws region "%s"', region)
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client = boto3.client('ec2', region_name=region)
         custom_filter = []
@@ -493,7 +496,9 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         response = client.describe_instances(Filters=custom_filter)
         instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
             'Instances']]
-        LOGGER.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
+
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100).run(get_instances)
 
@@ -505,9 +510,13 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
                                            if not i['State']['Name'] == 'terminated']
     if not group_as_region:
         instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
-        LOGGER.info("Found total of %s instances.", len(instances))
+        total_items = len(instances)
     else:
-        LOGGER.info("Found total of %s instances.", sum([len(value) for _, value in instances.items()]))
+        total_items = sum([len(value) for _, value in instances.items()])
+
+    if verbose:
+        LOGGER.info("Found total of %s instances.", len(total_items))
+
     return instances
 
 
@@ -521,7 +530,6 @@ def clean_instances_aws(tags_dict):
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
 
-    print aws_instances.keys()
     for region, instance_list in aws_instances.items():
         client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
@@ -531,6 +539,70 @@ def clean_instances_aws(tags_dict):
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             response = client.terminate_instances(InstanceIds=[instance_id])
             LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
+
+
+def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
+    """
+    list all elastic ips with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+    :param group_as_region: if True the results would be grouped into regions
+    :param verbose: if True will log progress information
+
+    :return: instances dict where region is a key
+    """
+    elastic_ips = {}
+    aws_regions = [region_name] if region_name else AWS_REGIONS
+
+    def get_elastic_ips(region):
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        client = boto3.client('ec2', region_name=region)
+        custom_filter = []
+        if tags_dict:
+            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+        response = client.describe_addresses(Filters=custom_filter)
+        elastic_ips[region] = [ip for ip in response['Addresses']]
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(elastic_ips.keys()), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100).run(get_elastic_ips)
+
+    if not group_as_region:
+        elastic_ips = list(itertools.chain(*elastic_ips.values()))  # flatten the list of lists
+        total_items = elastic_ips
+    else:
+        total_items = sum([len(value) for _, value in elastic_ips.items()])
+    if verbose:
+        LOGGER.info("Found total of %s ips.", total_items)
+    return elastic_ips
+
+
+def clean_elastic_ips_aws(tags_dict):
+    """
+    Remove all elastic ips with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
+
+    for region, eip_list in aws_instances.items():
+        client = boto3.client('ec2', region_name=region)
+        for eip in eip_list:
+            association_id = eip.get('AssociationId', None)
+            if association_id:
+                response = client.disassociate_address(AssociationId=association_id)
+                LOGGER.debug("disassociate_address. Result: %s\n", response)
+
+            allocation_id = eip['AllocationId']
+            LOGGER.info("Going to release '{allocation_id}' [public_ip={public_ip}] ".format(
+                allocation_id=allocation_id, public_ip=eip['PublicIp']))
+            response = client.release_address(AllocationId=allocation_id)
+            LOGGER.debug("Done. Result: %s\n", response)
 
 
 def get_all_gce_regions():
@@ -566,7 +638,7 @@ def filter_gce_by_tags(tags_dict, instances):
     return filtered_instances
 
 
-def list_instances_gce(tags_dict=None, running=False):
+def list_instances_gce(tags_dict=None, running=False, verbose=False):
     """
     list all instances with specific tags GCE
 
@@ -585,7 +657,8 @@ def list_instances_gce(tags_dict=None, running=False):
                                 gcp_credentials["private_key"],
                                 project=gcp_credentials["project_id"])
 
-    LOGGER.info("Going to get all instances from GCE")
+    if verbose:
+        LOGGER.info("Going to get all instances from GCE")
     all_gce_instances = compute_engine.list_nodes()
     # filter instances by tags since libcloud list_nodes() doesn't offer any filtering
     if tags_dict:
@@ -598,7 +671,8 @@ def list_instances_gce(tags_dict=None, running=False):
         instances = [i for i in instances if i.state == 'running']
     else:
         instances = [i for i in instances if not i.state == 'terminated']
-    LOGGER.info("Done. Found total of %s instances.", len(instances))
+    if verbose:
+        LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
 
 

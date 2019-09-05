@@ -252,12 +252,8 @@ class SCTConfiguration(dict):
              help="""If true would kill the fullscan thread in the test teardown"""),
 
         # Scylla command line arguments options
-
         dict(name="experimental", env="SCT_EXPERIMENTAL", type=boolean,
              help="when enabled scylla will use it's experimental features"),
-
-        dict(name="enable_tc", env="SCT_ENABLE_TC", type=boolean,
-             help="when enable scylla will use traffic control"),
 
         dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the server side"),
@@ -407,6 +403,9 @@ class SCTConfiguration(dict):
 
         dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
              help="The max percentage of the on demand price we set for spot/fleet instances"),
+
+        dict(name="aws_extra_network_interface", env="SCT_AWS_EXTRA_NETWORK_INTERFACE", type=boolean,
+             help="if true, create extra network interface on each node"),
 
         # GCE config options
 
@@ -1112,6 +1111,9 @@ class SCTConfiguration(dict):
                     region_count[opt] = 1
             if not all(region_count['region_name'] == x for x in region_count.values()):
                 raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
+
+        if 'aws_extra_network_interface' in self and len(self.get('region_name').split()) >= 2:
+            raise ValueError("aws_extra_network_interface isn't supported for multi region use cases")
 
     def dump_config(self):
         """

@@ -25,3 +25,4 @@ tenacity==5.0.4
 https://github.com/iuscommunity/repodataParser/archive/master.zip
 backports.datetime-timestamp==1.2
 pytest==4.6.4
+tcconfig==0.23.0

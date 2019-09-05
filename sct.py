@@ -15,7 +15,7 @@ from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, restore_monitoring_stack, get_branched_ami, gce_meta_to_dict,
-                               aws_tags_to_dict)
+                               aws_tags_to_dict, list_elastic_ips_aws)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 
@@ -90,9 +90,11 @@ def clean_resources(ctx, user, test_id):
 @click.option('--get-all', is_flag=True, default=False, help='All resources')
 @click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
 @sct_option('--test-id', 'test_id', help='test id to filter by')
+@click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running):
-    # pylint: disable=too-many-locals
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
+    # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
+
     params = dict()
 
     if user:
@@ -107,10 +109,9 @@ def list_resources(ctx, user, test_id, get_all, get_all_running):
     else:
         table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "LaunchTime"]
 
-    click.secho("Checking EC2...", fg='green')
-
-    aws_instances = list_instances_aws(tags_dict=params, running=get_all_running)
     click.secho("Checking AWS EC2...", fg='green')
+    aws_instances = list_instances_aws(tags_dict=params, running=get_all_running, verbose=verbose)
+
     if aws_instances:
         aws_table = PrettyTable(table_header)
         aws_table.align = "l"
@@ -127,12 +128,32 @@ def list_resources(ctx, user, test_id, get_all, get_all_running):
                 test_id,
                 run_by_user,
                 instance['LaunchTime'].ctime()])
-        click.echo(aws_table.get_string(title="Resources used on AWS"))
+        click.echo(aws_table.get_string(title="Instances used on AWS"))
     else:
         click.secho("Nothing found for selected filters in AWS!", fg="yellow")
 
+    click.secho("Checking AWS Elastic IPs...", fg='green')
+    elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
+    if elastic_ips_aws:
+        aws_table = PrettyTable(["AllocationId", "PublicIP", "TestId", "RunByUser", "InstanceId (attached to)"])
+        aws_table.align = "l"
+        aws_table.sortby = 'AllocationId'
+        for eip in elastic_ips_aws:
+            tags = aws_tags_to_dict(eip.get('Tags'))
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            aws_table.add_row([
+                eip['AllocationId'],
+                eip['PublicIp'],
+                test_id,
+                run_by_user,
+                eip.get('InstanceId', 'N/A')])
+        click.echo(aws_table.get_string(title="EIPs used on AWS"))
+    else:
+        click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
+
     click.secho("Checking GCE...", fg='green')
-    gce_instances = list_instances_gce(tags_dict=params, running=get_all_running)
+    gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
     if gce_instances:
         gce_table = PrettyTable(table_header)
         gce_table.align = "l"
