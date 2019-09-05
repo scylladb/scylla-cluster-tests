@@ -22,6 +22,8 @@ import time
 import datetime
 import string
 import threading
+
+import os
 import re
 import traceback
 
@@ -275,14 +277,16 @@ class Nemesis(object):
             raise NoFilesFoundToDestroy('Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
                                                                                                        files.stderr))
 
-        for file in files.stdout.split():
-            if not file or '/' not in file:
+        for one_file in files.stdout.split():
+            if not one_file or '/' not in one_file:
                 continue
-            file_path_splitted = file.split('/')
+            file_name = os.path.basename(one_file)
             # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
-            # For corruption we need to remove all files that their names are started from "mc-220-"
-            file_name = '-'.join(file_path_splitted[-1].split('-')[:2]) + '-*'
-            file_for_destroy = '/'.join(file_path_splitted[:-1] + [file_name])
+            # For corruption we need to remove all files that their names are started from "mc-220-" (MC format)
+            # Old format: "system-truncated-ka-" (system-truncated-ka-7-Data.db)
+            # Search for "<digit>-" substring
+            file_name_template = re.search("(.*-\d+)-", file_name).group(1)
+            file_for_destroy = one_file.replace(file_name, file_name_template + '-*')
             self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
             if file_for_destroy:
                 break
@@ -303,13 +307,15 @@ class Nemesis(object):
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
-            file_for_destroy = self._choose_file_for_destroy(ks_cfs)
+            # Remove 5 data files
+            for _ in xrange(5):
+                file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
-            result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
-            if result.stderr:
-                raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
-                                        'Error: {}'.format(result))
-            self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+                result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
+                if result.stderr:
+                    raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
+                                            'Error: {}'.format(result))
+                self.log.debug('Files {} were destroyed'.format(file_for_destroy))
 
         finally:
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
