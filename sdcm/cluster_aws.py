@@ -11,12 +11,14 @@ from datetime import datetime
 
 import yaml
 from botocore.exceptions import WaiterError, ClientError
+import boto3
 
 from sdcm import cluster
 from sdcm import ec2_client
 from sdcm.utils.common import retrying, list_instances_aws
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
+from sdcm.remote import LocalCmdRunner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
+LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
 def create_tags_list():
@@ -51,7 +54,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None, node_type=None):
+                 node_prefix='node', n_nodes=10, params=None, node_type=None, aws_extra_network_interface=False):
         # pylint: disable=too-many-locals
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
@@ -74,6 +77,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._ec2_user_data = ec2_user_data
         self.region_names = region_names
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
+        self.aws_extra_network_interface = aws_extra_network_interface
         self.params = params
         self.node_type = node_type
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
@@ -173,6 +177,14 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                        'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
+        if self.aws_extra_network_interface:
+            interfaces = [{'DeviceIndex': 0,
+                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'Groups': self._ec2_security_group_ids[dc_idx]},
+                          {'DeviceIndex': 1,
+                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'Groups': self._ec2_security_group_ids[dc_idx]}]
+
         if self.instance_provision == 'mixed':
             instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
@@ -260,10 +272,54 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
+    @staticmethod
+    def configure_eth1_script():
+        return dedent("""
+            BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
+            NUMBER_OF_ENI=`curl -s ${BASE_EC2_NETWORK_URL} | wc -w`
+            for mac in `curl -s ${BASE_EC2_NETWORK_URL}`
+            do
+                DEVICE_NUMBER=`curl -s ${BASE_EC2_NETWORK_URL}${mac}/device-number`
+                if [[ "$DEVICE_NUMBER" == "1" ]]; then
+                   ETH1_MAC=${mac}
+                fi
+            done
+
+            if [[ ! "${DEVICE_NUMBER}x" == "x" ]]; then
+               ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
+               ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
+            fi
+
+            sudo bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
+
+            echo "
+            DEVICE="eth1"
+            BOOTPROTO="dhcp"
+            ONBOOT="yes"
+            TYPE="Ethernet"
+            USERCTL="yes"
+            PEERDNS="yes"
+            IPV6INIT="no"
+            PERSISTENT_DHCLIENT="1"
+            " > /etc/sysconfig/network-scripts/ifcfg-eth1
+
+            echo "
+            default via 10.0.0.1 dev eth1 table 2
+            ${ETH1_CIDR_BLOCK} dev eth1 src ${ETH1_IP_ADDRESS} table 2
+            " > /etc/sysconfig/network-scripts/route-eth1
+
+            echo "
+            from ${ETH1_IP_ADDRESS}/32 table 2
+            " > /etc/sysconfig/network-scripts/rule-eth1
+
+            sudo systemctl restart network
+        """)
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
 
         post_boot_script = cluster.Setup.get_startup_script()
-
+        if self.aws_extra_network_interface:
+            post_boot_script += self.configure_eth1_script()
         if 'clustername' in ec2_user_data:
             ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
         else:
@@ -304,11 +360,16 @@ class AWSNode(cluster.BaseNode):
     def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, ami_username='root',
                  base_logdir=None, dc_idx=0, node_type=None):
+
         name = '%s-%s' % (node_prefix, node_index)
         self._instance = ec2_instance
         self._ec2_service = ec2_service
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
+        self._eth1_private_ip_address = None
+        if len(self._instance.network_interfaces) == 2:
+            self.allocate_and_attach_elastic_ip()
+
         self._wait_public_ip()
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
@@ -339,12 +400,50 @@ class AWSNode(cluster.BaseNode):
         return bool(self._instance.instance_lifecycle and 'spot' in self._instance.instance_lifecycle.lower())
 
     @property
+    def external_address(self):
+        """
+        the communication address for usage between the test and the nodes
+        :return:
+        """
+
+        if cluster.IP_SSH_CONNECTIONS == 'public' or cluster.Setup.INTRA_NODE_COMM_PUBLIC:
+            return self.public_ip_address
+        else:
+            return self._instance.private_ip_address
+
+    @property
     def public_ip_address(self):
         return self._instance.public_ip_address
 
     @property
     def private_ip_address(self):
+        if self._eth1_private_ip_address:
+            return self._eth1_private_ip_address
+
         return self._instance.private_ip_address
+
+    def allocate_and_attach_elastic_ip(self):
+        primary_interface = [
+            interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
+        if primary_interface.association_attribute is None:
+            # create and attach EIP
+            client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
+            response = client.allocate_address(Domain='vpc')
+
+            self.eip_allocation_id = response['AllocationId']
+
+            client.create_tags(
+                Resources=[
+                    self.eip_allocation_id
+                ],
+                Tags=create_tags_list()
+            )
+            client.associate_address(
+                AllocationId=self.eip_allocation_id,
+                NetworkInterfaceId=primary_interface.id,
+            )
+        self._eth1_private_ip_address = [interface for interface in self._instance.network_interfaces if
+                                         interface.attachment['DeviceIndex'] == 1][0].private_ip_address
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
@@ -441,6 +540,10 @@ class AWSNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()
         self._instance.terminate()
+        if self.eip_allocation_id:
+            client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
+            response = client.release_address(AllocationId=self.eip_allocation_id)
+            self.log.debug("release elastic ip . Result: %s\n", response)
         self.log.info('Destroyed')
 
     def start_task_threads(self):
@@ -519,6 +622,22 @@ class AWSNode(cluster.BaseNode):
             self.log.warning('Some error during getting console screenshot')
         return imagedata
 
+    def traffic_control(self, tcconfig_params=None):
+        """
+        run tcconfig locally to create tc commands, and run them on the node
+        :param tcconfig_params: commandline arguments for tcset, if None will call tcdel
+        :return: None
+        """
+
+        self.remoter.run("sudo modprobe sch_netem")
+
+        if tcconfig_params is None:
+            tc_command = LOCAL_CMD_RUNNER.run("tcdel eth1 --tc-command", ignore_status=True).stdout
+            self.remoter.run('sudo bash -cxe "%s"' % tc_command, ignore_status=True)
+        else:
+            tc_command = LOCAL_CMD_RUNNER.run("tcset eth1 {} --tc-command".format(tcconfig_params)).stdout
+            self.remoter.run('sudo bash -cxe "%s"' % tc_command)
+
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
@@ -555,7 +674,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params,
-                                               node_type=node_type)
+                                               node_type=node_type,
+                                               aws_extra_network_interface=params.get('aws_extra_network_interface'))
         self.seed_nodes_ips = None
         self.version = '2.1'
 
@@ -597,6 +717,13 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.public_ip_address,
+            ))
+
+        if self.aws_extra_network_interface:
+            setup_params.update(dict(
+                seed_address=seed_address,
+                broadcast=node.private_ip_address,
+                listen_on_all_interfaces=True,
             ))
 
         node.config_setup(**setup_params)

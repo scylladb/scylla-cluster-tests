@@ -1303,7 +1303,8 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
                      client_encrypt=None, append_conf=None, append_scylla_args=None, debug_install=False,
-                     hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None, alternator_port=None):
+                     hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
+                     alternator_port=None, listen_on_all_interfaces=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
 
@@ -1324,6 +1325,15 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             pattern = re.compile('\n[# ]*rpc_address:.*')
             scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
                                                scylla_yaml_contents)
+
+        if listen_on_all_interfaces:
+            # Set listen_address
+            pattern = re.compile('listen_address:.*')
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format("0.0.0.0"), scylla_yaml_contents)
+            # Set rpc_address
+            pattern = re.compile('\n[# ]*rpc_address:.*')
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format("0.0.0.0"), scylla_yaml_contents)
+
         if broadcast:
             # Set broadcast_address
             pattern = re.compile('[# ]*broadcast_address:.*')
@@ -2293,25 +2303,6 @@ class BaseCluster(object):  # pylint: disable=too-many-instance-attributes
         else:
             raise ValueError('Unsupported type: {}'.format(type(param)))
 
-    @staticmethod
-    def set_tc(node, dst_nodes):
-        node.remoter.run("sudo modprobe sch_netem")
-        node.remoter.run("sudo tc qdisc del dev eth0 root", ignore_status=True)
-        node.remoter.run("sudo tc qdisc add dev eth0 handle 1: root prio")
-        for dst in dst_nodes:
-            node.remoter.run("sudo tc filter add dev eth0 protocol ip parent 1:0 prio 1 u32 match ip dst {} flowid 2:1".format(
-                dst.private_ip_address))
-        node.remoter.run(
-            "sudo tc qdisc add dev eth0 parent 1:1 handle 2:1 netem delay 100ms 20ms 25% reorder 5% 25% loss random 5% 25%")
-        node.remoter.run("sudo tc qdisc show dev eth0", verbose=True)
-        node.remoter.run("sudo tc filter show dev eth0", verbose=True)
-
-    def set_traffic_control(self):
-        if self._param_enabled('enable_tc'):
-            for node in self.nodes:
-                dst_nodes = [n for n in self.nodes if n.dc_idx != node.dc_idx]
-                self.set_tc(node, dst_nodes)
-
     def destroy(self):
         self.log.info('Destroy nodes')
         for node in self.nodes:
@@ -2475,6 +2466,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         seed_nodes_ips = self.get_seed_nodes_from_node()
         seed_nodes = []
         for node in self.nodes:  # pylint: disable=no-member
+            LOGGER.debug("node: %s, seeds: %s", node.ip_address, seed_nodes_ips)
             if node.ip_address in seed_nodes_ips:
                 node.is_seed = True  # TODO: check if we need to change the is_seed, later on
                 seed_nodes.append(node)
@@ -2891,7 +2883,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         self.update_db_packages(node_list)
         self.get_seed_nodes()
         self.get_scylla_version()
-        self.set_traffic_control()  # pylint: disable=no-member
+
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 

@@ -41,6 +41,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import mgmt
 from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
+from sdcm.db_stats import PrometheusDBStats
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -59,6 +60,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
     disruptive = False
     run_with_gemini = False
+    networking = False
 
     def __init__(self, tester_obj, termination_event):
         self.tester = tester_obj  # ClusterTester object
@@ -152,11 +154,13 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         for operation in self.operation_log:
             self.log.info(operation)
 
-    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None):  # pylint: disable=invalid-name
+    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None, networking=None):  # pylint: disable=invalid-name
         if disruptive is not None:
             return self._get_subclasses_disrupt_methods(disruptive=disruptive)
         if run_with_gemini is not None:
             return self._get_subclasses_disrupt_methods(run_with_gemini=run_with_gemini)
+        if networking is not None:
+            return self._get_subclasses_disrupt_methods(networking=networking)
         return None
 
     def _get_subclasses_disrupt_methods(self, **kwargs):
@@ -1034,6 +1038,92 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), args['toppartition'],
                                         msg="Wrong number of requested and expected toppartitions for {} sampler".format(sampler))
 
+    def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
+        # pylint: disable=too-many-locals
+        self._set_current_disruption('NetworkRandomInterruption')
+        if not self.cluster.aws_extra_network_interface:
+            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+
+        # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        query = 'avg(irate(node_network_receive_bytes_total{instance=~"%s", device="eth0"}[30s]))' % self.target_node.ip_address
+        now = time.time()
+        results = prometheus_stats.query(query=query, start=now - 600, end=now)
+        avg_bitrate_per_node = max([float(avg_rate) for _, avg_rate in results[0]["values"]])
+        avg_mpbs_per_node = avg_bitrate_per_node / 1024 / 1024
+
+        if avg_mpbs_per_node > 10:
+            min_limit = int(round(avg_mpbs_per_node * 0.30))
+            max_limit = int(round(avg_mpbs_per_node * 0.70))
+            rate_limit_suffix = "mbps"
+        else:
+            avg_kbps_per_node = avg_bitrate_per_node / 1024
+            min_limit = int(round(avg_kbps_per_node * 0.30))
+            max_limit = int(round(avg_kbps_per_node * 0.70))
+            rate_limit_suffix = "kbps"
+
+        rate_limit = "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
+
+        # random packet loss - between 1% - 15%
+        loss_percentage = random.randrange(1, 15)
+
+        # random packet corruption - between 1% - 15%
+        corrupt_percentage = random.randrange(1, 15)
+
+        # random packet delay - between 1s - 30s
+        delay_in_secs = random.randrange(1, 30)
+
+        list_of_tc_options = [("NetworkRandomInterruption_{}%-loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
+                              ("NetworkRandomInterruption_{}%-corrupt".format(corrupt_percentage),
+                               "--corrupt {}%".format(corrupt_percentage)),
+                              ("NetworkRandomInterruption_{}sec-delay".format(delay_in_secs),
+                               "--delay {}s --delay-distro 500ms".format(delay_in_secs)),
+                              ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit))]
+
+        list_of_timeout_options = [10, 60, 120, 300, 500]
+        option_name, selected_option = random.choice(list_of_tc_options)
+        wait_time = random.choice(list_of_timeout_options)
+
+        self._set_current_disruption(option_name)
+        self.log.debug("NetworkRandomInterruption: [%s] for %dsec", selected_option, wait_time)
+        self.target_node.traffic_control(None)
+        try:
+            self.target_node.traffic_control(selected_option)
+            time.sleep(wait_time)
+        finally:
+            self.target_node.traffic_control(None)
+
+    def disrupt_network_block(self):
+        self._set_current_disruption('BlockNetwork')
+        if not self.cluster.aws_extra_network_interface:
+            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+
+        selected_option = "--loss 100%"
+        list_of_timeout_options = [10, 60, 120, 300, 500]
+        wait_time = random.choice(list_of_timeout_options)
+        self.log.debug("BlockNetwork: [%s] for %dsec", selected_option, wait_time)
+        self.target_node.traffic_control(None)
+        try:
+            self.target_node.traffic_control(selected_option)
+            time.sleep(wait_time)
+        finally:
+            self.target_node.traffic_control(None)
+
+    def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
+        self._set_current_disruption('StopStartNetworkInterfaces')
+        if not self.cluster.aws_extra_network_interface:
+            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+
+        list_of_timeout_options = [10, 60, 120, 300, 500]
+        wait_time = random.choice(list_of_timeout_options)
+        self.log.debug("Taking down eth1 for %dsec", wait_time)
+
+        try:
+            self.target_node.remoter.run("sudo /sbin/ifdown eth1")
+            time.sleep(wait_time)
+        finally:
+            self.target_node.remoter.run("sudo /sbin/ifup eth1")
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -1545,6 +1635,33 @@ class TopPartitions(Nemesis):
         self.disrupt_show_toppartitions()
 
 
+class RandomInterruptionNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_random_interruptions()
+
+
+class BlockNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_block()
+
+
+class StopStartInterfacesNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_start_stop_interface()
+
+
 class DisruptiveMonkey(Nemesis):
     # Limit the nemesis scope:
         #  - ValidateHintedHandoffShortDowntime
@@ -1590,6 +1707,20 @@ class NonDisruptiveMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
+class NetworkMonkey(Nemesis):
+    # Limit the nemesis scope:
+    #  - RandomInterruptionNetworkMonkey
+    #  - StopStartInterfacesNetworkMonkey
+    #  - BlockNetworkMonkey
+    def __init__(self, *args, **kwargs):
+        super(NetworkMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(networking=True)
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
 class GeminiChaosMonkey(Nemesis):
     # Limit the nemesis scope to use with gemini
         # - StopStartMonkey
@@ -1611,4 +1742,5 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    LimitedChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
-                   DisruptiveMonkey, NonDisruptiveMonkey]
+                   DisruptiveMonkey, NonDisruptiveMonkey,
+                   GeminiChaosMonkey, NetworkMonkey]
