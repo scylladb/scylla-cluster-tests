@@ -1513,6 +1513,7 @@ server_encryption_options:
             self.remoter.run('sudo mv /tmp/encrypt_conf /etc/')
             self.remoter.run('sudo mkdir /etc/encrypt_conf/system_key_dir/')
             self.remoter.run('sudo chown -R scylla:scylla /etc/encrypt_conf/')
+            self.remoter.run('sudo md5sum /etc/encrypt_conf/*.pem', ignore_status=True)
 
         if append_conf:
             scylla_yaml_contents += append_conf
