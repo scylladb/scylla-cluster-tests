@@ -68,6 +68,7 @@ class GeminiStressThread(object):
         self.result_futures = []
         self.gemini_log = None
         self.outputdir = outputdir
+        self.gemini_commands = []
 
     def _generate_gemini_command(self, loader_idx):
         seed = random.randint(1, 100)
@@ -79,6 +80,7 @@ class GeminiStressThread(object):
                                                                                               oracle_node.ip_address,
                                                                                               self.gemini_log,
                                                                                               seed)
+        self.gemini_commands.append(cmd)
         return cmd
 
     def run(self):

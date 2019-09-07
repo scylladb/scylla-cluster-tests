@@ -16,6 +16,7 @@
 import datetime
 import time
 import os
+
 from sdcm.tester import ClusterTester
 from sdcm.results_analyze import BaseResultsAnalyzer
 
@@ -34,13 +35,13 @@ class GeminiTest(ClusterTester):
         prepared_results = self._prepare_test_results()
 
         cmd = self.params.get('gemini_cmd')
-        prepared_results['gemini_cmd'] = cmd
 
         self.log.debug('Start gemini benchmark')
         prepared_results['start_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         test_queue = self.run_gemini(cmd=cmd)
         result = self.verify_gemini_results(queue=test_queue)
 
+        prepared_results['gemini_cmd'] = test_queue.gemini_commands
         prepared_results.update(result)
 
         prepared_results['end_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -53,7 +54,6 @@ class GeminiTest(ClusterTester):
         prepared_results = self._prepare_test_results()
 
         cmd = self.params.get('gemini_cmd')
-        prepared_results['gemini_cmd'] = cmd
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
@@ -75,6 +75,7 @@ class GeminiTest(ClusterTester):
         self.db_cluster.stop_nemesis(timeout=1600)
         nemesises = self.get_doc_data(key='nemesis')
 
+        prepared_results['gemini_cmd'] = test_queue.gemini_commands
         prepared_results.update(result)
         prepared_results['nemesis_details'] = nemesises
         prepared_results['end_time'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
