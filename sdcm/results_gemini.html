@@ -6,7 +6,11 @@
         <ul>
             <li>Start time: {{ start_time }}</li>
             <li>End time: {{ end_time }}</li>
-            <li>Gemini command: {{ gemini_cmd }}</li>
+            <li>Gemini command: <ul>
+                {% for cmd in gemini_cmd %}
+                    <li>{{ cmd }}</li>
+                {% endfor %}
+            </ul></li>
             <li>Gemini version: {{ gemini_version }}</li>
             <li>Build URL: <a href="{{ build_url }}">link</a></li>
         </ul>
