@@ -2064,6 +2064,7 @@ server_encryption_options:
     def check_schema_version(self):
         # Get schema version
         errors = []
+        peers_details = ''
         try:
             gossip_node_schemas = self.validate_gossip_nodes_info()
             status = gossip_node_schemas[self.private_ip_address]['status']
@@ -2074,7 +2075,7 @@ server_encryption_options:
             # Search for nulls in system.peers
             peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
                                            'rpc_address, schema_version, supported_features from system.peers',
-                                           split=True)
+                                           split=True, verbose=False)
 
             for line in peers_details[3:-2]:
                 line_splitted = line.split('|')
@@ -2090,7 +2091,8 @@ server_encryption_options:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
                                   'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
         except Exception as e:
-            errors.append('Validate schema version failed. Error: {}'.format(str(e)))
+            errors.append('Validate schema version failed.{} Error: {}'
+                          .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(e)))
 
         if errors:
             ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.CRITICAL,
