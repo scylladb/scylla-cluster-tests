@@ -186,6 +186,7 @@ class retrying(object):
     """
 
     def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message=""):
+        assert n > 0, "Number of retries parameter should be greater then 0 (current: %s)" % n
         self.n = n  # number of times to retry
         self.sleep_time = sleep_time  # number seconds to sleep between retries
         self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
@@ -194,16 +195,19 @@ class retrying(object):
     def __call__(self, func):
         @wraps(func)
         def inner(*args, **kwargs):
+            if self.n == 1:
+                # there is no need to retry
+                return func(*args, **kwargs)
             for i in xrange(self.n):
                 try:
                     if self.message:
                         logger.info("%s [try #%s]" % (self.message, i))
                     return func(*args, **kwargs)
                 except self.allowed_exceptions as e:
-                    logger.debug("retrying: %r" % e)
+                    logger.debug("'%s': failed with '%r', retrying [#%s]" % (func.func_name, e, i))
                     time.sleep(self.sleep_time)
                     if i == self.n - 1:
-                        logger.error("Number of retries exceeded!")
+                        logger.error("'%s': Number of retries exceeded!", func.func_name)
                         raise
         return inner
 

@@ -22,7 +22,7 @@ import getpass
 import socket
 
 from fabric import Connection, Config
-from invoke.exceptions import UnexpectedExit, Failure, ThreadException
+from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
 import six.moves
 
@@ -34,15 +34,6 @@ class OutputCheckError(Exception):
 
     """
     Remote command output check failed.
-    """
-    pass
-
-
-class CmdExecTimeoutExceeded(socket.timeout):
-
-    """Exception which should be raised if
-    command execution time exceeds predefined timeout
-
     """
     pass
 
@@ -207,39 +198,32 @@ class RemoteCmdRunner(CommandRunner):
 
     def run(self, cmd, timeout=None, ignore_status=False,
             connect_timeout=300, options='', verbose=True,
-            args=None, log_file=None, watch_stdout_pattern=None, retry=0, watchers=[]):
-
+            args=None, log_file=None, watch_stdout_pattern=None, retry=1, watchers=None):
         self.connection.connect_timeout = connect_timeout
-
-        watchers.append(OutputWatcher(self, verbose))
+        watchers = watchers if watchers else []
+        if verbose:
+            watchers.append(OutputWatcher(self.log))
         if log_file:
             watchers.append(LogWriteWatcher(log_file))
 
-        for i in range(retry + 1):
+        @retrying(n=retry)
+        def _run():
             try:
                 if verbose:
                     self.log.debug('Running command "{}"...'.format(cmd))
-
                 start_time = time.time()
-                result = self.connection.run(cmd, warn=ignore_status,
-                                             encoding='utf-8', hide=True,
-                                             watchers=watchers, timeout=timeout)
-
-                setattr(result, 'duration', time.time() - start_time)
-                setattr(result, 'exit_status', result.exited)
-                break
+                _result = self.connection.run(cmd, warn=ignore_status,
+                                              encoding='utf-8', hide=True,
+                                              watchers=watchers, timeout=timeout)
+                setattr(_result, 'duration', time.time() - start_time)
+                setattr(_result, 'exit_status', _result.exited)
+                return _result
             except Exception as details:
-                if i == retry:
-                    if isinstance(details, ThreadException):
-                        for exc in details.exceptions:
-                            if issubclass(exc.type, socket.timeout):
-                                error_msg = 'Time of command "{}" execution exceeded timeout {}'.format(cmd, timeout)
-                                raise CmdExecTimeoutExceeded(error_msg)
-                    if hasattr(details, "result"):
-                        self._print_command_results(details.result, verbose)
+                if hasattr(details, "result"):
+                    self._print_command_results(details.result, verbose)
+                raise
 
-                    raise
-
+        result = _run()
         self._print_command_results(result, verbose)
         result.stdout = result.stdout.encode(encoding='utf-8')
         result.stderr = result.stderr.encode(encoding='utf-8')
@@ -646,19 +630,16 @@ class RemoteCmdRunner(CommandRunner):
 
 
 class OutputWatcher(StreamWatcher):
-    def __init__(self, remoter, verbose=True):
+    def __init__(self, log):
         self.len = 0
-        self.remoter = remoter
-        self.verbose = verbose
+        self.log = log
 
     def submit(self, stream):
         stream_buffer = stream[self.len:]
-        if not self.verbose:
-            return []
 
         while '\n' in stream_buffer:
             out_buf, rest_buf = stream_buffer.split('\n', 1)
-            self.remoter.log.info('{}'.format(out_buf.encode('utf-8')))
+            self.log.info('{}'.format(out_buf.encode('utf-8')))
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
         return []
