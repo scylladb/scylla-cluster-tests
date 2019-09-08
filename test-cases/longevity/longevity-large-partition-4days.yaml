@@ -10,6 +10,8 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
 
+append_scylla_args: '--blocked-reactor-notify-ms 500'
+
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 
