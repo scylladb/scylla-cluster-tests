@@ -720,17 +720,19 @@ class Collector:
         return os.path.basename(self.base_dir)
 
     def define_test_id(self):
-        if not self.test_id:
-            result = LocalCmdRunner().run('cat {0.sct_result_dir}/latest/test_id'.format(self))
+        if not self._test_id:
+            result = LocalCmdRunner().run('cat {0.sct_result_dir}/latest/test_id'.format(self), ignore_status=True)
             if result.exited == 0 and result.stdout:
                 self._test_id = result.stdout.strip()
                 LOGGER.info("Found latest test_id: {0.test_id}".format(self))
-        LOGGER.info("Collect logs for test-run with test-id: {}".format(self.test_id))
-        return self.test_id
+                LOGGER.info("Collect logs for test-run with test-id: {}".format(self.test_id))
+            else:
+                LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
 
     def search_testdir_locally(self):
-        if not self._test_id:
-            self._test_id = self.define_test_id()
+        self.define_test_id()
+        if not self.test_id:
+            return None
         LOGGER.info('Search dir with logs locally for test id: {}'.format(self.test_id))
         search_cmd = "grep -rl {0.test_id} {0.sct_result_dir}/*/test_id".format(self)
         result = LocalCmdRunner().run(cmd=search_cmd, ignore_status=True)
