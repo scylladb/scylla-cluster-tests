@@ -435,8 +435,8 @@ class AWSNode(cluster.BaseNode):
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             try:
-                self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
                 self.stop_scylla_server(verify_down=False)
+                self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
                 self.start_scylla_server(verify_up=False)
             finally:
                 if event_filters:
