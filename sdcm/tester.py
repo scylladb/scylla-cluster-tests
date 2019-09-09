@@ -1377,7 +1377,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         finally:
             self.send_email()
             self.collect_logs()
-        self.clean_resources()
+        # self.clean_resources()
 
     def stop_resources(self):
         self.log.debug('Stopping all resources')
@@ -1479,16 +1479,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             raise
         finally:
             from logcollector import SCTLogCollector
-            if self._failure_post_behavior == 'destroy':
-                clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
+            # if self._failure_post_behavior == 'destroy':
+            #     clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
             stop_events_device()
+            if self.params.get('collect_logs', False):
+                storing_dir = os.path.join(self.logdir, "collected_logs")
+                _, _, s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
+                self.log.info(s3_link)
 
-            storing_dir = os.path.join(self.logdir, "collected_logs")
-            _, _, s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
-            self.log.info(s3_link)
-
-            if self.create_stats:
-                self.update({'test_details': {'log_files': {'job_log': s3_link}}})
+                if self.create_stats:
+                    self.update({'test_details': {'log_files': {'job_log': s3_link}}})
             stop_rsyslog()
             self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
             if self.create_stats:
@@ -1627,7 +1627,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
 
     def collect_logs(self):
-        do_collect = self.params.get('collect_logs', True)
+        do_collect = self.params.get('collect_logs', False)
         if not do_collect:
             self.log.warning("Collect logs is disabled")
             return

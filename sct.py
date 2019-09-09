@@ -375,19 +375,19 @@ def cloud_usage_report(emails):
 
 @cli.command('collect-logs', help='Collect logs from cluster by test-id')
 @click.option('--test-id', help='Find cluster by test-id')
-@click.option('--log-dir', help='Path to directory with sct results')
-@click.option('--backend', help='Backend where to find nodes', default='aws')
+@click.option('--logdir', help='Path to directory with sct results')
+@click.option('--backend', help='Clound where search nodes', default='aws')
 # @click.option('--user', help='Authenticate with user to remote nodes')
 # @click.option('--key_file', help='Key file for authorization')
 # def collect_logs(test_id=None, backend='aws', user='centos', key_file='', log_dir=None):
-def collect_logs(test_id=None, log_dir=None, backend='aws'):
+def collect_logs(test_id=None, logdir=None, backend='aws'):
     from sdcm.logcollector import Collector
     if not os.environ.get('SCT_CLUSTER_BACKEND', None):
         os.environ['SCT_CLUSTER_BACKEND'] = backend
 
     config = SCTConfiguration()
 
-    collector = Collector(test_id=test_id, params=config, test_dir=log_dir)
+    collector = Collector(test_id=test_id, params=config, test_dir=logdir)
 
     collected_logs = collector.run()
 

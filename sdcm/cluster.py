@@ -26,8 +26,6 @@ import time
 import uuid
 import shutil
 import itertools
-import io
-from base64 import decodestring
 from textwrap import dedent
 from datetime import datetime
 
@@ -35,6 +33,7 @@ from invoke.exceptions import UnexpectedExit, Failure
 import yaml
 import requests
 from paramiko import SSHException
+
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError
@@ -45,7 +44,6 @@ from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
-from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
@@ -429,7 +427,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         # enable bootstrap.
         self.enable_auto_bootstrap = False
         self.scylla_version = ''
-        self.is_enterprise = None
+        self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
         self._cassandra_stress_version = None
@@ -639,15 +637,6 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         return self.__class__.__name__ == "GCENode"
 
     def scylla_pkg(self):
-        if self.is_enterprise is None:
-            if self.is_rhel_like():
-                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
-                self.is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
-                                              'No matches found' not in result.stdout) else False
-            else:
-                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                self.is_enterprise = True if 'scylla-enterprise' in result.stdout else False
-
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
     def file_exists(self, file_path):
@@ -658,6 +647,23 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error checking if file %s exists: %s',
                            file_path, details)
+
+    @property
+    def is_enterprise(self):
+        if self._is_enterprise is None:
+            if self.is_rhel_like():
+                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result.stdout:
+                    result = self.remoter.run("sudo cat /etc/yum.repos.d/scylla.repo")
+                    self._is_enterprise = 'enterprise' in result.stdout
+                else:
+                    self._is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
+                                                   'No matches found' not in result.stdout) else False
+            else:
+                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
+                self._is_enterprise = True if 'scylla-enterprise' in result.stdout else False
+
+        return self._is_enterprise
 
     @property
     def public_ip_address(self):
@@ -814,7 +820,6 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                          "'%s' '%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
         return download_url, download_instructions
 
@@ -832,23 +837,12 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         for line in output.splitlines():
             line = line.strip()
             if line.startswith('Coredump:'):
-                urls = []
-                download_instructions = ''
+                url = ""
+                download_instructions = "failed to upload"
                 try:
                     coredump = line.split()[-1]
                     self.log.debug('Found coredump file: {}'.format(coredump))
-                    coredump_files = self._try_split_coredump(coredump)
-                    for f in coredump_files:
-                        urls.append(self._upload_coredump(f))
-                    if len(coredump_files) > 1 or coredump_files[0].endswith('.gz'):
-                        for url in urls:
-                            download_instructions += 'wget {}\n'.format(url)
-                        base_name = os.path.basename(coredump)
-                        if len(coredump_files) > 1:
-                            download_instructions += "\n# To join coredump pieces, you may use:\n"
-                            download_instructions += "cat {}.gz.* > {}.gz\n".format(base_name, base_name)
-                        download_instructions += "# To decompress you may use:\nunpigz --fast {}.gz".format(base_name)
-                        self.log.info(download_instructions)
+                    url, download_instructions = self._upload_coredump(coredump)
                 finally:
                     CoreDumpEvent(corefile_url=url, download_instructions=download_instructions,
                                   backtrace=output, node=self)
@@ -1537,7 +1531,6 @@ server_encryption_options:
             self.remoter.run('sudo chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
-            self.remoter.run('sudo yum clean all')
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
             self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
@@ -3070,11 +3063,6 @@ class BaseLoaderSet(object):
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
-            result = node.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
-            if result.exit_status == 0:
-                node.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
-            else:
-                node.remoter.run('sudo yum update -y --skip-broken', retry=3)
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
         else:
@@ -3370,7 +3358,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.monitor_branch = self.params.get('monitor_branch', default='branch-2.4')
+        self.monitor_branch = self.params.get('monitor_branch')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
         self.grafana_start_time = 0
