@@ -433,7 +433,7 @@ def restore_monitoring_stack(test_id):
                            archive=monitoring_stack_archive_file))
             result = lr.run(cmd, ignore_status=True)
         else:
-            branches = re.search('(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>[\d]+\.[\d]+?)',
+            branches = re.search('(?P<monitoring_branch>branch-[\d]+\.[\d]+?)_(?P<scylla_version>.*)\.tar\.gz',
                                  monitoring_stack_archive_file)
             monitoring_branch = branches.group('monitoring_branch')
             scylla_version = branches.group('scylla_version')
