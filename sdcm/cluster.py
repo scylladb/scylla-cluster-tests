@@ -400,6 +400,7 @@ class BaseNode(object):
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
         self._init_system = None
+        self.db_init_finished = False
 
         self._short_hostname = None
 
@@ -1131,6 +1132,7 @@ class BaseNode(object):
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout, throw_exc=True)
+        self.db_init_finished = True
         self._report_housekeeping_uuid()
 
     def apt_running(self):
@@ -2030,8 +2032,8 @@ server_encryption_options:
 
         self.log.info('Gossipinfo schema version and status of all nodes: {}'.format(gossip_node_schemas))
 
-        # Validate that ALL existent nodes in the gossip
-        cluster_nodes = [node.private_ip_address for node in self.parent_cluster.nodes]
+        # Validate that ALL initiated nodes in the gossip
+        cluster_nodes = [node.private_ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
 
         not_in_gossip = list(set(cluster_nodes) - set(gossip_node_schemas.keys()))
         if not_in_gossip:
