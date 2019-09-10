@@ -3759,7 +3759,7 @@ class BaseMonitorSet(object):
     def create_prometheus_snapshot(self, node):
         ps = PrometheusDBStats(host=node.external_address)
         result = ps.create_snapshot()
-        if "success" in result['status']:
+        if result and "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
                                         "snapshots",
                                         result['data']['name'])
