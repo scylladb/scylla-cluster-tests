@@ -4,6 +4,7 @@ import traceback
 import unittest
 import tempfile
 import logging
+import datetime
 
 from sdcm.prometheus import start_metrics_server
 
@@ -161,6 +162,30 @@ class SctEventsTests(unittest.TestCase):
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
                                                                                     line="not filtered")
 
+        self.wait_for_event_log_change(log_content_before)
+
+        log_content_after = self.get_event_logs()
+        self.assertIn("not filtered", log_content_after)
+        self.assertNotIn("this is filtered", log_content_after)
+
+    def test_filter_expiration(self):
+        log_content_before = self.get_event_logs()
+
+        line_prefix = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+        with DbEventsFilter(type="NO_SPACE_ERROR", node="A"):
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
+                                                                                    line=line_prefix + " this is filtered")
+
+        time.sleep(5)
+        DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
+                                                                                line=line_prefix + " this is filtered")
+
+        time.sleep(5)
+        line_prefix = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        print line_prefix
+        DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
+                                                                                line=line_prefix + " not filtered")
         self.wait_for_event_log_change(log_content_before)
 
         log_content_after = self.get_event_logs()
