@@ -8,13 +8,16 @@ import time
 from multiprocessing import Process, Value, Event, Manager, current_process
 from json import JSONEncoder
 import atexit
+import dateutil.parser
 
 import enum
 from enum import Enum
 import zmq
 import requests
+from backports.datetime_timestamp import timestamp
 
-from sdcm.utils.common import safe_kill, pid_exists, _fromtimestamp
+from sdcm.utils.py3_backports import _fromtimestamp
+from sdcm.utils.common import safe_kill, pid_exists
 from sdcm.prometheus import nemesis_metrics_obj
 
 LOGGER = logging.getLogger(__name__)
@@ -77,15 +80,26 @@ class EventsDevice(Process):
                 if socket.poll(timeout=1):
                     obj = socket.recv_pyobj()
 
+                    # remove filter objects when log event timestamp on the
+                    # specific node is bigger the time filter was canceled
+                    if isinstance(obj, DatabaseLogEvent):
+                        for filter_key, filter_obj in filters.items():
+                            if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
+                                del filters[filter_key]
+
                     obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
 
                     if isinstance(obj, DbEventsFilter):
                         if not obj.clear_filter:
                             filters[obj.id] = obj
                         else:
-                            del filters[obj.id]
+                            filters[obj.id].expire_time = obj.expire_time
+                            if not obj.expire_time:
+                                del filters[obj.id]
+
                     obj_filtered = obj_filtered or isinstance(obj, SystemEvent)
                     if not obj_filtered:
+
                         yield obj.__class__.__name__, obj
         except (KeyboardInterrupt, SystemExit) as ex:
             LOGGER.debug("%s - subscribe_events was halted by %s", current_process().name, ex.__class__.__name__)
@@ -152,10 +166,13 @@ class DbEventsFilter(SystemEvent):
         self.line = line
         self.node = str(node) if node else None
         self.clear_filter = False
+        self.expire_time = None
         self.publish()
 
     def cancel_filter(self):
         self.clear_filter = True
+        if self.node:
+            self.expire_time = time.time()
         self.publish()
 
     def __enter__(self):
@@ -317,7 +334,11 @@ class DatabaseLogEvent(SctEvent):
         self.severity = severity
 
     def add_info(self, node, line, line_number):
-        self.timestamp = time.time()
+        try:
+            t = dateutil.parser.parse(line.split()[0])
+            self.timestamp = timestamp(t)
+        except ValueError:
+            self.timestamp = time.time()
         self.line = line
         self.line_number = line_number
         self.node = str(node)
