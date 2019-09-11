@@ -305,6 +305,9 @@ def get_username():
     email = os.environ.get('BUILD_USER_EMAIL')
     if is_email_in_scylladb_domain(email):
         return get_email_user(email)
+    user_id = os.environ.get('BUILD_USER_ID')
+    if user_id:
+        return user_id
     current_linux_user = getpass.getuser()
     if current_linux_user == "jenkins":
         return current_linux_user
