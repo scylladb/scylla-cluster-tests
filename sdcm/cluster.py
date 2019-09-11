@@ -1521,6 +1521,7 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get clean all')
                 self.remoter.run('sudo rm -rf /var/cache/apt/')
                 self.remoter.run('sudo apt-get update', retry=3)
+                self.remoter.run("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections")
         except Exception as ex:
             self.log.error('Failed to update repo cache: %s', ex)
 
