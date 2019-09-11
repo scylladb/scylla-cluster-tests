@@ -104,6 +104,7 @@ class UpgradeTest(FillDatabaseData):
         new_version = self.params.get('new_version', default='')
         upgrade_node_packages = self.params.get('upgrade_node_packages', default=None)
         self.log.info('Upgrading a Node')
+        node.upgrade_system()
 
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)

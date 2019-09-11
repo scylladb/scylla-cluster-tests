@@ -2798,7 +2798,6 @@ class BaseScyllaCluster(object):
         node.wait_ssh_up(verbose=verbose)
         # update repo cache and system after system is up
         node.update_repo_cache()
-        node.upgrade_system()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
             node.remoter.run('sudo systemctl disable apt-daily.timer')
             node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
@@ -2954,7 +2953,6 @@ class BaseLoaderSet(object):
         node.wait_ssh_up(verbose=verbose)
         # update repo cache and system after system is up
         node.update_repo_cache()
-        node.upgrade_system()
 
         if Setup.REUSE_CLUSTER:
             self.kill_stress_thread()
@@ -3342,7 +3340,6 @@ class BaseMonitorSet(object):
         node.wait_ssh_up()
         # update repo cache and system after system is up
         node.update_repo_cache()
-        node.upgrade_system()
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
