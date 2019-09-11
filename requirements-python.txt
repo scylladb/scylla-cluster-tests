@@ -25,3 +25,4 @@ pyzmq==18.0.1
 tenacity==5.0.4
 # this package isn't in pypi
 https://github.com/iuscommunity/repodataParser/archive/master.zip
+backports.datetime-timestamp==1.2
