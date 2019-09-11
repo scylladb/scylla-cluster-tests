@@ -104,6 +104,7 @@ class UpgradeTest(FillDatabaseData):
         new_version = self.params.get('new_version', default='')
         upgrade_node_packages = self.params.get('upgrade_node_packages', default=None)
         self.log.info('Upgrading a Node')
+        node.upgrade_system()
 
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
@@ -203,13 +204,11 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-            node.remoter.run('sudo yum clean all')
         else:
             node.remoter.run('sudo cp ~/scylla.list-backup /etc/apt/sources.list.d/scylla.list')
             node.remoter.run('sudo chown root.root /etc/apt/sources.list.d/scylla.list')
             node.remoter.run('sudo chmod 644 /etc/apt/sources.list.d/scylla.list')
-            node.remoter.run('sudo apt-get clean all')
-            node.remoter.run('sudo apt-get update')
+        node.update_repo_cache()
 
         if re.findall('\d+.\d+', self.orig_ver)[0] == re.findall('\d+.\d+', self.new_ver)[0]:
             self.upgrade_rollback_mode = 'minor_release'

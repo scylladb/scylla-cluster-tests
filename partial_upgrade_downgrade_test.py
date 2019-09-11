@@ -30,7 +30,7 @@ class PartialUpgradeDowngradeNemesis(UpgradeNemesis):
         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-        node.remoter.run('sudo yum clean all')
+        node.update_repo_cache()
         node.remoter.run('sudo yum downgrade scylla scylla-conf scylla-server scylla-jmx scylla-tools -y')
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
