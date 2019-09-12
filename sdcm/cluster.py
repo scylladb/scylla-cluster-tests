@@ -792,7 +792,10 @@ class BaseNode(object):
 
     def _upload_coredump(self, coredump):
         try:
-            self.remoter.run('sudo yum install -y pigz')
+            if self.is_debian() or self.is_ubuntu():
+                self.remoter.run('sudo apt-get install -y pigz')
+            else:
+                self.remoter.run('sudo yum install -y pigz')
             self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
         except Exception as ex:  # pylint: disable=broad-except
