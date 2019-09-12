@@ -790,6 +790,13 @@ class BaseNode(object):
                            details)
 
     def _upload_coredump(self, coredump):
+        try:
+            self.remoter.run('sudo yum install -y pigz')
+            self.remoter.run('sudo pigz --fast {}'.format(coredump))
+            coredump += '.gz'
+        except Exception as ex:  # pylint: disable=broad-except
+            self.log.warning("failed to compress coredump [%s]", str(ex))
+
         base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
