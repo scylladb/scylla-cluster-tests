@@ -793,10 +793,10 @@ class BaseNode(object):
     def _upload_coredump(self, coredump):
         try:
             self.remoter.run('sudo yum install -y pigz')
-            self.remoter.run('sudo pigz --fast {}'.format(coredump))
+            self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
         except Exception as ex:  # pylint: disable=broad-except
-            self.log.warning("failed to compress coredump [%s]", str(ex))
+            self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
 
         base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
@@ -806,7 +806,7 @@ class BaseNode(object):
                          "'%s' '%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .' % upload_url
+        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
         return download_url, download_instructions
 
     def _notify_backtrace(self, last):
