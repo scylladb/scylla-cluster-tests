@@ -1567,7 +1567,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             table, scylla_encryption_options="{'key_provider': 'none'}", upgradesstables=upgradesstables)
 
     def alter_test_tables_encryption(self, scylla_encryption_options=None, upgradesstables=True):
-        for table in get_non_system_ks_cf_list(self.loaders.nodes[0], self.db_cluster.nodes[0]):
+        for table in get_non_system_ks_cf_list(self.loaders.nodes[0], self.db_cluster.nodes[0], filter_out_mv=True):
             self.alter_table_encryption(
                 table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
 
