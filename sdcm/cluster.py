@@ -2063,10 +2063,11 @@ server_encryption_options:
                 status = line.replace('STATUS:', '').split(',')[0]
             # STATUS is "LEFT": in case the node was decommissioned
             # STATUS is "removed": in case the node was removed by nodetool removenode
+            # STATUS is "BOOT": node during boot and not exists in the cluster yet
             # and they will remain in the gossipinfo 3 days.
             # It's expected behaviour and we won't send the error in this case
             if schema and ip and status:
-                if status not in ['LEFT', 'removed']:
+                if status not in ['LEFT', 'removed', 'BOOT']:
                     gossip_node_schemas[ip] = {'schema': schema, 'status': status}
                 schema, ip, status = '', '', ''
 
