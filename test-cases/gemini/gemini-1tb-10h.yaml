@@ -11,7 +11,7 @@ store_results_in_elasticsearch: False
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -m mixed -f
 # the below cmd runs about 10 hours
-gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 25 -m mixed -f --non-interactive --cql-features normal"
+gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 100 -m mixed -f --non-interactive --cql-features normal"
 gemini_version: 'latest'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
@@ -21,4 +21,4 @@ ami_id_db_oracle: 'ami-0c20f6998065c9ca6' # ScyllaDB 3.0.6 eu-west-1
 append_scylla_args_oracle: '--enable-cache false'
 
 send_email: true
-email_recipients: ['roy@scylladb.com', 'alex.bykov@scylladb.com', 'penberg@scylladb.com', 'shlomi@scylladb.com', 'bentsi@@scylladb.com']
+email_recipients: ['rnd-internal@scylladb.com']

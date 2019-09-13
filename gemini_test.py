@@ -34,7 +34,7 @@ class GeminiTest(ClusterTester):
         """
         Run gemini tool
         """
-
+        self.gemini_results = None
         cmd = self.params.get('gemini_cmd')
 
         self.log.debug('Start gemini benchmark')
