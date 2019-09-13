@@ -73,13 +73,14 @@ class GeminiStressThread(object):
     def _generate_gemini_command(self, loader_idx):
         seed = random.randint(1, 100)
         test_node = random.choice(self.test_cluster.nodes)
-        oracle_node = random.choice(self.oracle_cluster.nodes)
+        oracle_node = random.choice(self.oracle_cluster.nodes) if self.oracle_cluster else None
         self.gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())
-        cmd = "/$HOME/{} --test-cluster={} --oracle-cluster={} --outfile {} --seed {}".format(self.gemini_cmd.strip(),
-                                                                                              test_node.ip_address,
-                                                                                              oracle_node.ip_address,
-                                                                                              self.gemini_log,
-                                                                                              seed)
+        cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {}".format(self.gemini_cmd.strip(),
+                                                                          test_node.ip_address,
+                                                                          self.gemini_log,
+                                                                          seed)
+        if oracle_node:
+            cmd += " --oracle-cluster={}".format(oracle_node.ip_address)
         self.gemini_commands.append(cmd)
         return cmd
 
