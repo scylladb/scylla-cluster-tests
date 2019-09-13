@@ -123,13 +123,13 @@ class BaseEmailReporter(object):
         try:
             email_data = self.build_data_for_render(results)
             self.log.info('Send email with results to {}'.format(self.email_recipients))
-            html, report_file = self.build_report(email_data)
-            self.send_email(subject=email_data['subject'], content=html, files=(report_file, ))
+            html, attached_files = self.build_report(email_data)
+            self.send_email(subject=email_data['subject'], content=html, files=attached_files)
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error during sending email: %s", details, exc_info=True)
 
     def build_report(self, email_data):
-        return self.render_to_html(email_data), None
+        return self.render_to_html(email_data), ()
 
 
 class LongevityEmailReporter(BaseEmailReporter):
@@ -146,7 +146,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         self.save_html_to_file(email_data, report_file)
         email_data['short_report'] = True
         html = self.render_to_html(email_data)
-        return html, report_file
+        return html, (report_file, )
 
 
 class GeminiEmailReporter(BaseEmailReporter):
@@ -162,4 +162,4 @@ class GeminiEmailReporter(BaseEmailReporter):
     def build_report(self, email_data):
         self.log.info('Prepare result to send in email')
         html = self.render_to_html(email_data)
-        return html, None
+        return html, ()

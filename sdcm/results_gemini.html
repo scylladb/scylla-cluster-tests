@@ -20,11 +20,17 @@
     {% if nemesis_details %}
         <div>
             <table id='results_table'>
-                <tr><th>Nemesis name</th><th>Count</th></tr>
+                <tr>
+                    <th>Nemesis name</th>
+                    <th>Count</th>
+                    <th>Runs</th>
+                    <th>Failures</th></tr>
             {% for name, detail in nemesis_details.items() %}
                 <tr>
                     <td>{{ name }}</td>
                     <td>{{ detail['cnt'] }}</td>
+                    <td>{{ detail['runs']|length }}</td>
+                    <td>{{ detail['failures']|length }}</td>
                 </tr>
             {% endfor %}
             </table>
