@@ -9,7 +9,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: ['test-cases/longevity/longevity-50GB-4days-authorization-and-tls-ssl.yaml', 'configurations/local-ear.yaml'],
+    test_config: '''["test-cases/longevity/longevity-50GB-4days-authorization-and-tls-ssl.yaml", "configurations/local-ear.yaml"]''',
 
     timeout: [time: 6550, unit: 'MINUTES'],
     post_behaviour: 'destroy',

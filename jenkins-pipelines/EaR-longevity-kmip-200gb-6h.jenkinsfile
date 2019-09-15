@@ -9,7 +9,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: ['test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml', 'configurations/kmip-ear.yaml'],
+    test_config: '''["test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml", "configurations/kmip-ear.yaml"]''',
 
     timeout: [time: 550, unit: 'MINUTES'],
     post_behaviour: 'destroy'
