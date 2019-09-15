@@ -71,7 +71,7 @@ def call(Map pipelineParams) {
 
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
-                                    export SCT_CONFIG_FILES="${test_config}"
+                                    export SCT_CONFIG_FILES=${test_config}
                                     export SCT_COLLECT_LOGS=false
 
                                     if [[ ! -z "${params.scylla_ami_id}" ]] ; then
@@ -119,7 +119,7 @@ def call(Map pipelineParams) {
 
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
-                                    export SCT_CONFIG_FILES="${test_config}"
+                                    export SCT_CONFIG_FILES=${test_config}
 
                                     echo "start collect logs ..."
                                     ./docker/env/hydra.sh collect-logs --logdir /sct
