@@ -1268,7 +1268,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with open(self.partitions_stats_file, 'a') as f:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
-                count_partition_keys_cmd = 'select count(*) from {table_name} where {pk} = {i}'.format(**locals())
+                count_partition_keys_cmd = 'select count(*) from {table_name} where {primary_key_column} = {i}'.format(
+                    **locals())
                 out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
