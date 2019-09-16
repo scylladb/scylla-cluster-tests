@@ -3815,9 +3815,8 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
     def download_monitor_data(self):
         for node in self.nodes:  # pylint: disable=no-member
             try:
-                snapshot_archive = self.get_prometheus_snapshot(node)
+                snapshot_archive = self.get_prometheus_data(node)
                 self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
-
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error('Error downloading prometheus data dir: %s',  # pylint: disable=no-member
@@ -3893,12 +3892,22 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         else:
             raise PrometheusSnapshotErrorException(result)
 
-    def get_prometheus_snapshot(self, node):
+    def get_prometheus_data(self, node):
+        local_archive_path = ""
+        aprom_docker_stopped = False
+
+        def docker_aprom_command(node, cmd):
+            result = node.remoter.run('docker {} aprom'.format(cmd), ignore_status=True)
+            return result.exited == 0
+
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
+            self.log.info('Use created Prometheus snapshot %s', snapshot_dir)  # pylint: disable=no-member
         except PrometheusSnapshotErrorException as details:
-            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(   # pylint: disable=no-member
+            self.log.warning('Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(  # pylint: disable=no-member
                 details))
+            self.log.info('Stopping prometheus docker')  # pylint: disable=no-member
+            aprom_docker_stopped = docker_aprom_command(node, 'stop')
             snapshot_dir = self.monitoring_data_dir
 
         archive_snapshot_name = '/tmp/prometheus_snapshot-{}.tar.gz'.format(self.shortid)  # pylint: disable=no-member
@@ -3907,9 +3916,10 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                                   ignore_status=True)
         if result.exit_status > 0:
             self.log.warning('Unable to create archive {}'.format(result))  # pylint: disable=no-member
-            return ""
+            return local_archive_path
 
         try:
+            self.log.info("Collecting prometheus data...")  # pylint: disable=no-member
             local_snapshot_data_dir = os.path.join(node.logdir, "prometheus_data")
 
             if not os.path.exists(local_snapshot_data_dir):
@@ -3920,16 +3930,21 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
             if os.path.exists(local_archive_path):
                 self.log.info('Remove previous file {}'.format(local_archive_path))  # pylint: disable=no-member
                 os.remove(local_archive_path)
-
             node.remoter.receive_files(src=archive_snapshot_name, dst=local_snapshot_data_dir)
-            return local_archive_path
+            self.log.info("Prometheus data collected %s", local_archive_path)  # pylint: disable=no-member
+        except Exception as e:  # pylint: disable=broad-except,invalid-name
+            self.log.error("Unable to downlaod Prometheus data: %s" % e)  # pylint: disable=no-member
 
-        except Exception:  # pylint: disable=broad-except
-            self.log.exception("Unable to download Prometheus data:")  # pylint: disable=no-member
-            return ""
+        finally:
+            if aprom_docker_stopped:
+                self.log.info('Starting prometheus docker')  # pylint: disable=no-member
+                docker_aprom_command(node, 'start')
+        return local_archive_path
 
     def get_monitoring_data_stack(self, node):
         archive_name = "monitoring_data_stack_{0.monitor_branch}_{0.monitoring_version}.tar.gz".format(self)
+
+        archive_full_path = os.path.join(self.logdir, archive_name)  # pylint: disable=no-member
 
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
 
@@ -3948,9 +3963,14 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                                                           archive_name,
                                                           os.path.basename(self.monitor_install_path)),
                          ignore_status=True)
-        node.remoter.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
-                                   dst=self.logdir)  # pylint: disable=no-member
-        return os.path.join(self.logdir, archive_name)  # pylint: disable=no-member
+
+        if os.path.exists(archive_full_path):
+            self.log.info('Remove previous file {}'.format(archive_full_path))  # pylint: disable=no-member
+            os.remove(archive_full_path)
+
+        node.receive_files(src=os.path.join(self.monitor_install_path_base, archive_name),
+                           dst=self.logdir)  # pylint: disable=no-member
+        return archive_full_path
 
     def download_monitoring_data_stack(self):
         for node in self.nodes:  # pylint: disable=no-member
