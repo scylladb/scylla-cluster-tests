@@ -874,7 +874,8 @@ class Nemesis(object):
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
         with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception", node=self.target_node), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node):
+                DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
 
             self.target_node.remoter.run('curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)
