@@ -430,7 +430,7 @@ class AWSNode(cluster.BaseNode):
         self._wait_public_ip()
         self.log.debug('Got new public IP %s',
                        self._instance.public_ip_address)
-        self.remoter.hostname = self._instance.public_ip_address
+        self.remoter.hostname = self.external_address
         self.wait_ssh_up()
 
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
