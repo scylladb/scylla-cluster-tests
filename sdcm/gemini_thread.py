@@ -60,7 +60,7 @@ class GeminiEventsPublisher(FileFollowerThread):
 
 class GeminiStressThread(object):  # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None):  # pylint: disable=too-many-arguments
+    def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None, params=None):  # pylint: disable=too-many-arguments
         self.loaders = loaders
         self.gemini_cmd = gemini_cmd
         self.test_cluster = test_cluster
@@ -70,9 +70,12 @@ class GeminiStressThread(object):  # pylint: disable=too-many-instance-attribute
         self.gemini_log = None
         self.outputdir = outputdir
         self.gemini_commands = []
+        self.params = params if params else {}
 
     def _generate_gemini_command(self, loader_idx):
-        seed = random.randint(1, 100)
+        seed = self.params.get('gemini_seed', None)
+        if not seed:
+            seed = random.randint(1, 100)
         test_node = random.choice(self.test_cluster.nodes)
         oracle_node = random.choice(self.oracle_cluster.nodes) if self.oracle_cluster else None
         self.gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())

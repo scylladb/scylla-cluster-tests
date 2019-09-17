@@ -336,6 +336,8 @@ class SCTConfiguration(dict):
         dict(name="gemini_cmd", env="SCT_GEMINI_CMD", type=str,
              help="""gemini command to run (for now used only in GeminiTest)"""),
 
+        dict(name="gemini_seed", env="SCT_GEMINI_SEED", type=int,
+             help="Seed number for gemini command"),
         # AWS config options
 
         dict(name="instance_type_loader", env="SCT_INSTANCE_TYPE_LOADER", type=str,
