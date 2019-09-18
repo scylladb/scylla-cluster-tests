@@ -19,6 +19,7 @@ import logging
 
 import tenacity
 from tenacity.retry import retry_if_result, retry_if_exception_type
+from tenacity import RetryError
 
 LOGGER = logging.getLogger('sdcm.wait')
 
@@ -58,13 +59,15 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
         res = r.call(func, **kwargs)
 
     except Exception as ex:
-        err = 'Wait for: {}: timeout - {} seconds - expired'.format(text, timeout)
+        err = 'Wait for: {}: timeout - {} seconds - expired'.format(text if text else func.__name__, timeout)
         LOGGER.error(err)
-        if hasattr(ex, 'last_attempt'):
+        if hasattr(ex, 'last_attempt') and ex.last_attempt.exception() is not None:
             LOGGER.error("last error: %s", repr(ex.last_attempt.exception()))
         else:
             LOGGER.error("last error: %s", repr(ex))
         if throw_exc:
+            if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:
+                raise RetryError(err)
             raise
 
     return res
