@@ -71,12 +71,17 @@ def provision(**kwargs):
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
 @click.option('--user', type=str, help='user name to filter instances by')
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
+@click.option('--logdir', type=str, help='directory with test run')
 @click.pass_context
-def clean_resources(ctx, user, test_id):
+def clean_resources(ctx, user, test_id, logdir):
     params = dict()
 
-    if not (user or test_id):
+    if not (user or test_id or logdir):
         click.echo(clean_resources.get_help(ctx))
+
+    if logdir:
+        from sdcm.logcollector import Collector
+        params['TestId'] = Collector.search_test_id_in_latest(logdir)
 
     if user:
         params['RunByUser'] = user
