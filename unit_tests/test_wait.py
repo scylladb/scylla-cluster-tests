@@ -37,6 +37,16 @@ class TestSdcmWait(unittest.TestCase):
         wait_for(callback, timeout=1, step=0.5, arg1=1, arg2=3)
         self.assertEqual(len(calls), 3)
 
+    def test_03_false_return_rerise(self):
+        calls = []
+
+        def callback(arg1, arg2):
+            calls.append((arg1, arg2))
+            return False
+
+        self.assertRaisesRegexp(Exception, "callback: timeout - 2 seconds - expired", wait_for, callback, timeout=2, throw_exc=True, step=0.5, arg1=1, arg2=3)
+        self.assertEqual(len(calls), 5)
+
     def test_03_return_value(self):
         calls = []
 
