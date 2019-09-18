@@ -99,26 +99,57 @@ def call(Map pipelineParams) {
             }
             stage('Collect log data') {
                 steps {
-                    script {
-                        wrap([$class: 'BuildUser']) {
-                            dir('scylla-cluster-tests') {
-                                def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
 
-                                sh """
-                                #!/bin/bash
+                                    sh """
+                                    #!/bin/bash
 
-                                set -xe
-                                env
+                                    set -xe
+                                    env
 
-                                export SCT_CLUSTER_BACKEND="${params.backend}"
-                                export SCT_REGION_NAME=${aws_region}
-                                export SCT_CONFIG_FILES="${test_config}"
+                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_CONFIG_FILES="${test_config}"
 
-                                echo "start collect logs ..."
-                                ./docker/env/hydra.sh collect-logs --logdir /sct
-                                echo "end collect logs"
-                                """
+                                    echo "start collect logs ..."
+                                    ./docker/env/hydra.sh collect-logs --logdir /sct
+                                    echo "end collect logs"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Clear instances') {
+                steps {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_CONFIG_FILES="${test_config}"
+
+                                    echo "start clean resources ..."
+                                    ./docker/env/hydra.sh clean-resources --logdir /sct
+                                    echo "end clean resources"
+                                    """
+                                }
                             }
                         }
                     }

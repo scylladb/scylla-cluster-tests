@@ -719,15 +719,21 @@ class Collector:
     def current_user(self):
         return os.path.basename(self.base_dir)
 
+    @staticmethod
+    def search_test_id_in_latest(logdir):
+        test_id = None
+        result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
+        if result.exited == 0 and result.stdout:
+            test_id = result.stdout.strip()
+            LOGGER.info("Found latest test_id: {}".format(test_id))
+            LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
+        else:
+            LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
+        return test_id
+
     def define_test_id(self):
         if not self._test_id:
-            result = LocalCmdRunner().run('cat {0.sct_result_dir}/latest/test_id'.format(self), ignore_status=True)
-            if result.exited == 0 and result.stdout:
-                self._test_id = result.stdout.strip()
-                LOGGER.info("Found latest test_id: {0.test_id}".format(self))
-                LOGGER.info("Collect logs for test-run with test-id: {}".format(self.test_id))
-            else:
-                LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
+            self._test_id = self.search_test_id_in_latest(self.sct_result_dir)
 
     def search_testdir_locally(self):
         self.define_test_id()
