@@ -1044,3 +1044,21 @@ def makedirs(path):
         if os.path.exists(path):
             return
         raise
+
+
+def wait_ami_available(client, ami_id):
+    """Wait while ami_id become available
+
+    Wait while ami_id become available, after
+    10 minutes return an error
+
+    Arguments:
+        client {boto3.EC2.Client} -- client of EC2 service
+        ami_id {str} -- ami id to check availability
+    """
+    waiter = client.get_waiter('image_available')
+    waiter.wait(ImageIds=[ami_id],
+                WaiterConfig={
+                    'Delay': 30,
+                    'MaxAttempts': 20}
+                )

@@ -57,7 +57,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp
+    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -525,6 +525,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             service = session.resource('ec2')
             services.append(service)
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+        ami_ids = self.params.get('ami_id_db_scylla').split()
+        for idx, service in enumerate(services):
+            wait_ami_available(service.meta.client, ami_ids[idx])
 
         ec2_security_group_ids = []
         for i in self.params.get('security_group_ids').split():
