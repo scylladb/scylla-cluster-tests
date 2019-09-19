@@ -14,6 +14,8 @@
 # Copyright (c) 2017 ScyllaDB
 
 import os
+from textwrap import dedent
+
 from performance_regression_test import PerformanceRegressionTest
 
 
@@ -31,6 +33,17 @@ class JanusGraphTest(PerformanceRegressionTest):
         2. mvn clean install -DskipTests -pl janusgraph-cql -am
         3. mvn verify -pl janusgraph-cql -Dstorage.hostname=DB_IP -Dtest=CQLGraphTest
         """
+
+        prereqs_script = dedent("""
+            curl -fsSL get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            systemctl start docker
+        """)
+
+        self.loaders.nodes[0].remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
+        self.loaders.nodes[0].remoter.run("sudo usermod -aG docker $USER")
+        self.loaders.nodes[0].remoter.reconnect()
+
         self.loaders.nodes[0].remoter.run('sudo yum install -y git maven')
         self.loaders.nodes[0].remoter.run('git clone https://github.com/JanusGraph/janusgraph.git')
         self.loaders.nodes[0].remoter.run('cd janusgraph && mvn clean install -DskipTests -pl janusgraph-cql -am')
