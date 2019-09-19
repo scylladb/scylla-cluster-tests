@@ -848,3 +848,41 @@ def remove_files(path):
             os.remove(path)
     except Exception as details:
         logger.error("Error during remove archived logs %s", details)
+
+
+def format_timestamp(timestamp):
+    return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def makedirs(path):
+    """
+
+    TODO: when move to python3, this function will be replaced
+    with os.makedirs function:
+        os.makedirs(name, mode=0o777, exist_ok=False)
+
+    """
+    try:
+        os.makedirs(path)
+    except OSError:
+        if os.path.exists(path):
+            return
+        raise
+
+
+def wait_ami_available(client, ami_id):
+    """Wait while ami_id become available
+
+    Wait while ami_id become available, after
+    10 minutes return an error
+
+    Arguments:
+        client {boto3.EC2.Client} -- client of EC2 service
+        ami_id {str} -- ami id to check availability
+    """
+    waiter = client.get_waiter('image_available')
+    waiter.wait(ImageIds=[ami_id],
+                WaiterConfig={
+                    'Delay': 30,
+                    'MaxAttempts': 20}
+                )

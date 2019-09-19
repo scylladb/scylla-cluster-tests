@@ -36,39 +36,34 @@ from cassandra.query import SimpleStatement
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from keystore import KeyStore
 from sdcm.rsyslog_daemon import stop_rsyslog
-from . import cluster
-from . import nemesis
-from .cluster_libvirt import LoaderSetLibvirt
-from .cluster_openstack import LoaderSetOpenStack
-from .cluster_libvirt import MonitorSetLibvirt
-from .cluster_openstack import MonitorSetOpenStack
-from .cluster import NoMonitorSet, SCYLLA_DIR
-from .cluster_libvirt import ScyllaLibvirtCluster
-from .cluster_openstack import ScyllaOpenStackCluster
-from .cluster import UserRemoteCredentials
-from .cluster_gce import ScyllaGCECluster
-from .cluster_gce import LoaderSetGCE
-from .cluster_gce import MonitorSetGCE
-from .cluster_aws import CassandraAWSCluster
-from .cluster_aws import ScyllaAWSCluster
-from .cluster_aws import LoaderSetAWS
-from .cluster_aws import MonitorSetAWS
-from .utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, remove_files
-from .utils.log import configure_logging
-from . import docker
-from . import cluster_baremetal
-from . import db_stats
-from db_stats import PrometheusDBStats
-from results_analyze import PerformanceResultsAnalyzer
+from sdcm.keystore import KeyStore
+from sdcm import cluster, nemesis, docker, cluster_baremetal, db_stats, wait
+from sdcm.cluster_libvirt import LoaderSetLibvirt
+from sdcm.cluster_openstack import LoaderSetOpenStack
+from sdcm.cluster_libvirt import MonitorSetLibvirt
+from sdcm.cluster_openstack import MonitorSetOpenStack
+from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
+from sdcm.cluster_libvirt import ScyllaLibvirtCluster
+from sdcm.cluster_openstack import ScyllaOpenStackCluster
+from sdcm.cluster import UserRemoteCredentials
+from sdcm.cluster_gce import ScyllaGCECluster
+from sdcm.cluster_gce import LoaderSetGCE
+from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.cluster_aws import CassandraAWSCluster
+from sdcm.cluster_aws import ScyllaAWSCluster
+from sdcm.cluster_aws import LoaderSetAWS
+from sdcm.cluster_aws import MonitorSetAWS
+from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
+    get_non_system_ks_cf_list, remove_files, wait_ami_available
+from sdcm.utils.log import configure_logging
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, EVENTS_PROCESSES, FullScanEvent, \
     Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
-from sdcm import wait
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -512,6 +507,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             service = session.resource('ec2')
             services.append(service)
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+        ami_ids = self.params.get('ami_id_db_scylla').split()
+        for idx, service in enumerate(services):
+            wait_ami_available(service.meta.client, ami_ids[idx])
 
         ec2_security_group_ids = []
         for i in self.params.get('security_group_ids').split():
