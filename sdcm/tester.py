@@ -1480,12 +1480,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             raise
         finally:
             from logcollector import SCTLogCollector
-            # if self._failure_post_behavior == 'destroy':
-            #     clean_cloud_instances({"TestId": str(cluster.Setup.test_id())})
             stop_events_device()
             if self.params.get('collect_logs', False):
                 storing_dir = os.path.join(self.logdir, "collected_logs")
-                _, _, s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
+                s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
                 self.log.info(s3_link)
 
                 if self.create_stats:
@@ -1649,14 +1647,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info("Storing dir is {}".format(storing_dir))
         if self.db_cluster:
             db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, cluster.Setup.test_id(), storing_dir)
-            _, archive_path, s3_link = db_log_collector.collect_logs(self.logdir)
-            self.log.info(archive_path)
+            s3_link = db_log_collector.collect_logs(self.logdir)
             self.log.info(s3_link)
             logs_dict["db_cluster_log"] = s3_link
 
         if self.monitors.nodes:
             monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storing_dir)
-            _, archive_path, s3_link = monitor_log_collector.collect_logs(self.logdir)
+            s3_link = monitor_log_collector.collect_logs(self.logdir)
+            self.log.info(s3_link)
             logs_dict["monitoring_log"] = s3_link
 
         if self.create_stats:
