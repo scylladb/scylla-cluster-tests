@@ -90,7 +90,6 @@ def call(Map pipelineParams) {
                                     ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                     echo "end test ....."
                                     """
-                                    sh "exit 1"
                                 }
                             }
                         }

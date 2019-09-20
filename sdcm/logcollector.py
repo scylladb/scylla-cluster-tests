@@ -537,14 +537,35 @@ class LogCollector(object):
             ParallelObject(self.nodes, num_workers=3, timeout=300).run(collect_logs_per_node)
         except Exception:
             LOGGER.error('Error occured during collecting logs')
-        final_archive = shutil.make_archive("{}".format(self.local_dir),
-                                            "zip",
-                                            root_dir=self.local_dir)
+        final_archive = self.archive_dir_with_zip64(self.local_dir)
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
         return s3_link
 
     def update_db_info(self):
         pass
+
+    @staticmethod
+    def archive_dir_with_zip(logdir):
+        return shutil.make_archive("{}".format(logdir), "zip", root_dir=logdir)
+
+    @staticmethod
+    def archive_dir_with_zip64(logdir):
+        archive_base_name = os.path.basename(logdir)
+        archive_storing_dir = os.path.dirname(logdir)
+        archive_full_name = os.path.join(archive_storing_dir, archive_base_name + ".zip")
+        cur_dir = os.getcwd()
+        try:
+            with zipfile.ZipFile(archive_full_name, "w", allowZip64=True) as arch:
+                os.chdir(logdir)
+                for root, _, files in os.walk(logdir):
+                    for log_file in files:
+                        full_path = os.path.join(root, log_file)
+                        arch.write(full_path, full_path.replace(logdir, ""))
+                os.chdir(cur_dir)
+        except Exception as details:
+            LOGGER.error("{}".format(details))
+            archive_full_name = None
+        return archive_full_name
 
 
 class ScyllaLogCollector(LogCollector):
@@ -647,27 +668,6 @@ class SCTLogCollector(LogCollector):
         remove_files(final_archive)
         return s3_link
 
-    def archive_dir_with_zip(self, logdir):
-        return shutil.make_archive("{}".format(logdir), "zip", root_dir=logdir)
-
-    def archive_dir_with_zip64(self, logdir):
-
-        archive_base_name = os.path.basename(logdir)
-        archive_storing_dir = os.path.dirname(logdir)
-        archive_full_name = os.path.join(archive_storing_dir, archive_base_name + ".zip")
-        cur_dir = os.getcwd()
-        try:
-            with zipfile.ZipFile(archive_full_name, "w", allowZip64=True) as arch:
-                os.chdir(logdir)
-                for root, _, files in os.walk(logdir):
-                    for log_file in files:
-                        arch.write(log_file)
-                os.chdir(cur_dir)
-        except Exception as details:
-            LOGGER.error("{}".format(details))
-            archive_full_name = None
-        return archive_full_name
-
 
 class Collector:
     """Collector instance
@@ -676,7 +676,6 @@ class Collector:
     as separate stage in pipeline on as subcommand in hydra
 
     """
-    LOCAL_SEARCH_FOR_USER = "jenkins"
 
     def __init__(self, test_id=None, test_dir=None, params=None):
         """Constructor of Collector object
@@ -715,10 +714,6 @@ class Collector:
     def sct_result_dir(self):
         return self._test_dir if self._test_dir else os.path.join(self.base_dir, "sct-results")
 
-    @property
-    def current_user(self):
-        return os.path.basename(self.base_dir)
-
     @staticmethod
     def search_test_id_in_latest(logdir):
         test_id = None
@@ -735,7 +730,7 @@ class Collector:
         if not self._test_id:
             self._test_id = self.search_test_id_in_latest(self.sct_result_dir)
 
-    def search_testdir_locally(self):
+    def get_local_dir_with_logs(self):
         self.define_test_id()
         if not self.test_id:
             return None
@@ -748,11 +743,6 @@ class Collector:
             LOGGER.info(found_dirs)
             return os.path.dirname(found_dirs[0])
         LOGGER.info("No any dirs found locally for current test id")
-        return None
-
-    def get_local_dir_with_logs(self):
-        if self.current_user == self.LOCAL_SEARCH_FOR_USER:
-            return self.search_testdir_locally()
         return None
 
     def get_aws_instances_by_testid(self):
@@ -835,8 +825,6 @@ class Collector:
         self.create_base_storing_dir(local_dir_with_logs)
         LOGGER.info("Created directory to storing collected logs: {}".format(self.storing_dir))
         for cluster_log_collector, nodes in self.cluster_log_collectors.items():
-            if (cluster_log_collector is SCTLogCollector and self.current_user != self.LOCAL_SEARCH_FOR_USER):
-                continue
             log_collector = cluster_log_collector(nodes,
                                                   test_id=self.test_id,
                                                   storing_dir=self.storing_dir)
