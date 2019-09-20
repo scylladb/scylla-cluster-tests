@@ -244,7 +244,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.create_stats:
             self.create_test_stats()
-
+            # Need to clarify with Performance tests
+            cluster.Setup.set_es_doc_id(self.get_doc_id())
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf', default=3)
         if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
