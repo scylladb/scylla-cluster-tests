@@ -2548,7 +2548,7 @@ class BaseScyllaCluster(object):
             node.log.info('Updating DB packages')
             node.remoter.run('mkdir /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
-            node.remoter.run('sudo yum update -y --skip-broken')
+            node.remoter.run(r'sudo yum update -y --skip-broken -x scylla\*')
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*', ignore_status=False, verbose=True)
