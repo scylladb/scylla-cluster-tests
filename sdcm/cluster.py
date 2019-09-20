@@ -172,8 +172,10 @@ class Setup(object):
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
     RSYSLOG_ADDRESS = None
+    ES_DOC_ID = None
 
     _test_id = None
+    _es_doc_id = None
     _test_name = None
     TAGS = dict()
     _logdir = None
@@ -181,6 +183,20 @@ class Setup(object):
     @classmethod
     def test_id(cls):
         return cls._test_id
+
+    @classmethod
+    def es_doc_id(cls):
+        return cls._es_doc_id
+
+    @classmethod
+    def set_es_doc_id(cls, es_doc_id):
+        if not cls._es_doc_id:
+            cls._es_doc_id = es_doc_id
+            es_doc_id_file_path = os.path.join(cls.logdir(), 'es_doc_id')
+            with open(es_doc_id_file_path, "w") as es_doc_id_file:
+                es_doc_id_file.write(str(es_doc_id))
+        else:
+            logger.warning("ES DocID already set!")
 
     @classmethod
     def set_test_id(cls, test_id):

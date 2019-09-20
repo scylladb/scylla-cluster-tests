@@ -279,7 +279,7 @@ def list_logs_by_test_id(test_id):
             try:
                 t = datetime.datetime.strptime(date_str, "%Y_%m_%d_%H_%M_%S")
             except ValueError:
-                t = datetime.datetime(1999, 01, 01, 01, 01, 01)
+                t = datetime.datetime(1999, 1, 1, 1, 1, 1)
         finally:
             return t
 
