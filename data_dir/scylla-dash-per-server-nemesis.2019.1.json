@@ -73,7 +73,7 @@
             "2019.1"
         ],
         "style": "dark",
-        "timezone": "browser",
+        "timezone": "utc",
         "editable": true,
         "gnetId": null,
         "graphTooltip": 1,

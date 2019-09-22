@@ -5186,7 +5186,7 @@
                 "30d"
             ]
         },
-        "timezone": "browser",
+        "timezone": "utc",
         "title": "Scylla Per Server Metrics Nemesis Master",
         "version": 1
     }

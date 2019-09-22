@@ -4,7 +4,7 @@
         "title": "Database Per Node Timeout Metrics",
         "tags": [],
         "style": "dark",
-        "timezone": "browser",
+        "timezone": "utc",
         "editable": true,
         "hideControls": true,
         "sharedCrosshair": true,
