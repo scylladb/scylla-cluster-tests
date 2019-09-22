@@ -73,7 +73,7 @@
             "3.0"
         ],
         "style": "dark",
-        "timezone": "browser",
+        "timezone": "utc",
         "editable": true,
         "gnetId": null,
         "graphTooltip": 1,

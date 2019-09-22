@@ -5024,7 +5024,7 @@
                 "30d"
             ]
         },
-        "timezone": "browser",
+        "timezone": "utc",
         "title": "Scylla Per Server Metrics Nemesis 2.3",
         "version": 1
     }
