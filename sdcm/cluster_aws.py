@@ -682,7 +682,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                params=params,
                                                node_type=node_type,
                                                aws_extra_network_interface=params.get('aws_extra_network_interface'))
-        self.seed_nodes_ips = None
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
@@ -718,10 +717,10 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
             alternator_port=self.params.get('alternator_port'),
+            seed_address=seed_address
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
-                seed_address=seed_address,
                 broadcast=node.public_ip_address,
             ))
 
@@ -736,7 +735,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        seed_address = self.get_seed_nodes_by_flag()
+        seed_address = ','.join(self.seed_nodes_ips)
 
         def scylla_ami_setup_done():
             """

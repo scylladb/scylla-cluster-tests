@@ -184,7 +184,6 @@ class ScyllaLibvirtCluster(LibvirtCluster, cluster.BaseScyllaCluster):  # pylint
                                                    node_prefix=node_prefix,
                                                    n_nodes=n_nodes,
                                                    params=params)
-        self.seed_nodes_ips = None
 
 
 class LoaderSetLibvirt(LibvirtCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method

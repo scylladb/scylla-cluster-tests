@@ -26,8 +26,8 @@
 | **<a name="sct_public_ip">sct_public_ip</a>**  | Override the default hostname address of the sct test runner,<br>for the monitoring of the Nemesis.<br>can only work out of the box in AWS | N/A | SCT_SCT_PUBLIC_IP
 | **<a name="reuse_cluster">reuse_cluster</a>**  | If true `test_id` would be used to run a test with existing cluster.<br>You have to define all the nodes ip addresses both public and private:<br><br>`reuse_cluster: True`<br>`test_id: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71`<br>`db_nodes_public_ip: []`<br>`db_nodes_private_ip: []`<br>`loaders_public_ip: []`<br>`loaders_private_ip: []`<br>`monitor_nodes_public_ip: []`<br>`monitor_nodes_private_ip: []` | False | SCT_REUSE_CLUSTER
 | **<a name="test_id">test_id</a>**  | see [`reuse_cluster`](#reuse_cluster) for more info on usage. | N/A | SCT_TEST_ID
-| **<a name="seeds_first">seeds_first</a>**  | If true would start and wait for the seed nodes to finish booting | N/A | SCT_SEEDS_FIRST
-| **<a name="seeds_num">seeds_num</a>**  | Number of seeds to select, would be the first `seeds_num` of the cluster | N/A | SCT_SEEDS_NUM
+| **<a name="seeds_selector">seeds_selector</a>**  | How to select the seeds. Expected values: reflector/random/first | first | SCT_SEEDS_SELECTOR
+| **<a name="seeds_num">seeds_num</a>**  | Number of seeds to select | 1 | SCT_SEEDS_NUM
 | **<a name="send_email">send_email</a>**  | If true would send email out of the performance regression test | N/A | SCT_SEND_EMAIL
 | **<a name="email_recipients">email_recipients</a>**  | list of email of send the performance regression test to | N/A | SCT_EMAIL_RECIPIENTS
 | **<a name="bench_run">bench_run</a>**  | If true would kill the scylla-bench thread in the test teardown | N/A | SCT_BENCH_RUN

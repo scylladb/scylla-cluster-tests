@@ -26,6 +26,9 @@ nemesis_interval: 5
 
 nemesis_filter_seeds: true
 
+seeds_selector: first
+seeds_num: 1
+
 instance_provision: spot_low_price
 spot_max_price: 0.60
 

@@ -235,11 +235,12 @@ class SCTConfiguration(dict):
         dict(name="test_id", env="SCT_TEST_ID", type=str,
              help="""Set the test_id of the run manually. Use only from the env before running Hydra"""),
 
-        dict(name="seeds_first", env="SCT_SEEDS_FIRST", type=boolean,
-             help="""If true would start and wait for the seed nodes to finish booting"""),
+        dict(name="seeds_selector", env="SCT_SEEDS_SELECTOR", type=str,
+             choices=['reflector', 'random', 'first'],
+             help="""How to select the seeds. Expected values: reflector/random/first"""),
 
         dict(name="seeds_num", env="SCT_SEEDS_NUM", type=int,
-             help="""Number of seeds to select, would be the first `seeds_num` of the cluster"""),
+             help="""Number of seeds to select"""),
 
         dict(name="send_email", env="SCT_SEND_EMAIL", type=boolean,
              help="""If true would send email out of the performance regression test"""),
@@ -1015,6 +1016,10 @@ class SCTConfiguration(dict):
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
         LOGGER.info(self.dump_config())
 
+        # 9) instance_provision MIXED is not supported
+        if self.get('instance_provision') == 'mixed':
+            LOGGER.warning('Selected instance_provision type "MIXED" is not supported!')
+
     @classmethod
     def get_config_option(cls, name):
         return [o for o in cls.config_options if o['name'] == name][0]
@@ -1129,6 +1134,14 @@ class SCTConfiguration(dict):
 
         if 'aws_extra_network_interface' in self and len(self.get('region_name').split()) >= 2:
             raise ValueError("aws_extra_network_interface isn't supported for multi region use cases")
+
+        # validate seeds number
+        seeds_num = self.get('seeds_num')
+        assert seeds_num > 0, "Seed number should be at least one"
+
+        num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
+        assert seeds_num <= num_of_db_nodes, 'Seeds number ({}) should be not more then nodes number ({})'. \
+            format(seeds_num, num_of_db_nodes)
 
     def dump_config(self):
         """
