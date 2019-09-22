@@ -540,6 +540,29 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
         return 'server_encryption_options' in result.stdout.lower()
 
+    def extract_seeds_from_scylla_yaml(self):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
+        self.remoter.receive_files(src=SCYLLA_YAML_PATH, dst=yaml_dst_path)
+        with open(yaml_dst_path, 'r') as yaml_stream:
+            try:
+                conf_dict = yaml.safe_load(yaml_stream)
+            except Exception:
+                yaml_stream.seek(0)
+                self.log.error('Parsing failed. Scylla YAML config contents:')
+                self.log.exception(yaml_stream.read())
+                raise
+
+            try:
+                node_seeds = conf_dict['seed_provider'][0]['parameters'][0].get('seeds')
+            except Exception as details:
+                self.log.debug('Loaded YAML data structure: %s', conf_dict)
+                raise ValueError('Exception determining seed node ips: %s' % details)
+
+            if node_seeds:
+                return node_seeds.split(',')
+            else:
+                raise Exception('Seeds not found in the scylla.yaml')
+
     def is_centos7(self):
         return self.distro == Distro.CENTOS7
 
@@ -2454,7 +2477,9 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         self.nemesis = []
         self.nemesis_threads = []
         self._seed_node_rebooted = False
-        self.seed_nodes_ips = None
+        self._seed_nodes_ips = None
+        self._seed_nodes = None
+        self._non_seed_nodes = None
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -2468,25 +2493,35 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
 
-    def get_seed_nodes_from_node(self):
-        if self.seed_nodes_ips is None:
-            node = self.nodes[0]  # pylint: disable=no-member
-            yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'),
-                                         'scylla.yaml')
-            node.remoter.receive_files(src=SCYLLA_YAML_PATH,
-                                       dst=yaml_dst_path)
-            with open(yaml_dst_path, 'r') as yaml_stream:
-                conf_dict = yaml.safe_load(yaml_stream)
-                try:
-                    self.seed_nodes_ips = conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-                except Exception as details:
-                    self.log.debug('Loaded YAML data structure: %s', conf_dict)  # pylint: disable=no-member
-                    self.log.error('Scylla YAML config contents:')  # pylint: disable=no-member
-                    with open(yaml_dst_path, 'r') as yaml_stream:
-                        self.log.error(yaml_stream.read())  # pylint: disable=no-member
-                    raise ValueError('Exception determining seed node ips: %s' %
-                                     details)
-        return self.seed_nodes_ips
+    @property
+    def seed_nodes_ips(self):
+        if not self._seed_nodes_ips:
+            self._seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]  # pylint: disable=no-member
+            assert self._seed_nodes_ips, "We should have at least one selected seed by now"
+        return self._seed_nodes_ips
+
+    @property
+    def seed_nodes(self):
+        if not self._seed_nodes:
+            self._seed_nodes = [node for node in self.nodes if node.is_seed]  # pylint: disable=no-member
+            assert self._seed_nodes, "We should have at least one selected seed by now"
+        return self._seed_nodes
+
+    @property
+    def non_seed_nodes(self):
+        if not self._non_seed_nodes:
+            self._non_seed_nodes = [node for node in self.nodes if not node.is_seed]  # pylint: disable=no-member
+        return self._non_seed_nodes
+
+    def validate_seeds_on_all_nodes(self):
+        for node in self.nodes:  # pylint: disable=no-member
+            yaml_seeds_ips = node.extract_seeds_from_scylla_yaml()
+            for ip in yaml_seeds_ips:
+                assert ip in self.seed_nodes_ips, \
+                    'Wrong seed IP {act_ip} in the scylla.yaml on the {node_name} node. ' \
+                    'Expected {exp_ips}'.format(node_name=node.name,
+                                                exp_ips=self.seed_nodes_ips,
+                                                act_ip=ip)
 
     def enable_client_encrypt(self):
         for node in self.nodes:  # pylint: disable=no-member
@@ -2498,35 +2533,8 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             self.log.debug("Disabling client encryption on node")  # pylint: disable=no-member
             node.disable_client_encrypt()
 
-    def get_seed_nodes(self):
-        seed_nodes_ips = self.get_seed_nodes_from_node()
-        seed_nodes = []
-        for node in self.nodes:  # pylint: disable=no-member
-            LOGGER.debug("node: %s, seeds: %s", node.ip_address, seed_nodes_ips)
-            if node.ip_address in seed_nodes_ips:
-                node.is_seed = True  # TODO: check if we need to change the is_seed, later on
-                seed_nodes.append(node)
-        assert seed_nodes, "We should have at least one selected seed by now"
-        return seed_nodes
-
-    def get_seed_nodes_by_flag(self):
-        """
-        We set is_seed at two point, before and after node_setup.
-        However, we can only call this function when the flag is set.
-        """
-
-        node_ips = [node.ip_address for node
-                    in self.nodes if node.is_seed]  # pylint: disable=no-member
-        seeds = ",".join(node_ips)
-
-        assert seeds, "We should have at least one selected seed by now"
-        return seeds
-
     def _update_db_binary(self, new_scylla_bin, node_list):
         self.log.debug('User requested to update DB binary...')  # pylint: disable=no-member
-
-        seed_nodes = self.get_seed_nodes()
-        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]  # pylint: disable=no-member
 
         def update_scylla_bin(node, queue):
             node.log.info('Updating DB binary')
@@ -2563,24 +2571,21 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         start_time = time.time()
 
         # First, stop *all* non seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
         # First, stop *all* seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
         # Then, update bin only on requested nodes
         self.run_func_parallel(func=update_scylla_bin, node_list=node_list)  # pylint: disable=no-member
         # Start all seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
         # Start all non seed nodes
-        self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))  # pylint: disable=no-member
 
     def _update_db_packages(self, new_scylla_bin, node_list):
         self.log.debug('User requested to update DB packages...')  # pylint: disable=no-member
-
-        seed_nodes = self.get_seed_nodes()
-        non_seed_nodes = [n for n in self.nodes if not n in seed_nodes]  # pylint: disable=no-member
 
         def update_scylla_packages(node, queue):
             node.log.info('Updating DB packages')
@@ -2614,15 +2619,15 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             self.run_func_parallel(func=start_scylla, node_list=node_list)  # pylint: disable=no-member
         else:
             # First, stop *all* non seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=stop_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
             # First, stop *all* seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=stop_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
             # Then, update packages only on requested nodes
             self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
             # Start all seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
             # Start all non seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=non_seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))  # pylint: disable=no-member
@@ -2852,7 +2857,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         endpoint_snitch = self.params.get('endpoint_snitch')  # pylint: disable=no-member
-        seed_address = self.get_seed_nodes_by_flag()
+        seed_address = ','.join(self.seed_nodes_ips)
 
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()
@@ -2916,7 +2921,6 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         node_list = node_list or self.nodes  # pylint: disable=no-member
         self.update_db_binary(node_list)
         self.update_db_packages(node_list)
-        self.get_seed_nodes()
         self.get_scylla_version()
 
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
@@ -2956,6 +2960,18 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             if os.path.exists(node.database_log):
                 shutil.copy(node.database_log, storing_dir_for_node)
         return storing_dir
+
+    def get_seed_selected_by_reflector(self, node=None):
+        """
+        Check if reflector updated the scylla.yaml with selected seed IP
+        """
+        if not node:
+            node = self.nodes[0]  # pylint: disable=no-member
+
+        seed_nodes_ips = node.extract_seeds_from_scylla_yaml()
+        # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
+        # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
+        return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_ips]  # pylint: disable=no-member
 
 
 class BaseLoaderSet(object):

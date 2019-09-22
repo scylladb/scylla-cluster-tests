@@ -306,8 +306,11 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                                           escape=False)
                 local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                result = self.connection.local(scp)
+                result = self.connection.local(scp, hide=True)
                 self.log.info("Command {} with status {}".format(result.command, result.exited))
+                # Avoid "already printed" message without real error
+                if result.stderr:
+                    self.log.info("Stderr: {}".format(result.stderr))
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
