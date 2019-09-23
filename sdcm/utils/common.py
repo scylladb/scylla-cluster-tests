@@ -632,8 +632,8 @@ class FileFollowerIterator(object):
         with open(self.filename, 'r') as input:
             line = ''
             while not self.thread_obj.stopped():
-                poller = select.poll()
-                poller.register(input, select.POLLIN)
+                poller = select.poll()  # pylint: disable=no-member
+                poller.register(input_file, select.POLLIN)  # pylint: disable=no-member
                 if poller.poll(100):
                     line += input.readline()
                 if not line or not line.endswith('\n'):
