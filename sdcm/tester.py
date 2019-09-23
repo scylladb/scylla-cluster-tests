@@ -914,9 +914,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         FullScanEvent(type='start', db_node_ip=db_node.ip_address, ks_cf=ks_cf)
 
+        cmd_select_all = 'select * from {}'
+        cmd_bypass_cache = 'select * from {} bypass cache'
+        cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
         try:
             with self.cql_connection_patient(db_node) as session:
-                result = session.execute(SimpleStatement('select * from {}'.format(ks_cf), fetch_size=page_size,
+                # pylint: disable=no-member
+                self.log.info('Will run command "{}"'.format(cmd))
+                result = session.execute(SimpleStatement(cmd, fetch_size=page_size,
                                                          consistency_level=ConsistencyLevel.ONE))
                 pages = 0
                 while result.has_more_pages and pages <= read_pages:
