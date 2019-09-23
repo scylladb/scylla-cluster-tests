@@ -17,3 +17,6 @@ user_prefix: 'alternator-3h'
 alternator_port: 8080
 
 store_results_in_elasticsearch: false
+
+send_email: true
+email_recipients: ['qa@scylladb.com']

@@ -35,3 +35,6 @@ cloud_credentials_path: '~/.ssh/support'
 backtrace_decoding: false
 
 logs_transport: "rsyslog"
+
+send_email: false
+email_recipients: ['qa@scylladb.com']

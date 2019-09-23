@@ -41,3 +41,6 @@ authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
 use_mgmt: true
+
+send_email: true
+email_recipients: ['qa@scylladb.com']

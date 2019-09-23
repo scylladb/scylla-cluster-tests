@@ -27,3 +27,6 @@ primary_key_column: "pk"
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: true
+
+send_email: true
+email_recipients: ['qa@scylladb.com']

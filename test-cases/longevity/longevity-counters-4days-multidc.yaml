@@ -21,3 +21,6 @@ nemesis_interval: 15
 nemesis_during_prepare: 'false'
 
 use_mgmt: true
+
+send_email: true
+email_recipients: ['qa@scylladb.com']

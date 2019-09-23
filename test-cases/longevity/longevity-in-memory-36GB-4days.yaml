@@ -26,3 +26,6 @@ client_encrypt: 'false'
 append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --in-memory-storage-size-mb 80000'
 
 use_mgmt: true
+
+send_email: true
+email_recipients: ['qa@scylladb.com']
