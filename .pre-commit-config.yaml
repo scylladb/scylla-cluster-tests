@@ -33,7 +33,7 @@ repos:
             - 'fabric==2.4.0'
             - 'PyYAML==3.11'
             - 'boto3==1.6.5'
-            - 'apache-libcloud==2.3.0'
+            - 'apache-libcloud==2.6.0'
             - 'elasticsearch==6.0.0'
             - 'sortedcontainers==1.5.9'
             - 'jinja2==2.10'
