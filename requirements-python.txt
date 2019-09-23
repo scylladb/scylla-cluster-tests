@@ -6,7 +6,7 @@ boto3==1.9.200
 awscli==1.16.180
 aexpect==1.2.0
 cassandra-driver==3.13
-apache-libcloud==2.3.0
+apache-libcloud==2.6.0
 requests==2.20.0
 elasticsearch==6.0.0
 sortedcontainers==1.5.9
