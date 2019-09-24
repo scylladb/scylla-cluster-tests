@@ -15,7 +15,8 @@ from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
-                               aws_tags_to_dict, list_elastic_ips_aws)
+                               aws_tags_to_dict, list_elastic_ips_aws, filter_aws_instances_by_type,
+                               filter_gce_instances_by_type)
 from sdcm.utils.monitorstack import restore_monitor_stack
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
@@ -291,12 +292,12 @@ def investigate():
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
 def show_log(test_id):
-    x = PrettyTable(["Date", "Log type", "Link"])
-    x.align = "l"
+    table = PrettyTable(["Date", "Log type", "Link"])
+    table.align = "l"
     files = list_logs_by_test_id(test_id)
     for log in files:
-        x.add_row([log["date"], log["type"], log["link"]])
-    click.echo(x.get_string(title="Log links for testrun with test id {}".format(test_id)))
+        table.add_row([log["date"], log["type"], log["link"]])
+    click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
 
 
 @investigate.command('show-monitor', help="Show link to prometheus data snapshot")
@@ -307,14 +308,14 @@ def show_monitor(test_id, debug_log):
     if debug_log:
         LOGGER.setLevel(logging.DEBUG)
     status = restore_monitor_stack(test_id)
-    x = PrettyTable(['Name', 'container', 'Link'])
-    x.align = 'l'
+    table = PrettyTable(['Name', 'container', 'Link'])
+    table.align = 'l'
     if status:
         click.echo('Monitoring stack restored')
 
-        tbl.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
-        tbl.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
-        click.echo(tbl.get_string(title='Grafana monitoring stack'))
+        table.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
+        table.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
+        click.echo(table.get_string(title='Grafana monitoring stack'))
     else:
         click.echo('Docker containers were not started. Please rerun comand with flag -l')
 
@@ -396,12 +397,149 @@ def collect_logs(test_id=None, logdir=None, backend='aws'):
 
     collected_logs = collector.run()
 
-    x = PrettyTable(['Cluster set', 'Link'])
-    x.align = 'l'
+    table = PrettyTable(['Cluster set', 'Link'])
+    table.align = 'l'
     for cluster_type, s3_link in collected_logs.items():
-        x.add_row([cluster_type, s3_link])
-    click.echo(x.get_string(title="Collected logs by test-id: {} Storing dir: {}".format(collector.test_id,
-                                                                                         collector.storing_dir,)))
+        table.add_row([cluster_type, s3_link])
+    click.echo(table.get_string(title="Collected logs by test-id: {} Storing dir: {}".format(collector.test_id,
+                                                                                             collector.storing_dir,)))
+
+
+@cli.command('destroy-resources', help='')
+@click.option('--logdir', type=str)
+@click.option('--backend', type=str)
+# pylint: disable=too-many-statements
+# pylint: disable=too-many-branches
+def destroy_resources(logdir, backend):
+    import boto3
+    from sdcm.logcollector import Collector
+    if not logdir:
+        logdir = "$HOME/sct-results"
+    if not backend:
+        backend = "aws"
+    if not os.environ.get('SCT_CLUSTER_BACKEND', None):
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
+    config = SCTConfiguration()
+    params = dict()
+    params['TestId'] = Collector.search_test_id_in_latest(logdir)
+
+    if config['cluster_backend'] == 'aws':
+        aws_instances = list_instances_aws(params, group_as_region=True)
+        status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read().strip()
+        for region, instances in aws_instances.items():
+            if not instances:
+                continue
+            client = boto3.client("ec2", region_name=region)
+            filtered_instances = filter_aws_instances_by_type(instances)
+
+            if config['post_behavior_db_nodes'] == 'destroy':
+                instances_ids = [instance['InstanceId'] for instance in filtered_instances['db_nodes']]
+                LOGGER.info('Clean next instances %s', instances_ids)
+                client.terminate_instances(InstanceIds=instances_ids)
+
+            if config['post_behavior_db_nodes'] == 'keep':
+                LOGGER.info('Leave instances runing')
+
+            if config['post_behavior_db_nodes'] == 'keep-on-failure':
+                LOGGER.info('Checking status of run in ES...')
+                if status:
+                    LOGGER.info('Run failed. Leave instances running')
+                else:
+                    LOGGER.info('Run wasSuccessful. Killing nodes')
+                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['db_nodes']]
+                    LOGGER.info('Clean next instances %s', instances_ids)
+                    client.terminate_instances(InstanceIds=instances_ids)
+
+            if config['post_behavior_monitor_nodes'] == 'destroy':
+                instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
+                LOGGER.info('Clean next instances %s', instances_ids)
+                client.terminate_instances(InstanceIds=instances_ids)
+
+            if config['post_behavior_monitor_nodes'] == 'keep':
+                LOGGER.info('Leave instances runing')
+
+            if config['post_behavior_monitor_nodes'] == 'keep-on-failure':
+                LOGGER.info('Checking status of run in ES...')
+                if status:
+                    LOGGER.info('Run failed. Leave instances running')
+                else:
+                    LOGGER.info('Run wasSuccessful. kill nodes')
+                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
+                    LOGGER.info('Clean next instances %s', instances_ids)
+                    client.terminate_instances(InstanceIds=instances_ids)
+
+            if config['post_behavior_loader_nodes'] == 'destroy':
+                instances_ids = [instance['InstanceId'] for instance in filtered_instances['loader_nodes']]
+                LOGGER.info('Clean next instances %s', instances_ids)
+                client.terminate_instances(InstanceIds=instances_ids)
+
+            if config['post_behavior_loader_nodes'] == 'keep':
+                LOGGER.info('Leave instances runing')
+
+            if config['post_behavior_loader_nodes'] == 'keep-on-failure':
+                LOGGER.info('Checking status of run in ES...')
+                if status:
+                    LOGGER.info('Run failed. Leave instances running')
+                else:
+                    LOGGER.info('Run wasSuccessful. kill nodes')
+                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
+                    LOGGER.info('Clean next instances %s', instances_ids)
+                    client.terminate_instances(InstanceIds=instances_ids)
+
+    if config['cluster_backend'] == 'gce':
+        gce_instances = list_instances_gce(params)
+        filtered_instances = filter_gce_instances_by_type(gce_instances)
+        if config['post_behavior_db_nodes'] == 'destroy':
+            for instance in filtered_instances['db_nodes']:
+                instance.destroy()
+
+        if config['post_behavior_db_nodes'] == 'keep':
+            LOGGER.info('Leave instances runing')
+
+        if config['post_behavior_db_nodes'] == 'keep-on-failure':
+            LOGGER.info('Checking status of run in ES...')
+            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read().split()
+            if status:
+                LOGGER.info('Run failed. Leave instances running')
+            else:
+                LOGGER.info('Run wasSuccessful. Killing nodes')
+                for instance in filtered_instances['db_nodes']:
+                    instance.destroy()
+
+        if config['post_behavior_monitor_nodes'] == 'destroy':
+            for instance in filtered_instances['monitor_nodes']:
+                instance.destroy()
+
+        if config['post_behavior_monitor_nodes'] == 'keep':
+            LOGGER.info('Leave instances runing')
+
+        if config['post_behavior_monitor_nodes'] == 'keep-on-failure':
+            LOGGER.info('Checking status of run in ES...')
+            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read()
+            if status:
+                LOGGER.info('Run failed. Leave instances running')
+            else:
+                LOGGER.info('Run wasSuccessful. kill nodes')
+                for instance in filtered_instances['monitor_nodes']:
+                    instance.destroy()
+
+        if config['post_behavior_loader_nodes'] == 'destroy':
+            for instance in filtered_instances['loader_nodes']:
+                instance.destroy()
+
+        if config['post_behavior_loader_nodes'] == 'keep':
+            LOGGER.info('Leave instances runing')
+
+        if config['post_behavior_loader_nodes'] == 'keep-on-failure':
+            LOGGER.info('Checking status of run in ES...')
+            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read()
+            if status:
+                LOGGER.info('Run failed. Leave instances running')
+            else:
+                LOGGER.info('Run wasSuccessful. kill nodes')
+                for instance in filtered_instances['loader_nodes']:
+                    instance.destroy()
 
 
 if __name__ == '__main__':

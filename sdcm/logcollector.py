@@ -717,8 +717,8 @@ class Collector:
     @staticmethod
     def search_test_id_in_latest(logdir):
         test_id = None
-        result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
-        if result.exited == 0 and result.stdout:
+        result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir))
+        if not result.exited and result.stdout:
             test_id = result.stdout.strip()
             LOGGER.info("Found latest test_id: {}".format(test_id))
             LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))

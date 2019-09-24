@@ -13,3 +13,7 @@ nemesis_interval: 3
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424
+
+post_behavior_db_nodes: keep-on-failure # keep-on-failure/destroy
+post_behavior_loader_nodes: destroy # keep-on-failure/destroy
+post_behavior_monitor_nodes: keep # keep-on-failure/destroy

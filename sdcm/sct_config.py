@@ -833,7 +833,19 @@ class SCTConfiguration(dict):
              help="How to transport logs: rsyslog or ssh", choices=("rsyslog", "ssh")),
 
         dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
-             help="Collect logs from instances and sct runner")
+             help="Collect logs from instances and sct runner"),
+
+        dict(name="execute_post_behavior", env="SCT_EXECUTE_POST_BEHAVIOR", type=boolean,
+             help="Run post behavior actions in sct teardown step"),
+
+        dict(name="post_behavior_db_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
+             help=""),
+
+        dict(name="post_behavior_loader_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
+             help=""),
+
+        dict(name="post_behavior_monitor_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
+             help="")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
