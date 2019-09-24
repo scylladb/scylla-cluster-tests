@@ -846,7 +846,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
                 Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
             targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0], disable_automatic_repair=True)
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0], disable_automatic_repair=True,
+                                                   auth_token=self.monitoring_set.mgmt_auth_token)
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(

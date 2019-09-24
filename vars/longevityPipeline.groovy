@@ -46,6 +46,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
+            string(defaultValue: '', description: 'If empty - the default manager version will be taken', name: 'scylla_mgmt_repo')
         }
         options {
             timestamps()
@@ -108,6 +109,10 @@ def call(Map pipelineParams) {
 
                                     export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+
+                                    if [[ ! -z "${params.scylla_mgmt_repo}" ]] ; then
+                                        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                    fi
 
                                     echo "start test ......."
                                     ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct

@@ -485,9 +485,11 @@ class ManagerCluster(ScyllaManagerBase):
 
 
 def verify_errorless_result(cmd, res):
-    if not res or res.stderr:
-        LOGGER.error("Encountered an error on '{}' command response: {}".format(cmd, str(res)))
-        raise ScyllaManagerError("Encountered an error on '{}' command response".format(cmd))
+    if res.exited != 0:
+        raise ScyllaManagerError("Encountered an error on '{}' command response {}\ncommand exit code:{}\nstderr:{}".format(
+            cmd, res, res.exited, res.stderr))
+    if res.stderr:
+        LOGGER.error("Encountered an error on '{}' stderr: {}".format(cmd, str(res.stderr)))  # TODO: just for checking
 
 
 def get_scylla_manager_tool(manager_node):
@@ -588,8 +590,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ip_addr_attr = 'public_ip_address'
         return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, user=None, create_user=None,  # pylint: disable=too-many-arguments
-                    single_node=False, disable_automatic_repair=False):
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=False,  # pylint: disable=too-many-arguments
+                    auth_token=None):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -626,13 +628,9 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
-        user = user or self.default_user
         LOGGER.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
-        _, ssh_identity_file = self.scylla_mgr_ssh_setup(node_ip=host, user=user, create_user=create_user,
-                                                         single_node=single_node)
-        ssh_user = create_user or 'scylla-manager'
-        cmd = 'cluster add --host={} --ssh-identity-file={} --ssh-user={} --name={}'.format(host, ssh_identity_file,
-                                                                                            ssh_user, name)
+        cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
+            host, name, auth_token)
         # Adding client-encryption parameters if required
         if client_encrypt:
             if not db_cluster:
@@ -650,7 +648,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         cluster_id = res_cluster_add.stdout.split('\n')[0]
         # return ManagerCluster instance with the manager's new cluster-id
         manager_cluster = ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id,
-                                         client_encrypt=client_encrypt, ssh_identity_file=ssh_identity_file)
+                                         client_encrypt=client_encrypt)
         if disable_automatic_repair:
             manager_cluster.delete_automatic_repair_task()
         return manager_cluster
@@ -749,13 +747,17 @@ class SCTool():
     def _remoter_run(self, cmd):
         return self.manager_node.remoter.run(cmd)
 
-    def run(self, cmd, is_verify_errorless_result=False, parse_table_res=True, is_multiple_tables=False):
+    def run(self, cmd, is_verify_errorless_result=False, parse_table_res=True, is_multiple_tables=False,  # pylint: disable=too-many-arguments
+            replace_broken_unicode_values=True):
         LOGGER.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
             LOGGER.debug("sctool output: %s", res.stdout)
         except (UnexpectedExit, Failure) as ex:
             raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, ex))
+
+        if replace_broken_unicode_values:
+            res.stdout = res.stdout.replace('���', '│')
 
         if is_verify_errorless_result:
             verify_errorless_result(cmd=cmd, res=res)
@@ -771,12 +773,17 @@ class SCTool():
     def parse_result_table(res):
         parsed_table = []
         lines = res.stdout.split('\n')
-        filtered_lines = [line for line in lines if
-                          not (line.startswith('╭') or line.startswith('├') or line.startswith(
-                              '╰'))]  # filter out the dashes lines
-        filtered_lines = [line for line in filtered_lines if line]
+        filtered_lines = [line for line in lines if line]
+        if filtered_lines:
+            if '╭' in res.stdout:
+                filtered_lines = [line.replace('│', "|") for line in filtered_lines if
+                                  not (line.startswith('╭') or line.startswith('├') or line.startswith(
+                                      '╰'))]  # filter out the dashes lines
+            else:
+                filtered_lines = [line for line in filtered_lines if
+                                  not line.startswith('+')]  # filter out the dashes lines
         for line in filtered_lines:
-            list_line = [s if s else 'EMPTY' for s in line.split("│")]  # filter out spaces and "|" column seperators
+            list_line = [s if s else 'EMPTY' for s in line.split("|")]  # filter out spaces and "|" column seperators
             list_line_no_spaces = [s.split() for s in list_line if s != 'EMPTY']
             list_line_multiple_words_join = []
             for words in list_line_no_spaces:

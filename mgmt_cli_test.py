@@ -58,24 +58,16 @@ class MgmtCliTest(ClusterTester):
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
         cluster_name = 'mgr_cluster_crud'
-        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host)
+        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
+                                               auth_token=self.monitors.mgmt_auth_token)
 
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
 
-        origin_ssh_user = mgr_cluster.ssh_user
-        origin_rsa_id = mgr_cluster.ssh_identity_file
-        new_ssh_user = "centos"
-        new_rsa_id = '/tmp/scylla-test'
-
-        mgr_cluster.update(ssh_user=new_ssh_user, ssh_identity_file=new_rsa_id)
-        assert mgr_cluster.ssh_user == new_ssh_user, "Cluster ssh-user wasn't changed after update command"
-
-        mgr_cluster.update(ssh_user=origin_ssh_user, ssh_identity_file=origin_rsa_id)
         mgr_cluster.delete()
-        manager_tool.add_cluster(name=cluster_name, host=selected_host)
+        manager_tool.add_cluster(name=cluster_name, host=selected_host, auth_token=self.monitors.mgmt_auth_token)
 
     def _get_cluster_hosts_ip(self):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips()]
@@ -111,7 +103,8 @@ class MgmtCliTest(ClusterTester):
 
     def test_client_encryption(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster)
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
         self._generate_load()
         repair_task = mgr_cluster.create_repair_task()
         dict_host_health = mgr_cluster.get_hosts_health()
@@ -137,7 +130,7 @@ class MgmtCliTest(ClusterTester):
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
         mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(
-            name=cluster_name, db_cluster=self.db_cluster)
+            name=cluster_name, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
         other_host, other_host_ip = [
             host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
 
@@ -184,8 +177,8 @@ class MgmtCliTest(ClusterTester):
         assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(
             res_new_user_login_cmd.stdout, new_user_login_message)
 
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup",
-                                               host=selected_host_ip, single_node=True)
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip,
+                                               single_node=True, auth_token=self.monitors.mgmt_auth_token)
         # self.log.debug('mgr_cluster: {}'.format(mgr_cluster))
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
@@ -204,8 +197,9 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         selected_host = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(name=cluster_name,
-                                                                                                      host=selected_host)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or \
+            manager_tool.add_cluster(name=cluster_name, host=selected_host,
+                                     auth_token=self.monitors.mgmt_auth_token)
         self.log.info('Running some stress and repair before upgrade')
         self.test_mgmt_repair_nemesis()
 
@@ -249,7 +243,8 @@ class MgmtCliTest(ClusterTester):
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host)
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
+                                        auth_token=self.monitors.mgmt_auth_token)
         self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy")
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
 
