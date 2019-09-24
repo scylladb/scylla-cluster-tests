@@ -51,7 +51,7 @@ def call(Map pipelineParams) {
             }
             stage('Run SCT Test') {
                 steps {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
@@ -98,7 +98,7 @@ def call(Map pipelineParams) {
             }
             stage('Collect log data') {
                 steps {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
@@ -127,7 +127,7 @@ def call(Map pipelineParams) {
             }
             stage('Clear instances') {
                 steps {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
@@ -145,7 +145,7 @@ def call(Map pipelineParams) {
                                     export SCT_CONFIG_FILES="${test_config}"
 
                                     echo "start clean resources ..."
-                                    ./docker/env/hydra.sh clean-resources --logdir /sct
+                                    ./docker/env/hydra.sh destroy-resources --logdir /sct
                                     echo "end clean resources"
                                     """
                                 }

@@ -1072,3 +1072,40 @@ def download_dir_from_cloud(url):
         tmp_dir += '/'
     LOGGER.info("Finished downloading [%s]", url)
     return tmp_dir
+
+
+def filter_aws_instances_by_type(instances):
+    filtered_instances = {
+        "db_nodes": [],
+        "loader_nodes": [],
+        "monitor_nodes": []
+    }
+
+    for instance in instances:
+        name = [tag['Value']
+                for tag in instance['Tags'] if tag['Key'] == 'Name']
+        if 'db-node' in name[0]:
+            filtered_instances["db_nodes"].append(instance)
+        if 'monitor-node' in name[0]:
+            filtered_instances["monitor_nodes"].append(instance)
+        if 'loader-node' in name[0]:
+            filtered_instances["loader_nodes"].append(instance)
+    return filtered_instances
+
+
+def filter_gce_instances_by_type(instances):
+    filtered_instances = {
+        "db_nodes": [],
+        "loader_nodes": [],
+        "monitor_nodes": []
+    }
+
+    for instance in instances:
+        if 'db-nodes' in instance.name:
+            filtered_instances["db_nodes"].append(instance)
+        if 'monitor-node' in instance.name:
+            filtered_instances["monitor_nodes"].append(instance)
+        if 'loader-node' in instance.name:
+            filtered_instances["loader_nodes"].append(instance)
+    return filtered_instances
+

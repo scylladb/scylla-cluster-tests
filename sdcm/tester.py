@@ -19,16 +19,19 @@ import os
 import logging
 import time
 import types
-from uuid import uuid4
-from functools import wraps
-import libvirt
 import random
 import unittest
+
+from uuid import uuid4
+from functools import wraps
+
 
 import boto3.session
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
+
+import libvirt
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.auth import PlainTextAuthProvider
@@ -1378,7 +1381,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         finally:
             self.send_email()
             self.collect_logs()
-        # self.clean_resources()
+            self.clean_resources()
 
     def stop_resources(self):
         self.log.debug('Stopping all resources')
@@ -1425,36 +1428,37 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def clean_resources(self):
         # pylint: disable=too-many-branches
-        self.log.debug('Cleaning up resources used in the test')
+        if self.params.get('execute_post_behavior', False):
+            self.log.debug('Cleaning up resources used in the test')
 
-        if self.db_cluster is not None:
-            if self._failure_post_behavior == 'destroy':
-                self.db_cluster.destroy()
-                self.db_cluster = None
-                if self.cs_db_cluster:
-                    self.cs_db_cluster.destroy()
-            elif self._failure_post_behavior == 'stop':
-                for node in self.db_cluster.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
+        # if self.db_cluster is not None:
+        #     if self._failure_post_behavior == 'destroy':
+        #         self.db_cluster.destroy()
+        #         self.db_cluster = None
+        #         if self.cs_db_cluster:
+        #             self.cs_db_cluster.destroy()
+        #     elif self._failure_post_behavior == 'stop':
+        #         for node in self.db_cluster.nodes:
+        #             node.instance.stop()
+        #         self.db_cluster = None
 
-        if self.loaders is not None:
-            if self._failure_post_behavior == 'destroy':
-                self.loaders.destroy()
-                self.loaders = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.loaders.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
+        # if self.loaders is not None:
+        #     if self._failure_post_behavior == 'destroy':
+        #         self.loaders.destroy()
+        #         self.loaders = None
+        #     elif self._failure_post_behavior == 'stop':
+        #         for node in self.loaders.nodes:
+        #             node.instance.stop()
+        #         self.db_cluster = None
 
-        if self.monitors is not None:
-            if self._failure_post_behavior == 'destroy':
-                self.monitors.destroy()
-                self.monitors = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.monitors.nodes:
-                    node.instance.stop()
-                self.monitors = None
+        # if self.monitors is not None:
+        #     if self._failure_post_behavior == 'destroy':
+        #         self.monitors.destroy()
+        #         self.monitors = None
+        #     elif self._failure_post_behavior == 'stop':
+        #         for node in self.monitors.nodes:
+        #             node.instance.stop()
+        #         self.monitors = None
 
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
@@ -1479,7 +1483,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.exception('Exception in finalize_test method {}'.format(details))
             raise
         finally:
-            from logcollector import SCTLogCollector
+            from sdcm.logcollector import SCTLogCollector
             stop_events_device()
             if self.params.get('collect_logs', False):
                 storing_dir = os.path.join(self.logdir, "collected_logs")

@@ -569,7 +569,7 @@ class TestStatsMixin(Stats):
 
     def get_doc_data(self, key):
         if self.create_stats:
-            result = self.es.get_doc(self._test_index, self.get_doc_id(), doc_type=self._es_doc_type)
+            result = self.elasticsearch.get_doc(self._test_index, self.get_doc_id(), doc_type=self._es_doc_type)
 
             return result['_source'].get(key, None)
         return None
