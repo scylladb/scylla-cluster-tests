@@ -57,7 +57,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates
+    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -227,6 +227,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.connections = []
 
         update_certificates()
+
+        # download rpms for update_db_packages
+        update_db_packages = self.params.get('update_db_packages', default=None)
+        self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
+
         self.init_resources()
         if self.params.get('seeds_first', default='false') == 'true':
             seeds_num = self.params.get('seeds_num', default=1)

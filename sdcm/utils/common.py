@@ -32,9 +32,13 @@ from enum import Enum
 from collections import defaultdict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+from urlparse import urlparse
+import hashlib
 
 import requests
 import boto3
+import libcloud.storage.providers
+import libcloud.storage.types
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -1085,3 +1089,98 @@ def update_certificates():
         localrunner.run('openssl x509 -enddate -noout -in data_dir/ssl_conf/db.crt')
     except Exception as ex:
         raise Exception('Failed to update certificates by openssl: %s' % ex)
+
+
+def s3_download_dir(bucket, path, target):
+    """
+    Downloads recursively the given S3 path to the target directory.
+    :param bucket: the name of the bucket to download from
+    :param path: The S3 directory to download.
+    :param target: the local directory to download the files to.
+    """
+
+    client = boto3.client('s3')
+
+    # Handle missing / at end of prefix
+    if not path.endswith('/'):
+        path += '/'
+    if path.startswith('/'):
+        path = path[1:]
+    result = client.list_objects_v2(Bucket=bucket, Prefix=path)
+    # Download each file individually
+    for key in result['Contents']:
+        # Calculate relative path
+        rel_path = key['Key'][len(path):]
+        # Skip paths ending in /
+        if not key['Key'].endswith('/'):
+            local_file_path = os.path.join(target, rel_path)
+            # Make sure directories exist
+            local_file_dir = os.path.dirname(local_file_path)
+            makedirs(local_file_dir)
+            LOGGER.info("Downloading %s from s3 to %s", key['Key'], local_file_path)
+            client.download_file(bucket, key['Key'], local_file_path)
+
+
+def gce_download_dir(bucket, path, target):
+    """
+    Downloads recursively the given google storage path to the target directory.
+    :param bucket: the name of the bucket to download from
+    :param path: The google storage directory to download.
+    :param target: the local directory to download the files to.
+    """
+
+    from sdcm.keystore import KeyStore
+    gcp_credentials = KeyStore().get_gcp_credentials()
+    gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
+
+    driver = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                        gcp_credentials["private_key"],
+                        project=gcp_credentials["project_id"])
+
+    if not path.endswith('/'):
+        path += '/'
+    if path.startswith('/'):
+        path = path[1:]
+
+    container = driver.get_container(container_name=bucket)
+    dir_listing = driver.list_container_objects(container, ex_prefix=path)
+    for obj in dir_listing:
+        rel_path = obj.name[len(path):]
+        local_file_path = os.path.join(target, rel_path)
+
+        local_file_dir = os.path.dirname(local_file_path)
+        makedirs(local_file_dir)
+        LOGGER.info("Downloading %s from gcp to %s", obj.name, local_file_path)
+        obj.download(destination_path=local_file_path, overwrite_existing=True)
+
+
+def download_dir_from_cloud(url):
+    """
+    download a directory from AWS S3 or from google storage
+
+    :param url: a url that starts with `s3://` or `gs://`
+    :return: the temp directory create with the downloaded content
+    """
+    if url is None:
+        return url
+
+    md5 = hashlib.md5()
+    md5.update(url)
+    tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
+    parsed = urlparse(url)
+    LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
+    if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
+        LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+    else:
+        if url.startswith('s3://'):
+            s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
+        elif url.startswith('gs://'):
+            gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+        elif os.path.isdir(url):
+            tmp_dir = url
+        else:
+            raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+    if not tmp_dir.endswith('/'):
+        tmp_dir += '/'
+    LOGGER.info("Finished downloading [%s]", url)
+    return tmp_dir

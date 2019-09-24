@@ -1463,7 +1463,7 @@ class UpgradeNemesis(Nemesis):
     #         # update *development* packages
     #         node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
     #         # and all the rest
-    #         node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
+    #         node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm | true')
     #         node.remoter.run('rpm -qa scylla\*')
     #     elif repo_file:
     #         scylla_repo = get_data_dir_path(repo_file)

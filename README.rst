@@ -454,6 +454,26 @@ FAQ
     # from your yaml file set like this:
     update_db_packages: '<path_to_my_rpm>/'
 
+**Q:** I want to use SCT_UPDATE_DB_PACKAGES but Jenkins keep selecting different builder, what can I do
+
+**A:** SCT now support passing s3:// or gs:// urls in update_db_packages, for example ::
+
+    # uploading to s3
+    aws s3 cp s3://downloads.scylladb.com/
+    aws s3 cp --recursive rpms s3://scylla-qa-public/`whoami`/
+
+    # download from s3 path
+    export SCT_UPDATE_DB_PACKAGES=s3://scylla-qa-public/`whoami`/rpms
+
+    # uploading to google storage
+    gsutil cp rpms/* gs://scratch.scylladb.com/`whoami`/rpms/
+
+    # download for google storage
+    export SCT_UPDATE_DB_PACKAGES=gs://scratch.scylladb.com/`whoami`/rpms
+
+    # downloading a specific rpms built on master in job 888
+    export SCT_UPDATE_DB_PACKAGES=s3://downloads.scylladb.com/rpm/unstable/centos/master/888/scylla/7/x86_64/
+
 TODO
 ====
 
