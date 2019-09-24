@@ -1003,7 +1003,7 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
-        # 8) update target_upgrade_version automaticlly
+        # 8) update target_upgrade_version automatically
         new_scylla_repo = self.get('new_scylla_repo', None)
         if new_scylla_repo and 'target_upgrade_version' not in self:
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)

@@ -120,6 +120,9 @@ def configure_logging():
             'boto3': {
                 'level': 'CRITICAL'
             },
+            's3transfer': {
+                'level': 'CRITICAL'
+            },
             'paramiko.transport': {
                 'level': 'CRITICAL'
             },

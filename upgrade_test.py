@@ -130,7 +130,7 @@ class UpgradeTest(FillDatabaseData):
             # update *development* packages
             node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
             # and all the rest
-            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/* | true')
+            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm | true')
             node.remoter.run(r'rpm -qa scylla\*')
         elif new_scylla_repo:
             # backup the data
