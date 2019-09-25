@@ -419,7 +419,7 @@ class AWSNode(cluster.BaseNode):
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
             output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
             if 'replace_address_first_boot:' not in output.stdout:
-                self.remoter.run('sudo echo replace_address_first_boot: %s >> /etc/scylla/scylla.yaml' %
+                self.remoter.run('echo replace_address_first_boot: %s |sudo tee --append /etc/scylla/scylla.yaml' %
                                  self._instance.private_ip_address)
         self._instance.stop()
         self._instance_wait_safe(self._instance.wait_until_stopped)
