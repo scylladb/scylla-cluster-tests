@@ -1367,7 +1367,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
-                     client_encrypt=None, append_conf=None, append_scylla_args=None, debug_install=False,
+                     client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
                      alternator_port=None, listen_on_all_interfaces=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
@@ -1507,7 +1507,7 @@ server_encryption_options:
                 scylla_yaml_contents += "\nalternator_port: %s\n" % alternator_port
 
         # system_key must be pre-created, kmip keys will be used for kmip server auth
-        if append_conf and ('system_key_directory' in append_conf or 'system_info_encryption' in append_conf or 'kmip_hosts:' in append_conf):
+        if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             self.remoter.send_files(src='./data_dir/encrypt_conf',
                                     dst='/tmp/')
             self.remoter.run('sudo mv /tmp/encrypt_conf /etc/')
@@ -1515,8 +1515,8 @@ server_encryption_options:
             self.remoter.run('sudo chown -R scylla:scylla /etc/encrypt_conf/')
             self.remoter.run('sudo md5sum /etc/encrypt_conf/*.pem', ignore_status=True)
 
-        if append_conf:
-            scylla_yaml_contents += append_conf
+        if append_scylla_yaml:
+            scylla_yaml_contents += append_scylla_yaml
 
         with open(yaml_dst_path, 'w') as scylla_yaml_file:
             scylla_yaml_file.write(scylla_yaml_contents)
@@ -2881,7 +2881,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
                           authenticator=self.params.get('authenticator'),  # pylint: disable=no-member
                           server_encrypt=self._param_enabled('server_encrypt'),  # pylint: disable=no-member
                           client_encrypt=self._param_enabled('client_encrypt'),  # pylint: disable=no-member
-                          append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),  # pylint: disable=no-member
+                          append_scylla_yaml=self.params.get('append_scylla_yaml'), append_scylla_args=self.get_scylla_args(),  # pylint: disable=no-member
                           hinted_handoff=self.params.get('hinted_handoff'),  # pylint: disable=no-member
                           authorizer=self.params.get('authorizer'),  # pylint: disable=no-member
                           alternator_port=self.params.get('alternator_port'))  # pylint: disable=no-member

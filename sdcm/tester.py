@@ -246,8 +246,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         update_db_packages = self.params.get('update_db_packages', default=None)
         self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
 
-        append_conf = self.params.get('append_conf')
-        if append_conf and ('system_key_directory' in append_conf or 'system_info_encryption' in append_conf or 'kmip_hosts:' in append_conf):
+        append_scylla_yaml = self.params.get('append_scylla_yaml')
+        if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             download_encrypt_keys()
 
         self.init_resources()

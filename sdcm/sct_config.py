@@ -297,8 +297,8 @@ class SCTConfiguration(dict):
         dict(name="append_scylla_args_oracle", env="SCT_APPEND_SCYLLA_ARGS_ORACLE", type=str,
              help="More arguments to append to oracle command line"),
 
-        dict(name="append_conf", env="SCT_APPEND_CONF", type=str,
-             help="More arguments to append to /etc/scylla/scylla.yaml"),
+        dict(name="append_scylla_yaml", env="SCT_APPEND_SCYLLA_YAML", type=str,
+             help="More configuration to append to /etc/scylla/scylla.yaml"),
 
         # Nemesis config options
 
