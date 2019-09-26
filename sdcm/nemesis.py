@@ -921,6 +921,9 @@ class Nemesis(object):
             self.tester.fail(result.stderr)
 
     def disrupt_show_toppartitions(self):
+        if "rc8" in self.target_node.scylla_version:
+            raise Exception("Disabled on 3.1-rc8 due to Avi and Shlomi request. Should be re-enabled on future RCs")
+
         def _parse_toppartitions_output(output):
             """parsing output of toppartitions
 
