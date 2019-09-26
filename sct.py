@@ -320,6 +320,56 @@ def show_monitor(test_id, debug_log):
         click.echo('Docker containers were not started. Please rerun comand with flag -l')
 
 
+@investigate.command('search-builder', help='Search builder where test run with test-id located')
+@click.argument('test-id')
+def search_builder(test_id):
+    from sdcm.remote import RemoteCmdRunner
+    builders = [
+        {
+            "name": "aws-scylla-qa-builder3",
+            "public_ip": "18.235.64.163",
+            "user": "jenkins",
+            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+        },
+        {
+            "name": "aws-eu-west1-qa-builder1",
+            "public_ip": "18.203.132.87",
+            "user": "jenkins",
+            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+        },
+        {
+            "name": "aws-eu-west1-qa-builder2",
+            "public_ip": "34.244.95.165",
+            "user": "jenkins",
+            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+        },
+        {
+            "name": "aws-eu-west1-qa-builder4",
+            "public_ip": "34.253.184.117",
+            "user": "jenkins",
+            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+        },
+    ]
+
+    base_path = "/home/jenkins/slave/workspace"
+    path = None
+    for builder in builders:
+        remoter = RemoteCmdRunner(builder['public_ip'],
+                                  user=builder['user'],
+                                  key_file=builder['key_file'])
+        LOGGER.info('Search on %s', builder['name'])
+        result = remoter.run("find {base_path} -name test_id | xargs grep -rl {test_id}".format(base_path=base_path,
+                                                                                                test_id=test_id),
+                             ignore_status=True, verbose=False)
+
+        if not result.exited and not result.stderr:
+            path = result.stdout.strip()
+            LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
+            break
+        else:
+            LOGGER.info("Nothing found")
+
+
 cli.add_command(investigate)
 
 
@@ -383,9 +433,6 @@ def cloud_usage_report(emails):
 @click.option('--test-id', help='Find cluster by test-id')
 @click.option('--logdir', help='Path to directory with sct results')
 @click.option('--backend', help='Clound where search nodes', default='aws')
-# @click.option('--user', help='Authenticate with user to remote nodes')
-# @click.option('--key_file', help='Key file for authorization')
-# def collect_logs(test_id=None, backend='aws', user='centos', key_file='', log_dir=None):
 def collect_logs(test_id=None, logdir=None, backend='aws'):
     from sdcm.logcollector import Collector
     if not os.environ.get('SCT_CLUSTER_BACKEND', None):
@@ -408,9 +455,7 @@ def collect_logs(test_id=None, logdir=None, backend='aws'):
 @cli.command('destroy-resources', help='')
 @click.option('--logdir', type=str)
 @click.option('--backend', type=str)
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-branches
-def destroy_resources(logdir, backend):
+def destroy_resources(logdir, backend):  # pylint: disable=too-many-statements,too-many-branches
     import boto3
     from sdcm.logcollector import Collector
     if not logdir:
