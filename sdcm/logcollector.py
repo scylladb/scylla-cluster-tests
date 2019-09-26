@@ -6,21 +6,22 @@ import shutil
 import tempfile
 import time
 import zipfile
+import fnmatch
 
 from textwrap import dedent
 
 import requests
 
-from utils.common import (S3Storage, list_instances_aws, list_instances_gce,
-                          retrying, ParallelObject, remove_files)
-from .db_stats import PrometheusDBStats
-from .remote import LocalCmdRunner, RemoteCmdRunner
+from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
+                               retrying, ParallelObject, remove_files)
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunner
 
 LOGGER = logging.getLogger(__name__)
 # LOGGER.setLevel(logging.INFO)
 
 
-class CollectingNode(object):
+class CollectingNode(object):  # pylint: disable=too-few-public-methods
 
     def __init__(self, name, ssh_login_info, instance, global_ip):
         self.remoter = RemoteCmdRunner(**ssh_login_info)
@@ -33,7 +34,7 @@ class PrometheusSnapshotErrorException(Exception):
     pass
 
 
-class BaseLogEntity(object):
+class BaseLogEntity(object):  # pylint: disable=too-few-public-methods
     """Base class for log entity
 
     LogEntity any file, command, operation, complex actions
@@ -46,11 +47,11 @@ class BaseLogEntity(object):
         self.cmd = command
         self.search_locally = search_locally
 
-    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):  # pylint: disable=unused-argument,no-self-use
         raise Exception('Should be implemented in child class')
 
 
-class CommandLogEntity(BaseLogEntity):
+class CommandLogEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """LogEntity to save output result to file on remote host
 
     LogEntity which allow to save the output (usually log output)
@@ -76,39 +77,40 @@ class FileLogEntity(CommandLogEntity):
     """Log File Entinty
 
     Allow to find log file locally first, if it have not
-    found, run command to collect log data remotely if command provided
+    found
+    Run command to collect log data remotely if command provided
 
     Extends:
         CommandLogEntity
     """
-    # TODO check simlink
-
-    def get_local_file_version(self, search_dir, search_pattern):
-        local_file_version = None
-        for root, _, files in os.walk(search_dir):
-            if root.endswith(search_pattern) and self.name in files:
-                local_file_version = os.path.join(root, self.name)
-                break
-            elif os.path.exists(os.path.join(root, self.name)):
-                local_file_version = os.path.join(root, self.name)
-                break
-        if local_file_version and os.path.islink(local_file_version):
-            local_file_version = os.path.realpath(local_file_version)
-        return local_file_version
+    @staticmethod
+    def find_local_files(search_in_dir, search_pattern, except_patterns="collected_logs"):
+        local_files = []
+        for root, _, files in os.walk(search_in_dir):
+            for f in files:  # pylint: disable=invalid-name
+                full_path = os.path.join(root, f)
+                if except_patterns in full_path:
+                    continue
+                if full_path.endswith(search_pattern) or fnmatch.fnmatch(full_path, search_pattern):
+                    if os.path.islink(full_path):
+                        full_path = os.path.realpath(full_path)
+                    local_files.append(full_path)
+        return local_files
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         if self.search_locally and local_search_path:
-            logfile = None
-            search_for = node.name if node else self.name
-            local_logfile = self.get_local_file_version(local_search_path, search_for)
-            if local_logfile:
-                shutil.copy(src=local_logfile, dst=local_dst)
-                logfile = os.path.join(local_dst, os.path.basename(local_logfile))
-            return logfile
-        if self.cmd:
+            search_pattern = self.name if not node else "/".join([node.name, self.name])
+            local_logfiles = self.find_local_files(local_search_path, search_pattern)
+            for logfile in local_logfiles:
+                shutil.copy(src=logfile, dst=local_dst)
+                logfile = os.path.join(local_dst, os.path.basename(logfile))
+            return local_dst
+        elif self.cmd:
             logfile = super(FileLogEntity, self).collect(node, local_dst, remote_dst)
 
             return logfile
+        else:
+            return None
 
 
 class PrometheusSnapshotsEntity(BaseLogEntity):
@@ -131,8 +133,8 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
     @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException,),
               message='Create prometheus snapshot')
     def create_prometheus_snapshot(self, node):
-        ps = PrometheusDBStats(host=node.external_address)
-        result = ps.create_snapshot()
+        prometheus_client = PrometheusDBStats(host=node.external_address)
+        result = prometheus_client.create_snapshot()
         if "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
                                         "snapshots",
@@ -144,7 +146,7 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
     def get_prometheus_snapshot_remote(self, node):
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
-        except Exception as details:
+        except PrometheusSnapshotErrorException as details:
             LOGGER.warning(
                 'Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(details))
             node.remoter.run('docker stop aprom', ignore_status=True)
@@ -214,7 +216,7 @@ class MonitoringStackEntity(BaseLogEntity):
 
         annotations_json = self.get_grafana_annotations(node)
         tmp_dir = tempfile.mkdtemp()
-        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:
+        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:  # pylint: disable=invalid-name
             f.write(annotations_json)
         node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'),
                                 dst=os.path.join(monitor_base_dir, monitor_install_dir_name, "sct_monitoring_addons"))
@@ -246,15 +248,16 @@ class MonitoringStackEntity(BaseLogEntity):
             scylla_version = None
         return name, monitor_version, scylla_version
 
-    def get_grafana_annotations(self, node):
+    def get_grafana_annotations(self, node):  # pylint: disable=inconsistent-return-statements
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
         try:
             res = requests.get(annotations_url.format(
                 node_ip=node.external_address, grafana_port=self.grafana_port))
             if res.ok:
                 return res.text
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
+            return ""
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         local_archive = self.get_monitoring_data_stack(node, local_dst)
@@ -308,9 +311,11 @@ class GrafanaEntity(BaseLogEntity):
     def install_phantom_js(self):
         if not self.phantomjs_installed:
             localrunner = LocalCmdRunner()
+            # pylint: disable=unused-variable
             phantomjs_base = self.phantomjs_base
             phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
-            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(**locals())
+            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(
+                **locals())
             install_phantom_js_script = dedent("""
                 rm -rf {phantomjs_base}*
                 curl {phantomjs_url} -o {phantomjs_tar} -L
@@ -344,7 +349,7 @@ class GrafanaScreenShotEntity(GrafanaEntity):
         try:
             screenshots = []
 
-            for i, screenshot in enumerate(self.grafana_entity_names):
+            for screenshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
                 path = screenshot['path'].format(
                     version=version,
@@ -363,7 +368,7 @@ class GrafanaScreenShotEntity(GrafanaEntity):
 
             return screenshots
 
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error('Error taking monitor snapshot: %s',
                          str(details))
             return []
@@ -380,9 +385,6 @@ class GrafanaSnapshotEntity(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-
-    def __init__(self, *args, **kwargs):
-        super(GrafanaSnapshotEntity, self).__init__(*args, **kwargs)
 
     def _get_shared_snapshot_link(self, grafana_url):
         result = LocalCmdRunner().run(
@@ -407,7 +409,7 @@ class GrafanaSnapshotEntity(GrafanaEntity):
         try:
 
             snapshots = []
-            for i, snapshot in enumerate(self.grafana_entity_names):
+            for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
                 path = snapshot['path'].format(
                     version=version,
@@ -421,14 +423,14 @@ class GrafanaSnapshotEntity(GrafanaEntity):
 
             return snapshots
 
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error('Error taking monitor snapshot: %s', str(details))
         return []
 
-    def collect(self, node, local_dst, remote_dist=None, local_search_path=None):
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         snapshots = self.get_grafana_snapshot(node)
         snapshots_file = os.path.join(local_dst, "grafana_snapshots")
-        with open(snapshots_file, "w") as f:
+        with open(snapshots_file, "w") as f:  # pylint: disable=invalid-name
             for snapshot in snapshots:
                 f.write(snapshot + '\n')
 
@@ -486,7 +488,7 @@ class LogCollector(object):
         return remote_dir
 
     @staticmethod
-    def collect_log_remotely(node, cmd, log_filename):
+    def collect_log_remotely(node, cmd, log_filename):  # pylint: disable=unused-argument
         collect_log_command = "{cmd} >& {log_filename}".format(**locals())
         result = node.remoter.run(
             collect_log_command, ignore_status=True, verbose=True)
@@ -502,7 +504,7 @@ class LogCollector(object):
         else:
             archive_name = os.path.join(archive_dir, os.path.basename(log_filename))
         log_filename = os.path.basename(log_filename)
-        result = node.remoter.run(
+        node.remoter.run(
             "cd {archive_dir}; tar -czf {archive_name}.tar.gz {log_filename}".format(**locals()), ignore_status=True)
         return "{}.tar.gz".format(archive_name)
 
@@ -525,17 +527,17 @@ class LogCollector(object):
 
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: {node.name}'.format(**locals()))
-            try:
-                remote_node_dir = self.create_remote_storing_dir(node)
-                local_node_dir = os.path.join(self.local_dir, node.name)
-                os.makedirs(local_node_dir)
-                for log_entity in self.log_entities:
+            remote_node_dir = self.create_remote_storing_dir(node)
+            local_node_dir = os.path.join(self.local_dir, node.name)
+            os.makedirs(local_node_dir)
+            for log_entity in self.log_entities:
+                try:
                     log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
-            except Exception as details:
-                LOGGER.error("Error occured during collecting on host: {node.name}\n{details}".format(**locals()))
+                except Exception as details:  # pylint: disable=unused-variable, broad-except
+                    LOGGER.error("Error occured during collecting on host: {node.name}\n{details}".format(**locals()))
         try:
             ParallelObject(self.nodes, num_workers=3, timeout=300).run(collect_logs_per_node)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             LOGGER.error('Error occured during collecting logs')
         final_archive = self.archive_dir_with_zip64(self.local_dir)
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
@@ -562,7 +564,7 @@ class LogCollector(object):
                         full_path = os.path.join(root, log_file)
                         arch.write(full_path, full_path.replace(logdir, ""))
                 os.chdir(cur_dir)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("{}".format(details))
             archive_full_name = None
         return archive_full_name
@@ -601,6 +603,10 @@ class ScyllaLogCollector(LogCollector):
 
 class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
+    log_entities = [
+        FileLogEntity(name='*cassandra-stress*.log',
+                      search_locally=True)
+    ]
 
 
 class MonitorLogCollector(LogCollector):
@@ -659,7 +665,7 @@ class SCTLogCollector(LogCollector):
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
             LOGGER.warning('No any local files')
-            return self.local_dir, None, None
+            return None
 
         final_archive = self.archive_dir_with_zip64(self.local_dir)
 
@@ -669,7 +675,7 @@ class SCTLogCollector(LogCollector):
         return s3_link
 
 
-class Collector:
+class Collector(object):  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
     Collector instance which should be run to collect logs and additional info
@@ -803,7 +809,7 @@ class Collector:
                                                       instance=instance,
                                                       global_ip=instance.public_ips[0]))
 
-    def get_running_cluster_sets_by_testid(self):
+    def get_running_cluster_sets(self):
         if self.backend == 'aws':
             self.get_aws_instances_by_testid()
         if self.backend == 'gce':
@@ -817,7 +823,7 @@ class Collector:
         """
         results = {}
         self.define_test_id()
-        self.get_running_cluster_sets_by_testid()
+        self.get_running_cluster_sets()
 
         local_dir_with_logs = self.get_local_dir_with_logs()
         LOGGER.info("Found sct result directory with logs: {}".format(local_dir_with_logs))
@@ -841,5 +847,5 @@ class Collector:
         if not os.path.exists(self.storing_dir):
             os.makedirs(self.storing_dir)
         if not os.path.exists(os.path.join(os.path.dirname(self.storing_dir), "test_id")):
-            with open(os.path.join(os.path.dirname(self.storing_dir), "test_id"), "w") as f:
+            with open(os.path.join(os.path.dirname(self.storing_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
                 f.write(self.test_id)
