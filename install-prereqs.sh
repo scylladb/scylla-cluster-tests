@@ -18,6 +18,9 @@ yum install -y openssh-clients
 # Install Git - needed to get current SCT branch
 yum install -y git
 
+# Install OpenSSL - needed to update encryption key
+yum install -y openssl
+
 # Install Docker
 yum install -y sudo  # needed for Docker container build
 curl -fsSL get.docker.com -o get-docker.sh
