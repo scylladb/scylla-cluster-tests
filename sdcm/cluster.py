@@ -3715,9 +3715,11 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
             screenshot_collector = GrafanaScreenShotEntity(name="grafana-screenshot",
                                                            test_start_time=start_time)
             screenshots = screenshot_collector.collect(node, self.logdir)  # pylint: disable=no-member
+            screenshots = [S3Storage().upload_file(screenshot, Setup.test_id()) for screenshot in screenshots]
             snapshots_collector = GrafanaSnapshotEntity(name="grafana-snapshot",
                                                         test_start_time=start_time)
             snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
+            snapshots = [S3Storage().upload_file(snapshot, Setup.test_id()) for snapshot in snapshots]
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):
