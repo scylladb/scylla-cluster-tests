@@ -48,6 +48,7 @@ from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, Datab
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
+from sdcm.logcollector import GrafanaSnapshotEntity, GrafanaScreenShotEntity, PrometheusSnapshotsEntity, MonitoringStackEntity
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -196,7 +197,7 @@ class Setup(object):
             with open(es_doc_id_file_path, "w") as es_doc_id_file:
                 es_doc_id_file.write(str(es_doc_id))
         else:
-            logger.warning("ES DocID already set!")
+            LOGGER.warning("ES DocID already set!")
 
     @classmethod
     def set_test_id(cls, test_id):
@@ -2953,26 +2954,6 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             node.start_scylla(verify_up=True)
             self.log.debug("'{0.name}' restarted.".format(node))  # pylint: disable=no-member
 
-    # def collect_logs(self, storing_dir):
-    #     storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))
-    #     os.mkdir(storing_dir)
-
-    #     files_to_archive = ['/proc/meminfo', '/proc/cpuinfo', '/proc/interrupts', '/proc/vmstat', '/etc/scylla/scylla.yaml']
-    #     for node in self.nodes:
-    #         storing_dir_for_node = os.path.join(storing_dir, node.name)
-    #         src_dir = node.prepare_files_for_archive(files_to_archive)
-    #         node.receive_files(src=src_dir, dst=storing_dir)
-    #         with open(os.path.join(storing_dir_for_node, 'installed_pkgs'), 'w') as pkg_list_file:
-    #             pkg_list_file.write(node.get_installed_packages())
-    #         with open(os.path.join(storing_dir_for_node, 'console_output'), 'w') as co:
-    #             co.write(node.get_console_output())
-    #         with open(os.path.join(storing_dir_for_node, 'console_screenshot.jpg'), 'wb') as cscrn:
-    #             imagedata = node.get_console_screenshot()
-    #             cscrn.write(decodestring(imagedata))
-    #         if os.path.exists(node.database_log):
-    #             shutil.copy(node.database_log, storing_dir_for_node)
-    #     return storing_dir
-
     def get_seed_selected_by_reflector(self, node=None):
         """
         Check if reflector updated the scylla.yaml with selected seed IP
@@ -3664,7 +3645,8 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         self.save_monitoring_version(node)
 
     def save_monitoring_version(self, node):
-        node.remoter.run('echo "{0.monitor_branch}:{0.monitoring_version}" > {0.monitor_install_path}/monitor_version'.format(self), ignore_status=True)
+        node.remoter.run(
+            'echo "{0.monitor_branch}:{0.monitoring_version}" > {0.monitor_install_path}/monitor_version'.format(self), ignore_status=True)
 
     def add_sct_dashboards_to_grafana(self, node):
         sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
@@ -3684,10 +3666,10 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
-        sct_dashboard_file = self.get_sct_dashboards_config(node)
+        sct_dashboard_file = self.get_sct_dashboards_config()
         node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
 
-    def get_sct_dashboards_config(self, node):
+    def get_sct_dashboards_config(self):
         sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         return get_data_dir_path(sct_dashboard_json_filename)
@@ -3720,24 +3702,22 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         """.format(self))
         node.remoter.run("bash -ce '%s'" % kill_script)
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=invalid-name
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        from logcollector import GrafanaSnapshotEntity, GrafanaScreenShotEntity
-
         if not test_start_time:
             self.log.error("No start time for test")  # pylint: disable=no-member
             return {}
         start_time = str(test_start_time).split('.')[0] + '000'
 
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             screenshot_collector = GrafanaScreenShotEntity(name="grafana-screenshot",
                                                            test_start_time=start_time)
-            screenshots = screenshot_collector.collect(node, self.logdir)
+            screenshots = screenshot_collector.collect(node, self.logdir)  # pylint: disable=no-member
             snapshots_collector = GrafanaSnapshotEntity(name="grafana-snapshot",
                                                         test_start_time=start_time)
-            snapshots = snapshots_collector.collect(node, self.logdir)
+            snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):
@@ -3759,13 +3739,12 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
 
     @log_run_info
     def download_monitor_data(self):
-        from logcollector import PrometheusSnapshotsEntity
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             try:
                 collector = PrometheusSnapshotsEntity(name='prometheus_snapshot')
 
-                snapshot_archive = collector.collect(node, self.logdir)
-                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
+                snapshot_archive = collector.collect(node, self.logdir)  # pylint: disable=no-member
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
 
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception as details:  # pylint: disable=broad-except
@@ -3774,20 +3753,19 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                 return ""
 
     def get_prometheus_snapshot(self, node):
-        from logcollector import PrometheusSnapshotsEntity
-
         collector = PrometheusSnapshotsEntity(name="prometheus_data")
 
-        return collector.collect(node, self.logdir)
+        return collector.collect(node, self.logdir)  # pylint: disable=no-member
 
     def download_monitoring_data_stack(self):
-        from logcollector import MonitoringStackEntity
 
-        for node in self.nodes:
+        for node in self.nodes:  # pylint: disable=no-member
             collector = MonitoringStackEntity(name="monitoring-stack")
 
-            local_path_to_monitor_stack = collector.collect(node, self.logdir)
-            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
+            local_path_to_monitor_stack = collector.collect(node, self.logdir)  # pylint: disable=no-member
+            # pylint: disable=no-member
+            self.log.info('Path to monitoring stack {}'.format(
+                local_path_to_monitor_stack))
 
             return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
 
