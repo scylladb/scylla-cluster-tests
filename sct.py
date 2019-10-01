@@ -15,8 +15,10 @@ from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
-                               aws_tags_to_dict, list_elastic_ips_aws, filter_aws_instances_by_type,
-                               filter_gce_instances_by_type)
+                               aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
+                               clean_aws_instances_according_post_behavior,
+                               clean_gce_instances_according_post_behavior,
+                               search_test_id_in_latest)
 from sdcm.utils.monitorstack import restore_monitor_stack
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
@@ -73,29 +75,58 @@ def provision(**kwargs):
 @click.option('--user', type=str, help='user name to filter instances by')
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.option('--logdir', type=str, help='directory with test run')
+@click.option('--config-file', type=str, help='config test file path')
+@click.option('--backend', type=str, help="")
 @click.pass_context
-def clean_resources(ctx, user, test_id, logdir):
+def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint: disable=too-many-arguments,too-many-branches
     params = dict()
 
-    if not (user or test_id or logdir):
-        click.echo(clean_resources.get_help(ctx))
+    if config_file:
 
-    if logdir:
-        from sdcm.logcollector import Collector
-        params['TestId'] = Collector.search_test_id_in_latest(logdir)
+        if not logdir:
+            logdir = os.path.expandvars("$HOME/sct-results")
 
-    if user:
-        params['RunByUser'] = user
+        if logdir and not test_id:
+            test_id = (search_test_id_in_latest(logdir), )
 
-    if not test_id:
-        clean_cloud_instances(params)
-        click.echo('cleaned instances for {}'.format(params))
+        if not logdir or not test_id:
+            click.echo(clean_resources.get_help(ctx))
+            return
 
-    if test_id:
+        if not backend:
+            backend = "aws"
+
+        if not os.environ.get('SCT_CLUSTER_BACKEND', None):
+            os.environ['SCT_CLUSTER_BACKEND'] = backend
+
+        os.environ['SCT_CONFIG_FILES'] = config_file
+
+        config = SCTConfiguration()
+
         for _test_id in test_id:
             params['TestId'] = _test_id
+            if backend == 'aws':
+                clean_aws_instances_according_post_behavior(params, config, logdir)
+            if backend == 'gce':
+                clean_gce_instances_according_post_behavior(params, config, logdir)
+
+    else:
+        if not (user or test_id):
+            click.echo(clean_resources.get_help(ctx))
+            return
+
+        if user:
+            params['RunByUser'] = user
+
+        if not test_id:
             clean_cloud_instances(params)
             click.echo('cleaned instances for {}'.format(params))
+
+        if test_id:
+            for _test_id in test_id:
+                params['TestId'] = _test_id
+                clean_cloud_instances(params)
+                click.echo('cleaned instances for {}'.format(params))
 
 
 @cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
@@ -296,18 +327,18 @@ def show_log(test_id):
     table.align = "l"
     files = list_logs_by_test_id(test_id)
     for log in files:
-        table.add_row([log["date"], log["type"], log["link"]])
+        table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
     click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
 
 
 @investigate.command('show-monitor', help="Show link to prometheus data snapshot")
 @click.argument('test_id')
-@click.option("-l", "--debug-log", required=False, default=False, is_flag=True, help="Print debug logs")
-def show_monitor(test_id, debug_log):
+@click.option("--date-time", type=str, required=False, help='Datetime of monitor collecting')
+def show_monitor(test_id, date_time):
     click.echo('Search monitor stack archive files for test id {} and restoring...'.format(test_id))
-    if debug_log:
-        LOGGER.setLevel(logging.DEBUG)
-    status = restore_monitor_stack(test_id)
+    # if debug_log:
+    #     LOGGER.setLevel(logging.DEBUG)
+    status = restore_monitor_stack(test_id, date_time)
     table = PrettyTable(['Name', 'container', 'Link'])
     table.align = 'l'
     if status:
@@ -317,57 +348,19 @@ def show_monitor(test_id, debug_log):
         table.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
         click.echo(table.get_string(title='Grafana monitoring stack'))
     else:
-        click.echo('Docker containers were not started. Please rerun comand with flag -l')
+        click.echo('Docker containers were not started')
 
 
 @investigate.command('search-builder', help='Search builder where test run with test-id located')
 @click.argument('test-id')
 def search_builder(test_id):
-    from sdcm.remote import RemoteCmdRunner
-    builders = [
-        {
-            "name": "aws-scylla-qa-builder3",
-            "public_ip": "18.235.64.163",
-            "user": "jenkins",
-            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-        },
-        {
-            "name": "aws-eu-west1-qa-builder1",
-            "public_ip": "18.203.132.87",
-            "user": "jenkins",
-            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-        },
-        {
-            "name": "aws-eu-west1-qa-builder2",
-            "public_ip": "34.244.95.165",
-            "user": "jenkins",
-            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-        },
-        {
-            "name": "aws-eu-west1-qa-builder4",
-            "public_ip": "34.253.184.117",
-            "user": "jenkins",
-            "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-        },
-    ]
+    results = get_builder_by_test_id(test_id)
+    tbl = PrettyTable(['Builder Name', "Public IP", "path"])
+    tbl.align = 'l'
+    for result in results:
+        tbl.add_row([result['builder']['name'], result['builder']['public_ip'], result['path']])
 
-    base_path = "/home/jenkins/slave/workspace"
-    path = None
-    for builder in builders:
-        remoter = RemoteCmdRunner(builder['public_ip'],
-                                  user=builder['user'],
-                                  key_file=builder['key_file'])
-        LOGGER.info('Search on %s', builder['name'])
-        result = remoter.run("find {base_path} -name test_id | xargs grep -rl {test_id}".format(base_path=base_path,
-                                                                                                test_id=test_id),
-                             ignore_status=True, verbose=False)
-
-        if not result.exited and not result.stderr:
-            path = result.stdout.strip()
-            LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
-            break
-        else:
-            LOGGER.info("Nothing found")
+    click.echo(tbl.get_string(title='Found builders for Test-id: {}'.format(test_id)))
 
 
 cli.add_command(investigate)
@@ -432,11 +425,14 @@ def cloud_usage_report(emails):
 @cli.command('collect-logs', help='Collect logs from cluster by test-id')
 @click.option('--test-id', help='Find cluster by test-id')
 @click.option('--logdir', help='Path to directory with sct results')
-@click.option('--backend', help='Clound where search nodes', default='aws')
-def collect_logs(test_id=None, logdir=None, backend='aws'):
+@click.option('--backend', help='Cloud where search nodes', default='aws')
+@click.option('--config-file', type=str, help='config test file path')
+def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
     from sdcm.logcollector import Collector
     if not os.environ.get('SCT_CLUSTER_BACKEND', None):
         os.environ['SCT_CLUSTER_BACKEND'] = backend
+    if config_file and not os.environ.get('SCT_CONFIG_FILES', None):
+        os.environ['SCT_CONFIG_FILES'] = config_file
 
     config = SCTConfiguration()
 
@@ -448,143 +444,8 @@ def collect_logs(test_id=None, logdir=None, backend='aws'):
     table.align = 'l'
     for cluster_type, s3_link in collected_logs.items():
         table.add_row([cluster_type, s3_link])
-    click.echo(table.get_string(title="Collected logs by test-id: {} Storing dir: {}".format(collector.test_id,
-                                                                                             collector.storing_dir,)))
-
-
-@cli.command('destroy-resources', help='')
-@click.option('--logdir', type=str)
-@click.option('--backend', type=str)
-def destroy_resources(logdir, backend):  # pylint: disable=too-many-statements,too-many-branches
-    import boto3
-    from sdcm.logcollector import Collector
-    if not logdir:
-        logdir = "$HOME/sct-results"
-    if not backend:
-        backend = "aws"
-    if not os.environ.get('SCT_CLUSTER_BACKEND', None):
-        os.environ['SCT_CLUSTER_BACKEND'] = backend
-
-    config = SCTConfiguration()
-    params = dict()
-    params['TestId'] = Collector.search_test_id_in_latest(logdir)
-
-    if config['cluster_backend'] == 'aws':
-        aws_instances = list_instances_aws(params, group_as_region=True)
-        status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read().strip()
-        for region, instances in aws_instances.items():
-            if not instances:
-                continue
-            client = boto3.client("ec2", region_name=region)
-            filtered_instances = filter_aws_instances_by_type(instances)
-
-            if config['post_behavior_db_nodes'] == 'destroy':
-                instances_ids = [instance['InstanceId'] for instance in filtered_instances['db_nodes']]
-                LOGGER.info('Clean next instances %s', instances_ids)
-                client.terminate_instances(InstanceIds=instances_ids)
-
-            if config['post_behavior_db_nodes'] == 'keep':
-                LOGGER.info('Leave instances runing')
-
-            if config['post_behavior_db_nodes'] == 'keep-on-failure':
-                LOGGER.info('Checking status of run in ES...')
-                if status:
-                    LOGGER.info('Run failed. Leave instances running')
-                else:
-                    LOGGER.info('Run wasSuccessful. Killing nodes')
-                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['db_nodes']]
-                    LOGGER.info('Clean next instances %s', instances_ids)
-                    client.terminate_instances(InstanceIds=instances_ids)
-
-            if config['post_behavior_monitor_nodes'] == 'destroy':
-                instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
-                LOGGER.info('Clean next instances %s', instances_ids)
-                client.terminate_instances(InstanceIds=instances_ids)
-
-            if config['post_behavior_monitor_nodes'] == 'keep':
-                LOGGER.info('Leave instances runing')
-
-            if config['post_behavior_monitor_nodes'] == 'keep-on-failure':
-                LOGGER.info('Checking status of run in ES...')
-                if status:
-                    LOGGER.info('Run failed. Leave instances running')
-                else:
-                    LOGGER.info('Run wasSuccessful. kill nodes')
-                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
-                    LOGGER.info('Clean next instances %s', instances_ids)
-                    client.terminate_instances(InstanceIds=instances_ids)
-
-            if config['post_behavior_loader_nodes'] == 'destroy':
-                instances_ids = [instance['InstanceId'] for instance in filtered_instances['loader_nodes']]
-                LOGGER.info('Clean next instances %s', instances_ids)
-                client.terminate_instances(InstanceIds=instances_ids)
-
-            if config['post_behavior_loader_nodes'] == 'keep':
-                LOGGER.info('Leave instances runing')
-
-            if config['post_behavior_loader_nodes'] == 'keep-on-failure':
-                LOGGER.info('Checking status of run in ES...')
-                if status:
-                    LOGGER.info('Run failed. Leave instances running')
-                else:
-                    LOGGER.info('Run wasSuccessful. kill nodes')
-                    instances_ids = [instance['InstanceId'] for instance in filtered_instances['monitor_nodes']]
-                    LOGGER.info('Clean next instances %s', instances_ids)
-                    client.terminate_instances(InstanceIds=instances_ids)
-
-    if config['cluster_backend'] == 'gce':
-        gce_instances = list_instances_gce(params)
-        filtered_instances = filter_gce_instances_by_type(gce_instances)
-        if config['post_behavior_db_nodes'] == 'destroy':
-            for instance in filtered_instances['db_nodes']:
-                instance.destroy()
-
-        if config['post_behavior_db_nodes'] == 'keep':
-            LOGGER.info('Leave instances runing')
-
-        if config['post_behavior_db_nodes'] == 'keep-on-failure':
-            LOGGER.info('Checking status of run in ES...')
-            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read().split()
-            if status:
-                LOGGER.info('Run failed. Leave instances running')
-            else:
-                LOGGER.info('Run wasSuccessful. Killing nodes')
-                for instance in filtered_instances['db_nodes']:
-                    instance.destroy()
-
-        if config['post_behavior_monitor_nodes'] == 'destroy':
-            for instance in filtered_instances['monitor_nodes']:
-                instance.destroy()
-
-        if config['post_behavior_monitor_nodes'] == 'keep':
-            LOGGER.info('Leave instances runing')
-
-        if config['post_behavior_monitor_nodes'] == 'keep-on-failure':
-            LOGGER.info('Checking status of run in ES...')
-            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read()
-            if status:
-                LOGGER.info('Run failed. Leave instances running')
-            else:
-                LOGGER.info('Run wasSuccessful. kill nodes')
-                for instance in filtered_instances['monitor_nodes']:
-                    instance.destroy()
-
-        if config['post_behavior_loader_nodes'] == 'destroy':
-            for instance in filtered_instances['loader_nodes']:
-                instance.destroy()
-
-        if config['post_behavior_loader_nodes'] == 'keep':
-            LOGGER.info('Leave instances runing')
-
-        if config['post_behavior_loader_nodes'] == 'keep-on-failure':
-            LOGGER.info('Checking status of run in ES...')
-            status = open(os.path.join(logdir, 'latest/events_log/critical.log')).read()
-            if status:
-                LOGGER.info('Run failed. Leave instances running')
-            else:
-                LOGGER.info('Run wasSuccessful. kill nodes')
-                for instance in filtered_instances['loader_nodes']:
-                    instance.destroy()
+    click.echo(table.get_string(title="Collected logs by test-id: {} Directory: {}".format(collector.test_id,
+                                                                                           collector.storing_dir,)))
 
 
 if __name__ == '__main__':

@@ -148,10 +148,9 @@ def call(Map pipelineParams) {
 
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
-                                    export SCT_CONFIG_FILES="${test_config}"
 
                                     echo "start clean resources ..."
-                                    ./docker/env/hydra.sh destroy-resources --logdir /sct
+                                    ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct
                                     echo "end clean resources"
                                     """
                                 }
