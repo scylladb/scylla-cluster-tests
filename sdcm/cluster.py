@@ -3336,16 +3336,6 @@ class BaseLoaderSet(object):
                 if kill_result.exit_status != 0:
                     self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)  # pylint: disable=no-member
 
-    def collect_logs(self, storing_dir):
-        storing_dir = os.path.join(storing_dir, os.path.basename(self.logdir))  # pylint: disable=no-member
-        os.mkdir(storing_dir)
-
-        for node in self.nodes:  # pylint: disable=no-member
-            storing_dir_for_node = os.path.join(storing_dir, node.name)
-            if os.path.exists(node.logdir):
-                shutil.copytree(node.logdir, storing_dir_for_node)
-        return storing_dir
-
 
 class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     # This is a Mixin for monitoring cluster and should not be inherited
@@ -3719,7 +3709,6 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
             snapshots_collector = GrafanaSnapshotEntity(name="grafana-snapshot",
                                                         test_start_time=start_time)
             snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
-            snapshots = [S3Storage().upload_file(snapshot, Setup.test_id()) for snapshot in snapshots]
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):

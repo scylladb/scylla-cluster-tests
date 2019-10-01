@@ -69,6 +69,7 @@ from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
+from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 
 configure_logging()
 
@@ -1483,7 +1484,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.exception('Exception in finalize_test method {}'.format(details))
             raise
         finally:
-            from sdcm.logcollector import SCTLogCollector
             stop_events_device()
             if self.params.get('collect_logs', False):
                 storing_dir = os.path.join(self.logdir, "collected_logs")
@@ -1641,7 +1641,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "monitoring_log": "",
                      "prometheus_data": "",
                      "monitoring_stack": ""}
-        from sdcm.logcollector import ScyllaLogCollector, MonitorLogCollector
         storing_dir = os.path.join(self.logdir, "collected_logs")
         makedirs(storing_dir)
 
@@ -1654,7 +1653,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             s3_link = db_log_collector.collect_logs(self.logdir)
             self.log.info(s3_link)
             logs_dict["db_cluster_log"] = s3_link
-
+        if self.loaders:
+            loader_log_collector = LoaderLogCollector(self.loaders.nodes, cluster.Setup.test_id(), storing_dir)
+            s3_link = loader_log_collector.collect_logs(self.logdir)
+            self.log.info(s3_link)
+            logs_dict["loader_log"] = s3_link
         if self.monitors.nodes:
             monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storing_dir)
             s3_link = monitor_log_collector.collect_logs(self.logdir)

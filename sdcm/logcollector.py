@@ -13,12 +13,13 @@ from textwrap import dedent
 import requests
 
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
-                               retrying, ParallelObject, remove_files)
+                               retrying, ParallelObject, remove_files, get_builder_by_test_id,
+                               get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
+                               makedirs, filter_gce_instances_by_type)
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LocalCmdRunner, RemoteCmdRunner
 
 LOGGER = logging.getLogger(__name__)
-# LOGGER.setLevel(logging.INFO)
 
 
 class CollectingNode(object):  # pylint: disable=too-few-public-methods
@@ -97,20 +98,37 @@ class FileLogEntity(CommandLogEntity):
                     local_files.append(full_path)
         return local_files
 
+    @staticmethod
+    def find_on_builder(builder, file_name, search_in_dir="/"):  # pylint: disable=unused-argument
+        result = builder.remoter.run('find {search_in_dir} -name {file_name}'.format(**locals()),
+                                     ignore_status=True)
+        if not result.exited and not result.stderr:
+            path = result.stdout.strip()
+        else:
+            path = None
+
+        return path
+
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         if self.search_locally and local_search_path:
             search_pattern = self.name if not node else "/".join([node.name, self.name])
             local_logfiles = self.find_local_files(local_search_path, search_pattern)
             for logfile in local_logfiles:
                 shutil.copy(src=logfile, dst=local_dst)
-                logfile = os.path.join(local_dst, os.path.basename(logfile))
-            return local_dst
-        elif self.cmd:
-            logfile = super(FileLogEntity, self).collect(node, local_dst, remote_dst)
 
-            return logfile
-        else:
+        if not os.listdir(local_dst) and self.cmd:
+            super(FileLogEntity, self).collect(node, local_dst, remote_dst)
+
+        return local_dst
+
+    def collect_from_builder(self, builder, local_dst, search_in_dir):
+
+        file_path = self.find_on_builder(builder, self.name, search_in_dir)
+        if not file_path:
             return None
+        archive = LogCollector.archive_log_remotely(builder, file_path)
+        builder.remoter.receive_files(archive, local_dst)
+        return os.path.join(local_dst, os.path.basename(file_path))
 
 
 class PrometheusSnapshotsEntity(BaseLogEntity):
@@ -148,7 +166,7 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
             snapshot_dir = self.create_prometheus_snapshot(node)
         except PrometheusSnapshotErrorException as details:
             LOGGER.warning(
-                'Create prometheus snapshot failed {}.\nUse prometheus data directory'.format(details))
+                'Create prometheus snapshot failed %s.\nUse prometheus data directory', details)
             node.remoter.run('docker stop aprom', ignore_status=True)
             snapshot_dir = self.monitoring_data_dir
         LOGGER.info(snapshot_dir)
@@ -244,8 +262,8 @@ class MonitoringStackEntity(BaseLogEntity):
         try:
             monitor_version, scylla_version = result.stdout.strip().split(':')
         except ValueError:
-            monitor_version = None
-            scylla_version = None
+            monitor_version = "None"
+            scylla_version = "None"
         return name, monitor_version, scylla_version
 
     def get_grafana_annotations(self, node):  # pylint: disable=inconsistent-return-statements
@@ -306,7 +324,7 @@ class GrafanaEntity(BaseLogEntity):
     def phantomjs_installed(self):
         result = LocalCmdRunner().run("test -d {}".format(self.phantomjs_base),
                                       ignore_status=True, verbose=False)
-        return True if result.exited == 0 else False
+        return result.exited == 0
 
     def install_phantom_js(self):
         if not self.phantomjs_installed:
@@ -336,10 +354,11 @@ class GrafanaScreenShotEntity(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
+    resolution = '1920px*4000px'
 
     def _get_screenshot_link(self, grafana_url, screenshot_path):
-        LocalCmdRunner().run("cd {0.phantomjs_base} && bin/phantomjs r.js \"{1}\" \"{2}\" 1920px".format(
-            self, grafana_url, screenshot_path))
+        LocalCmdRunner().run("cd {0.phantomjs_base} && bin/phantomjs r.js \"{1}\" \"{2}\" {0.resolution}".format(
+            self, grafana_url, screenshot_path), ignore_status=True)
 
     def get_grafana_screenshot(self, node, local_dst):
         """
@@ -510,8 +529,7 @@ class LogCollector(object):
 
     @staticmethod
     def receive_log(node, remote_log_path, local_dir):
-        if not os.path.exists(local_dir):
-            os.mkdir(local_dir)
+        makedirs(local_dir)
         node.remoter.receive_files(src=remote_log_path, dst=local_dir)
         return local_dir
 
@@ -522,11 +540,11 @@ class LogCollector(object):
 
     def collect_logs(self, local_search_path=None):
         if not self.nodes:
-            LOGGER.warning('No any running instances for {}'.format(self.cluster_log_type))
+            LOGGER.warning('No any running instances for %s', self.cluster_log_type)
             return None
 
         def collect_logs_per_node(node):
-            LOGGER.info('Collecting logs on host: {node.name}'.format(**locals()))
+            LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storing_dir(node)
             local_node_dir = os.path.join(self.local_dir, node.name)
             os.makedirs(local_node_dir)
@@ -534,11 +552,13 @@ class LogCollector(object):
                 try:
                     log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
                 except Exception as details:  # pylint: disable=unused-variable, broad-except
-                    LOGGER.error("Error occured during collecting on host: {node.name}\n{details}".format(**locals()))
+                    LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
         try:
-            ParallelObject(self.nodes, num_workers=3, timeout=300).run(collect_logs_per_node)
-        except Exception:  # pylint: disable=broad-except
-            LOGGER.error('Error occured during collecting logs')
+            workers_number = int(len(self.nodes) / 2)
+            workers_number = len(self.nodes) if workers_number < 2 else workers_number
+            ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(collect_logs_per_node)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error('Error occured during collecting logs %s', details)
         final_archive = self.archive_dir_with_zip64(self.local_dir)
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
         return s3_link
@@ -565,7 +585,7 @@ class LogCollector(object):
                         arch.write(full_path, full_path.replace(logdir, ""))
                 os.chdir(cur_dir)
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("{}".format(details))
+            LOGGER.error("Error durint creating archive. Error details: \n%s", details)
             archive_full_name = None
         return archive_full_name
 
@@ -665,7 +685,23 @@ class SCTLogCollector(LogCollector):
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
             LOGGER.warning('No any local files')
-            return None
+            LOGGER.info('Searching on builders')
+            builders = get_builder_by_test_id(self.test_id)
+
+            for obj in builders:
+                builder = CollectingNode(name=obj['builder']['name'],
+                                         ssh_login_info={
+                                             "hostname": obj['builder']['public_ip'],
+                                             "user": obj['builder']['user'],
+                                             "key_file": obj["builder"]['key_file']},
+                                         instance=None,
+                                         global_ip=obj['builder']['public_ip'])
+                for ent in self.log_entities:
+                    ent.collect_from_builder(builder, self.local_dir, obj["path"])
+
+            if not os.listdir(self.local_dir):
+                LOGGER.warning('Nothing found')
+                return None
 
         final_archive = self.archive_dir_with_zip64(self.local_dir)
 
@@ -720,94 +756,71 @@ class Collector(object):  # pylint: disable=too-many-instance-attributes,
     def sct_result_dir(self):
         return self._test_dir if self._test_dir else os.path.join(self.base_dir, "sct-results")
 
-    @staticmethod
-    def search_test_id_in_latest(logdir):
-        test_id = None
-        result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir))
-        if not result.exited and result.stdout:
-            test_id = result.stdout.strip()
-            LOGGER.info("Found latest test_id: {}".format(test_id))
-            LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
-        else:
-            LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
-        return test_id
-
     def define_test_id(self):
         if not self._test_id:
-            self._test_id = self.search_test_id_in_latest(self.sct_result_dir)
-
-    def get_local_dir_with_logs(self):
-        self.define_test_id()
-        if not self.test_id:
-            return None
-        LOGGER.info('Search dir with logs locally for test id: {}'.format(self.test_id))
-        search_cmd = "grep -rl {0.test_id} {0.sct_result_dir}/*/test_id".format(self)
-        result = LocalCmdRunner().run(cmd=search_cmd, ignore_status=True)
-        LOGGER.info("Search result {}".format(result))
-        if result.exited == 0 and result.stdout:
-            found_dirs = result.stdout.strip().split('\n')
-            LOGGER.info(found_dirs)
-            return os.path.dirname(found_dirs[0])
-        LOGGER.info("No any dirs found locally for current test id")
-        return None
+            self._test_id = search_test_id_in_latest(self.sct_result_dir)
 
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
-        for instance in instances:
+        filtered_instances = filter_aws_instances_by_type(instances)
+        for instance in filtered_instances['db_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
-            if 'db-node' in name[0]:
-                self.db_cluster.append(CollectingNode(name=name[0],
-                                                      ssh_login_info={
-                                                          "hostname": instance['PublicIpAddress'],
-                                                          "user": self.params['ami_db_scylla_user'],
-                                                          "key_file": self.params['user_credentials_path']},
-                                                      instance=instance,
-                                                      global_ip=instance['PublicIpAddress']))
-            if 'monitor-node' in name[0]:
-                self.monitor_set.append(CollectingNode(name=name[0],
-                                                       ssh_login_info={
-                                                           "hostname": instance['PublicIpAddress'],
-                                                           "user": self.params['ami_monitor_user'],
-                                                           "key_file": self.params['user_credentials_path']},
-                                                       instance=instance,
-                                                       global_ip=instance['PublicIpAddress']))
-            if 'loader-node' in name[0]:
-                self.loader_set.append(CollectingNode(name=name[0],
-                                                      ssh_login_info={
-                                                          "hostname": instance['PublicIpAddress'],
-                                                          "user": self.params['ami_loader_user'],
-                                                          "key_file": self.params['user_credentials_path']},
-                                                      instance=instance,
-                                                      global_ip=instance['PublicIpAddress']))
+            self.db_cluster.append(CollectingNode(name=name[0],
+                                                  ssh_login_info={
+                                                      "hostname": instance['PublicIpAddress'],
+                                                      "user": self.params['ami_db_scylla_user'],
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance['PublicIpAddress']))
+        for instance in filtered_instances['monitor_nodes']:
+            name = [tag['Value']
+                    for tag in instance['Tags'] if tag['Key'] == 'Name']
+            self.monitor_set.append(CollectingNode(name=name[0],
+                                                   ssh_login_info={
+                                                       "hostname": instance['PublicIpAddress'],
+                                                       "user": self.params['ami_monitor_user'],
+                                                       "key_file": self.params['user_credentials_path']},
+                                                   instance=instance,
+                                                   global_ip=instance['PublicIpAddress']))
+        for instance in filtered_instances['loader_nodes']:
+            name = [tag['Value']
+                    for tag in instance['Tags'] if tag['Key'] == 'Name']
+            self.loader_set.append(CollectingNode(name=name[0],
+                                                  ssh_login_info={
+                                                      "hostname": instance['PublicIpAddress'],
+                                                      "user": self.params['ami_loader_user'],
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance['PublicIpAddress']))
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
-        for instance in instances:
-            if 'db-node' in instance.name:
-                self.db_cluster.append(CollectingNode(name=instance.name,
-                                                      ssh_login_info={
-                                                          "hostname": instance.public_ips[0],
-                                                          "user": self.params['gce_image_username'],
-                                                          "key_file": self.params['user_credentials_path']},
-                                                      instance=instance,
-                                                      global_ip=instance.public_ips[0]))
-            if 'monitor-node' in instance.name:
-                self.monitor_set.append(CollectingNode(name=instance.name,
-                                                       ssh_login_info={
-                                                           "hostname": instance.public_ips[0],
-                                                           "user": self.params['gce_image_username'],
-                                                           "key_file": self.params['user_credentials_path']},
-                                                       instance=instance,
-                                                       global_ip=instance.public_ips[0]))
-            if 'loader-node' in instance.name:
-                self.loader_set.append(CollectingNode(name=instance.name,
-                                                      ssh_login_info={
-                                                          "hostname": instance.public_ips[0],
-                                                          "user": self.params['gce_image_username'],
-                                                          "key_file": self.params['user_credentials_path']},
-                                                      instance=instance,
-                                                      global_ip=instance.public_ips[0]))
+        filtered_instances = filter_gce_instances_by_type(instances)
+        for instance in filtered_instances['db_nodes']:
+            self.db_cluster.append(CollectingNode(name=instance.name,
+                                                  ssh_login_info={
+                                                      "hostname": instance.public_ips[0],
+                                                      "user": self.params['gce_image_username'],
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance.public_ips[0]))
+        for instance in filtered_instances['monitor_nodes']:
+            self.monitor_set.append(CollectingNode(name=instance.name,
+                                                   ssh_login_info={
+                                                       "hostname": instance.public_ips[0],
+                                                       "user": self.params['gce_image_username'],
+                                                       "key_file": self.params['user_credentials_path']},
+                                                   instance=instance,
+                                                   global_ip=instance.public_ips[0]))
+        for instance in filtered_instances['loader_nodes']:
+            self.loader_set.append(CollectingNode(name=instance.name,
+                                                  ssh_login_info={
+                                                      "hostname": instance.public_ips[0],
+                                                      "user": self.params['gce_image_username'],
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance.public_ips[0]))
 
     def get_running_cluster_sets(self):
         if self.backend == 'aws':
@@ -823,21 +836,24 @@ class Collector(object):  # pylint: disable=too-many-instance-attributes,
         """
         results = {}
         self.define_test_id()
+        if not self.test_id:
+            LOGGER.warning("No test_id provided or found")
+            return results
         self.get_running_cluster_sets()
 
-        local_dir_with_logs = self.get_local_dir_with_logs()
-        LOGGER.info("Found sct result directory with logs: {}".format(local_dir_with_logs))
+        local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
+        LOGGER.info("Found sct result directory with logs: %s", local_dir_with_logs)
 
         self.create_base_storing_dir(local_dir_with_logs)
-        LOGGER.info("Created directory to storing collected logs: {}".format(self.storing_dir))
+        LOGGER.info("Created directory to storing collected logs: %s", self.storing_dir)
         for cluster_log_collector, nodes in self.cluster_log_collectors.items():
             log_collector = cluster_log_collector(nodes,
                                                   test_id=self.test_id,
                                                   storing_dir=self.storing_dir)
-            LOGGER.info("Start collect logs for cluster {}".format(log_collector.cluster_log_type))
+            LOGGER.info("Start collect logs for cluster %s", log_collector.cluster_log_type)
             result = log_collector.collect_logs(local_search_path=local_dir_with_logs)
             results[log_collector.cluster_log_type] = result
-            LOGGER.info("collected data for {}\n{}\n".format(log_collector.cluster_log_type, result))
+            LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
         return results
 
     def create_base_storing_dir(self, test_dir=None):

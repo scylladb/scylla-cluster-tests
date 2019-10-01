@@ -3,87 +3,123 @@ import os
 import zipfile
 import tempfile
 import json
-import requests
+import datetime
 
 from textwrap import dedent
 
+import requests
+
 from sdcm.remote import LocalCmdRunner
-from .common import list_logs_by_test_id, S3Storage, retrying, remove_files
+from sdcm.utils.common import list_logs_by_test_id, S3Storage, retrying, remove_files
 
-logger = logging.getLogger(name='monitorstack')
+LOGGER = logging.getLogger(name='monitorstack')
 
 
-def restore_monitor_stack(test_id):
+def restore_monitor_stack(test_id, date_time=None):
     if not is_docker_available():
         return False
 
     monitor_stack_archives = get_monitor_set_archives(test_id)
-
-    for arch in monitor_stack_archives:
-        logger.info('Restoring monitoring stack from archive %s', arch['file_path'])
-        monitor_stack_base_dir = tempfile.mkdtemp()
-        logger.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
-        downloaded_monitor_archive = S3Storage().download_file(arch['link'],
-                                                               dst_dir=monitor_stack_base_dir)
-        monitor_data_arch = extract_monitor_data_archive(downloaded_monitor_archive,
-                                                         monitor_stack_base_dir)
-        monitor_stack_arch = extract_monitor_stack_archive(downloaded_monitor_archive,
-                                                           monitor_stack_base_dir)
-
-        if not monitor_data_arch:
-            logger.error("No prometheus snapshot were found. Switch to next archive")
-            continue
-        if not monitor_stack_arch:
-            logger.error("No monitor stack archive were found. Switch to next archive")
-            continue
-
-        monitor_data_base_dir = os.path.join(monitor_stack_base_dir, 'monitor_data_dir')
-        cmd = dedent("""
-            mkdir -p {data_dir}
-            cd {data_dir}
-            cp {archive} ./
-            tar -xvf {archive_name}
-            chmod -R 777 {data_dir}
-            """.format(data_dir=monitor_data_base_dir,
-                       archive=monitor_data_arch,
-                       archive_name=os.path.basename(monitor_data_arch)))
-        result = LocalCmdRunner().run(cmd, ignore_status=True)
-        if result.exited > 0:
-            logger.error("Error during extracting prometheus snapshot. Swithc to next archive")
-            continue
-
-        monitor_data_dir = get_monitor_data_dir(monitor_data_base_dir)
-
-        cmd = dedent("""
-            cd {data_dir}
-            cp {archive} ./
-            tar -xvf {archive_name}
-            chmod -R 777 {data_dir}
-            """.format(data_dir=monitor_stack_base_dir,
-                       archive_name=os.path.basename(monitor_stack_arch),
-                       archive=monitor_stack_arch))
-
-        result = LocalCmdRunner().run(cmd, ignore_status=True)
-        if result.exited > 0:
-            logger.error("Error during extracting monitor stack")
-            continue
-
-        monitor_stack_dir = get_monitor_stack_dir(monitor_stack_base_dir)
-        monitor_version, scylla_version = get_monitor_stack_scylla_version(monitor_stack_dir)
-
-        status = start_dockers(monitor_stack_dir,
-                               monitor_data_dir,
-                               scylla_version)
-        if status:
-            upload_sct_dashboards(monitor_stack_dir, scylla_version)
-            upload_annotations(monitor_stack_dir)
-            return status
-        else:
-            logger.error('Error during dockers starting. Trying next arhive')
-            remove_files(monitor_stack_base_dir)
-            continue
-    else:
+    arch = get_monitor_stack_archive(monitor_stack_archives, date_time)
+    if not arch:
         return False
+    # Arch element structure:
+    #     {
+    #         "file_path": log_file,
+    #         "type": log_type,
+    #         "link": link to archive,
+    #         "date": date of create
+    #     }
+
+    LOGGER.info('Restoring monitoring stack from archive %s', arch['file_path'])
+    monitor_stack_base_dir = tempfile.mkdtemp()
+    LOGGER.info('Download file {} to directory {}'.format(arch['link'], monitor_stack_base_dir))
+    downloaded_monitor_archive = S3Storage().download_file(arch['link'],
+                                                           dst_dir=monitor_stack_base_dir)
+    monitor_data_arch = extract_monitor_data_archive(downloaded_monitor_archive,
+                                                     monitor_stack_base_dir)
+    monitor_stack_arch = extract_monitor_stack_archive(downloaded_monitor_archive,
+                                                       monitor_stack_base_dir)
+
+    if not monitor_data_arch:
+        LOGGER.error("No prometheus snapshot were found in arch %s", arch['file_path'])
+        return False
+    if not monitor_stack_arch:
+        LOGGER.error("No monitor stack archive were found in arch %s", arch['file_path'])
+        return False
+
+    monitor_data_dir = create_monitoring_data_folder(monitor_stack_base_dir, monitor_data_arch)
+    monitor_stack_dir = create_monitoring_stack_folder(monitor_stack_base_dir, monitor_stack_arch)
+
+    if not monitor_stack_dir or not monitor_data_dir:
+        LOGGER.error('Creating monitor stack directories failed:\ndata_dir: %s; stack_dir: %s',
+                     monitor_data_dir, monitor_stack_dir)
+    _, scylla_version = get_monitorstack_scylla_version(monitor_stack_dir)
+
+    status = start_dockers(monitor_stack_dir,
+                           monitor_data_dir,
+                           scylla_version)
+    if status:
+        upload_sct_dashboards(monitor_stack_dir, scylla_version)
+        upload_annotations(monitor_stack_dir)
+        return status
+    else:
+        LOGGER.error('Error during dockers starting. Trying next arhive')
+        remove_files(monitor_stack_base_dir)
+        return False
+
+
+def get_monitor_stack_archive(archives, date_time):
+    arch = None
+    if not archives:
+        LOGGER.warning('No any archive for monitoring stack')
+    if date_time:
+        found_archives = [archive for archive in archives
+                          if archive['date'] == datetime.datetime.strptime(date_time, "%Y%m%d_%H%M%S")]
+        if not found_archives:
+            LOGGER.warning('Monitor stack archive for date %s was not found', date_time)
+        else:
+            arch = found_archives[0]
+    else:
+        arch = archives[0]
+
+    return arch
+
+
+def create_monitoring_data_folder(base_dir, archive):
+    monitor_data_base_dir = os.path.join(base_dir, 'monitor_data_dir')
+    cmd = dedent("""
+        mkdir -p {data_dir}
+        cd {data_dir}
+        cp {archive} ./
+        tar -xvf {archive_name}
+        chmod -R 777 {data_dir}
+        """.format(data_dir=monitor_data_base_dir,
+                   archive=archive,
+                   archive_name=os.path.basename(archive)))
+    result = LocalCmdRunner().run(cmd, ignore_status=True)
+    if result.exited > 0:
+        LOGGER.error("Error during extracting prometheus snapshot. Switch to next archive")
+        return False
+    return get_monitor_data_dir(monitor_data_base_dir)
+
+
+def create_monitoring_stack_folder(base_dir, archive):
+    cmd = dedent("""
+        cd {data_dir}
+        cp {archive} ./
+        tar -xvf {archive_name}
+        chmod -R 777 {data_dir}
+        """.format(data_dir=base_dir,
+                   archive_name=os.path.basename(archive),
+                   archive=archive))
+
+    result = LocalCmdRunner().run(cmd, ignore_status=True)
+    if result.exited > 0:
+        LOGGER.error("Error during extracting monitor stack")
+        return False
+
+    return get_monitor_stack_dir(base_dir)
 
 
 def get_monitor_set_archives(test_id):
@@ -109,10 +145,10 @@ def extract_monitor_data_archive(downloaded_monitor_set_archive, monitor_stack_b
 
 def extract_file_from_zip_archive(pattern, archive, extract_dir):
     found_file = None
-    with zipfile.ZipFile(archive) as z:
-        for name in z.namelist():
+    with zipfile.ZipFile(archive) as zfile:
+        for name in zfile.namelist():
             if pattern in name:
-                z.extract(name, extract_dir)
+                zfile.extract(name, extract_dir)
                 found_file = os.path.join(extract_dir, name)
                 break
     return found_file
@@ -129,12 +165,13 @@ def get_monitor_stack_dir(base_dir):
     return os.path.join(base_dir, monitoring_stack_dir)
 
 
-def get_monitor_stack_scylla_version(monitor_stack_dir):
+def get_monitorstack_scylla_version(monitor_stack_dir):
     try:
-        versions = open(os.path.join(monitor_stack_dir, 'monitor_version'), 'r').read().strip()
+        with open(os.path.join(monitor_stack_dir, 'monitor_version'), 'r') as f:  # pylint: disable=invalid-name
+            versions = f.read().strip()
         monitor_version, scylla_version = versions.split(':')
         return monitor_version, scylla_version
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         return 'branch-3.0', 'master'
 
 
@@ -145,11 +182,11 @@ def upload_sct_dashboards(monitoring_dockers_dir, scylla_version):
                                       sct_dashboard_file_name)
 
     if not os.path.exists(sct_dashboard_file):
-        logger.info('There is no dashboard {}. Skip load dashboard'.format(sct_dashboard_file_name))
+        LOGGER.info('There is no dashboard %s. Skip load dashboard', sct_dashboard_file_name)
         return False
 
     dashboard_url = 'http://localhost:3000/api/dashboards/db'
-    with open(sct_dashboard_file, "r") as f:
+    with open(sct_dashboard_file, "r") as f:  # pylint: disable=invalid-name
         dashboard_config = json.load(f)
 
     res = requests.post(dashboard_url,
@@ -157,9 +194,10 @@ def upload_sct_dashboards(monitoring_dockers_dir, scylla_version):
                         headers={'Content-Type': 'application/json'})
 
     if res.status_code != 200:
-        logger.info('Error uploading dashboard {}. Error message {}'.format(sct_dashboard_file, res.text))
+        LOGGER.info('Error uploading dashboard %s. Error message %s', sct_dashboard_file, res.text)
         return False
-    logger.info('Dashboard {} loaded successfully'.format(sct_dashboard_file))
+    LOGGER.info('Dashboard %s loaded successfully', sct_dashboard_file)
+    return True
 
 
 def upload_annotations(monitor_stack_dir):
@@ -168,24 +206,25 @@ def upload_annotations(monitor_stack_dir):
                                     'annotations.json')
 
     if not os.path.exists(annotations_file):
-        logger.info('There is no annotations file.Skip loading annotations')
+        LOGGER.info('There is no annotations file.Skip loading annotations')
         return False
 
-    with open(annotations_file, "r") as f:
+    with open(annotations_file, "r") as f:  # pylint: disable=invalid-name
         annotations = json.load(f)
 
     annotations_url = "http://localhost:3000/api/annotations"
-    for an in annotations:
+    for an in annotations:  # pylint: disable=invalid-name
         res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
         if res.status_code != 200:
-            logger.info('Error during uploading annotation {}. Error message {}'.format(an, res.text))
+            LOGGER.info('Error during uploading annotation %s. Error message %s', an, res.text)
             return False
-    logger.info('Annotations loaded successfully')
+    LOGGER.info('Annotations loaded successfully')
+    return True
 
 
 @retrying(n=3, sleep_time=1, message='Start docker containers')
-def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):
-    lr = LocalCmdRunner()
+def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):  # pylint: disable=unused-argument
+    lr = LocalCmdRunner()  # pylint: disable=invalid-name
     lr.run('cd {}; ./kill-all.sh'.format(monitoring_dockers_dir))
     cmd = dedent("""cd {monitoring_dockers_dir};
             ./start-all.sh \
@@ -194,19 +233,19 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
             -d {monitoring_stack_data_dir} -v {scylla_version}""".format(**locals()))
     res = lr.run(cmd, ignore_status=True)
     if res.ok:
-        r = lr.run('docker ps')
-        logger.info(r.stdout.encode('utf-8'))
+        r = lr.run('docker ps')  # pylint: disable=invalid-name
+        LOGGER.info(r.stdout.encode('utf-8'))
         return True
     else:
         raise Exception('dockers start failed. {}'.format(res))
 
 
 def is_docker_available():
-    logger.info("Checking that docker is available...")
+    LOGGER.info("Checking that docker is available...")
     result = LocalCmdRunner().run('docker ps', ignore_status=True, verbose=False)
     if result.ok:
-        logger.info('Docker is available')
+        LOGGER.info('Docker is available')
         return True
     else:
-        logger.warning('Docker is not available on your computer. Please install docker software before continue')
+        LOGGER.warning('Docker is not available on your computer. Please install docker software before continue')
         return False

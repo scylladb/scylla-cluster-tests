@@ -274,14 +274,13 @@ def list_logs_by_test_id(test_id):
 
     def convert_to_date(date_str):
         try:
-            t = datetime.datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+            t = datetime.datetime.strptime(date_str, "%Y%m%d_%H%M%S")  # pylint: disable=invalid-name
         except ValueError:
             try:
-                t = datetime.datetime.strptime(date_str, "%Y_%m_%d_%H_%M_%S")
+                t = datetime.datetime.strptime(date_str, "%Y_%m_%d_%H_%M_%S")  # pylint: disable=invalid-name
             except ValueError:
-                t = datetime.datetime(1999, 1, 1, 1, 1, 1)
-        finally:
-            return t
+                t = datetime.datetime(1999, 1, 1, 1, 1, 1)  # pylint: disable=invalid-name
+        return t   # pylint: disable=invalid-name
 
     log_files = S3Storage().search_by_path(path=test_id)
     for log_file in log_files:
@@ -1109,3 +1108,187 @@ def filter_gce_instances_by_type(instances):
             filtered_instances["loader_nodes"].append(instance)
     return filtered_instances
 
+
+BUILDERS = [
+    {
+        "name": "aws-scylla-qa-builder3",
+        "public_ip": "18.235.64.163",
+        "user": "jenkins",
+        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+    },
+    {
+        "name": "aws-eu-west1-qa-builder1",
+        "public_ip": "18.203.132.87",
+        "user": "jenkins",
+        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+    },
+    {
+        "name": "aws-eu-west1-qa-builder2",
+        "public_ip": "34.244.95.165",
+        "user": "jenkins",
+        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+    },
+    {
+        "name": "aws-eu-west1-qa-builder4",
+        "public_ip": "34.253.184.117",
+        "user": "jenkins",
+        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+    },
+    {
+        "name": "aws-eu-west1-qa-builder4",
+        "public_ip": "52.211.130.106",
+        "user": "jenkins",
+        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
+    }
+]
+
+
+def get_builder_by_test_id(test_id):
+    from sdcm.remote import RemoteCmdRunner
+
+    base_path_on_builder = "/home/jenkins/slave/workspace"
+    found_builders = []
+
+    def search_builder(builder):
+        remoter = RemoteCmdRunner(builder['public_ip'],
+                                  user=builder['user'],
+                                  key_file=builder['key_file'])
+        LOGGER.info('Search on %s', builder['name'])
+        result = remoter.run("find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder,
+                                                                                            test_id=test_id),
+                             ignore_status=True, verbose=False)
+
+        if not result.exited and not result.stderr:
+            path = result.stdout.strip()
+            LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
+            return {"builder": builder, "path": os.path.dirname(path)}
+        else:
+            LOGGER.info("Nothing found")
+            return None
+
+    search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=int(len(BUILDERS) / 2))
+    results = search_obj.run(search_builder)
+    found_builders = [builder for builder in results if builder]
+    if not found_builders:
+        LOGGER.info("Nothing found for %s", test_id)
+
+    return found_builders
+
+
+def get_post_behavior_actions(config):
+    action_per_type = {
+        "db_nodes": None,
+        "monitor_nodes": None,
+        "loader_nodes": None
+    }
+
+    for key in action_per_type:
+        config_key = 'post_behavior_{}'.format(key)
+        old_config_key = config.get('failure_post_behavior', 'destroy')
+        action_per_type[key] = config.get(config_key, old_config_key)
+
+    return action_per_type
+
+
+def clean_aws_instances_according_post_behavior(params, config, logdir):  # pylint: disable=invalid-name
+
+    status = get_testrun_status(params.get('TestId'), logdir)
+
+    def apply_action(instances, action):
+        if action == 'destroy':
+            instances_ids = [instance['InstanceId'] for instance in instances]
+            LOGGER.info('Clean next instances %s', instances_ids)
+            client.terminate_instances(InstanceIds=instances_ids)
+        elif action == 'keep-on-failure':
+            if status:
+                LOGGER.info('Run failed. Leave instances running')
+            else:
+                LOGGER.info('Run was Successful. Killing nodes')
+                apply_action(instances, action='destroy')
+        elif action == 'keep':
+            LOGGER.info('Leave instances running')
+        else:
+            LOGGER.warning('Unsupported action %s', action)
+
+    aws_instances = list_instances_aws(params, group_as_region=True)
+    for region, instances in aws_instances.items():
+        if not instances:
+            continue
+        client = boto3.client("ec2", region_name=region)
+        filtered_instances = filter_aws_instances_by_type(instances)
+        actions_per_type = get_post_behavior_actions(config)
+
+        for instance_set_type, action in actions_per_type.items():
+            LOGGER.info('Apply action "%s" for %s instances', action, instance_set_type)
+            apply_action(filtered_instances[instance_set_type], action)
+
+
+def clean_gce_instances_according_post_behavior(params, config, logdir):  # pylint: disable=invalid-name
+
+    status = get_testrun_status(params.get('TestId'), logdir)
+
+    def apply_action(instances, action):
+        if action == 'destroy':
+            for instance in filtered_instances['db_nodes']:
+                LOGGER.info('Destroying instance: %s', instance.name)
+                instance.destroy()
+                LOGGER.info('Destroyed instance: %s', instance.name)
+        elif action == 'keep-on-failure':
+            if status:
+                LOGGER.info('Run failed. Leave instances running')
+            else:
+                LOGGER.info('Run wasSuccessful. Killing nodes')
+                apply_action(instances, action='destroy')
+        elif action == 'keep':
+            LOGGER.info('Leave instances runing')
+        else:
+            LOGGER.warning('Unsupported action %s', action)
+
+    gce_instances = list_instances_gce(params)
+    filtered_instances = filter_gce_instances_by_type(gce_instances)
+    actions_per_type = get_post_behavior_actions(config)
+
+    for instance_set_type, action in actions_per_type.items():
+        apply_action(filtered_instances[instance_set_type], action)
+
+
+def search_test_id_in_latest(logdir):
+    from sdcm.remote import LocalCmdRunner
+
+    test_id = None
+    result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
+    if not result.exited and result.stdout:
+        test_id = result.stdout.strip()
+        LOGGER.info("Found latest test_id: {}".format(test_id))
+        LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
+    else:
+        LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
+    return test_id
+
+
+def get_testrun_dir(base_dir, test_id=None):
+    from sdcm.remote import LocalCmdRunner
+
+    if not test_id:
+        test_id = search_test_id_in_latest(base_dir)
+    LOGGER.info('Search dir with logs locally for test id: %s', test_id)
+    search_cmd = "find {base_dir} -name test_id | xargs grep -rl {test_id}".format(**locals())
+    result = LocalCmdRunner().run(cmd=search_cmd, ignore_status=True)
+    LOGGER.info("Search result %s", result)
+    if result.exited == 0 and result.stdout:
+        found_dirs = result.stdout.strip().split('\n')
+        LOGGER.info(found_dirs)
+        return os.path.dirname(found_dirs[0])
+    LOGGER.info("No any dirs found locally for current test id")
+    return None
+
+
+def get_testrun_status(test_id=None, logdir=None):
+
+    testrun_dir = get_testrun_dir(logdir, test_id)
+    status = None
+    if testrun_dir:
+        with open(os.path.join(testrun_dir, 'events_log/critical.log')) as f:  # pylint: disable=invalid-name
+            status = f.read().split()
+
+    return status
