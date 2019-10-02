@@ -338,7 +338,6 @@ def restore_monitoring_stack(test_id):
             LOGGER.warning("During restoring file {} next errors occured:\n {}".format(arch['link'], result))
             return False
         LOGGER.info("Extracting data finished")
-        return True
 
     LOGGER.info('Monitoring stack files available {}'.format(monitor_stack_workdir))
 
