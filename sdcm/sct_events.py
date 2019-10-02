@@ -139,8 +139,13 @@ class SctEvent(object):
         self.timestamp = time.time()
         self.severity = Severity.NORMAL
 
+    @property
     def formatted_timestamp(self):
-        return _fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        try:
+            return _fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        except ValueError:
+            LOGGER.exception("failed to format timestamp:[%d]", self.timestamp)
+            return '<UnknownTimestamp>'
 
     def publish(self):
         EVENTS_PROCESSES['MainDevice'].publish_event(self)
@@ -479,21 +484,25 @@ class EventsFileLogger(Process):
         LOGGER.info("writing to %s", self.events_filename)
 
         for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
-            msg = "{}: {}".format(message_data.formatted_timestamp(), str(message_data).strip())
-            with open(self.events_filename, 'a+') as log_file:
-                log_file.write(msg + '\n')
+            try:
+                msg = "{}: {}".format(message_data.formatted_timestamp, str(message_data).strip())
+                with open(self.events_filename, 'a+') as log_file:
+                    log_file.write(msg + '\n')
 
-            if (message_data.severity == Severity.CRITICAL or message_data.severity == Severity.ERROR) \
-                    and not event_type == 'ClusterHealthValidatorEvent':
-                with open(self.critical_events_filename, 'a+') as critical_file:
-                    critical_file.write(msg + '\n')
+                if (message_data.severity == Severity.CRITICAL or message_data.severity == Severity.ERROR) \
+                        and not event_type == 'ClusterHealthValidatorEvent':
+                    with open(self.critical_events_filename, 'a+') as critical_file:
+                        critical_file.write(msg + '\n')
 
-            LOGGER.info(msg)
-
+                LOGGER.info(msg)
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.exception("Failed to write event to event.log")
 
 # This is an example of how we'll send info into Prometheus,
 # Currently it's not in use, since the data we want to show, doesn't fit Prometheus model,
 # we are using the GrafanaAnnotator
+
+
 class PrometheusDumper(threading.Thread):
     def __init__(self):
         self.stop_event = threading.Event()
