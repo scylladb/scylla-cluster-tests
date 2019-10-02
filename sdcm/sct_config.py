@@ -125,7 +125,9 @@ class SCTConfiguration(dict):
                 'destroy' - Destroy instances and credentials (default)
                 'keep' - Keep instances running and leave credentials alone
                 'stop' - Stop instances and leave credentials alone
-             """),
+             """,
+             choices=("keep", "stop", "destroy"),
+             ),
 
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
              help="If True, all communication between nodes are via public addresses"),
@@ -153,7 +155,9 @@ class SCTConfiguration(dict):
 
                 Default: Use public IPs to connect to instances (public)
                 Use private IPs to connect to instances (private)
-             """),
+             """,
+             choices=("public", "private"),
+             ),
 
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO", type=str,
              help="Url to the repo of scylla version to install scylla"),
@@ -265,7 +269,9 @@ class SCTConfiguration(dict):
              help="when enable or disable scylla hinted handoff (enabled/disabled)"),
 
         dict(name="authenticator", env="SCT_AUTHENTICATOR", type=str,
-             help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator"),
+             help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
+             choices=("PasswordAuthenticator", "AllowAllAuthenticator"),
+             ),
 
         dict(name="authenticator_user", env="SCT_AUTHENTICATOR_USER", type=str,
              help="the username if PasswordAuthenticator is used"),
@@ -823,7 +829,7 @@ class SCTConfiguration(dict):
              help="options will be used for enable encryption at-rest for tables"),
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
-             help="How to transport logs: rsyslog or ssh"),
+             help="How to transport logs: rsyslog or ssh", choices=("rsyslog", "ssh")),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
@@ -1055,6 +1061,10 @@ class SCTConfiguration(dict):
             opt['type'](self.get(opt['name']))
         except Exception as ex:
             raise ValueError("failed to validate {}:\n\t\t{}".format(opt['name'], ex))
+        choices = opt.get('choices')
+        if choices:
+            cur_val = self.get(opt['name'])
+            assert cur_val in choices, "failed to validate '{}': {} not in {}".format(opt['name'], cur_val, choices)
 
     def verify_configuration(self):
         """
