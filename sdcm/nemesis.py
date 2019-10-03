@@ -987,9 +987,12 @@ class Nemesis(object):
 
         def generate_random_parameters_values():
             ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
-            if not ks_cf_list:
-                raise Exception("No user defined keyspace.columnfamily")
-            ks, cf = random.choice(ks_cf_list).split('.')
+            try:
+                ks, cf = random.choice(ks_cf_list).split('.')
+            except IndexError as details:
+                self.log.error('User-defined Keyspace and ColumnFamily are not found %s.', ks_cf_list)
+                self.log.debug('Error during choosing keyspace and columnfamily %s', details)
+                raise Exception('User-defined Keyspace and ColumnFamily are not found. \n{}'.format(details))
             return {
                 'toppartition': str(random.randint(5, 20)),
                 'samplers': random.choice(['writes', 'reads', 'writes,reads']),
