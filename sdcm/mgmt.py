@@ -45,7 +45,7 @@ class HostSsl(Enum):
             output_str = output_str.upper()
             return getattr(cls, output_str)
         except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+            raise ScyllaManagerError("Could not recognize returned host ssl status: {}".format(output_str))
 
 
 class HostStatus(Enum):
@@ -58,7 +58,7 @@ class HostStatus(Enum):
             output_str = output_str.upper()
             return getattr(cls, output_str)
         except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str))
 
 
 class HostRestStatus(Enum):
@@ -71,7 +71,7 @@ class HostRestStatus(Enum):
             output_str = output_str.upper()
             return getattr(cls, output_str)
         except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str))
 
 
 class TaskStatus(Enum):
