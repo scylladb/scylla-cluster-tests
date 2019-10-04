@@ -841,10 +841,10 @@ class SCTConfiguration(dict):
         dict(name="post_behavior_db_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
              help=""),
 
-        dict(name="post_behavior_loader_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
+        dict(name="post_behavior_loader_nodes", env="SCT_POST_BEHAVIOR_LOADER_NODES", type=str,
              help=""),
 
-        dict(name="post_behavior_monitor_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
+        dict(name="post_behavior_monitor_nodes", env="SCT_POST_BEHAVIOR_MONITOR_NODES", type=str,
              help="")
     ]
 

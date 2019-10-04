@@ -131,7 +131,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Clear instances') {
+            stage('Clean resources') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {

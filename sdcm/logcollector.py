@@ -52,7 +52,7 @@ class BaseLogEntity(object):  # pylint: disable=too-few-public-methods
         raise Exception('Should be implemented in child class')
 
 
-class CommandLogEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
+class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """LogEntity to save output result to file on remote host
 
     LogEntity which allow to save the output (usually log output)
@@ -74,7 +74,7 @@ class CommandLogEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
         return local_logfile
 
 
-class FileLogEntity(CommandLogEntity):
+class FileLog(CommandLog):
     """Log File Entinty
 
     Allow to find log file locally first, if it have not
@@ -117,7 +117,7 @@ class FileLogEntity(CommandLogEntity):
                 shutil.copy(src=logfile, dst=local_dst)
 
         if not os.listdir(local_dst) and self.cmd:
-            super(FileLogEntity, self).collect(node, local_dst, remote_dst)
+            super(FileLog, self).collect(node, local_dst, remote_dst)
 
         return local_dst
 
@@ -131,7 +131,7 @@ class FileLogEntity(CommandLogEntity):
         return os.path.join(local_dst, os.path.basename(file_path))
 
 
-class PrometheusSnapshotsEntity(BaseLogEntity):
+class PrometheusSnapshots(BaseLogEntity):
     """Get Prometheus snapshot entity
 
     Specific for Prometheus Log entity which allow to
@@ -144,7 +144,7 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
 
     def __init__(self, *args, **kwargs):
         self.monitoring_data_dir = kwargs.pop('monitoring_data_dir', None)
-        super(PrometheusSnapshotsEntity, self).__init__(*args, **kwargs)
+        super(PrometheusSnapshots, self).__init__(*args, **kwargs)
 
         self.current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -153,7 +153,7 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
     def create_prometheus_snapshot(self, node):
         prometheus_client = PrometheusDBStats(host=node.external_address)
         result = prometheus_client.create_snapshot()
-        if "success" in result['status']:
+        if result and "success" in result['status']:
             snapshot_dir = os.path.join(self.monitoring_data_dir,
                                         "snapshots",
                                         result['data']['name'])
@@ -201,7 +201,7 @@ class PrometheusSnapshotsEntity(BaseLogEntity):
         return local_archive_path
 
 
-class MonitoringStackEntity(BaseLogEntity):
+class MonitoringStack(BaseLogEntity):
     """LogEntinty to collect MonitoringStack
 
     Collect monitoring stack
@@ -250,7 +250,7 @@ class MonitoringStackEntity(BaseLogEntity):
 
     @staticmethod
     def get_monitoring_version(node):
-        basedir = MonitoringStackEntity.get_monitoring_base_dir(node)
+        basedir = MonitoringStack.get_monitoring_base_dir(node)
         result = node.remoter.run(
             'ls {} | grep scylla-monitoring-branch'.format(basedir), ignore_status=True, verbose=False)
 
@@ -346,7 +346,7 @@ class GrafanaEntity(BaseLogEntity):
             LOGGER.debug("PhantomJS is already installed!")
 
 
-class GrafanaScreenShotEntity(GrafanaEntity):
+class GrafanaScreenShot(GrafanaEntity):
     """Collect Grafana screenshot
 
     Collect grafana screenshot
@@ -364,7 +364,7 @@ class GrafanaScreenShotEntity(GrafanaEntity):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = MonitoringStackEntity.get_monitoring_version(node)
+        _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
         try:
             screenshots = []
 
@@ -396,7 +396,7 @@ class GrafanaScreenShotEntity(GrafanaEntity):
         return self.get_grafana_screenshot(node, local_dst)
 
 
-class GrafanaSnapshotEntity(GrafanaEntity):
+class GrafanaSnapshot(GrafanaEntity):
     """Grafana snapshot
 
     Collect Grafana snapshot
@@ -424,7 +424,7 @@ class GrafanaSnapshotEntity(GrafanaEntity):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = MonitoringStackEntity.get_monitoring_version(node)
+        _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
         try:
 
             snapshots = []
@@ -478,12 +478,12 @@ class LogCollector(object):
     def current_run(self):
         return LogCollector._current_run
 
-    def __init__(self, nodes, test_id, storing_dir):
+    def __init__(self, nodes, test_id, storage_dir):
         self.test_id = test_id
         self.nodes = nodes
-        self.local_dir = self.create_local_storing_dir(storing_dir)
+        self.local_dir = self.create_local_storage_dir(storage_dir)
 
-    def create_local_storing_dir(self, base_local_dir):
+    def create_local_storage_dir(self, base_local_dir):
         local_dir = os.path.join(base_local_dir, self.current_run,
                                  "{}-{}".format(self.cluster_log_type, self.test_id[:8]))
         try:
@@ -494,7 +494,7 @@ class LogCollector(object):
                 raise
         return local_dir
 
-    def create_remote_storing_dir(self, node, path=''):
+    def create_remote_storage_dir(self, node, path=''):
         if not path:
             path = node.name
         remote_dir = os.path.join(self.node_remote_dir, path)
@@ -545,7 +545,7 @@ class LogCollector(object):
 
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: %s', node.name)
-            remote_node_dir = self.create_remote_storing_dir(node)
+            remote_node_dir = self.create_remote_storage_dir(node)
             local_node_dir = os.path.join(self.local_dir, node.name)
             os.makedirs(local_node_dir)
             for log_entity in self.log_entities:
@@ -573,8 +573,8 @@ class LogCollector(object):
     @staticmethod
     def archive_dir_with_zip64(logdir):
         archive_base_name = os.path.basename(logdir)
-        archive_storing_dir = os.path.dirname(logdir)
-        archive_full_name = os.path.join(archive_storing_dir, archive_base_name + ".zip")
+        archive_storage_dir = os.path.dirname(logdir)
+        archive_full_name = os.path.join(archive_storage_dir, archive_base_name + ".zip")
         cur_dir = os.getcwd()
         try:
             with zipfile.ZipFile(archive_full_name, "w", allowZip64=True) as arch:
@@ -602,21 +602,21 @@ class ScyllaLogCollector(LogCollector):
         log_entities {list} -- LogEntities to collect
         cluster_log_type {str} -- cluster type name
     """
-    log_entities = [FileLogEntity(name='database.log',
-                                  command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
-                                  search_locally=True),
-                    CommandLogEntity(name='cpu_info',
-                                     command='cat /proc/cpuinfo'),
-                    CommandLogEntity(name='mem_info',
-                                     command='cat /proc/meminfo'),
-                    CommandLogEntity(name='interrupts',
-                                     command='cat /proc/interrupts'),
-                    CommandLogEntity(name='vmstat',
-                                     command='cat /proc/vmstat'),
-                    CommandLogEntity(name='scylla.yaml',
-                                     command='cat /etc/scylla/scylla.yaml'),
-                    CommandLogEntity(name='coredumps.info',
-                                     command='sudo coredumpctl info')
+    log_entities = [FileLog(name='database.log',
+                            command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
+                            search_locally=True),
+                    CommandLog(name='cpu_info',
+                               command='cat /proc/cpuinfo'),
+                    CommandLog(name='mem_info',
+                               command='cat /proc/meminfo'),
+                    CommandLog(name='interrupts',
+                               command='cat /proc/interrupts'),
+                    CommandLog(name='vmstat',
+                               command='cat /proc/vmstat'),
+                    CommandLog(name='scylla.yaml',
+                               command='cat /etc/scylla/scylla.yaml'),
+                    CommandLog(name='coredumps.info',
+                               command='sudo coredumpctl info')
                     ]
     cluster_log_type = "db-cluster"
 
@@ -624,8 +624,8 @@ class ScyllaLogCollector(LogCollector):
 class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
     log_entities = [
-        FileLogEntity(name='*cassandra-stress*.log',
-                      search_locally=True)
+        FileLog(name='*cassandra-stress*.log',
+                search_locally=True)
     ]
 
 
@@ -639,19 +639,19 @@ class MonitorLogCollector(LogCollector):
 
     """
     log_entities = [
-        CommandLogEntity(name='aprom.log',
-                         command='docker logs --details -t aprom'),
-        CommandLogEntity(name='agraf.log',
-                         command='docker logs --details -t agraf'),
-        CommandLogEntity(name='aalert.log',
-                         command='docker logs --details -t aalert'),
-        FileLogEntity(name='scylla_manager.log',
-                      command='sudo journalctl -u scylla-manager.service --no-tail',
-                      search_locally=True),
-        PrometheusSnapshotsEntity(name='prometheus_data'),
-        MonitoringStackEntity(name='monitoring-stack'),
-        GrafanaScreenShotEntity(name='grafana-screenshot'),
-        GrafanaSnapshotEntity(name='grafana-snapshot')
+        CommandLog(name='aprom.log',
+                   command='docker logs --details -t aprom'),
+        CommandLog(name='agraf.log',
+                   command='docker logs --details -t agraf'),
+        CommandLog(name='aalert.log',
+                   command='docker logs --details -t aalert'),
+        FileLog(name='scylla_manager.log',
+                command='sudo journalctl -u scylla-manager.service --no-tail',
+                search_locally=True),
+        PrometheusSnapshots(name='prometheus_data'),
+        MonitoringStack(name='monitoring-stack'),
+        GrafanaScreenShot(name='grafana-screenshot'),
+        GrafanaSnapshot(name='grafana-snapshot')
     ]
     cluster_log_type = "monitor-set"
 
@@ -667,16 +667,16 @@ class SCTLogCollector(LogCollector):
 
     """
     log_entities = [
-        FileLogEntity(name='sct.log',
-                      search_locally=True),
-        FileLogEntity(name='raw_events.log',
-                      search_locally=True),
-        FileLogEntity(name='events.log',
-                      search_locally=True),
-        FileLogEntity(name='output.log',
-                      search_locally=True),
-        FileLogEntity(name='critical.log',
-                      search_locally=True)
+        FileLog(name='sct.log',
+                search_locally=True),
+        FileLog(name='raw_events.log',
+                search_locally=True),
+        FileLog(name='events.log',
+                search_locally=True),
+        FileLog(name='output.log',
+                search_locally=True),
+        FileLog(name='critical.log',
+                search_locally=True)
     ]
     cluster_log_type = 'sct-runner'
 
@@ -735,7 +735,7 @@ class Collector(object):  # pylint: disable=too-many-instance-attributes,
         self._test_id = test_id
         self.backend = params['cluster_backend']
         self.params = params
-        self.storing_dir = None
+        self.storage_dir = None
         self._test_dir = test_dir
         self.db_cluster = []
         self.monitor_set = []
@@ -844,24 +844,24 @@ class Collector(object):  # pylint: disable=too-many-instance-attributes,
         local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
         LOGGER.info("Found sct result directory with logs: %s", local_dir_with_logs)
 
-        self.create_base_storing_dir(local_dir_with_logs)
-        LOGGER.info("Created directory to storing collected logs: %s", self.storing_dir)
+        self.create_base_storage_dir(local_dir_with_logs)
+        LOGGER.info("Created directory to storing collected logs: %s", self.storage_dir)
         for cluster_log_collector, nodes in self.cluster_log_collectors.items():
             log_collector = cluster_log_collector(nodes,
                                                   test_id=self.test_id,
-                                                  storing_dir=self.storing_dir)
+                                                  storage_dir=self.storage_dir)
             LOGGER.info("Start collect logs for cluster %s", log_collector.cluster_log_type)
             result = log_collector.collect_logs(local_search_path=local_dir_with_logs)
             results[log_collector.cluster_log_type] = result
             LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
         return results
 
-    def create_base_storing_dir(self, test_dir=None):
+    def create_base_storage_dir(self, test_dir=None):
         date_time_formatted = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         log_dir = os.path.basename(test_dir) if test_dir else date_time_formatted
-        self.storing_dir = os.path.join(self.sct_result_dir, log_dir, 'collected_logs')
-        if not os.path.exists(self.storing_dir):
-            os.makedirs(self.storing_dir)
-        if not os.path.exists(os.path.join(os.path.dirname(self.storing_dir), "test_id")):
-            with open(os.path.join(os.path.dirname(self.storing_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
+        self.storage_dir = os.path.join(self.sct_result_dir, log_dir, 'collected_logs')
+        if not os.path.exists(self.storage_dir):
+            os.makedirs(self.storage_dir)
+        if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
+            with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
                 f.write(self.test_id)
