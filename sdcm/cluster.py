@@ -48,7 +48,7 @@ from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, Datab
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
-from sdcm.logcollector import GrafanaSnapshotEntity, GrafanaScreenShotEntity, PrometheusSnapshotsEntity, MonitoringStackEntity
+from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -1876,13 +1876,6 @@ server_encryption_options:
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
 
-    # def collect_mgmt_log(self):
-    #     self.log.debug("Collect scylla manager log ...")
-    #     mgmt_log_name = "/tmp/{}_scylla_manager.log".format(self.name)
-    #     self.remoter.run('sudo journalctl -u scylla-manager.service --no-tail > {}'.format(mgmt_log_name), ignore_status=True, verbose=False)
-    #     self.log.debug("Collected log : {}".format(mgmt_log_name))
-    #     return mgmt_log_name
-
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
         this code was took out from  install_mgmt() method.
@@ -3702,12 +3695,12 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         start_time = str(test_start_time).split('.')[0] + '000'
 
         for node in self.nodes:  # pylint: disable=no-member
-            screenshot_collector = GrafanaScreenShotEntity(name="grafana-screenshot",
-                                                           test_start_time=start_time)
+            screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
+                                                     test_start_time=start_time)
             screenshots = screenshot_collector.collect(node, self.logdir)  # pylint: disable=no-member
             screenshots = [S3Storage().upload_file(screenshot, Setup.test_id()) for screenshot in screenshots]
-            snapshots_collector = GrafanaSnapshotEntity(name="grafana-snapshot",
-                                                        test_start_time=start_time)
+            snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
+                                                  test_start_time=start_time)
             snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
@@ -3732,7 +3725,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
     def download_monitor_data(self):
         for node in self.nodes:  # pylint: disable=no-member
             try:
-                collector = PrometheusSnapshotsEntity(name='prometheus_snapshot')
+                collector = PrometheusSnapshots(name='prometheus_snapshot')
 
                 snapshot_archive = collector.collect(node, self.logdir)  # pylint: disable=no-member
                 self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
@@ -3744,14 +3737,14 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
                 return ""
 
     def get_prometheus_snapshot(self, node):
-        collector = PrometheusSnapshotsEntity(name="prometheus_data")
+        collector = PrometheusSnapshots(name="prometheus_data")
 
         return collector.collect(node, self.logdir)  # pylint: disable=no-member
 
     def download_monitoring_data_stack(self):
 
         for node in self.nodes:  # pylint: disable=no-member
-            collector = MonitoringStackEntity(name="monitoring-stack")
+            collector = MonitoringStack(name="monitoring-stack")
 
             local_path_to_monitor_stack = collector.collect(node, self.logdir)  # pylint: disable=no-member
             # pylint: disable=no-member
@@ -3789,7 +3782,7 @@ class NoMonitorSet(object):
     def destroy(self):
         pass
 
-    def collect_logs(self, storing_dir):
+    def collect_logs(self, storage_dir):
         pass
 
     def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name

@@ -1149,7 +1149,7 @@ def get_builder_by_test_id(test_id):
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
 
-    def search_builder(builder):
+    def search_test_id_on_builder(builder):
         remoter = RemoteCmdRunner(builder['public_ip'],
                                   user=builder['user'],
                                   key_file=builder['key_file'])
@@ -1166,8 +1166,8 @@ def get_builder_by_test_id(test_id):
             LOGGER.info("Nothing found")
             return None
 
-    search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=int(len(BUILDERS) / 2))
-    results = search_obj.run(search_builder)
+    search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=len(BUILDERS))
+    results = search_obj.run(search_test_id_on_builder)
     found_builders = [builder for builder in results if builder]
     if not found_builders:
         LOGGER.info("Nothing found for %s", test_id)

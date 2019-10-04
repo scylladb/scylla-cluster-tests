@@ -57,8 +57,9 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, S3Storage, clean_cloud_instances, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, remove_files, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud
+from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, ScyllaCQLSession, \
+    get_non_system_ks_cf_list, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, \
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -1429,37 +1430,46 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def clean_resources(self):
         # pylint: disable=too-many-branches
-        if self.params.get('execute_post_behavior', False):
-            self.log.debug('Cleaning up resources used in the test')
+        if not self.params.get('execute_post_behavior', False):
+            self.log.info('Resources will continue to run')
+            return
 
-        # if self.db_cluster is not None:
-        #     if self._failure_post_behavior == 'destroy':
-        #         self.db_cluster.destroy()
-        #         self.db_cluster = None
-        #         if self.cs_db_cluster:
-        #             self.cs_db_cluster.destroy()
-        #     elif self._failure_post_behavior == 'stop':
-        #         for node in self.db_cluster.nodes:
-        #             node.instance.stop()
-        #         self.db_cluster = None
+        actions_per_cluster_type = get_post_behavior_actions(self.params)
+        critical_events = get_testrun_status(test_id=cluster.Setup.test_id(), logdir=self.logdir)
+        if self.db_cluster is not None:
+            self.log.info("Action for db nodes is %s", actions_per_cluster_type['db_nodes'])
+            if (actions_per_cluster_type['db_nodes'] == 'destroy') or \
+               (actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and not critical_events):
+                self.db_cluster.destroy()
+                self.db_cluster = None
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.destroy()
+            elif self._failure_post_behavior == 'stop':
+                for node in self.db_cluster.nodes:
+                    node.instance.stop()
+                self.db_cluster = None
 
-        # if self.loaders is not None:
-        #     if self._failure_post_behavior == 'destroy':
-        #         self.loaders.destroy()
-        #         self.loaders = None
-        #     elif self._failure_post_behavior == 'stop':
-        #         for node in self.loaders.nodes:
-        #             node.instance.stop()
-        #         self.db_cluster = None
+        if self.loaders is not None:
+            self.log.info("Action for loader nodes is %s", actions_per_cluster_type['loader_nodes'])
+            if (actions_per_cluster_type['loader_nodes'] == 'destroy') or \
+               (actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and not critical_events):
+                self.loaders.destroy()
+                self.loaders = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.loaders.nodes:
+                    node.instance.stop()
+                self.db_cluster = None
 
-        # if self.monitors is not None:
-        #     if self._failure_post_behavior == 'destroy':
-        #         self.monitors.destroy()
-        #         self.monitors = None
-        #     elif self._failure_post_behavior == 'stop':
-        #         for node in self.monitors.nodes:
-        #             node.instance.stop()
-        #         self.monitors = None
+        if self.monitors is not None:
+            self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
+            if (actions_per_cluster_type['monitor_nodes'] == 'destroy') or \
+               (actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and not critical_events):
+                self.monitors.destroy()
+                self.monitors = None
+            elif self._failure_post_behavior == 'stop':
+                for node in self.monitors.nodes:
+                    node.instance.stop()
+                self.monitors = None
 
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
@@ -1485,9 +1495,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             raise
         finally:
             stop_events_device()
-            if self.params.get('collect_logs', False):
-                storing_dir = os.path.join(self.logdir, "collected_logs")
-                s3_link = SCTLogCollector([], cluster.Setup.test_id(), storing_dir).collect_logs(self.logdir)
+            if self.params.get('collect_logs'):
+                storage_dir = os.path.join(self.logdir, "collected_logs")
+                s3_link = SCTLogCollector([], cluster.Setup.test_id(), storage_dir).collect_logs(self.logdir)
                 self.log.info(s3_link)
 
                 if self.create_stats:
@@ -1641,25 +1651,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "monitoring_log": "",
                      "prometheus_data": "",
                      "monitoring_stack": ""}
-        storing_dir = os.path.join(self.logdir, "collected_logs")
-        makedirs(storing_dir)
+        storage_dir = os.path.join(self.logdir, "collected_logs")
+        makedirs(storage_dir)
 
-        if not os.path.exists(storing_dir):
-            os.makedirs(storing_dir)
+        if not os.path.exists(storage_dir):
+            os.makedirs(storage_dir)
 
-        self.log.info("Storing dir is {}".format(storing_dir))
+        self.log.info("Storage dir is {}".format(storage_dir))
         if self.db_cluster:
-            db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, cluster.Setup.test_id(), storing_dir)
+            db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, cluster.Setup.test_id(), storage_dir)
             s3_link = db_log_collector.collect_logs(self.logdir)
             self.log.info(s3_link)
             logs_dict["db_cluster_log"] = s3_link
         if self.loaders:
-            loader_log_collector = LoaderLogCollector(self.loaders.nodes, cluster.Setup.test_id(), storing_dir)
+            loader_log_collector = LoaderLogCollector(self.loaders.nodes, cluster.Setup.test_id(), storage_dir)
             s3_link = loader_log_collector.collect_logs(self.logdir)
             self.log.info(s3_link)
             logs_dict["loader_log"] = s3_link
         if self.monitors.nodes:
-            monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storing_dir)
+            monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storage_dir)
             s3_link = monitor_log_collector.collect_logs(self.logdir)
             self.log.info(s3_link)
             logs_dict["monitoring_log"] = s3_link

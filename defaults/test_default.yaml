@@ -32,7 +32,10 @@ seeds_num: 1
 instance_provision: spot_low_price
 spot_max_price: 0.60
 
-failure_post_behavior: destroy
+execute_post_behavior: false
+post_behavior_db_nodes: keep-on-failure
+post_behavior_loader_nodes: destroy
+post_behavior_monitor_nodes: keep
 
 cloud_credentials_path: '~/.ssh/support'
 
@@ -43,5 +46,4 @@ logs_transport: "rsyslog"
 send_email: true
 email_recipients: ['qa@scylladb.com']
 
-collect_logs: true
-
+collect_logs: false

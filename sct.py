@@ -118,15 +118,14 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
         if user:
             params['RunByUser'] = user
 
-        if not test_id:
-            clean_cloud_instances(params)
-            click.echo('cleaned instances for {}'.format(params))
-
         if test_id:
             for _test_id in test_id:
                 params['TestId'] = _test_id
                 clean_cloud_instances(params)
                 click.echo('cleaned instances for {}'.format(params))
+        else:
+            clean_cloud_instances(params)
+            click.echo('cleaned instances for {}'.format(params))
 
 
 @cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
@@ -445,7 +444,7 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
     for cluster_type, s3_link in collected_logs.items():
         table.add_row([cluster_type, s3_link])
     click.echo(table.get_string(title="Collected logs by test-id: {} Directory: {}".format(collector.test_id,
-                                                                                           collector.storing_dir,)))
+                                                                                           collector.storage_dir,)))
 
 
 if __name__ == '__main__':

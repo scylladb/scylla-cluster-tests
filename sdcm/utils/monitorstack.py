@@ -48,8 +48,8 @@ def restore_monitor_stack(test_id, date_time=None):
         LOGGER.error("No monitor stack archive were found in arch %s", arch['file_path'])
         return False
 
-    monitor_data_dir = create_monitoring_data_folder(monitor_stack_base_dir, monitor_data_arch)
-    monitor_stack_dir = create_monitoring_stack_folder(monitor_stack_base_dir, monitor_stack_arch)
+    monitor_data_dir = create_monitoring_data_dir(monitor_stack_base_dir, monitor_data_arch)
+    monitor_stack_dir = create_monitoring_stack_dir(monitor_stack_base_dir, monitor_stack_arch)
 
     if not monitor_stack_dir or not monitor_data_dir:
         LOGGER.error('Creating monitor stack directories failed:\ndata_dir: %s; stack_dir: %s',
@@ -86,7 +86,7 @@ def get_monitor_stack_archive(archives, date_time):
     return arch
 
 
-def create_monitoring_data_folder(base_dir, archive):
+def create_monitoring_data_dir(base_dir, archive):
     monitor_data_base_dir = os.path.join(base_dir, 'monitor_data_dir')
     cmd = dedent("""
         mkdir -p {data_dir}
@@ -104,7 +104,7 @@ def create_monitoring_data_folder(base_dir, archive):
     return get_monitor_data_dir(monitor_data_base_dir)
 
 
-def create_monitoring_stack_folder(base_dir, archive):
+def create_monitoring_stack_dir(base_dir, archive):
     cmd = dedent("""
         cd {data_dir}
         cp {archive} ./
