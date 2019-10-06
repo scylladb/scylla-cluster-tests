@@ -40,7 +40,7 @@ class CreateSpotFleetError(ClientError):
     pass
 
 
-class EC2Client(object):
+class EC2Client():
 
     def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
@@ -215,7 +215,7 @@ class EC2Client(object):
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_request_fulfilled(request_ids)
-            LOGGER.debug("{request_ids}: [{status}] - {resp}".format(**locals()))
+            LOGGER.debug(f"{request_ids}: [{status}] - {resp}")
             if not status and resp == STATUS_PRICE_TOO_LOW:
                 break
             timeout += self._wait_interval
@@ -269,7 +269,7 @@ class EC2Client(object):
 
     @staticmethod
     def _encode_user_data(user_data):
-        return base64.b64encode(user_data)
+        return base64.b64encode(user_data.encode('utf-8')).decode("ascii")
 
     def get_instance(self, instance_id):
         """
@@ -277,7 +277,8 @@ class EC2Client(object):
         :param instance_id: instance id
         :return: EC2.Instance object
         """
-        instance = self._resource.Instance(id=instance_id)
+        # TODO: remove no-member when https://github.com/PyCQA/pylint/issues/3134 is fixed
+        instance = self._resource.Instance(id=instance_id)  # pylint: disable=no-member
         return instance
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(ClientError,),

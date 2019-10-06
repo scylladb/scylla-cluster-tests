@@ -282,7 +282,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
                 "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
-                for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                for _id in range(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
                 "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],
@@ -304,7 +304,7 @@ class FillDatabaseData(ClusterTester):
             'inserts': [
                 "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
                                                                                                               tld)
-                for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                for _id in range(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_multiget_test WHERE userid IN (48, 2) LIMIT 1"],
             'results': [
@@ -349,7 +349,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_sparse_test'],
             'inserts': [
                 "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
-                    _id, tld) for _id in xrange(0, 100) for tld in ['com', 'org', 'net']],
+                    _id, tld) for _id in range(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_sparse_test LIMIT 4"],
             'results': [
@@ -683,12 +683,9 @@ class FillDatabaseData(ClusterTester):
                 PRIMARY KEY (k, c1, c2)
             ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC);"""],
             'truncates': ['TRUNCATE reversed_comparator_test1', 'TRUNCATE reversed_comparator_test2'],
-            'inserts': ["INSERT INTO reversed_comparator_test1 (k, c, v) VALUES (0, {}, {})".format(x, x) for x in
+            'inserts': [f"INSERT INTO reversed_comparator_test1 (k, c, v) VALUES (0, {x}, {x})" for x in
                         range(0, 10)] + [
-                "INSERT INTO reversed_comparator_test2 (k, c1, c2, v) VALUES (0, {}, {}, '{}{}')".format(x,
-                                                                                                         y,
-                                                                                                         x,
-                                                                                                         y)
+                f"INSERT INTO reversed_comparator_test2 (k, c1, c2, v) VALUES (0, {x}, {y}, '{x}{y}')"
                 for x in range(0, 10) for y in range(0, 10)],
             'queries': [
                 "SELECT c, v FROM reversed_comparator_test1 WHERE k = 0 ORDER BY c ASC",
@@ -961,9 +958,9 @@ class FillDatabaseData(ClusterTester):
                         );"""],
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_test (k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (
-                i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in xrange(0, 5) for j in xrange(0, 2)
+                i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in range(0, 5) for j in range(0, 2)
                 for k
-                in xrange(0, 2)],
+                in range(0, 2)],
             'queries': ["SELECT v1, v2 FROM range_tombstones_test where k = %d" % 0,
                         "SELECT v1, v2 FROM range_tombstones_test where k = %d" % 1,
                         "SELECT v1, v2 FROM range_tombstones_test where k = %d" % 2,
@@ -985,27 +982,27 @@ class FillDatabaseData(ClusterTester):
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 2,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 3,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 4],
-            'results': [[[x, x] for x in xrange(0 * 4, (0 + 1) * 4)],
-                        [[x, x] for x in xrange(1 * 4, (1 + 1) * 4)],
-                        [[x, x] for x in xrange(2 * 4, (2 + 1) * 4)],
-                        [[x, x] for x in xrange(3 * 4, (3 + 1) * 4)],
-                        [[x, x] for x in xrange(4 * 4, (4 + 1) * 4)],
+            'results': [[[x, x] for x in range(0 * 4, (0 + 1) * 4)],
+                        [[x, x] for x in range(1 * 4, (1 + 1) * 4)],
+                        [[x, x] for x in range(2 * 4, (2 + 1) * 4)],
+                        [[x, x] for x in range(3 * 4, (3 + 1) * 4)],
+                        [[x, x] for x in range(4 * 4, (4 + 1) * 4)],
                         [],
                         [],
                         [],
                         [],
                         [],
-                        [[x, x] for x in xrange(0 * 4 + 2, (0 + 1) * 4)],
-                        [[x, x] for x in xrange(1 * 4 + 2, (1 + 1) * 4)],
-                        [[x, x] for x in xrange(2 * 4 + 2, (2 + 1) * 4)],
-                        [[x, x] for x in xrange(3 * 4 + 2, (3 + 1) * 4)],
-                        [[x, x] for x in xrange(4 * 4 + 2, (4 + 1) * 4)],
+                        [[x, x] for x in range(0 * 4 + 2, (0 + 1) * 4)],
+                        [[x, x] for x in range(1 * 4 + 2, (1 + 1) * 4)],
+                        [[x, x] for x in range(2 * 4 + 2, (2 + 1) * 4)],
+                        [[x, x] for x in range(3 * 4 + 2, (3 + 1) * 4)],
+                        [[x, x] for x in range(4 * 4 + 2, (4 + 1) * 4)],
                         None,
-                        [[x, x] for x in xrange(0 * 4 + 2, (0 + 1) * 4)],
-                        [[x, x] for x in xrange(1 * 4 + 2, (1 + 1) * 4)],
-                        [[x, x] for x in xrange(2 * 4 + 2, (2 + 1) * 4)],
-                        [[x, x] for x in xrange(3 * 4 + 2, (3 + 1) * 4)],
-                        [[x, x] for x in xrange(4 * 4 + 2, (4 + 1) * 4)]],
+                        [[x, x] for x in range(0 * 4 + 2, (0 + 1) * 4)],
+                        [[x, x] for x in range(1 * 4 + 2, (1 + 1) * 4)],
+                        [[x, x] for x in range(2 * 4 + 2, (2 + 1) * 4)],
+                        [[x, x] for x in range(3 * 4 + 2, (3 + 1) * 4)],
+                        [[x, x] for x in range(4 * 4 + 2, (4 + 1) * 4)]],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -1030,7 +1027,7 @@ class FillDatabaseData(ClusterTester):
                         [],
                         None,
                         None,
-                        [['%i%i' % (c1, c2)] for c1 in xrange(0, 4) for c2 in xrange(0, 2) if c1 != 1]],
+                        [['%i%i' % (c1, c2)] for c1 in range(0, 4) for c2 in range(0, 2) if c1 != 1]],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -1238,7 +1235,7 @@ class FillDatabaseData(ClusterTester):
         """],
             'truncates': ["TRUNCATE composite_row_key_test"],
             'inserts': [
-                "INSERT INTO composite_row_key_test (k1, k2, c, v) VALUES ({}, {}, {}, {})".format(0, i, i, i) for i
+                f"INSERT INTO composite_row_key_test (k1, k2, c, v) VALUES (0, {i}, {i}, {i})" for i
                 in range(0, 4)
             ],
             'queries': [
@@ -1514,7 +1511,7 @@ class FillDatabaseData(ClusterTester):
                         v int
                     )"""],
             'truncates': ["TRUNCATE remove_range_slice_test"],
-            'inserts': ["INSERT INTO remove_range_slice_test (k, v) VALUES ({}, {})".format(i, i) for i in
+            'inserts': [f"INSERT INTO remove_range_slice_test (k, v) VALUES ({i}, {i})" for i in
                         range(0, 3)] + [
                 "DELETE FROM remove_range_slice_test WHERE k = 1"],
             'queries': ["SELECT * FROM remove_range_slice_test"],
@@ -1882,10 +1879,10 @@ class FillDatabaseData(ClusterTester):
             )
             """],
             'truncates': ["TRUNCATE range_with_deletes_test"],
-            'inserts': ["INSERT INTO range_with_deletes_test(k, v) VALUES ({}, {})".format(i, i) for i in
+            'inserts': [f"INSERT INTO range_with_deletes_test(k, v) VALUES ({i}, {i})" for i in
                         range(0, 30)] + [
-                "DELETE FROM range_with_deletes_test WHERE k = {}".format(i) for i in
-                random.sample(xrange(30), 5)],
+                f"DELETE FROM range_with_deletes_test WHERE k = {i}" for i in
+                random.sample(range(30), 5)],
             'queries': ["#LENGTH SELECT * FROM range_with_deletes_test LIMIT {}".format(15)],
             'results': [15],
             'min_version': '',
@@ -2439,15 +2436,15 @@ class FillDatabaseData(ClusterTester):
             'truncates': ["TRUNCATE select_distinct_test1", "TRUNCATE select_distinct_test2",
                           "TRUNCATE select_distinct_test3"],
             'inserts': ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 0, 0)' % (i, i) for
-                        i in xrange(0, 3)] +
+                        i in range(0, 3)] +
                        ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 1, 1)' % (i, i) for
-                        i in xrange(0, 3)] +
+                        i in range(0, 3)] +
                        ['INSERT INTO select_distinct_test2 (pk0, pk1, val) VALUES (%d, %d, %d)' % (i, i, i) for i in
-                        xrange(0, 3)] +
+                        range(0, 3)] +
                        ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name0', 0)" % i for i in
-                        xrange(0, 3)] +
+                        range(0, 3)] +
                        ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name1', 1)" % i for i in
-                        xrange(0, 3)],
+                        range(0, 3)],
             'queries': ['SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 1',
                         'SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 3',
                         'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 1',
@@ -2486,8 +2483,8 @@ class FillDatabaseData(ClusterTester):
                           "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
                               k),
                           "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
-                              k).format(i)] for k in range(1, 10)][j][i] for j in xrange(0, 9) for i in
-                        xrange(0, 3)],
+                              k).format(i)] for k in range(1, 10)][j][i] for j in range(0, 9) for i in
+                        range(0, 3)],
             'results': [[], [[True]], [[False, True]]] * 3,
             'min_version': '',
             'max_version': '',
@@ -2843,20 +2840,21 @@ class FillDatabaseData(ClusterTester):
     def cql_create_simple_tables(session, rows):
         """ Create tables for truncate test """
         create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int)"
-        for i in xrange(rows):
+        for i in range(rows):
             session.execute(create_query % i)
 
     @staticmethod
     def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
-        insert_query = 'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
-        for i in xrange(rows):  # pylint: disable=unused-variable
-            for k in xrange(100):  # pylint: disable=unused-variable
-                session.execute(insert_query.format(**locals()))
+        def insert_query():
+            return f'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
+        for i in range(rows):  # pylint: disable=unused-variable
+            for k in range(100):  # pylint: disable=unused-variable
+                session.execute(insert_query())
 
     @staticmethod
     def cql_truncate_simple_tables(session, rows):
         truncate_query = 'TRUNCATE TABLE truncate_table%d'
-        for i in xrange(rows):
+        for i in range(rows):
             session.execute(truncate_query % i)
 
     def fill_db_data_for_truncate_test(self, insert_rows):

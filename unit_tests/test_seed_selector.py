@@ -3,6 +3,7 @@ import tempfile
 import logging
 import shutil
 import os.path
+
 from tenacity import RetryError
 
 import sdcm.cluster
@@ -56,7 +57,7 @@ class TestSeedSelector(unittest.TestCase):
     def setup_cluster(self, nodes_number):
         self.cluster = DummyCluster()
         # Add 3 nodes
-        for i in xrange(1, nodes_number+1):
+        for i in range(1, nodes_number+1):
             self.cluster.nodes.append(DummyNode(name='node%d' % i, parent_cluster=None,
                                                 base_logdir=self.temp_dir,
                                                 ssh_login_info=dict(key_file='~/.ssh/scylla-test')))
@@ -113,7 +114,7 @@ class TestSeedSelector(unittest.TestCase):
         self.setup_cluster(nodes_number=1)
         self.cluster.set_test_params(seeds_selector='reflector', seeds_num=1, db_type='scylla')
         sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), 'test_data', 'scylla.yaml')
-        self.assertRaisesRegexp(expected_exception=RetryError,
-                                expected_regexp='Waiting for seed is selected by reflector',
-                                callable_obj=self.cluster.set_seeds,
-                                wait_for_timeout=5)
+        self.assertRaisesRegex(expected_exception=RetryError,
+                               expected_regex='Waiting for seed is selected by reflector',
+                               callable_obj=self.cluster.set_seeds,
+                               wait_for_timeout=5)

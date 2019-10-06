@@ -90,7 +90,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
                                    node_prefix=self.node_prefix)
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
-        for node_index in xrange(count):
+        for node_index in range(count):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             self.nodes.append(self._create_node(node_name,
                                                 self._node_public_ips[node_index],
@@ -116,7 +116,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         We have to modify scylla.yaml on our own because we are not on AWS,
         where there are auto config scripts in place.
         """
-        pass  # self._node_setup(node, verbose)
+        # self._node_setup(node, verbose)
 
 
 class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method

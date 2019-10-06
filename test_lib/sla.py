@@ -20,7 +20,7 @@ def sla_result_to_dict(sla_result):
 DEFAULT_SERVICE_LEVEL_SHARES = 1000
 
 
-class ServiceLevel(object):  # pylint: disable=too-many-instance-attributes
+class ServiceLevel():  # pylint: disable=too-many-instance-attributes
     # The class provide interface to manage SERVICE LEVEL
     def __init__(self, session, name, service_shares=None, verbose=True):
         self.session = session
@@ -102,7 +102,7 @@ class ServiceLevel(object):  # pylint: disable=too-many-instance-attributes
         return sla_result_to_dict(res)
 
 
-class UserRoleBase(object):  # pylint: disable=too-many-instance-attributes
+class UserRoleBase():  # pylint: disable=too-many-instance-attributes
     # Base class for ROLES and USERS
     AUTHENTICATION_ENTITY = ''
 
@@ -176,8 +176,6 @@ class UserRoleBase(object):  # pylint: disable=too-many-instance-attributes
             assert ex.message.split('message=')[1].replace('"', '') == \
                 '{grant_to} already includes role {role_be_granted}.'.format(role_be_granted=role_be_granted, grant_to=grant_to), \
                 'Unexpected error during grant: {}'.format(ex.message)
-        except Exception:
-            raise
         self.log.debug('Role "{role_be_granted}" has been granted to {grant_to}'.format(
             role_be_granted=role_be_granted, grant_to=grant_to))
 
@@ -195,8 +193,6 @@ class UserRoleBase(object):  # pylint: disable=too-many-instance-attributes
                 '{role_revokes_from} was not granted role {role_be_revoked}, so it cannot be revoked.' \
                 .format(role_be_revoked=role_be_revoked, role_revokes_from=role_revokes_from), \
                 'Unexpected error during revoke: {}'.format(ex.message)
-        except Exception:
-            raise
         self.log.debug('Role "{role_be_revoked}" has been revocked from {role_revokes_from}'.format(
             role_be_revoked=role_be_revoked, role_revokes_from=role_revokes_from))
 
@@ -251,7 +247,7 @@ class Role(UserRoleBase):
                 if value:
                     role_options[opt.replace('_dict', '')] = '\'{}\''.format(value) \
                         if opt == 'password' else value
-        role_options_str = ' AND '.join(['{} = {}'.format(opt, val) for opt, val in role_options.iteritems()])
+        role_options_str = ' AND '.join(['{} = {}'.format(opt, val) for opt, val in role_options.items()])
         if role_options_str:
             role_options_str = ' WITH {}'.format(role_options_str)
 

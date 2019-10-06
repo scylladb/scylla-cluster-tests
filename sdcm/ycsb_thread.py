@@ -13,7 +13,7 @@ from sdcm.remote import FailuresWatcher
 LOGGER = logging.getLogger(__name__)
 
 
-class YcsbStressThread(object):  # pylint: disable=too-many-instance-attributes
+class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
     METRICS = dict()
     collectible_ops = ['read', 'update', 'cleanup', 'read-failed', 'update-failed']
 

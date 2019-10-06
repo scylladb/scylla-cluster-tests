@@ -138,7 +138,7 @@ class GCENode(cluster.BaseNode):
     def get_console_screenshot(self):
         # TODO adding console output from instance on GCE
         self.log.warning('Method is not implemented for GCENode')
-        return ''
+        return b''
 
     @property
     def ipv6_ip_address(self):

@@ -131,7 +131,7 @@ class LongevityTest(ClusterTester):
             # the loaders (round_robin).
             if keyspace_num > 1 and self.params.get('round_robin'):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
-                for i in xrange(1, keyspace_num + 1):
+                for i in range(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
                     self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
                                                                    'keyspace_name': keyspace_name,
@@ -186,7 +186,7 @@ class LongevityTest(ClusterTester):
             # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
             if keyspace_num > 1 and self.params.get('round_robin'):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
-                for i in xrange(1, keyspace_num + 1):
+                for i in range(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
                     params = {'keyspace_name': keyspace_name, 'round_robin': True, 'stress_cmd': stress_cmd}
 
@@ -340,7 +340,7 @@ class LongevityTest(ClusterTester):
         """
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
-            for i in xrange(0, len(_list), chunk_size):
+            for i in range(0, len(_list), chunk_size):
                 yield _list[i:i + chunk_size], i, i+chunk_size, len(_list) + i * 2
 
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
@@ -370,8 +370,8 @@ class LongevityTest(ClusterTester):
                                     scylla_encryption_options=self.params.get('scylla_encryption_options', None))
 
         num_of_batches = int(total_stress / batch_size)
-        for batch in xrange(0, num_of_batches):
-            for i in xrange(1 + batch * batch_size, (batch + 1) * batch_size + 1):
+        for batch in range(0, num_of_batches):
+            for i in range(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
                 self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
@@ -421,7 +421,7 @@ class LongevityTest(ClusterTester):
         """
 
         self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
-        for i in xrange(1, keyspace_num+1):
+        for i in range(1, keyspace_num+1):
             keyspace_name = 'keyspace{}'.format(i)
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
             self.log.debug('{} Created'.format(keyspace_name))

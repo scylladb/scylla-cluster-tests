@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import random
 from unittest import TestCase
 import logging
@@ -7,7 +9,7 @@ from sdcm.utils.common import version
 # pylint: disable=function-redefined
 
 
-class VersionedClass(object):  # pylint: disable=too-few-public-methods,function-redefined
+class VersionedClass():  # pylint: disable=too-few-public-methods,function-redefined
     def __init__(self, current_version):
         self.version = current_version
         self.log = logging.getLogger(__name__)
@@ -52,7 +54,7 @@ class TestUtilsVersionDecorator(TestCase):
         versions = ["1.2", "2", "3"]
         random.shuffle(versions)
         for ver in versions:
-            print ver
+            print(ver)
             vclass = VersionedClass(ver)
             got_ver, _ = vclass.setup()
             assert ver == got_ver
@@ -72,7 +74,7 @@ class TestUtilsVersionDecorator(TestCase):
         versions = ["1.2", "2", "3"]
         random.shuffle(versions)
         for ver in versions:
-            print ver
+            print(ver)
             vclass = MutliVersionMethods(ver)
             got_ver = vclass.mvc()
             assert ver == got_ver

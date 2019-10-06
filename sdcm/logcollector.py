@@ -7,7 +7,7 @@ import tempfile
 import time
 import zipfile
 import fnmatch
-
+import re
 from textwrap import dedent
 
 import requests
@@ -22,7 +22,7 @@ from sdcm.remote import LocalCmdRunner, RemoteCmdRunner
 LOGGER = logging.getLogger(__name__)
 
 
-class CollectingNode(object):  # pylint: disable=too-few-public-methods
+class CollectingNode():  # pylint: disable=too-few-public-methods
 
     def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None):
         self.name = name
@@ -35,7 +35,7 @@ class PrometheusSnapshotErrorException(Exception):
     pass
 
 
-class BaseLogEntity(object):  # pylint: disable=too-few-public-methods
+class BaseLogEntity():  # pylint: disable=too-few-public-methods
     """Base class for log entity
 
     LogEntity any file, command, operation, complex actions
@@ -418,7 +418,6 @@ class GrafanaSnapshot(GrafanaEntity):
             LOGGER.error(output)
             return ""
         else:
-            import re
             matched = re.search(r"https://snapshot.raintank.io/dashboard/snapshot/\w+", output)
             LOGGER.info("Shared grafana snapshot: {}".format(matched.group()))
 
@@ -460,7 +459,7 @@ class GrafanaSnapshot(GrafanaEntity):
         return {'links': snapshots, 'file': snapshots_file}
 
 
-class LogCollector(object):
+class LogCollector():
     """Base class for LogCollector types
 
     Base class implements interface for collecting
@@ -580,13 +579,13 @@ class LogCollector(object):
         return s3_link
 
     def collect_logs_for_inactive_nodes(self, local_search_path=None):
-        node_names = set([node.name for node in self.nodes])
+        node_names = {node.name for node in self.nodes}
         if not local_search_path:
             return
         for root, _, _ in os.walk(local_search_path):
             if self.cluster_log_type in root:
-                node_dirs = set([dir_name for dir_name in os.listdir(
-                    root) if os.path.isdir(os.path.join(root, dir_name))])
+                node_dirs = {dir_name for dir_name in os.listdir(
+                    root) if os.path.isdir(os.path.join(root, dir_name))}
                 if len(node_names) != len(node_dirs):
                     inactive_nodes = node_dirs.difference(node_names)
                     for dir_name in inactive_nodes:
@@ -747,7 +746,7 @@ class SCTLogCollector(LogCollector):
         return s3_link
 
 
-class Collector(object):  # pylint: disable=too-many-instance-attributes,
+class Collector():  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
     Collector instance which should be run to collect logs and additional info

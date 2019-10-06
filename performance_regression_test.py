@@ -151,7 +151,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             stress_queue = list()
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
-            if not isinstance(prepare_write_cmd, basestring) and len(prepare_write_cmd) > 1:
+            if not isinstance(prepare_write_cmd, str) and len(prepare_write_cmd) > 1:
                 # Check if it should be round_robin across loaders
                 if self.params.get('round_robin'):
                     self.log.debug('Populating data using round_robin')
@@ -514,7 +514,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                     self.log.debug('Run query: {}'.format(query))
                     session.execute(query)
             except Exception as ex:
-                self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, ex.message))
+                self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, str(ex)))
                 raise Exception
 
             self.log.debug('Finish dropping materialized view {}'.format(mv_name))

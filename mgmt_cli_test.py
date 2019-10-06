@@ -286,5 +286,5 @@ class MgmtCliTest(ClusterTester):
             table_repair_percentage = float(table_repair_progress.replace('%', ''))
             return table_repair_percentage
         except ScyllaManagerError as err:
-            assert "not found in" in err.message, "Unexpected error: {}".format(err.message)
+            assert "not found in" in str(err), "Unexpected error: {}".format(str(err))
             return None

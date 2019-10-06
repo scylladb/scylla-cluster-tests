@@ -5,7 +5,7 @@ import tempfile
 import jinja2
 
 
-class BaseReport(object):
+class BaseReport():
 
     def __init__(self, cloud_instances, html_template):
         self.cloud_instances = cloud_instances

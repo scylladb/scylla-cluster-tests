@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import logging
 import unittest
 
@@ -24,8 +25,8 @@ class TestSdcmWait(unittest.TestCase):
             calls.append((arg1, arg2))
             raise Exception("error")
 
-        self.assertRaisesRegexp(Exception, r'error', wait_for, callback,
-                                throw_exc=True, timeout=2, step=0.5, arg1=1, arg2=3)
+        self.assertRaisesRegex(Exception, r'error', wait_for, callback,
+                               throw_exc=True, timeout=2, step=0.5, arg1=1, arg2=3)
         self.assertEqual(len(calls), 5)
 
     def test_03_false_return(self):
@@ -45,8 +46,8 @@ class TestSdcmWait(unittest.TestCase):
             calls.append((arg1, arg2))
             return False
 
-        self.assertRaisesRegexp(Exception, "callback: timeout - 2 seconds - expired", wait_for,
-                                callback, timeout=2, throw_exc=True, step=0.5, arg1=1, arg2=3)
+        self.assertRaisesRegex(Exception, "callback: timeout - 2 seconds - expired", wait_for,
+                               callback, timeout=2, throw_exc=True, step=0.5, arg1=1, arg2=3)
         self.assertEqual(len(calls), 5)
 
     def test_03_return_value(self):

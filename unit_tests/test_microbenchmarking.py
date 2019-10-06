@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import unittest
 import os.path
 import subprocess
@@ -22,14 +23,14 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def get_result_obj(path):
-        with open(os.path.join(path, "result_obj"), "r") as result_file:
-            expected_obj = pickle.load(result_file)
+        with open(os.path.join(path, "result_obj"), "rb") as result_file:
+            expected_obj = pickle.load(result_file, encoding="latin-1")
         return expected_obj
 
     @staticmethod
     def get_report_obj(path):
-        with open(os.path.join(path, "report_obj"), "r") as result_file:
-            expected_obj = pickle.load(result_file)
+        with open(os.path.join(path, "report_obj"), "rb") as result_file:
+            expected_obj = pickle.load(result_file, encoding="latin-1")
         return expected_obj
 
     def test_object_exists(self):
@@ -81,28 +82,28 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def test_check_regression_for_results_with_avg_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
         result_obj = self.get_result_obj(result_path)
-        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_results_without_avg_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
         result_obj = self.get_result_obj(result_path)
-        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_results_with_new_metrics_cpu_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_new_metric')
         result_obj = self.get_result_obj(result_path)
-        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_new_metrics_cpu_aio_and_empty_last_and_best(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_new_metric')
         result_obj = self.get_result_obj(result_path)
-        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         self.mbra.lower_better = ('avg cpu', )
         self.mbra.metrics = self.mbra.higher_better + self.mbra.lower_better
         report_results = self.mbra.check_regression(result_obj)
@@ -157,7 +158,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def test_generate_html_report_for_avg_aio_with_zero_value(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO_0')
         result_obj = self.mbra.get_results(results_path=result_path, update_db=False)
-        self.mbra.cur_version_info = result_obj[result_obj.keys()[0]]['versions']['scylla-server']
+        self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
 
         self.assertEqual(report_results['small-partition-slicing_0-256.1']['avg aio']['Current'], 0.0)
@@ -187,11 +188,11 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
                               stderr=subprocess.PIPE)
         stdout, stderr = ps.communicate()
         self.assertEqual(ps.returncode, 0)
-        self.assertIn('usage: microbenchmarking.py [-h] Modes ...', stdout)
+        self.assertIn(b'usage: microbenchmarking.py [-h] Modes ...', stdout)
         self.assertFalse(stderr)
 
     def test_help_parameter_for_exclude(self):
-        msg = 'usage: microbenchmarking.py exclude [-h]'
+        msg = b'usage: microbenchmarking.py exclude [-h]'
         ps = subprocess.Popen(['./microbenchmarking.py', 'exclude', '--help'],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
@@ -202,7 +203,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertFalse(stderr)
 
     def test_help_parameter_for_check(self):
-        msg = """usage: microbenchmarking.py check [-h] [--update-db]"""
+        msg = b"""usage: microbenchmarking.py check [-h] [--update-db]"""
 
         ps = subprocess.Popen(['./microbenchmarking.py', 'check', '--help'],
                               cwd=self.cwd,
@@ -226,11 +227,12 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
         stdout, _ = ps.communicate()
-
+        print(_)
+        print(stdout)
         self.assertEqual(ps.returncode, 0)
-        self.assertIn("Send email to ['alex.bykov@scylladb.com']", stdout)
-        self.assertIn("HTML report saved to '/tmp/microbenchmarking", stdout)
-        self.assertIn("Rendering results to html using 'results_microbenchmark.html' template...", stdout)
+        self.assertIn(b"Send email to ['alex.bykov@scylladb.com']", stdout)
+        self.assertIn(b"HTML report saved to '/tmp/microbenchmarking", stdout)
+        self.assertIn(b"Rendering results to html using 'results_microbenchmark.html' template...", stdout)
 
 
 if __name__ == "__main__":

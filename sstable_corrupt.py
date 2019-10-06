@@ -30,8 +30,7 @@ class SstableCorruptTest(ClusterTester):
     def _run_stress(self, cmd, population_size):
         LOGGER.debug('Runn stress %s', cmd)
         ip = self.db_cluster.get_node_private_ips()[0]
-        stress_cmd = "cassandra-stress {} n={} -pop seq=1..{} -node {} -port jmx=6868".format(cmd, population_size,
-                                                                                              population_size, ip)
+        stress_cmd = f"cassandra-stress {cmd} n={population_size} -pop seq=1..{population_size} -node {ip} -port jmx=6868"
         self.run_stress(stress_cmd=stress_cmd)
 
     def corrupt_sstables(self):

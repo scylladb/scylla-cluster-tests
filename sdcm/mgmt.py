@@ -33,7 +33,6 @@ class ScyllaManagerError(Exception):
     """
     A custom exception for Manager related errors
     """
-    pass
 
 
 class HostSsl(Enum):
@@ -93,7 +92,7 @@ class TaskStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
-class ScyllaManagerBase(object):  # pylint: disable=too-few-public-methods
+class ScyllaManagerBase():  # pylint: disable=too-few-public-methods
 
     def __init__(self, id, manager_node):  # pylint: disable=redefined-builtin
         self.id = id  # pylint: disable=invalid-name
@@ -476,7 +475,7 @@ class ManagerCluster(ScyllaManagerBase):
                                                          health.rest_status, health.rest_rtt, health.ssl))
         return dict_hosts_health
 
-    class _HostHealth(object):  # pylint: disable=too-few-public-methods
+    class _HostHealth():  # pylint: disable=too-few-public-methods
         def __init__(self, status, rtt, ssl, rest_status, rest_rtt):  # pylint: disable=too-many-arguments
             self.status = status
             self.rtt = rtt
@@ -742,7 +741,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         # Rollback the Scylla Manager database???
 
 
-class SCTool(object):
+class SCTool():
 
     def __init__(self, manager_node):
         self.manager_node = manager_node
@@ -874,7 +873,7 @@ class SCTool(object):
         return identifier in full_rows_list
 
 
-class ScyllaMgmt(object):
+class ScyllaMgmt():
     """
     Provides communication with scylla-manager via REST API
     """
@@ -1022,7 +1021,7 @@ class ScyllaMgmt(object):
         LOGGER.info('Start repair tasks per cluster %s keyspace', cluster_id)
         unit_to = timeout / len(tasks)
         start_time = time.time()
-        for unit, task in tasks.iteritems():
+        for unit, task in tasks.items():
             self.start_repair_task(cluster_id, task, 'repair')
             task_status = self.wait_for_repair_done(cluster_id, unit, unit_to)
             if task_status['status'] != STATUS_DONE or task_status['error']:

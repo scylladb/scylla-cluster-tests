@@ -2,12 +2,12 @@ import logging
 import shutil
 
 
-class DummeyOutput(object):  # pylint: disable=too-few-public-methods
+class DummeyOutput():  # pylint: disable=too-few-public-methods
     def __init__(self, stdout):
         self.stdout = stdout
 
 
-class DummyRemote(object):  # pylint: disable=too-few-public-methods
+class DummyRemote():  # pylint: disable=too-few-public-methods
     def run(self, *args, **kwargs):  # pylint: disable=no-self-use
         logging.info(args, kwargs)
         return DummeyOutput(args[0])

@@ -22,10 +22,9 @@ import types
 import random
 import unittest
 import json
-
+import warnings
 from uuid import uuid4
 from functools import wraps
-
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -86,7 +85,8 @@ try:
 except ImportError:
     pass
 
-
+warnings.filterwarnings(action="ignore", message="unclosed",
+                        category=ResourceWarning)
 TEST_LOG = logging.getLogger(__name__)
 
 
@@ -795,7 +795,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if cluster_backend is None:
             cluster_backend = 'aws'
 
-        if cluster_backend == 'aws' or cluster_backend == 'aws-siren':
+        if cluster_backend in ('aws', 'aws-siren'):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
 
@@ -816,8 +816,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
             if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
-                ips = [ip for ip in self.db_cluster.get_node_public_ips()]
-                ip = ','.join(ips)
+                ip = ','.join(self.db_cluster.get_node_public_ips())
             else:
                 ip = self.db_cluster.get_node_private_ips()[0]
             stress_cmd = '%s -node %s' % (stress_cmd, ip)
@@ -1007,11 +1006,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
             # "Error decoding response from Cassandra":
             # failure like: Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
-            if 'timed out' in details.message or 'unpack requires' in details.message or db_node.running_nemesis:
+            if 'timed out' in str(details) or 'unpack requires' in str(details) or db_node.running_nemesis:
                 severity = Severity.WARNING
             else:
                 severity = Severity.ERROR
-            FullScanEvent(type='finish', db_node_ip=db_node.ip_address, ks_cf=ks_cf, message=details.message,
+            FullScanEvent(type='finish', db_node_ip=db_node.ip_address, ks_cf=ks_cf, message=str(details),
                           severity=severity)
 
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
@@ -1242,7 +1241,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             session.execute('TRUNCATE TABLE {0}.{1}'.format(ks_name, table_name))
         except Exception as ex:  # pylint: disable=broad-except
-            self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, ex.message))
+            self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
 
     def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # pylint: disable=too-many-arguments
                                  mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
@@ -1350,8 +1349,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         with open(partitions_stats_file, 'a') as stats_file:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
-                count_partition_keys_cmd = 'select count(*) from {table_name} where {primary_key_column} = {i}'.format(
-                    **locals())
+                count_partition_keys_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}'
                 out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
@@ -1634,14 +1632,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         res = self.prometheus_db.query(query=query, start=time.time(), end=time.time())
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
-        assert used >= size, "Waiting for Scylla data dir to reach '{size}', " \
-                             "current size is: '{used}'".format(**locals())
+        assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
+                             f"current size is: '{used}'"
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email', default=True),
                                                       email_recipients=self.params.get('email_recipients', default=None))
-        is_gce = True if self.params.get('cluster_backend') == 'gce' else False
+        is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self.test_id, is_gce)
         except Exception as ex:  # pylint: disable=broad-except
@@ -1734,7 +1732,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             result = self.defaultTestResult()  # these 2 methods have no side effects
             self._feedErrorsToResult(result, self._outcome.errors)  # pylint: disable=no-member
         else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
-            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)
+            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)  # pylint: disable=no-member
         error = list2reason(result.errors)
         failure = list2reason(result.failures)
         ok = not error and not failure
@@ -1778,10 +1776,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         email_data = self.get_email_data()
         if email_data:
             email_data["reporter"] = self.email_reporter.__class__.__name__
-
-            f = os.path.join(self.logdir, "email_data.json")  # pylint: disable=invalid-name
-            with open(f, "w") as fp:  # pylint: disable=invalid-name
-                json.dump(email_data, fp)  # pylint: disable=invalid-name
+            json_file_path = os.path.join(self.logdir, "email_data.json")
+            with open(json_file_path, "w") as json_file:
+                json.dump(email_data, json_file)
 
         if cluster.get_username() == "jenkins":
             self.log.info("Email will be sent by pipeline stage")

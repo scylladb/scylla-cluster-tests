@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+from __future__ import absolute_import
 import glob
 import logging
 import os
@@ -21,8 +22,8 @@ import time
 import getpass
 import socket
 import threading
+from shlex import quote
 
-import six.moves
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
@@ -41,7 +42,6 @@ class OutputCheckError(Exception):
     """
     Remote command output check failed.
     """
-    pass
 
 
 def _scp_remote_escape(filename):
@@ -66,12 +66,12 @@ def _scp_remote_escape(filename):
         else:
             new_name.append(char)
 
-    return six.moves.shlex_quote("".join(new_name))
+    return quote("".join(new_name))
 
 
 def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # pylint: disable=too-many-arguments
                       key_file=None, connect_timeout=300, alive_interval=300, extra_ssh_options=''):
-    assert isinstance(connect_timeout, (int, long))
+    assert isinstance(connect_timeout, int)
     ssh_full_path = LocalCmdRunner().run('which ssh').stdout.strip()
     base_command = ssh_full_path
     base_command += " " + extra_ssh_options
@@ -86,7 +86,7 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # 
                            alive_interval, user, port)
 
 
-class CommandRunner(object):
+class CommandRunner():
     def __init__(self, hostname, user='root', password=''):
         self.hostname = hostname
         self.user = user
@@ -109,7 +109,7 @@ class CommandRunner(object):
 
         if verbose and not result.failed:
             if result.stderr:
-                self.log.info('STDERR: {}'.format(result.stderr.encode('utf-8')))
+                self.log.info('STDERR: {}'.format(result.stderr))
 
             self.log.info('Command "{}" finished with status {}'.format(result.command, result.exited))
             return
@@ -117,9 +117,9 @@ class CommandRunner(object):
         if verbose and result.failed:
             self.log.error('Error executing command: "{}"; Exit status: {}'.format(result.command, result.exited))
             if result.stdout:
-                self.log.debug('STDOUT: {}'.format(result.stdout[-240:].encode('utf-8')))
+                self.log.debug('STDOUT: {}'.format(result.stdout[-240:]))
             if result.stderr:
-                self.log.debug('STDERR: {}'.format(result.stderr.encode('utf-8')))
+                self.log.debug('STDERR: {}'.format(result.stderr))
             return
 
 
@@ -238,8 +238,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
         result = _run()
         self._print_command_results(result, verbose)
-        result.stdout = result.stdout.encode(encoding='utf-8')
-        result.stderr = result.stderr.encode(encoding='utf-8')
+        #result.stdout = result.stdout.encode(encoding='utf-8')
+        #result.stderr = result.stderr.encode(encoding='utf-8')
         return result
 
     def is_up(self, timeout=30):
@@ -304,7 +304,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         self.log.debug('Receive files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
 
-        if isinstance(src, basestring):
+        if isinstance(src, str):
             src = [src]
         dst = os.path.abspath(dst)
 
@@ -314,7 +314,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         if self.use_rsync():
             try:
                 remote_source = self._encode_remote_paths(src)
-                local_dest = six.moves.shlex_quote(dst)
+                local_dest = quote(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks)
                 result = LocalCmdRunner().run(rsync)
@@ -336,7 +336,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 # _make_rsync_compatible_source() already did the escaping
                 remote_source = self._encode_remote_paths(remote_source,
                                                           escape=False)
-                local_dest = six.moves.shlex_quote(dst)
+                local_dest = quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 result = LocalCmdRunner().run(scp)
                 self.log.info("Command {} with status {}".format(result.command, result.exited))
@@ -387,7 +387,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
         # Start a master SSH connection if necessary.
         source_is_dir = False
-        if isinstance(src, basestring):
+        if isinstance(src, str):
             source_is_dir = os.path.isdir(src)
             src = [src]
         remote_dest = self._encode_remote_paths([dst])
@@ -397,7 +397,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         files_sent = True
         if self.use_rsync():
             try:
-                local_sources = [six.moves.shlex_quote(path) for path in src]
+                local_sources = [quote(path) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 LocalCmdRunner().run(rsync)
@@ -516,7 +516,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 return glob.glob(path + pattern)
         else:
             def glob_matches_files(path, pattern):
-                match_cmd = "ls \"%s\"%s" % (six.moves.shlex_quote(path), pattern)
+                match_cmd = "ls \"%s\"%s" % (quote(path), pattern)
                 result = self.run(match_cmd, ignore_status=True)
                 return result.exit_status == 0
 
@@ -526,7 +526,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
         # convert them into a set of paths suitable for the commandline
         if is_local:
-            return ["\"%s\"%s" % (six.moves.shlex_quote(pth), pattern)
+            return ["\"%s\"%s" % (quote(pth), pattern)
                     for pattern in patterns]
         else:
             return [_scp_remote_escape(pth) + pattern
@@ -557,7 +557,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         umask = os.umask(0)
         os.umask(umask)
 
-        max_privs = 0777 & ~umask
+        max_privs = 0o777 & ~umask
 
         def set_file_privs(filename):
             file_stat = os.stat(filename)
@@ -565,8 +565,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             file_privs = max_privs
             # if the original file permissions do not have at least one
             # executable bit then do not set it anywhere
-            if not file_stat.st_mode & 0111:
-                file_privs &= ~0111
+            if not file_stat.st_mode & 0o111:
+                file_privs &= ~0o111
 
             os.chmod(filename, file_privs)
 
@@ -679,7 +679,7 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
 
         while '\n' in stream_buffer:
             out_buf, rest_buf = stream_buffer.split('\n', 1)
-            self.log.info('{}'.format(out_buf.encode('utf-8')))
+            self.log.info('{}'.format(out_buf))
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
         return []
@@ -695,7 +695,7 @@ class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
         stream_buffer = stream[self.len:]
 
         with open(self.log_file, "a+") as log_file:
-            log_file.write(stream_buffer.encode('utf-8'))
+            log_file.write(stream_buffer)
 
         self.len = len(stream)
         return []

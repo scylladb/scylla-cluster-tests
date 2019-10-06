@@ -17,10 +17,9 @@ class ES(elasticsearch.Elasticsearch):
         super(ES, self).__init__(hosts=[self._conf["es_url"]], verify_certs=False,
                                  http_auth=(self._conf["es_user"], self._conf["es_password"]))
 
-    @staticmethod
-    def get_conf():
-        key_store = KeyStore()
-        return key_store.get_elasticsearch_credentials()
+    def get_conf(self):
+        self.key_store = KeyStore()
+        return self.key_store.get_elasticsearch_credentials()
 
     def _create_index(self, index):
         self.indices.create(index=index, ignore=400)  # pylint: disable=unexpected-keyword-arg

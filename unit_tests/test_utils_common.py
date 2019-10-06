@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import hashlib
 import shutil
@@ -20,7 +21,7 @@ class TestDownloadDir(unittest.TestCase):
     @staticmethod
     def clear_cloud_downloaded_path(url):
         md5 = hashlib.md5()
-        md5.update(url)
+        md5.update(url.encode('utf-8'))
         tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

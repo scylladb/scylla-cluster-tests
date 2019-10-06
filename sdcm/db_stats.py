@@ -12,7 +12,6 @@ from collections import defaultdict
 
 import yaml
 import requests
-from requests import ConnectionError, HTTPError
 
 from sdcm.es import ES
 from sdcm.utils.common import get_job_name, retrying, remove_comments
@@ -127,7 +126,7 @@ def get_gemini_cmd_params(cmd):
     return cmd_params
 
 
-class PrometheusDBStats(object):
+class PrometheusDBStats():
     def __init__(self, host, port=9090):
         self.host = host
         self.port = port
@@ -139,7 +138,7 @@ class PrometheusDBStats(object):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
     @staticmethod
-    @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError, HTTPError))
+    @retrying(n=5, sleep_time=7, allowed_exceptions=(requests.ConnectionError, requests.HTTPError))
     def request(url, post=False):
         if post:
             response = requests.post(url)
@@ -262,7 +261,7 @@ class PrometheusDBStats(object):
         results = self.query(query=query, start=start_time, end=end_time)
         res = {}
         for item in results:
-            res[item['metric']['group']] = set([int(i[1]) for i in item['values']])
+            res[item['metric']['group']] = {int(i[1]) for i in item['values']}
         return res
 
     def get_latency(self, start_time, end_time, latency_type):
@@ -287,7 +286,7 @@ class PrometheusDBStats(object):
         return result
 
 
-class Stats(object):
+class Stats():
     """
     This class is responsible for creating and updating database entry(document in Elasticsearch DB)
     There are two usage options:
@@ -373,11 +372,11 @@ class TestStatsMixin(Stats):
         test_params = self.params.items()
 
         for key, value in test_params:
-            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):
+            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
                 continue
             else:
                 if is_gce and key in \
-                        ['instance_type_loader',
+                        ['instance_type_loader',  # pylint: disable=no-else-continue
                          'instance_type_monitor',
                          'instance_type_db']:
                     # exclude these params from gce run
@@ -388,7 +387,7 @@ class TestStatsMixin(Stats):
                     setup_details[key] = value
 
         new_scylla_packages = self.params.get('update_db_packages')
-        setup_details['packages_updated'] = True if new_scylla_packages and os.listdir(new_scylla_packages) else False
+        setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
         setup_details['cpu_platform'] = 'UNKNOWN'
         if is_gce and self.db_cluster:
             setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access

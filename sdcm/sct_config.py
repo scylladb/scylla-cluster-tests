@@ -23,11 +23,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 # pylint: disable=too-few-public-methods
-class UnsetMarker(object):
+class UnsetMarker():
     """
     Marker object for function empty default, used SCTConfiguration.get to mimic dict.get behavior
     """
-    pass
 
 
 def str_or_list(value):
@@ -37,7 +36,7 @@ def str_or_list(value):
     :param value: raw string variable
     :return: list of strings
     """
-    if isinstance(value, basestring):
+    if isinstance(value, str):
         try:
             return ast.literal_eval(value)
         except Exception:  # pylint: disable=broad-except
@@ -57,7 +56,7 @@ def int_or_list(value):
     except Exception:  # pylint: disable=broad-except
         pass
 
-    if isinstance(value, basestring):
+    if isinstance(value, str):
         try:
             values = value.split()
             [int(v) for v in values]  # pylint: disable=expression-not-assigned
@@ -75,7 +74,7 @@ def int_or_list(value):
 def boolean(value):
     if isinstance(value, bool):
         return value
-    elif isinstance(value, basestring):
+    elif isinstance(value, str):
         return bool(strtobool(value))
     else:
         raise ValueError("{} isn't a boolean".format(type(value)))
@@ -1024,7 +1023,7 @@ class SCTConfiguration(dict):
         # 6) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version', None)
         if new_scylla_version:
-            if 'ami_id_db_scylla' not in self and cluster_backend == 'aws':
+            if 'ami_id_db_scylla' not in self and cluster_backend == 'aws':  # pylint: disable=no-else-raise
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif 'new_scylla_repo' not in self:
@@ -1120,15 +1119,15 @@ class SCTConfiguration(dict):
         # pylint: disable=too-many-locals,too-many-branches
 
         # check if there are SCT_* environment variable which aren't documented
-        config_keys = set([opt['env'] for opt in self.config_options])
-        env_keys = set([o for o in os.environ.keys() if o.startswith('SCT_') and o != 'SCT_NEW_CONFIG'])
-        unknown_env_keys = (env_keys.difference(config_keys))
+        config_keys = {opt['env'] for opt in self.config_options}
+        env_keys = {o for o in os.environ.keys() if o.startswith('SCT_') and o != 'SCT_NEW_CONFIG'}
+        unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
             output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
         # check for unsupported configuration
-        config_names = set([o['name'] for o in self.config_options])
+        config_names = {o['name'] for o in self.config_options}
         unsupported_option = set(self.keys()).difference(config_names)
 
         if unsupported_option:
@@ -1159,7 +1158,7 @@ class SCTConfiguration(dict):
             region_count = {}
             for opt in self.multi_region_params:
                 val = self.get(opt)
-                if isinstance(val, basestring):
+                if isinstance(val, str):
                     region_count[opt] = len(self.get(opt).split())
                 elif isinstance(val, list):
                     region_count[opt] = len(val)

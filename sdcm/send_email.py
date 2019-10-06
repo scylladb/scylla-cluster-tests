@@ -13,7 +13,7 @@ from sdcm.keystore import KeyStore
 LOGGER = logging.getLogger(__name__)
 
 
-class Email(object):
+class Email():
     """
     Responsible for sending emails
     """
@@ -73,7 +73,7 @@ class Email(object):
         self.conn.quit()
 
 
-class BaseEmailReporter(object):
+class BaseEmailReporter():
 
     fields = []
     email_template_file = 'results_base.html'
