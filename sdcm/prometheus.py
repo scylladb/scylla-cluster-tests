@@ -60,7 +60,7 @@ def nemesis_metrics_obj():
     return NM_OBJ
 
 
-class NemesisMetrics(object):
+class NemesisMetrics():
 
     DISRUPT_COUNTER = 'nemesis_disruptions_counter'
     DISRUPT_GAUGE = 'nemesis_disruptions_gauge'

@@ -1,3 +1,6 @@
+from __future__ import print_function
+
+from __future__ import absolute_import
 import unittest
 import tempfile
 import logging
@@ -62,14 +65,14 @@ class TestBaseNode(unittest.TestCase):
         self.assertEqual(len(critical_errors), 34)
 
         for _, line in critical_errors:
-            print line
+            print(line)
 
     def test_search_database_log_teardown(self):  # pylint: disable=invalid-name
         critical_errors = self.node.search_database_log(start_from_beginning=True, publish_events=False)
         self.assertEqual(len(critical_errors), 36)
 
         for _, line in critical_errors:
-            print line
+            print(line)
 
     def test_search_database_log_specific_log(self):  # pylint: disable=invalid-name
         errors = self.node.search_database_log(
@@ -77,7 +80,7 @@ class TestBaseNode(unittest.TestCase):
         self.assertEqual(len(errors), 2)
 
         for line_number, line in errors:
-            print line_number, line
+            print(line_number, line)
 
     def test_search_database_interlace_reactor_stall(self):  # pylint: disable=invalid-name
         self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database_interlace_stall.log')
@@ -91,8 +94,8 @@ class TestBaseNode(unittest.TestCase):
             events.append(json.loads(line))
 
         event_a, event_b = events[-2], events[-1]
-        print event_a
-        print event_b
+        print(event_a)
+        print(event_b)
 
         assert event_a["type"] == "REACTOR_STALLED"
         assert event_a["line_number"] == 1
@@ -110,7 +113,7 @@ class TestBaseNode(unittest.TestCase):
         events = [json.loads(line) for line in events_file.readlines()]
 
         event_a = events[-1]
-        print event_a
+        print(event_a)
 
         assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
         assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])

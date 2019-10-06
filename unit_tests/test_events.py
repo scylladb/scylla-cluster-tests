@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import time
 import traceback
@@ -7,7 +9,6 @@ import logging
 import datetime
 
 from sdcm.prometheus import start_metrics_server
-
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
                              InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity)
@@ -102,7 +103,7 @@ class SctEventsTests(unittest.TestCase):
         str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2,
                             node='test'))
 
-        print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
+        print(str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test')))
 
     def test_filter(self):
         log_content_before = self.get_event_logs()
@@ -203,7 +204,7 @@ class SctEventsTests(unittest.TestCase):
 
         time.sleep(5)
         line_prefix = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-        print line_prefix
+        print(line_prefix)
         DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
                                                                                 line=line_prefix + " not filtered")
         self.wait_for_event_log_change(log_content_before)

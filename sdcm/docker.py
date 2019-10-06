@@ -175,7 +175,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         :return: list of DockerNode objects
         """
         new_nodes = []
-        for _ in xrange(count):
+        for _ in range(count):
             node_name, node_index = self._get_node_name_and_index()
             is_seed = (node_index == 0)
             seed_ip = self.nodes[0].public_ip_address if not is_seed else None

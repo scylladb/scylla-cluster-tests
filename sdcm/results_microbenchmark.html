@@ -32,7 +32,7 @@
         <span>To see full results download and open attached HTML file.</span>
     </div>
     {% endif %}
-    {% for test_type, params in results.iteritems() %}
+    {% for test_type, params in results.items() %}
     {% if full_report or params.get("has_diff") or params.get("has_improve") %}
     <h2> {{ test_type }} </h2>
     <h3> Dataset: {{ params.get("dataset_name") }} </h3>
@@ -65,7 +65,7 @@
                     {% endif %}
                         {% if stat == 'Stats' %}
                             {% if cur_stat %}
-                                    {% for submetrica, value in stats.get(stat).iteritems() %}
+                                    {% for submetrica, value in stats.get(stat).items() %}
                                         <div class="divRow">
                                             <div class="divCellLeft">{{ submetrica[:3] }}</div>
                                             <div class="divCellRight">{{ '%g' % value }}</div>
@@ -75,13 +75,13 @@
                                 <div style='text-align: center; width: 100%'>-</div>
                             {% endif %}
                         {% else %}
-                            {% if (stat.startswith("Diff") and cur_stat > 0) %}
+                            {% if (stat.startswith("Diff") and cur_stat and cur_stat > 0) %}
                                 <span class="notice green fbold">
                             {% elif stat.startswith("Diff") and not cur_stat %}
                                 <span class="fnormal black">
-                            {% elif stat.startswith("Diff") and cur_stat < -10 %}
+                            {% elif stat.startswith("Diff") and cur_stat and cur_stat < -10 %}
                                 <span class="notice red fbold">
-                            {% elif stat.startswith("Diff") and cur_stat < -5 %}
+                            {% elif stat.startswith("Diff") and cur_stat and cur_stat < -5 %}
                                 <span class="orange fbold">
                             {% else %}
                                 <span>

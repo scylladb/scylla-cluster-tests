@@ -13,7 +13,7 @@ from sdcm.utils.common import FileFollowerThread, makedirs
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult(object):  # pylint: disable=too-few-public-methods
+class NotGeminiErrorResult():  # pylint: disable=too-few-public-methods
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -58,7 +58,7 @@ class GeminiEventsPublisher(FileFollowerThread):
                 break
 
 
-class GeminiStressThread(object):  # pylint: disable=too-many-instance-attributes
+class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None, params=None):  # pylint: disable=too-many-arguments
         self.loaders = loaders

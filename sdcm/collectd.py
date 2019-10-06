@@ -17,7 +17,7 @@ import shutil
 from textwrap import dedent
 
 
-class CollectdSetup(object):  # pylint: disable=too-many-instance-attributes
+class CollectdSetup():  # pylint: disable=too-many-instance-attributes
     def __init__(self):
         self.node = None
         self._collectd_cfg = None

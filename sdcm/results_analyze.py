@@ -15,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)
 
 
-class QueryFilter(object):
+class QueryFilter():
     """
     Definition of query filtering parameters
     """
@@ -103,7 +103,7 @@ class QueryFilterScyllaBench(QueryFilter):
         return ' '.join(test_details)
 
 
-class BaseResultsAnalyzer(object):  # pylint: disable=too-many-instance-attributes
+class BaseResultsAnalyzer():  # pylint: disable=too-many-instance-attributes
     def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),  # pylint: disable=too-many-arguments
                  email_template_fp="", query_limit=1000, logger=None):
         self._es = ES()
@@ -152,6 +152,7 @@ class BaseResultsAnalyzer(object):  # pylint: disable=too-many-instance-attribut
         """
         self.log.info("Rendering results to html using '%s' template...", self._email_template_fp)
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
+        print(os.path.dirname(os.path.abspath(__file__)))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
         template = env.get_template(self._email_template_fp)
         html = template.render(results)

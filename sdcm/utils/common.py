@@ -12,6 +12,7 @@
 # Copyright (c) 2017 ScyllaDB
 
 # pylint: disable=too-many-lines
+from __future__ import absolute_import
 import itertools
 import os
 import logging
@@ -24,13 +25,13 @@ import threading
 import select
 import shutil
 import copy
+from urllib.parse import urlparse
 
 from functools import wraps
 from enum import Enum
 from collections import defaultdict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
-from urlparse import urlparse
 import hashlib
 
 import boto3
@@ -68,7 +69,7 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     assert _remote_get_hash(remoter, dst) == hash_expected
 
 
-class retrying(object):  # pylint: disable=invalid-name,too-few-public-methods
+class retrying():  # pylint: disable=invalid-name,too-few-public-methods
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
@@ -86,16 +87,16 @@ class retrying(object):  # pylint: disable=invalid-name,too-few-public-methods
             if self.n == 1:
                 # there is no need to retry
                 return func(*args, **kwargs)
-            for i in xrange(self.n):
+            for i in range(self.n):
                 try:
                     if self.message:
                         LOGGER.info("%s [try #%s]", self.message, i)
                     return func(*args, **kwargs)
                 except self.allowed_exceptions as ex:
-                    LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.func_name, ex, i)
+                    LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
                     time.sleep(self.sleep_time)
                     if i == self.n - 1:
-                        LOGGER.error("'%s': Number of retries exceeded!", func.func_name)
+                        LOGGER.error("'%s': Number of retries exceeded!", func.__name__)
                         raise
         return inner
 
@@ -156,7 +157,7 @@ class Distro(Enum):
 
 
 def get_data_dir_path(*args):
-    import sdcm
+    import sdcm  # pylint: disable=import-outside-toplevel
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     data_dir = os.path.join(sdcm_path, "../data_dir", *args)
     return os.path.abspath(data_dir)
@@ -194,7 +195,7 @@ def remove_comments(data):
     return '\n'.join([i.strip() for i in data.split('\n') if not i.startswith('#')])
 
 
-class S3Storage(object):
+class S3Storage():
 
     bucket_name = 'cloudius-jenkins-test'
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
@@ -233,7 +234,7 @@ class S3Storage(object):
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
             LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
-            print "Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url)
+            print("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
             self._bucket.upload_file(Filename=file_path,
                                      Key=s3_obj,
                                      Config=self.transfer_config)
@@ -328,7 +329,7 @@ def all_aws_regions():
 AWS_REGIONS = all_aws_regions()
 
 
-class ParallelObject(object):  # pylint: disable=too-few-public-methods
+class ParallelObject():  # pylint: disable=too-few-public-methods
     """
         Run function in with supplied args in parallel using thread.
     """
@@ -411,7 +412,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
             'Instances']]
 
         if verbose:
-            LOGGER.info("%s: done [%s/%s]", region, len(instances.keys()), len(aws_regions))
+            LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100).run(get_instances)
 
@@ -422,7 +423,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
             instances[curr_region_name] = [i for i in instances[curr_region_name]
                                            if not i['State']['Name'] == 'terminated']
     if not group_as_region:
-        instances = list(itertools.chain(*instances.values()))  # flatten the list of lists
+        instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
         total_items = len(instances)
     else:
         total_items = sum([len(value) for _, value in instances.items()])
@@ -477,14 +478,14 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         if tags_dict:
             custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
         response = client.describe_addresses(Filters=custom_filter)
-        elastic_ips[region] = [ip for ip in response['Addresses']]
+        elastic_ips[region] = response['Addresses']
         if verbose:
-            LOGGER.info("%s: done [%s/%s]", region, len(elastic_ips.keys()), len(aws_regions))
+            LOGGER.info("%s: done [%s/%s]", region, len(list(elastic_ips.keys())), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=100).run(get_elastic_ips)
 
     if not group_as_region:
-        elastic_ips = list(itertools.chain(*elastic_ips.values()))  # flatten the list of lists
+        elastic_ips = list(itertools.chain(*list(elastic_ips.values())))  # flatten the list of lists
         total_items = elastic_ips
     else:
         total_items = sum([len(value) for _, value in elastic_ips.items()])
@@ -666,7 +667,7 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
                 _S3_SCYLLA_REPOS_CACHE[(
                     dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file['Key'])
 
-    elif dist_type == 'ubuntu' or dist_type == 'debian':
+    elif dist_type in ('ubuntu', 'debian'):
         response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
         for repo_file in response['Contents']:
             filename = os.path.basename(repo_file['Key'])
@@ -710,7 +711,7 @@ def safe_kill(pid, signal):
         return False
 
 
-class FileFollowerIterator(object):  # pylint: disable=too-few-public-methods
+class FileFollowerIterator():  # pylint: disable=too-few-public-methods
     def __init__(self, filename, thread_obj):
         self.filename = filename
         self.thread_obj = thread_obj
@@ -732,7 +733,7 @@ class FileFollowerIterator(object):  # pylint: disable=too-few-public-methods
             yield line
 
 
-class FileFollowerThread(object):
+class FileFollowerThread():
     def __init__(self):
         self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self._stop_event = threading.Event()
@@ -761,7 +762,7 @@ class FileFollowerThread(object):
         return FileFollowerIterator(filename, self)
 
 
-class ScyllaCQLSession(object):
+class ScyllaCQLSession():
     def __init__(self, session, cluster):
         self.session = session
         self.cluster = cluster
@@ -777,7 +778,7 @@ class MethodVersionNotFound(Exception):
     pass
 
 
-class version(object):  # pylint: disable=invalid-name,too-few-public-methods
+class version():  # pylint: disable=invalid-name,too-few-public-methods
     VERSIONS = {}
     """
         Runs a method according to the version attribute of the class method
@@ -811,17 +812,17 @@ class version(object):  # pylint: disable=invalid-name,too-few-public-methods
         self.version = ver
 
     def __call__(self, func):
-        self.VERSIONS[(self.version, func.func_name, func.func_code.co_filename)] = func
+        self.VERSIONS[(self.version, func.__name__, func.__code__.co_filename)] = func
 
         @wraps(func)
         def inner(*args, **kwargs):
             cls_self = args[0]
-            func_to_run = self.VERSIONS.get((cls_self.version, func.func_name, func.func_code.co_filename))
+            func_to_run = self.VERSIONS.get((cls_self.version, func.__name__, func.__code__.co_filename))
             if func_to_run:
                 return func_to_run(*args, **kwargs)
             else:
                 raise MethodVersionNotFound("Method '{}' with version '{}' not defined in '{}'!".format(
-                    func.func_name,
+                    func.__name__,
                     cls_self.version,
                     cls_self.__class__.__name__))
         return inner
@@ -854,7 +855,7 @@ def get_branched_ami(ami_version, region_name):
     ec2 = boto3.resource('ec2', region_name=region_name)
 
     LOGGER.info("Looking for AMI match [%s]", ami_version)
-    if build_id == 'latest' or build_id == 'all':
+    if build_id in ('latest', 'all'):
         filters = [{'Name': 'tag:branch', 'Values': [branch]}]
     else:
         filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
@@ -949,10 +950,10 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         avaialable_ks_cf[ks_cf_name].append(column_type)
 
     if filter_out_table_with_counter:
-        for ks_cf, column_types in avaialable_ks_cf.items():
+        for ks_cf, column_types in list(avaialable_ks_cf.items()):
             if 'counter' in column_types:
                 avaialable_ks_cf.pop(ks_cf)
-    return avaialable_ks_cf.keys()
+    return list(avaialable_ks_cf.keys())
 
 
 def remove_files(path):
@@ -1091,7 +1092,7 @@ def download_dir_from_cloud(url):
         return url
 
     md5 = hashlib.md5()
-    md5.update(url)
+    md5.update(url.encode('utf-8'))
     tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
     parsed = urlparse(url)
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)

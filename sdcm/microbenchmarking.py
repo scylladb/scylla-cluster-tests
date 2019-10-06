@@ -1,4 +1,5 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
+from __future__ import absolute_import
 import os
 import sys
 import logging
@@ -8,6 +9,7 @@ import argparse
 import socket
 import tempfile
 from collections import defaultdict
+import contextlib
 
 # disable InsecureRequestWarning
 import urllib3
@@ -21,6 +23,17 @@ setup_stdout_logger()
 
 LOGGER = logging.getLogger("microbenchmarking")
 LOGGER.setLevel(logging.DEBUG)
+
+
+@contextlib.contextmanager
+def chdir(dirname=None):
+    curdir = os.getcwd()
+    try:
+        if dirname is not None:
+            os.chdir(dirname)
+        yield
+    finally:
+        os.chdir(curdir)
 
 
 class LargeNumberOfDatasetsException(Exception):
@@ -41,7 +54,7 @@ class EmptyResultFolder(Exception):
         return "MBM: {0.message}".format(self)
 
 
-class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
+class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=too-many-instance-attributes
     allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
     higher_better = ('frag/s',)
     lower_better = ('avg aio',)
@@ -66,7 +79,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         self.metrics = self.higher_better + self.lower_better
 
     def check_regression(self, current_results):  # pylint: disable=arguments-differ
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals, too-many-statements
 
         if not current_results:
             return {}
@@ -226,7 +239,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 report_results[test_type]["has_diff"] = True
                 stats["has_regression"] = True
 
-            if (diff_last > 50 or diff_best > 50):
+            if ((diff_last and diff_last > 50) or (diff_best and diff_best > 50)):
                 report_results[test_type]['has_improve'] = True
                 stats['has_improvement'] = True
 
@@ -239,15 +252,15 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
                 submetrica_cur_val = float(current_result["results"]["stats"][submetrica])
                 report_results[test_type][metrica]['Stats'].update({submetrica: submetrica_cur_val})
 
-        for test_type, current_result in current_results.iteritems():
+        for test_type, current_result in current_results.items():
             list_of_results_from_db = sorted_by_type[test_type]
             if not list_of_results_from_db:
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
             for metrica in self.metrics:
-                self.log.info("Analyzing {test_type}:{metrica}".format(**locals()))
+                self.log.info(f"Analyzing {test_type}:{metrica}")
                 set_results_for(current_result, metrica)
-                if metrica in self.submetrics.keys():
+                if metrica in list(self.submetrics.keys()):
                     set_results_for_sub(current_result, metrica)
 
         return report_results
@@ -286,46 +299,46 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
         # pylint: disable=too-many-locals
 
         bad_chars = " "
-        os.chdir(os.path.join(results_path, "perf_fast_forward_output"))
-        results = {}
-        for (fullpath, subdirs, files) in os.walk(os.getcwd()):
-            self.log.info(fullpath)
-            if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
-                    len(subdirs) > 1):
-                raise LargeNumberOfDatasetsException('Test set {} has more than one datasets: {}'.format(
-                    os.path.basename(fullpath),
-                    subdirs))
+        with chdir(os.path.join(results_path, "perf_fast_forward_output")):
+            results = {}
+            for (fullpath, subdirs, files) in os.walk(os.getcwd()):
+                self.log.info(fullpath)
+                if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
+                        len(subdirs) > 1):
+                    raise LargeNumberOfDatasetsException('Test set {} has more than one datasets: {}'.format(
+                        os.path.basename(fullpath),
+                        subdirs))
 
-            if not subdirs:
-                dataset_name = os.path.basename(fullpath)
-                self.log.info('Dataset name: {}'.format(dataset_name))
-                dirname = os.path.basename(os.path.dirname(fullpath))
-                self.log.info("Test set: {}".format(dirname))
-                for filename in files:
-                    if filename.startswith('.'):
-                        continue
-                    new_filename = "".join(c for c in filename if c not in bad_chars)
-                    test_args = os.path.splitext(new_filename)[0]
-                    test_type = dirname + "_" + test_args
-                    json_path = os.path.join(dirname, dataset_name, filename)
-                    with open(json_path, 'r') as json_file:
-                        self.log.info("Reading: %s", json_path)
-                        datastore = json.load(json_file)
-                    datastore.update({'hostname': self.hostname,
-                                      'test_args': test_args,
-                                      'test_run_date': self.test_run_date,
-                                      'dataset_name': dataset_name,
-                                      'excluded': False
-                                      })
-                    if update_db:
-                        self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
-                                            doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
-                    results[test_type] = datastore
-        if not results:
-            raise EmptyResultFolder("perf_fast_forward_output folder is empty")
+                if not subdirs:
+                    dataset_name = os.path.basename(fullpath)
+                    self.log.info('Dataset name: {}'.format(dataset_name))
+                    dirname = os.path.basename(os.path.dirname(fullpath))
+                    self.log.info("Test set: {}".format(dirname))
+                    for filename in files:
+                        if filename.startswith('.'):
+                            continue
+                        new_filename = "".join(c for c in filename if c not in bad_chars)
+                        test_args = os.path.splitext(new_filename)[0]
+                        test_type = dirname + "_" + test_args
+                        json_path = os.path.join(dirname, dataset_name, filename)
+                        with open(json_path, 'r') as json_file:
+                            self.log.info("Reading: %s", json_path)
+                            datastore = json.load(json_file)
+                        datastore.update({'hostname': self.hostname,
+                                          'test_args': test_args,
+                                          'test_run_date': self.test_run_date,
+                                          'dataset_name': dataset_name,
+                                          'excluded': False
+                                          })
+                        if update_db:
+                            self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
+                                                doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
+                        results[test_type] = datastore
+            if not results:
+                raise EmptyResultFolder("perf_fast_forward_output folder is empty")
 
-        self.cur_version_info = results[results.keys()[0]]['versions']['scylla-server']
-        return results
+            self.cur_version_info = results[list(results.keys())[0]]['versions']['scylla-server']
+            return results
 
     def exclude_test_run(self, testrun_id=''):
         """Exclude test results by testrun id

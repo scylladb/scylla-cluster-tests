@@ -221,7 +221,8 @@ contextmanager-decorators=contextlib.contextmanager
 # List of members which are set dynamically and missed by pylint inference
 # system, and so shouldn't trigger E1101 when accessed. Python regular
 # expressions are accepted.
-generated-members=
+# TODO: remove all boto3 stuff until https://github.com/PyCQA/pylint/issues/3134 is fixed
+generated-members=.*dynamodb.*, .*boto3.*, .*ec2.*, .*s3.* , .*self.nodes.*, .*self.log.*, .*self.params.*, .*self._param_enabled.*
 
 # Tells whether missing members accessed in mixin class should be ignored. A
 # mixin class is detected if its name ends with "mixin" (case insensitive).

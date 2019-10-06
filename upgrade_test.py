@@ -153,11 +153,11 @@ class UpgradeTest(FillDatabaseData):
             orig_is_enterprise = node.is_enterprise
             if node.is_rhel_like():
                 result = node.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
-                new_is_enterprise = True if ('scylla-enterprise.x86_64' in result.stdout or
-                                             'No matches found' not in result.stdout) else False
+                new_is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
+                                         'No matches found' not in result.stdout)
             else:
                 result = node.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                new_is_enterprise = True if 'scylla-enterprise' in result.stdout else False
+                new_is_enterprise = 'scylla-enterprise' in result.stdout
 
             scylla_pkg = 'scylla-enterprise' if new_is_enterprise else 'scylla'
             if orig_is_enterprise != new_is_enterprise:
@@ -320,8 +320,8 @@ class UpgradeTest(FillDatabaseData):
 
                 sstable_version_regex = re.compile(r'(\w+)-\d+-(.+)\.(db|txt|sha1|crc32)')
 
-                sstable_versions = list(
-                    set([sstable_version_regex.search(f).group(1) for f in all_sstable_files if sstable_version_regex.search(f)]))
+                sstable_versions = {sstable_version_regex.search(f).group(
+                    1) for f in all_sstable_files if sstable_version_regex.search(f)}
 
                 assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(sstable_versions)
                 assert sstable_versions[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
@@ -376,7 +376,7 @@ class UpgradeTest(FillDatabaseData):
 
         nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(nodes_num)]
+        indexes = list(range(nodes_num))
         # shuffle it so we will upgrade the nodes in a random order
         random.shuffle(indexes)
 
@@ -445,7 +445,7 @@ class UpgradeTest(FillDatabaseData):
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(nodes_num)]
+        indexes = list(range(nodes_num))
         # shuffle it so we will upgrade the nodes in a
         # random order
         random.shuffle(indexes)

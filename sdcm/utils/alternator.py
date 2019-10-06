@@ -39,5 +39,5 @@ def create_table(endpoint_url, dynamodb_primarykey_type):
         waiter.wait(TableName=name)
 
     except ClientError as ex:
-        LOGGER.warn(str(ex))
+        LOGGER.warning(str(ex))
         assert 'already exists' in str(ex)

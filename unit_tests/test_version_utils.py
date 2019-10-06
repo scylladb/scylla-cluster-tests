@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import unittest
 
 from sdcm.utils.version_utils import get_branch_version_from_list, get_branch_version_from_repo, get_branch_version, is_enterprise
@@ -26,9 +27,9 @@ class TestVersionUtils(unittest.TestCase):
         self.assertEqual(get_branch_version(DEB_URL), '2019.1.1')
 
     def test_04_get_branch_version_failed(self):
-        self.assertRaisesRegexp(ValueError, "url isn't a correct", get_branch_version, BROKEN_URL)
-        self.assertRaisesRegexp(ValueError, "url isn't a correct", get_branch_version_from_list, BROKEN_URL)
-        self.assertRaisesRegexp(ValueError, "url isn't a correct", get_branch_version_from_repo, BROKEN_URL)
+        self.assertRaisesRegex(ValueError, "url isn't a correct", get_branch_version, BROKEN_URL)
+        self.assertRaisesRegex(ValueError, "url isn't a correct", get_branch_version_from_list, BROKEN_URL)
+        self.assertRaisesRegex(ValueError, "url isn't a correct", get_branch_version_from_repo, BROKEN_URL)
 
     def test_05_is_enterprise(self):
         self.assertEqual(is_enterprise('2019.1.1'), True)

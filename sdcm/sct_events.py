@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import threading
 import os
 import re
@@ -8,16 +9,15 @@ import signal
 import time
 from multiprocessing import Process, Value, Event, current_process
 import atexit
+import datetime
 
 import enum
 from enum import Enum
 import zmq
 import requests
-from backports.datetime_timestamp import timestamp
 import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs
-from sdcm.utils.py3_backports import _fromtimestamp
 from sdcm.prometheus import nemesis_metrics_obj
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class EventsDevice(Process):
             # Socket facing clients
             frontend = context.socket(zmq.SUB)  # pylint: disable=no-member
             self.pub_port.value = frontend.bind_to_random_port("tcp://*")
-            frontend.setsockopt(zmq.SUBSCRIBE, "")  # pylint: disable=no-member
+            frontend.setsockopt(zmq.SUBSCRIBE, b"")  # pylint: disable=no-member
 
             # Socket facing services
             backend = context.socket(zmq.PUB)  # pylint: disable=no-member
@@ -63,7 +63,7 @@ class EventsDevice(Process):
             backend.close()
             context.term()
 
-    def subscribe_events(self, filter_type='', stop_event=None):
+    def subscribe_events(self, filter_type=b'', stop_event=None):
         # pylint: disable=too-many-nested-blocks
         context = zmq.Context()
         LOGGER.info("subscribe to server with port %d", self.sub_port.value)
@@ -81,7 +81,7 @@ class EventsDevice(Process):
                     # remove filter objects when log event timestamp on the
                     # specific node is bigger the time filter was canceled
                     if isinstance(obj, DatabaseLogEvent):
-                        for filter_key, filter_obj in filters.items():
+                        for filter_key, filter_obj in list(filters.items()):
                             if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
                                 del filters[filter_key]
 
@@ -134,7 +134,7 @@ class Severity(enum.Enum):
     CRITICAL = 4
 
 
-class SctEvent(object):
+class SctEvent():
     def __init__(self):
         self.timestamp = time.time()
         self.severity = Severity.NORMAL
@@ -142,7 +142,7 @@ class SctEvent(object):
     @property
     def formatted_timestamp(self):
         try:
-            return _fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            return datetime.datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         except ValueError:
             LOGGER.exception("failed to format timestamp:[%d]", self.timestamp)
             return '<UnknownTimestamp>'
@@ -384,7 +384,7 @@ class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attribute
     def add_info(self, node, line, line_number):
         try:
             log_time = dateutil.parser.parse(line.split()[0])
-            self.timestamp = timestamp(log_time)
+            self.timestamp = log_time.timestamp()
         except ValueError:
             self.timestamp = time.time()
         self.line = line

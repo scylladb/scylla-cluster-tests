@@ -101,7 +101,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
-        self.log.debug("Creating {count} on-demand instances using AMI id '{ami_id}'... ".format(**locals()))
+        self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
         instances = self._ec2_services[dc_idx].create_instances(ImageId=ami_id,
                                                                 UserData=ec2_user_data,
                                                                 MinCount=count,
@@ -161,7 +161,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                     instances_i = ec2.create_spot_instances(**spot_params)
                 instances.extend(instances_i)
             except ClientError as cl_ex:
-                if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex.message:
+                if ec2_client.MAX_SPOT_EXCEEDED_ERROR in str(cl_ex):
                     self.log.debug('Cannot create spot instance(-s): %s.'
                                    'Creating on demand instance(-s) instead.', cl_ex)
                     instances_i = self._create_on_demand_instances(
@@ -362,11 +362,13 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             post_boot_script += self.network_config_ipv6_workaround_script()
 
         if isinstance(ec2_user_data, dict):
-            ec2_user_data['post_configuration_script'] = base64.b64encode(post_boot_script).decode()
+            ec2_user_data['post_configuration_script'] = base64.b64encode(
+                post_boot_script.encode('utf-8')).decode('acsii')
             ec2_user_data = json.dumps(ec2_user_data)
         else:
             if 'clustername' in ec2_user_data:
-                ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
+                ec2_user_data += " --base64postscript={0}".format(
+                    base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii'))
             else:
                 ec2_user_data = post_boot_script
 
@@ -711,7 +713,7 @@ class AWSNode(cluster.BaseNode):
 
         if not imagedata:
             self.log.warning('Some error during getting console screenshot')
-        return imagedata
+        return imagedata.encode('ascii')
 
     def traffic_control(self, tcconfig_params=None):
         """

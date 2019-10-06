@@ -58,7 +58,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                         event.add_info_and_publish(node=self.node, line=line, line_number=line_number)
 
 
-class CassandraStressThread(object):  # pylint: disable=too-many-instance-attributes
+class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
     def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False):
         if not node_list:

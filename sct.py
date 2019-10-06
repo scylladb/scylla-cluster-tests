@@ -1,8 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
 import sys
 import unittest
 import logging
+import json
 
 import pytest
 import click
@@ -40,7 +41,7 @@ def install_callback(ctx, _, value):
         return value
     shell, path = click_completion.core.install()
     click.echo('%s completion installed in %s' % (shell, path))
-    return exit(0)
+    return sys.exit(0)
 
 
 @click.group()
@@ -260,7 +261,7 @@ def list_ami_branch(region, version):
 def list_repos(dist_type, dist_version):
     if not dist_type == 'centos' and dist_version is None:
         click.secho("when passing --dist-type=debian/ubutnu need to pass --dist-version as well", fg='red')
-        exit(1)
+        sys.exit(1)
 
     repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
@@ -285,10 +286,10 @@ def conf(config_file, backend):
         config.verify_configuration()
     except Exception as ex:  # pylint: disable=broad-except
         click.secho(str(ex), fg='red')
-        exit(1)
+        sys.exit(1)
     else:
         click.secho(config.dump_config(), fg='green')
-        exit(0)
+        sys.exit(0)
 
 
 @cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
@@ -372,7 +373,7 @@ def unit_tests(test):
     sys.exit(pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)]))
 
 
-class OutputLogger(object):
+class OutputLogger():
     def __init__(self, filename, terminal):
         self.terminal = terminal
         self.log = open(filename, "a")
@@ -452,7 +453,6 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, email_recipients=None, logdir=None):
-    import json
     from sdcm.send_email import GeminiEmailReporter, LongevityEmailReporter
 
     if not logdir:

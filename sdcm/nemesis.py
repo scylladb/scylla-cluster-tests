@@ -58,10 +58,9 @@ class FilesNotCorrupted(Exception):
 
 class UnsupportedNemesis(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
-    pass
 
 
-class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
     run_with_gemini = True
@@ -271,8 +270,8 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNode with resharding %s' % self.target_node)
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
-        self.log.info('Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
-                      '{murmur3_partitioner_ignore_msb_bits}'.format(**locals()))
+        self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
+                      f'{murmur3_partitioner_ignore_msb_bits}')
         self.target_node.restart_node_with_resharding(
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.log.info('Waiting scylla services to start after node restart')
@@ -331,7 +330,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
         try:
             # Remove 5 data files
-            for _ in xrange(5):
+            for _ in range(5):
                 file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
                 result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
@@ -702,7 +701,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
     def modify_table_comment(self):
         # default: comment = ''
-        prop_val = ''.join(random.choice(string.ascii_letters) for _ in xrange(24))
+        prop_val = ''.join(random.choice(string.ascii_letters) for _ in range(24))
         self._modify_table_property(name="comment", val="'%s'" % prop_val)
 
     def modify_table_gc_grace_time(self):
@@ -1052,7 +1051,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
                                    msg="Wrong expected and actual top partitions number for {} sampler".format(sampler))
             self.tester.assertTrue(toppartition_result[sampler]['capacity'] == args['capacity'],
                                    msg="Wrong expected and actual capacity number for {} sampler".format(sampler))
-            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), args['toppartition'],
+            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), int(args['toppartition']),
                                         msg="Wrong number of requested and expected toppartitions for {} sampler".format(sampler))
 
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
@@ -1517,7 +1516,7 @@ class UpgradeNemesis(Nemesis):
         # get the number of nodes
         nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(nodes_num)]
+        indexes = list(range(nodes_num))
         # shuffle it so we will upgrade the nodes in a
         # random order
         random.shuffle(indexes)
@@ -1570,7 +1569,7 @@ class RollbackNemesis(Nemesis):
         # get the number of nodes
         nodes_num = len(self.cluster.nodes)
         # prepare an array containing the indexes
-        indexes = [x for x in range(nodes_num)]
+        indexes = list(range(nodes_num))
         # shuffle it so we will rollback the nodes in a
         # random order
         random.shuffle(indexes)

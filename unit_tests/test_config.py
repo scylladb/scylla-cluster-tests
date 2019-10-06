@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import logging
 import unittest
@@ -101,8 +102,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with self.assertRaises(ValueError) as context:
             conf.verify_configuration()
 
-        self.assertEqual(context.exception.message,
-                         'Unsupported environment variables were used:\n\t - SCT_WHAT_IS_THAT=just_made_this_up\n\t - SCT_WHAT_IS_THAT_2=what is this ?')
+        self.assertIn('SCT_WHAT_IS_THAT_2=what is this ?', str(context.exception))
+        self.assertIn('SCT_WHAT_IS_THAT=just_made_this_up', str(context.exception))
 
     def test_10_longevity(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -152,7 +153,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
-        self.assertRaisesRegexp(ValueError, r"AMI for scylla version 99.0.3 wasn't found", SCTConfiguration)
+        self.assertRaisesRegex(ValueError, r"AMI for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
     @staticmethod
     def test_12_scylla_version_repo():
@@ -175,7 +176,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
-        self.assertRaisesRegexp(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
+        self.assertRaisesRegex(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
     def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -232,7 +233,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             a, b = itertools.tee(sorted(c))
             next(b, None)
             r = None
-            for k, g in itertools.izip(a, b):
+            for k, g in zip(a, b):
                 if k != g:
                     continue
                 if k != r:

@@ -9,7 +9,7 @@ LOGGER = getLogger(__name__)
 CLOUD_PROVIDERS = ("aws", "gce")
 
 
-class CloudInstance(object):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+class CloudInstance():  # pylint: disable=too-few-public-methods,too-many-instance-attributes
     def __init__(self, cloud, name, region_az, state, lifecycle, instance_type, owner, create_time):  # pylint: disable=too-many-arguments
         self.cloud = cloud
         self.name = name
@@ -21,7 +21,7 @@ class CloudInstance(object):  # pylint: disable=too-few-public-methods,too-many-
         self.create_time = create_time
 
 
-class CloudInstances(object):
+class CloudInstances():
 
     def __init__(self):
         self.instances = {prov: [] for prov in CLOUD_PROVIDERS}
