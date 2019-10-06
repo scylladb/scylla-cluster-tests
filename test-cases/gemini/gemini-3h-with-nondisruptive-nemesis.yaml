@@ -6,7 +6,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.large'
 
 user_prefix: 'gemini-basic-3h'
-failure_post_behavior: keep
+failure_post_behavior: 'destroy'
 store_results_in_elasticsearch: False
 
 nemesis_class_name: 'NonDisruptiveMonkey'
