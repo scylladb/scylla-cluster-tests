@@ -22,6 +22,7 @@ space_node_threshold: 0
 reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: 'true'
+nemesis_interval: 5
 
 nemesis_filter_seeds: true
 
