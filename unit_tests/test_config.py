@@ -2,8 +2,6 @@ import os
 import logging
 import unittest
 import itertools
-import hashlib
-import shutil
 
 from sdcm.sct_config import SCTConfiguration
 
@@ -279,39 +277,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = SCTConfiguration()
         conf.verify_configuration()
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
-
-    @staticmethod
-    def clear_cloud_downloaded_path(url):
-        md5 = hashlib.md5()
-        md5.update(url)
-        tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    def test_16_update_db_packages_s3(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_UPDATE_DB_PACKAGES'] = 's3://downloads.scylladb.com/rpm/centos/scylladb-nightly/scylla/7/x86_64/repodata/'
-        os.environ['SCT_USER_PREFIX'] = 'testing'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
-        self.clear_cloud_downloaded_path(os.environ['SCT_UPDATE_DB_PACKAGES'])
-
-        conf = SCTConfiguration()
-        conf.verify_configuration()
-        update_db_packages = conf.get('update_db_packages')
-        assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
-
-    def test_16_update_db_packages_gce(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_UPDATE_DB_PACKAGES'] = 'gs://scratch.scylladb.com/sct_test/'
-        os.environ['SCT_USER_PREFIX'] = 'testing'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
-        self.clear_cloud_downloaded_path(os.environ['SCT_UPDATE_DB_PACKAGES'])
-
-        conf = SCTConfiguration()
-        conf.verify_configuration()
-        update_db_packages = conf.get('update_db_packages')
-        assert os.path.exists(os.path.join(update_db_packages, "text.txt"))
 
 
 if __name__ == "__main__":
