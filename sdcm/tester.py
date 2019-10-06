@@ -1041,7 +1041,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             auth_provider = None
 
         if ssl_opts is None and self.params.get('client_encrypt', default=None):
-            ssl_opts = {'ca_certs': './data_dir/ssl_conf/unittest/catest.pem'}
+            ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
         self.log.debug(str(ssl_opts))
         cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
                                        compression=compression,
