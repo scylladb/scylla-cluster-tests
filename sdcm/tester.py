@@ -513,8 +513,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         ami_ids = self.params.get('ami_id_db_scylla', default='').split()
-        for idx, service in enumerate(services):
-            wait_ami_available(service.meta.client, ami_ids[idx])
+        for idx, ami_id in enumerate(ami_ids):
+            wait_ami_available(services[idx].meta.client, ami_id)
 
         ec2_security_group_ids = []
         for i in self.params.get('security_group_ids').split():
