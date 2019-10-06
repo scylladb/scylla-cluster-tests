@@ -320,7 +320,7 @@ cli.add_command(investigate)
 @click.option("-t", "--test", required=False, default="",
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)])
+    sys.exit(pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)]))
 
 
 class OutputLogger(object):

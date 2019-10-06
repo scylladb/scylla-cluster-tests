@@ -20,6 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 setup_stdout_logger()
 
 LOGGER = logging.getLogger("microbenchmarking")
+LOGGER.setLevel(logging.DEBUG)
 
 
 class LargeNumberOfDatasetsException(Exception):
