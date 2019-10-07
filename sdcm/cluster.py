@@ -2145,7 +2145,7 @@ server_encryption_options:
         credentials = self.parent_cluster.get_db_auth()
         auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
         use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
-        ssl_params = '--ssl' if self.is_client_encrypt else ''
+        ssl_params = '--ssl' if self.parent_cluster.params.get("client_encrypt") else ''
         options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} --connect-timeout={connect_timeout} {ssl_params}".format(
             auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout, connect_timeout=connect_timeout, ssl_params=ssl_params)
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host, port=port)
