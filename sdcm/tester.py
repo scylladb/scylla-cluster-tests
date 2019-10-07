@@ -1756,13 +1756,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         The method is used to send email with test results.
         Child class should implement the method get_mail_data
         which return the dict with 2 required fields:
-        email_template, email_subject
+            email_template, email_subject
+        and set the self.email_reporter to appropriate reporter object
         """
         send_email = self.params.get('send_email', default=False)
         if send_email:
             try:
                 email_data = self.get_email_data()
-                self.email_reporter.send_report(email_data)
+                if self.email_reporter:
+                    self.email_reporter.send_report(email_data)
+                else:
+                    self.log.warning('Tests is not configured with email reporter')
 
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("Error during sending email: {}".format(details))
