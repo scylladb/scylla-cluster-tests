@@ -59,7 +59,7 @@ class FilesNotCorrupted(Exception):
 class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
-    run_with_gemini = False
+    run_with_gemini = True
     networking = False
 
     def __init__(self, tester_obj, termination_event):
@@ -1227,7 +1227,6 @@ class StopWaitStartMonkey(Nemesis):
 
 class StopStartMonkey(Nemesis):
 
-    run_with_gemini = True
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1238,7 +1237,6 @@ class StopStartMonkey(Nemesis):
 class RestartThenRepairNodeMonkey(NotSpotNemesis):
 
     disruptive = True
-    run_with_gemini = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1329,6 +1327,7 @@ class MajorCompactionMonkey(Nemesis):
 class RefreshMonkey(Nemesis):
 
     disruptive = False
+    run_with_gemini = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1338,6 +1337,7 @@ class RefreshMonkey(Nemesis):
 class RefreshBigMonkey(Nemesis):
 
     disruptive = False
+    run_with_gemini = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1631,7 +1631,6 @@ class NodeRestartWithResharding(Nemesis):
 class TopPartitions(Nemesis):
 
     disruptive = False
-    run_with_gemini = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1641,6 +1640,7 @@ class TopPartitions(Nemesis):
 class RandomInterruptionNetworkMonkey(Nemesis):
     disruptive = False
     networking = True
+    run_with_gemini = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1650,6 +1650,7 @@ class RandomInterruptionNetworkMonkey(Nemesis):
 class BlockNetworkMonkey(Nemesis):
     disruptive = False
     networking = True
+    run_with_gemini = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1659,6 +1660,7 @@ class BlockNetworkMonkey(Nemesis):
 class StopStartInterfacesNetworkMonkey(Nemesis):
     disruptive = False
     networking = True
+    run_with_gemini = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1737,6 +1739,18 @@ class GeminiChaosMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
+class GeminiNonDisruptiveChaosMonkey(Nemesis):
+    def __init__(self, *args, **kwargs):
+        super(GeminiNonDisruptiveChaosMonkey, self).__init__(*args, **kwargs)
+        run_with_gemini = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True))
+        non_disruptive = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False))
+        self.disrupt_methods_list = run_with_gemini.intersection(non_disruptive)
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
 
 DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
@@ -1745,5 +1759,5 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    LimitedChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
-                   DisruptiveMonkey, NonDisruptiveMonkey,
+                   DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
                    GeminiChaosMonkey, NetworkMonkey]

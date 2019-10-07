@@ -9,7 +9,7 @@ user_prefix: 'gemini-basic-3h'
 failure_post_behavior: 'destroy'
 store_results_in_elasticsearch: False
 
-nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_class_name: 'GeminiNonDisruptiveChaosMonkey'
 nemesis_interval: 5
 
 # gemini
