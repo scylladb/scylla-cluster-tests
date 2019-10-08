@@ -71,6 +71,8 @@ from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
+from sdcm.send_email import build_reporter
+
 
 configure_logging()
 
@@ -186,7 +188,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
-        self.email_reporter = None
+        self.email_reporter = build_reporter(self)
         self.start_time = time.time()
 
         if self.params.get("logs_transport") == 'rsyslog':
@@ -1725,16 +1727,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Child class should implement the method get_mail_data
         which return the dict with 2 required fields:
             email_template, email_subject
-        and set the self.email_reporter to appropriate reporter object
         """
         send_email = self.params.get('send_email', default=False)
         if send_email:
             try:
-                email_data = self.get_email_data()
                 if self.email_reporter:
+                    email_data = self.get_email_data()
                     self.email_reporter.send_report(email_data)
                 else:
-                    self.log.warning('Tests is not configured with email reporter')
+                    self.log.warning('Test is not configured to send html reports')
 
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("Error during sending email: {}".format(details))

@@ -19,7 +19,6 @@ import os
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import format_timestamp
-from sdcm.send_email import GeminiEmailReporter
 
 
 class GeminiTest(ClusterTester):
@@ -71,9 +70,8 @@ class GeminiTest(ClusterTester):
             self.fail(self.gemini_results['results'])
 
     def get_email_data(self):
-        email_recipients = self.params.get('email_recipients', default=None)
-        self.email_reporter = GeminiEmailReporter(email_recipients=email_recipients, logdir=self.logdir)
         scylla_version = self.db_cluster.nodes[0].scylla_version
+        oracle_db_version = self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else ""
         start_time = format_timestamp(self.start_time)
 
         return {
@@ -85,7 +83,7 @@ class GeminiTest(ClusterTester):
             "scylla_instance_type": self.params.get('instance_type_db'),
             "number_of_db_nodes": self.params.get('n_db_nodes'),
             "number_of_oracle_nodes": self.params.get('n_test_oracle_db_nodes', 1),
-            "oracle_db_version": scylla_version,
+            "oracle_db_version": oracle_db_version,
             "oracle_ami_id": self.params.get('ami_id_db_oracle'),
             "oracle_instance_type": self.params.get('instance_type_db_oracle'),
             "results": self.gemini_results['results'],

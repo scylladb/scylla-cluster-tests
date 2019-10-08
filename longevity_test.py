@@ -20,7 +20,6 @@ import time
 from sdcm.tester import ClusterTester
 from sdcm.utils.alternator import create_table as alternator_create_table
 from sdcm.utils.common import format_timestamp
-from sdcm.send_email import LongevityEmailReporter
 from sdcm.sct_events import EVENTS_PROCESSES
 
 
@@ -338,18 +337,19 @@ class LongevityTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info('Prepare data for email')
-        email_recipients = self.params.get('email_recipients', default=None)
-        self.email_reporter = LongevityEmailReporter(email_recipients=email_recipients, logdir=self.logdir)
-
         grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time)
         start_time = format_timestamp(self.start_time)
 
+        config_file_name = ";".join([os.path.splitext(os.path.basename(f))[0] for f in self.params['config_files']])
+        job_name = os.environ.get('JOB_NAME')
+        subject_name = job_name if job_name else config_file_name
+
         return {
-            'subject': 'Longevity results {}: {}'.format(self.id(), start_time),
+            'subject': 'Result {}: {}'.format(subject_name, start_time),
             'grafana_screenshots': grafana_dataset.get('screenshots', []),
             'grafana_snapshots': grafana_dataset.get('snapshots', []),
             'test_status': self._get_critical_errors(),
-            'test_name': self.id(),
+            'test_name': "{} with {}".format(self.id(), config_file_name),
             'start_time': start_time,
             'end_time': format_timestamp(time.time()),
             'build_url': os.environ.get('BUILD_URL', None),
@@ -365,5 +365,9 @@ class LongevityTest(ClusterTester):
 
     @staticmethod
     def _get_critical_errors():
-        critical = open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r').readlines()
+        with open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r') as crit_err_file:
+            critical = crit_err_file.readlines()
+            if len(critical) > 200:
+                critical = critical[:200]
+                critical.append("Full Log see in critical.log")
         return ("No critical errors in critical.log", None) if not critical else ("FAILED", critical)
