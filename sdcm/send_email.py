@@ -163,3 +163,21 @@ class GeminiEmailReporter(BaseEmailReporter):
         self.log.info('Prepare result to send in email')
         html = self.render_to_html(email_data)
         return html, ()
+
+
+def build_reporter(tester):
+    """Build reporter
+
+    [description]
+
+    Arguments:
+        tester {ClusterTester} -- instance of ClusterTester for currrent test
+    """
+    email_recipients = tester.params.get('email_recipients', default=None)
+    logdir = tester.logdir
+    if "Gemini" in tester.__class__.__name__:
+        return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Longevity" in tester.__class__.__name__:
+        return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    else:
+        return None

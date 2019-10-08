@@ -98,21 +98,24 @@
     </h3>
     <div> {{ test_status[0] }} </div>
     {% if test_status[1] and short_report %}
-        <div> Number of critical records : {{ test_status[1]|length }} </div>
+        <div> See attached html report for full details of critical errors </div>
     {% elif test_status[1] and not short_report %}
         <div>
-            <table class="longevity_critical_errors_table">
-                {% for line in test_status[1] %}
-                    <tr><td>{{ line }}</td></tr>
-                    {% if loop.index > 99 %}
-                        <tr><td> See more records in critical.log file</td></tr>
-                        {% break %}
-                    {% endif %}
-                {% endfor %}
-            </table>
+            {% for line in test_status[1] %}
+                <pre>{{ line }}</pre>
+            {% endfor %}
         </div>
     {% endif %}
-        <h3>Links:</h3>
+    <h3>
+        Hydra commands:
+    </h3>
+    <div>
+        <ul>
+            <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
+            <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
+        </ul>
+    </div>
+    <h3>Links:</h3>
     <ul>
         {% if grafana_screenshots %}
             {% if grafana_screenshots[0] %}
@@ -138,10 +141,4 @@
         {% endfor %}
     {% endif %}
     <h3> Access logs </h3>
-    <div>
-        <ul>
-            <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
-            <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
-        </ul>
-    </div>
 {% endblock %}
