@@ -1302,6 +1302,7 @@ class CorruptThenRebuildMonkey(Nemesis):
 class DecommissionMonkey(Nemesis):
 
     disruptive = True
+    run_with_gemini = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
