@@ -2,7 +2,7 @@
 scylla_encryption_options: "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmipKeyProviderFactory', 'kmip_host': 'kmip_test'}"
 
 # enable system_info_encryption, config kmip_hosts
-append_conf: |
+append_scylla_yaml: |
   system_key_directory: /etc/encrypt_conf/
   system_info_encryption:
       enabled: True  # system_info_encryption
