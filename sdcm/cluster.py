@@ -2897,6 +2897,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
 
         node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
+        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
 
     def clean_replacement_node_ip(self, node, seed_address, endpoint_snitch):
         if node.replacement_node_ip:
