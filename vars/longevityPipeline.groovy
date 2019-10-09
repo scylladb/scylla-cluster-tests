@@ -100,6 +100,11 @@ def call(Map pipelineParams) {
                 }
             }
         }
+        post {
+            always {
+                archiveArtifacts artifacts: 'scylla-cluster-tests/latest/**'
+            }
+        }
     }
 
 }
