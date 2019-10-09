@@ -197,11 +197,23 @@ def remove_comments(data):
 class S3Storage(object):
 
     bucket_name = 'cloudius-jenkins-test'
+    enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
+    multipart_chunksize = 50 * 1024 * 1024  # 50 MB
+    num_download_attempts = 5
 
     def __init__(self, bucket=None):
         if bucket:
             self.bucket_name = bucket
-        self._bucket = boto3.resource('s3').Bucket(name=self.bucket_name)
+        self._bucket = boto3.resource("s3").Bucket(name=self.bucket_name)
+        self.transfer_config = boto3.s3.transfer.TransferConfig(multipart_threshold=self.enable_multipart_threshold_size,
+                                                                multipart_chunksize=self.multipart_chunksize,
+                                                                num_download_attempts=self.num_download_attempts)
+
+    def get_s3_fileojb(self, key):
+        objects = []
+        for obj in self._bucket.objects.filter(Prefix=key):
+            objects.append(obj)
+        return objects
 
     def search_by_path(self, path=''):
         files = []
@@ -217,39 +229,33 @@ class S3Storage(object):
                                                                                       bucket_name=bucket_name)
 
     def upload_file(self, file_path, dest_dir=''):
+        s3_url = self.generate_url(file_path, dest_dir)
         try:
-            s3_url = self.generate_url(file_path, dest_dir)
-            with open(file_path) as file_handle:
-                mydata = file_handle.read()
-                LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
-                response = requests.put(s3_url, data=mydata)
-                LOGGER.debug(response)
-                return s3_url if response.ok else ""
-        except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.debug("Unable to upload to S3: %s", ex)
+            LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
+            print "Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url)
+            self._bucket.upload_file(Filename=file_path,
+                                     Key="{}/{}".format(dest_dir, os.path.basename(file_path)),
+                                     Config=self.transfer_config)
+            LOGGER.info("Uploaded to {0}".format(s3_url))
+            return s3_url
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.debug("Unable to upload to S3: %s", details)
             return ""
 
-    @staticmethod
-    def download_file(link, dst_dir=""):
-        resp = requests.get(link)
+    def download_file(self, link, dst_dir):
+        key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
+        file_name = os.path.basename(key_name)
         try:
-            if resp.status_code == 200:
+            LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
+            self._bucket.download_file(Key=key_name,
+                                       Filename=os.path.join(dst_dir, file_name),
+                                       Config=self.transfer_config)
+            LOGGER.info("Downloaded finished")
+            return os.path.join(os.path.abspath(dst_dir), file_name)
 
-                file_path = os.path.basename(os.path.dirname(link))
-
-                if dst_dir:
-                    dst = os.path.join(dst_dir, file_path)
-                else:
-                    dst = file_path
-
-                if not os.path.exists(dst):
-                    os.mkdir(dst)
-                with open(os.path.join(dst, os.path.basename(link)), 'wb') as file_handle:
-                    file_handle.write(resp.content)
-                return os.path.join(os.path.abspath(dst), os.path.basename(link))
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.warning("File {} is not downloaded by reason: {}".format(file_path, details))
-        return None
+            LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
+            return ""
 
 
 def get_latest_gemini_version():
