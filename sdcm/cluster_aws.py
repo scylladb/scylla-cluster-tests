@@ -535,6 +535,9 @@ class AWSNode(cluster.BaseNode):
                 self.stop_scylla_server(verify_down=False)
                 self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
                 self.start_scylla_server(verify_up=False)
+                self.remoter.run(
+                    'sudo sed -i -e "s/replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
+                self.remoter.run("sudo sed -e '/auto_bootstrap:.*/s/True/False/g' -i /etc/scylla/scylla.yaml")
             finally:
                 if event_filters:
                     for event_filter in event_filters:
