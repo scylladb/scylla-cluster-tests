@@ -108,7 +108,7 @@ class LongevityTest(ClusterTester):
                 self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get('scylla_encryption_options', None))
             # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
             # the loaders (round_robin).
-            if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
+            if keyspace_num > 1 and self.params.get('round_robin'):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
@@ -122,7 +122,7 @@ class LongevityTest(ClusterTester):
 
             # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
             # all keys were written succesfully
-            if self.params.get('nemesis_during_prepare', default='true').lower() == 'true':
+            if self.params.get('nemesis_during_prepare'):
                 # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
                 # pay attention to the fact it checks only on keyspace1
                 self.db_cluster.wait_total_space_used_per_node(keyspace=None)
@@ -163,7 +163,7 @@ class LongevityTest(ClusterTester):
         stress_cmd = self.params.get('stress_cmd', default=None)
         if stress_cmd:
             # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
-            if keyspace_num > 1 and self.params.get('round_robin', default='false').lower() == 'true':
+            if keyspace_num > 1 and self.params.get('round_robin'):
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in xrange(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
@@ -198,7 +198,7 @@ class LongevityTest(ClusterTester):
             self.run_fullscan_thread(ks_cf=fullscan['ks.cf'], interval=fullscan['interval'])
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
-        if not prepare_write_cmd or self.params.get('nemesis_during_prepare', default='true').lower() == 'false':
+        if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 

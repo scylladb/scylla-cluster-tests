@@ -18,7 +18,7 @@ instance_type_monitor: 't2.small'
 instance_type_db: 'i3.4xlarge'
 
 failure_post_behavior: 'destroy'
-round_robin: 'true'
+round_robin: true
 space_node_threshold: 644245094
 
 user_prefix: 'perf-regression-latency-in-memory'

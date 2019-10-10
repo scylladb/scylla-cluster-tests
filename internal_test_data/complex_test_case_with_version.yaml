@@ -20,7 +20,7 @@ user_prefix: 'longevity-50gb-4d-not-jenkins'
 failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
-experimental: 'true'
+experimental: true
 append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 instance_provision: 'on_demand'
 

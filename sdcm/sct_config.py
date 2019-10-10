@@ -300,7 +300,7 @@ class SCTConfiguration(dict):
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",  type=int,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
 
-        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=str,
+        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=boolean,
              help="""Run nemesis during prepare stage of the test"""),
 
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD",  type=int,
@@ -602,7 +602,7 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="keyspace_num", env="SCT_KEYSPACE_NUM",  type=int,
              help=""),
-        dict(name="round_robin", env="SCT_ROUND_ROBIN",  type=str,
+        dict(name="round_robin", env="SCT_ROUND_ROBIN", type=boolean,
              help=""),
         dict(name="batch_size", env="SCT_BATCH_SIZE",  type=int,
              help=""),
@@ -685,7 +685,7 @@ class SCTConfiguration(dict):
             multiple commands can passed as a list"""),
 
         # RefreshTest
-        dict(name="skip_download", env="SCT_SKIP_DOWNLOAD",  type=str,
+        dict(name="skip_download", env="SCT_SKIP_DOWNLOAD", type=boolean,
              help=""),
         dict(name="sstable_file", env="SCT_SSTABLE_FILE",  type=str,
              help=""),

@@ -386,7 +386,7 @@ class FillDatabaseData(ClusterTester):
                 [[-4]]
             ],
             'min_version': '1.7',
-            'skip_condition': "self.params.get('experimental', default='false').lower() == 'true'",
+            'skip_condition': "self.params.get('experimental')",
             'max_version': '',
             'skip': ''},
         # indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause

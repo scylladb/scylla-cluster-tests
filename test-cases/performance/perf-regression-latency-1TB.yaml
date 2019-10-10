@@ -21,7 +21,7 @@ user_prefix: 'perf-regression-latency'
 failure_post_behavior: destroy
 space_node_threshold: 644245094
 
-round_robin: 'true'
+round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 4'
 
 send_email: true
