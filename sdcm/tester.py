@@ -219,6 +219,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             duration = self.test_duration
         return duration * 60 + 600
 
+    @staticmethod
+    def init_nodes(db_cluster):
+        db_cluster.set_seeds()
+
+        # Init seed nodes
+        db_cluster.wait_for_init(node_list=db_cluster.seed_nodes)
+
+        # Init non-seed nodes
+        if db_cluster.non_seed_nodes:
+            db_cluster.wait_for_init(node_list=db_cluster.non_seed_nodes)
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):
@@ -236,16 +247,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
 
         self.init_resources()
-        self.set_seeds()
 
-        # Init seed nodes
-        self.db_cluster.wait_for_init(node_list=self.db_cluster.seed_nodes)
+        self.init_nodes(db_cluster=self.db_cluster)
 
-        # Init non-seed nodes
-        self.db_cluster.wait_for_init(node_list=self.db_cluster.non_seed_nodes)
-
+        # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
-            self.cs_db_cluster.wait_for_init()
+            self.init_nodes(db_cluster=self.cs_db_cluster)
 
         if self.create_stats:
             self.create_test_stats()
@@ -794,33 +801,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_docker()
         elif cluster_backend == 'baremetal':
             self.get_cluster_baremetal()
-
-    def set_seeds(self):
-        seeds_selector = self.params.get('seeds_selector')
-        seeds_num = self.params.get('seeds_num')
-
-        seed_nodes_ips = None
-        if seeds_selector == 'reflector':
-            node = self.db_cluster.nodes[0]
-            node.wait_ssh_up()
-            # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
-            # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
-            seed_nodes_ips = wait.wait_for(self.db_cluster.get_seed_selected_by_reflector,
-                                           step=10, text='Waiting for seed is selected by reflector',
-                                           timeout=300, throw_exc=True)
-        else:
-            if seeds_selector == 'random':
-                selected_nodes = random.sample(self.db_cluster.nodes, seeds_num)
-            # seeds_selector == 'first'
-            else:
-                selected_nodes = self.db_cluster.nodes[:seeds_num]
-
-            seed_nodes_ips = [node.ip_address for node in selected_nodes]
-
-        for node in self.db_cluster.nodes:
-            if node.ip_address in seed_nodes_ips:
-                node.is_seed = True
-        assert seed_nodes_ips, "We should have at least one selected seed by now"
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
