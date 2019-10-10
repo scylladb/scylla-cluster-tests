@@ -8,6 +8,15 @@ def call() {
             }
         }
          parameters {
+
+            string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
+                   description: 'sct git repo',
+                   name: 'sct_repo')
+
+            string(defaultValue: 'master',
+                   description: 'sct git branch',
+                   name: 'sct_branch')
+
             string(defaultValue: "longevity_test.LongevityTest.test_custom_time",
                    description: '',
                    name: 'test_name')
@@ -49,7 +58,9 @@ def call() {
             stage('Checkout') {
                steps {
                   dir('scylla-cluster-tests') {
-                      checkout scm
+                      git(url: params.sct_repo,
+                            credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
+                            branch: params.sct_branch)
 
                       dir("scylla-qa-internal") {
                         git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
