@@ -13,7 +13,7 @@ instance_type_db: 'i3.4xlarge'
 
 nemesis_class_name: 'LimitedChaosMonkey'
 nemesis_interval: 30
-# nemesis_during_prepare: 'false'
+# nemesis_during_prepare: false
 
 user_prefix: 'longevity-encrypt-at-rest-200gb-6h-tls'
 
@@ -22,7 +22,7 @@ space_node_threshold: 644245094
 
 use_mgmt: true
 
-server_encrypt: 'true'
+server_encrypt: true
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'

@@ -15,7 +15,7 @@ nemesis_class_name: 'NetworkMonkey'
 nemesis_interval: 10
 aws_extra_network_interface: true
 
-nemesis_during_prepare: 'false'
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-200gb-48h-network'
 
@@ -24,7 +24,7 @@ space_node_threshold: 644245094
 
 use_mgmt: true
 
-server_encrypt: 'true'
+server_encrypt: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra

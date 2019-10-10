@@ -18,6 +18,6 @@ space_node_threshold: 6442
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 15
-nemesis_during_prepare: 'false'
+nemesis_during_prepare: false
 
 use_mgmt: true

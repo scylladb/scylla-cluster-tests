@@ -14,7 +14,7 @@ instance_type_db: 'i3.4xlarge'
 
 nemesis_class_name: 'LimitedChaosMonkey'
 nemesis_interval: 30
-nemesis_during_prepare: 'false'
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-200gb-48h-verify-limited-tls'
 
