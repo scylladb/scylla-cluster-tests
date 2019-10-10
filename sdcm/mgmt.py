@@ -754,6 +754,7 @@ class SCTool(object):
         LOGGER.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
+            LOGGER.debug("sctool output: %s", res.stdout)
         except (UnexpectedExit, Failure) as ex:
             raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, ex))
 
@@ -764,6 +765,7 @@ class SCTool(object):
             if is_multiple_tables:
                 dict_res_tables = self.parse_result_multiple_tables(res=res)
                 return dict_res_tables
+        LOGGER.debug('sctool res after parsing: %s', str(res))
         return res
 
     @staticmethod
