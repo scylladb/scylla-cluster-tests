@@ -17,4 +17,4 @@ failure_post_behavior: destroy
 sstable_url: 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.tar.gz'
 sstable_file: '/var/tmp/keyspace1.standard1.tar.gz'
 sstable_md5: 'f64ab85111e817f22f93653a4a791b1f'
-skip_download: 'true'
+skip_download: true

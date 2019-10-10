@@ -19,8 +19,8 @@ failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 
-server_encrypt: 'true'
-client_encrypt: 'false'
+server_encrypt: true
+client_encrypt: false
 
 # 80GB in-memory storage - 36GB table is 45% of total in-memory store as recommended
 append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --in-memory-storage-size-mb 80000'
