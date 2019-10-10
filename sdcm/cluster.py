@@ -2484,9 +2484,9 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         self.nemesis = []
         self.nemesis_threads = []
         self._seed_node_rebooted = False
-        self._seed_nodes_ips = None
-        self._seed_nodes = None
-        self._non_seed_nodes = None
+        self._seed_nodes_ips = []
+        self._seed_nodes = []
+        self._non_seed_nodes = []
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -2499,6 +2499,33 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         # pylint: disable=no-member
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
+
+    def set_seeds(self):
+        seeds_selector = self.params.get('seeds_selector')  # pylint: disable=no-member
+        seeds_num = self.params.get('seeds_num')  # pylint: disable=no-member
+
+        seed_nodes_ips = None
+        if seeds_selector == 'reflector':
+            node = self.nodes[0]  # pylint: disable=no-member
+            node.wait_ssh_up()
+            # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
+            # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
+            seed_nodes_ips = wait.wait_for(self.get_seed_selected_by_reflector,
+                                           step=10, text='Waiting for seed is selected by reflector',
+                                           timeout=300, throw_exc=True)
+        else:
+            if seeds_selector == 'random':
+                selected_nodes = random.sample(self.nodes, seeds_num)  # pylint: disable=no-member
+            # seeds_selector == 'first'
+            else:
+                selected_nodes = self.nodes[:seeds_num]  # pylint: disable=no-member
+
+            seed_nodes_ips = [node.ip_address for node in selected_nodes]
+
+        for node in self.nodes:  # pylint: disable=no-member
+            if node.ip_address in seed_nodes_ips:
+                node.is_seed = True
+        assert seed_nodes_ips, "We should have at least one selected seed by now"
 
     @property
     def seed_nodes_ips(self):
