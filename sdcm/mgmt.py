@@ -743,8 +743,9 @@ class SCTool(object):
         logger.debug("Issuing: 'sctool {}'".format(cmd))
         try:
             res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
-        except (UnexpectedExit, Failure) as e:
-            raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, e))
+            logger.debug("sctool output: %s", res.stdout)
+        except (UnexpectedExit, Failure) as ex:
+            raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, ex))
 
         if is_verify_errorless_result:
             MgrUtils.verify_errorless_result(cmd=cmd, res=res)
@@ -753,6 +754,7 @@ class SCTool(object):
             if is_multiple_tables:
                 dict_res_tables = self.parse_result_multiple_tables(res=res)
                 return dict_res_tables
+        logger.debug('sctool res after parsing: %s', str(res))
         return res
 
     def parse_result_table(self, res):
