@@ -1597,7 +1597,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       email_recipients=self.params.get('email_recipients', default=None))
         is_gce = True if self.params.get('cluster_backend') == 'gce' else False
         try:
-            results_analyzer.check_regression(self._test_id, is_gce)
+            results_analyzer.check_regression(self.test_id, is_gce)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 

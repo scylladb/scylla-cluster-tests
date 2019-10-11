@@ -333,7 +333,15 @@ class TestStatsMixin(Stats):
 
     @staticmethod
     def _create_test_id():
-        return datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        """return unified test-id
+
+        Returns:
+            str -- generated test-id for whole run.
+        """
+        # avoid cyclic-decencies between cluster and db_stats
+        from sdcm.cluster import Setup
+
+        return Setup.test_id()
 
     def _init_stats(self):
         return {k: {} for k in self.KEYS}
