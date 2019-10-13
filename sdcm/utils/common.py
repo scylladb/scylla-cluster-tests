@@ -32,7 +32,6 @@ from concurrent.futures import ThreadPoolExecutor
 from urlparse import urlparse
 import hashlib
 
-import requests
 import boto3
 import libcloud.storage.providers
 import libcloud.storage.types
