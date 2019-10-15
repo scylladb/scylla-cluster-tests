@@ -271,7 +271,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('repair system_auth keyspace ...')
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
-        db_node_address = self.db_cluster.nodes[0].private_ip_address
+        db_node_address = self.db_cluster.nodes[0].ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
         self.monitors.wait_for_init()
 
@@ -1581,8 +1581,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
         query = '(sum(node_filesystem_size{{mountpoint="{0.scylla_dir}", ' \
-            'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
-            'instance=~"{1.private_ip_address}"}}))'.format(self, node)
+            'instance=~"{1.external_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
+            'instance=~"{1.external_address}"}}))'.format(self, node)
         res = self.prometheus_db.query(query=query, start=time.time(), end=time.time())
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)

@@ -70,9 +70,9 @@ class BuildClusterTest(ClusterTester):
                                "Please check AMI!")
 
         for node in self.db_cluster.nodes:
-            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.private_ip_address,
+            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.ip_address,
                                                                                           addresses.get(
-                                                                                              node.private_ip_address,
+                                                                                              node.ip_address,
                                                                                               "")))
             for seed in seeds:
                 node.remoter.run(

@@ -425,6 +425,10 @@ class AWSNode(cluster.BaseNode):
 
         return self._instance.private_ip_address
 
+    @property
+    def ipv6_ip_address(self):
+        return self._instance.network_interfaces[0].ipv6_addresses[0]["Ipv6Address"]
+
     def _refresh_instance_state(self):
         raise NotImplementedError()
 

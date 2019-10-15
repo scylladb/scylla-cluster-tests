@@ -684,25 +684,23 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     @property
     def public_ip_address(self):
-        return self._get_public_ip_address()
-
-    @property
-    def private_ip_address(self):
-        return self._get_private_ip_address()
-
-    def _get_public_ip_address(self):
         public_ips, _ = self._refresh_instance_state()
         if public_ips:
             return public_ips[0]
         else:
             return None
 
-    def _get_private_ip_address(self):
+    @property
+    def private_ip_address(self):
         _, private_ips = self._refresh_instance_state()
         if private_ips:
             return private_ips[0]
         else:
             return None
+
+    @property
+    def ipv6_ip_address(self):
+        raise NotImplementedError()
 
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
@@ -721,7 +719,9 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     @property
     def ip_address(self):
-        if Setup.INTRA_NODE_COMM_PUBLIC:
+        if self.parent_cluster.params["ip_ssh_connections"] == "ipv6":
+            return self.ipv6_ip_address
+        elif Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -732,8 +732,9 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         the communication address for usage between the test and the nodes
         :return:
         """
-
-        if IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
+        if self.parent_cluster.params["ip_ssh_connections"] == "ipv6":
+            return self.ipv6_ip_address
+        elif IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -930,10 +931,11 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         self._db_log_reader_thread.start()
 
     def __str__(self):
-        return 'Node %s [%s | %s] (seed: %s)' % (self.name,
-                                                 self.public_ip_address,
-                                                 self.private_ip_address,
-                                                 self.is_seed)
+        return 'Node %s [%s | %s%s] (seed: %s)' % (self.name,
+                                                   self.public_ip_address,
+                                                   self.private_ip_address,
+                                                   " | %s" % self.ipv6_ip_address if self.ipv6_ip_address else "",
+                                                   self.is_seed)
 
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
@@ -1384,11 +1386,11 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
             # Set listen_address
             pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
             # Set rpc_address
             pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
 
         if listen_on_all_interfaces:
@@ -2135,7 +2137,7 @@ server_encryption_options:
         self.log.info('Gossipinfo schema version and status of all nodes: {}'.format(gossip_node_schemas))
 
         # Validate that ALL initiated nodes in the gossip
-        cluster_nodes = [node.private_ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
+        cluster_nodes = [node.ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
 
         not_in_gossip = list(set(cluster_nodes) - set(gossip_node_schemas.keys()))
         if not_in_gossip:
@@ -2170,7 +2172,7 @@ server_encryption_options:
         peers_details = ''
         try:
             gossip_node_schemas = self.validate_gossip_nodes_info()
-            status = gossip_node_schemas[self.private_ip_address]['status']
+            status = gossip_node_schemas[self.ip_address]['status']
             if status != 'NORMAL':
                 self.log.debug('Node status is {status}. Schema version can\'t be validated'. format(status=status))
                 return
@@ -2189,7 +2191,7 @@ server_encryption_options:
                     errors.append('Found nulls in system.peers on the node %s: %s' % (current_node_ip, peers_details))
 
                 peer_schema_version = line_splitted[6].strip()
-                gossip_node_schema_version = gossip_node_schemas[self.private_ip_address]['schema']
+                gossip_node_schema_version = gossip_node_schemas[self.ip_address]['schema']
                 if gossip_node_schema_version and peer_schema_version != gossip_node_schema_version:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
                                   'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
@@ -3317,7 +3319,7 @@ class BaseLoaderSet(object):
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
-            ips = ",".join([n.private_ip_address for n in node_list])
+            ips = ",".join([n.ip_address for n in node_list])
             bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
             result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(stress_cmd.strip(), ips, bench_log),
                                       timeout=timeout,

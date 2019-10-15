@@ -318,7 +318,7 @@ class GrafanaEntity(BaseLogEntity):
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
         super(GrafanaEntity, self).__init__(*args, **kwargs)
-        self.install_phantom_js()
+        # self.install_phantom_js()
 
     @property
     def phantomjs_installed(self):

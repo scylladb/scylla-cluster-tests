@@ -13,3 +13,9 @@ nemesis_interval: 5
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424
+ip_ssh_connections: "ipv6"
+
+
+post_behavior_db_nodes: destroy
+post_behavior_loader_nodes: destroy
+post_behavior_monitor_nodes: destroy
