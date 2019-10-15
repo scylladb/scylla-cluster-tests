@@ -18,7 +18,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_clo
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_aws_instances_according_post_behavior,
                                clean_gce_instances_according_post_behavior,
-                               search_test_id_in_latest)
+                               search_test_id_in_latest, get_testrun_dir)
 from sdcm.utils.monitorstack import restore_monitor_stack
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
@@ -445,6 +445,41 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
         table.add_row([cluster_type, s3_link])
     click.echo(table.get_string(title="Collected logs by test-id: {} Directory: {}".format(collector.test_id,
                                                                                            collector.storage_dir,)))
+
+
+@cli.command('send-email', help='Send email with results for testrun')
+@click.option('--test-id', help='Test-id of run')
+@click.option('--email-recipients', help="Send email to next recipients")
+@click.option('--logdir', help='Directory where to find testrun folder')
+def send_email(test_id=None, email_recipients=None, logdir=None):
+    import json
+    from sdcm.send_email import GeminiEmailReporter, LongevityEmailReporter
+
+    if not logdir:
+        logdir = os.path.expanduser('~/sct-results')
+    testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
+
+    email_results_file = os.path.join(testrun_dir, "email_data.json")
+    if os.path.exists(email_results_file):
+        with open(email_results_file, "r") as fp:  # pylint: disable=invalid-name
+            test_results = json.load(fp)  # pylint: disable=invalid-name
+    else:
+        LOGGER.warning("File with email results data not found")
+        return
+
+    reporter = test_results.get('reporter')
+    email_recipients = email_recipients.split(',')
+    if not reporter:
+        LOGGER.warning("No reporter found")
+    else:
+        if "Gemini" in reporter:
+            reporter = GeminiEmailReporter(email_recipients.split(','), logdir=testrun_dir)
+            reporter.send_report(test_results)
+        elif "Longevity" in reporter:
+            reporter = LongevityEmailReporter(email_recipients, logdir=testrun_dir)
+            reporter.send_report(test_results)
+        else:
+            LOGGER.warning("No reporter found")
 
 
 if __name__ == '__main__':

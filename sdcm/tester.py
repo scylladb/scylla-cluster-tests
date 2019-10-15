@@ -875,7 +875,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   loaders=self.loaders,
                                   gemini_cmd=cmd,
                                   timeout=timeout,
-                                  outputdir=self.logdir,
+                                  outputdir=self.loaders.logdir,
                                   params=self.params).run()
 
     def kill_stress_thread(self):
@@ -1728,16 +1728,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             email_template, email_subject
         """
         send_email = self.params.get('send_email', default=False)
-        if send_email:
+        email_data = self.get_email_data()
+        if email_data:
+            email_data["reporter"] = self.email_reporter.__class__.__name__
+            import json
+            f = os.path.join(self.logdir, "email_data.json")  # pylint: disable=invalid-name
+            with open(f, "w") as fp:  # pylint: disable=invalid-name
+                json.dump(email_data, fp)  # pylint: disable=invalid-name
+
+        if send_email and email_data:
             try:
                 if self.email_reporter:
-                    email_data = self.get_email_data()
                     self.email_reporter.send_report(email_data)
                 else:
                     self.log.warning('Test is not configured to send html reports')
 
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("Error during sending email: {}".format(details))
+        else:
+            self.log.warning("Email is not configured: %s or no email data: %s", send_email, email_data)
 
     def get_email_data(self):  # pylint: disable=no-self-use
         """prepare data to generate and send via email
