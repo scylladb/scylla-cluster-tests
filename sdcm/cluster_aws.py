@@ -85,14 +85,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
         self.aws_extra_network_interface = aws_extra_network_interface
         self.params = params
-        self.node_type = node_type
 
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
                                          n_nodes=n_nodes,
                                          params=params,
-                                         region_names=self.region_names)
+                                         region_names=self.region_names,
+                                         node_type=node_type,
+                                         )
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,

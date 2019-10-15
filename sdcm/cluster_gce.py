@@ -2,6 +2,7 @@ import os
 import time
 
 from libcloud.common.google import ResourceNotFoundError
+from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 
 from sdcm import cluster
 
@@ -10,9 +11,11 @@ class CreateGCENodeError(Exception):
     pass
 
 
-def gce_create_metadata():
+def gce_create_metadata(extra_meta=None):
     tags = cluster.create_common_tags()
     tags['startup-script'] = cluster.Setup.get_startup_script()
+    if extra_meta:
+        tags.update(extra_meta)
     return tags
 
 
@@ -24,7 +27,7 @@ class GCENode(cluster.BaseNode):
 
     def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
         self._instance = gce_instance
         self._gce_service = gce_service
@@ -42,25 +45,28 @@ class GCENode(cluster.BaseNode):
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
-
-        if cluster.TEST_DURATION >= 24 * 60:
-            self.log.info('Test duration set to %s. '
-                          'Tagging node with "keep-alive"',
-                          cluster.TEST_DURATION)
+        if not cluster.Setup.REUSE_CLUSTER:
+            metadata = []
+            ex_metadata = {'Name': name,
+                           'NodeIndex': node_index,
+                           'NodeType': node_type}
+            ex_metadata = gce_create_metadata(ex_metadata)
+            if cluster.TEST_DURATION >= 24 * 60:
+                self.log.info('Test duration set to %s. '
+                              'Tagging node with "keep-alive"',
+                              cluster.TEST_DURATION)
+                metadata.append('keep-alive')
+            elif "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
+                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
+                metadata.append('keep-alive')
+            elif "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
+                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
+                metadata.append('keep-alive')
+            elif "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
+                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
+                metadata.append('keep-alive')
             self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
-        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
-        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
-        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
+                                     self._instance, metadata, ex_metadata)
 
     def set_keep_tag(self):
         if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
@@ -155,7 +161,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, add_disks=None, params=None):
+                 node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None):
 
         # pylint: disable=too-many-locals
         self._gce_image = gce_image
@@ -178,7 +184,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                          n_nodes=n_nodes,
                                          params=params,
                                          # services=services,
-                                         region_names=gce_region_names)
+                                         region_names=gce_region_names,
+                                         node_type=node_type)
         self.log.debug("GCECluster constructor")
 
     def __str__(self):
@@ -236,6 +243,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_instance(self, node_index, dc_idx):
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
+
         gce_job_default_timeout = None
         if self._gce_image_size and int(self._gce_image_size) > 80:
             gce_job_default_timeout = self._gce_services[dc_idx].connection.timeout
@@ -264,7 +272,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                           image=self._gce_image,
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=gce_create_metadata())
+                                                          ex_metadata=gce_create_metadata({'NodeType': self.node_type}))
+
         self.log.info('Created instance %s', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
@@ -281,11 +290,29 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
         return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
 
-    def _get_instances(self):
-        instances = self._get_instances_by_prefix()
+    def _get_instances(self, dc_idx):
+        test_id = cluster.Setup.test_id()
+        if not test_id:
+            raise ValueError("test_id should be configured for using reuse_cluster")
+        instances_by_nodetype = list_instances_gce(tags_dict={'TestId': test_id, 'NodeType': self.node_type})
+        instances_by_zone = self._get_instances_by_prefix(dc_idx)
+        instances = []
         ips = self._node_public_ips or self._node_private_ips
         attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
-        return [node for node in instances if getattr(node, attr_name)[0] in ips]
+        for node_zone in instances_by_zone:
+            # Filter nodes by zone and by ip addresses
+            if getattr(node_zone, attr_name)[0] not in ips:
+                continue
+            for node_nodetype in instances_by_nodetype:
+                if node_zone.id == node_nodetype.id:
+                    instances.append(node_zone)
+
+        def sort_by_index(node):
+            metadata = gce_meta_to_dict(node.extra['metadata'])
+            return metadata.get('NodeIndex', 0)
+
+        instances = sorted(instances, key=sort_by_index)
+        return instances
 
     def _create_node(self, instance, node_index, dc_idx):
         try:
@@ -297,7 +324,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            node_prefix=self.node_prefix,
                            node_index=node_index,
                            base_logdir=self.logdir,
-                           dc_idx=dc_idx)
+                           dc_idx=dc_idx,
+                           node_type=self.node_type)
         except Exception as ex:
             raise CreateGCENodeError('Failed to create node: %s' % ex)
 
@@ -305,7 +333,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.info("Adding nodes to cluster")
         nodes = []
         if cluster.Setup.REUSE_CLUSTER:
-            instances = self._get_instances()
+            instances = self._get_instances(dc_idx)
         else:
             instances = self._create_instances(count, dc_idx)
 
@@ -348,7 +376,9 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
                                                n_nodes=n_nodes,
                                                add_disks=add_disks,
                                                params=params,
-                                               gce_region_names=gce_datacenter)
+                                               gce_region_names=gce_datacenter,
+                                               node_type='scylla-db'
+                                               )
         self.version = '2.1'
 
 
@@ -377,7 +407,9 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
                             add_disks=add_disks,
-                            params=params)
+                            params=params,
+                            node_type='loader'
+                            )
 
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
@@ -408,4 +440,5 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
                             add_disks=add_disks,
-                            params=params)
+                            params=params,
+                            node_type='monitor')
