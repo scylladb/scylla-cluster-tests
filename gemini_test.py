@@ -73,6 +73,7 @@ class GeminiTest(ClusterTester):
         scylla_version = self.db_cluster.nodes[0].scylla_version
         oracle_db_version = self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else ""
         start_time = format_timestamp(self.start_time)
+        critical = self.get_critical_events()
 
         return {
             "subject": 'Gemini - test results: {}'.format(start_time),
@@ -89,9 +90,11 @@ class GeminiTest(ClusterTester):
             "results": self.gemini_results['results'],
             "status": self.gemini_results['status'],
             'test_name': self.id(),
+            'test_id': self.test_id,
             'start_time': start_time,
             'end_time': format_timestamp(time.time()),
             'build_url': os.environ.get('BUILD_URL', None),
             'nemesis_name': self.params.get('nemesis_class_name'),
             'nemesis_details': self.get_nemesises_stats(),
+            'test_status': ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
         }

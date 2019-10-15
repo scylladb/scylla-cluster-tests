@@ -1294,6 +1294,6 @@ def get_testrun_status(test_id=None, logdir=None):
     status = None
     if testrun_dir:
         with open(os.path.join(testrun_dir, 'events_log/critical.log')) as f:  # pylint: disable=invalid-name
-            status = f.read().split()
+            status = f.readlines()
 
     return status
