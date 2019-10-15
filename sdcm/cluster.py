@@ -2311,11 +2311,12 @@ class BaseCluster():  # pylint: disable=too-many-instance-attributes
 
     # pylint: disable=too-many-arguments
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, params=None, region_names=None):
+                 node_prefix='node', n_nodes=3, params=None, region_names=None, node_type=None):
         if cluster_uuid is None:
             self.uuid = Setup.test_id()
         else:
             self.uuid = cluster_uuid
+        self.node_type = node_type
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
