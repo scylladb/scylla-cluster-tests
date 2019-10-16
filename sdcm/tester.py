@@ -158,18 +158,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log = logging.getLogger(__name__)
         self.logdir = cluster.Setup.logdir()
 
-        self._failure_post_behavior = self.params.get(key='failure_post_behavior',
-                                                      default='destroy')
         ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
         cluster.set_ip_ssh_connections(ip_ssh_connections)
-        self.log.debug("Behavior on failure/post test is '%s'",
-                       self._failure_post_behavior)
-        cluster.register_cleanup(cleanup=self._failure_post_behavior)
         self._duration = self.params.get(key='test_duration', default=60)
+        post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
+        self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
+        cluster.Setup.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
+        post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
+        self.log.debug('Post behavior for loader nodes %s', post_behavior_monitor_nodes)
+        cluster.Setup.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
+        post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
+        self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
+        cluster.Setup.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
+
         cluster.set_duration(self._duration)
-        cluster.Setup.keep_cluster(self._failure_post_behavior)
         cluster_backend = self.params.get('cluster_backend', default='')
         if cluster_backend == 'aws':
             cluster.Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
@@ -1442,10 +1446,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.db_cluster = None
                 if self.cs_db_cluster:
                     self.cs_db_cluster.destroy()
-            elif self._failure_post_behavior == 'stop':
-                for node in self.db_cluster.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
+            elif actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and critical_events:
+                self.log.info('Critical errors found. Set keep flag for db nodes')
+                cluster.Setup.keep_cluster(node_type='db_nodes', val='keep')
+                self.db_cluster.set_keep_tag_on_failure()
+                if self.cs_db_cluster:
+                    self.cs_db_cluster.set_keep_tag_on_failure()
 
         if self.loaders is not None:
             self.log.info("Action for loader nodes is %s", actions_per_cluster_type['loader_nodes'])
@@ -1453,10 +1459,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                (actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and not critical_events):
                 self.loaders.destroy()
                 self.loaders = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.loaders.nodes:
-                    node.instance.stop()
-                self.db_cluster = None
+            elif actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and critical_events:
+                self.log.info('Critical errors found. Set keep flag for loader nodes')
+                cluster.Setup.keep_cluster(node_type='loader_nodes', val='keep')
+                self.db_cluster.set_keep_tag_on_failure()
 
         if self.monitors is not None:
             self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
@@ -1464,17 +1470,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                (actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and not critical_events):
                 self.monitors.destroy()
                 self.monitors = None
-            elif self._failure_post_behavior == 'stop':
-                for node in self.monitors.nodes:
-                    node.instance.stop()
-                self.monitors = None
+            elif actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and critical_events:
+                self.log.info('Critical errors found. Set keep flag for monitor nodes')
+                cluster.Setup.keep_cluster(node_type='monitor_nodes', val='keep')
+                self.db_cluster.set_keep_tag_on_failure()
 
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
-            if self._failure_post_behavior == 'destroy':
-                for credential in self.credentials:
-                    credential.destroy()
-                self.credentials = []
+            # if self._failure_post_behavior == 'destroy':
+            for credential in self.credentials:
+                credential.destroy()
+            self.credentials = []
 
     def tearDown(self):
 

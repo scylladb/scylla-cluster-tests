@@ -165,7 +165,9 @@ def register_cleanup(cleanup='destroy'):
 
 class Setup(object):
 
-    KEEP_ALIVE = False
+    KEEP_ALIVE_DB_NODES = False
+    KEEP_ALIVE_LOADER_NODES = False
+    KEEP_ALIVE_MONITOR_NODES = False
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
@@ -229,8 +231,13 @@ class Setup(object):
         cls.REUSE_CLUSTER = val
 
     @classmethod
-    def keep_cluster(cls, val='destroy'):
-        cls.KEEP_ALIVE = bool(val == 'keep')
+    def keep_cluster(cls, node_type, val='destroy'):
+        if "db_nodes" in node_type:
+            cls.KEEP_ALIVE_DB_NODES = bool(val == 'keep')
+        if "loader_nodes" in node_type:
+            cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
+        if "monitor_nodes" in node_type:
+            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
 
     @classmethod
     def mixed_cluster(cls, val=False):
@@ -2420,6 +2427,11 @@ class BaseCluster(object):  # pylint: disable=too-many-instance-attributes
         with open(private_ip_file_path, 'w') as private_ip_file:
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
+
+    def set_keep_tag_on_failure(self):
+        for node in self.nodes:
+            if hasattr(node, "set_keep_tag"):
+                node.set_keep_tag()
 
 
 class NodeSetupFailed(Exception):
