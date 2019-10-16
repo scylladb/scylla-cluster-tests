@@ -114,6 +114,16 @@ class LibvirtCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         return 'LibvirtCluster %s (Image: %s)' % (self.name,
                                                   os.path.basename(self._domain_info['image']))
 
+    def _set_post_behavior(self, action, obj):
+        if "Scylla" in self.__class__.__name__ and self.params.get('post_behavior_db_nodes') == 'destroy':
+            atexit.register(action, obj)
+        elif "Loader" in self.__class__.__name__ and self.params.get('post_behavior_loader_nodes') == 'destroy':
+            atexit.register(action, obj)
+        elif "Monitor" in self.__class__.__name__ and self.params.get('post_behavior_monitor_nodes') == 'destroy':
+            atexit.register(action, obj)
+        else:
+            self.log.debug("Post behavior is not set")
+
     def add_nodes(self, count, **kwargs):  # pylint: disable=unused-argument, arguments-differ
         # pylint: disable=too-many-locals
         nodes = []
@@ -129,14 +139,12 @@ class LibvirtCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
             name = '%s-%s' % (self.node_prefix, index)
             dst_image_basename = '%s.qcow2' % name
             dst_image_path = os.path.join(image_parent_dir, dst_image_basename)
-            if self.params.get('failure_post_behavior') == 'destroy':
-                atexit.register(cluster.remove_if_exists, dst_image_path)
+            self._set_post_behavior(cluster.remove_if_exists, dst_image_path)
             self.log.info('Copying %s -> %s',
                           self._domain_info['image'], dst_image_path)
             cluster.LIBVIRT_IMAGES.append(dst_image_path)
             shutil.copyfile(self._domain_info['image'], dst_image_path)
-            if self.params.get('failure_post_behavior') == 'destroy':
-                atexit.register(cluster.clean_domain, name)
+            self._set_post_behavior(cluster.clean_domain, name)
             virt_install_cmd = ('virt-install --connect %s --name %s '
                                 '--memory %s --os-type=%s '
                                 '--os-variant=%s '
