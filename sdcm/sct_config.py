@@ -880,8 +880,7 @@ class SCTConfiguration(dict):
              choices=("keep", "keep-on-failure", "destroy"))
     ]
 
-    required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
-                       'user_credentials_path']
+    required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {

@@ -43,11 +43,36 @@ class GCENode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
 
-        if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
+        if cluster.TEST_DURATION >= 24 * 60:
             self.log.info('Test duration set to %s. '
-                          'Keep cluster on failure %s. '
                           'Tagging node with "keep-alive"',
-                          cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
+                          cluster.TEST_DURATION)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+
+    def set_keep_tag(self):
+        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, ['keep-alive'])
+        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
+            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
             self._instance_wait_safe(self._gce_service.ex_set_node_tags,
                                      self._instance, ['keep-alive'])
 
