@@ -2503,7 +2503,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
 
-    def set_seeds(self):
+    def set_seeds(self, wait_for_timeout=300):
         seeds_selector = self.params.get('seeds_selector')  # pylint: disable=no-member
         seeds_num = self.params.get('seeds_num')  # pylint: disable=no-member
 
@@ -2515,7 +2515,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
             seed_nodes_ips = wait.wait_for(self.get_seed_selected_by_reflector,
                                            step=10, text='Waiting for seed is selected by reflector',
-                                           timeout=300, throw_exc=True)
+                                           timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
                 selected_nodes = random.sample(self.nodes, seeds_num)  # pylint: disable=no-member
