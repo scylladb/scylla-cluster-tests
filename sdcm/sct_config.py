@@ -118,16 +118,16 @@ class SCTConfiguration(dict):
         dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_list,
              help="Number list of monitor nodes in multiple data centers"),
 
-        dict(name="failure_post_behavior", env="SCT_FAILURE_POST_BEHAVIOR", type=str,
-             help="""
-                Failure/post test behavior. i.e. what to do with the cloud instances at the end of the test.
+        # dict(name="failure_post_behavior", env="SCT_FAILURE_POST_BEHAVIOR", type=str,
+        #      help="""
+        #         Failure/post test behavior. i.e. what to do with the cloud instances at the end of the test.
 
-                'destroy' - Destroy instances and credentials (default)
-                'keep' - Keep instances running and leave credentials alone
-                'stop' - Stop instances and leave credentials alone
-             """,
-             choices=("keep", "stop", "destroy"),
-             ),
+        #         'destroy' - Destroy instances and credentials (default)
+        #         'keep' - Keep instances running and leave credentials alone
+        #         'stop' - Stop instances and leave credentials alone
+        #      """,
+        #      choices=("keep", "stop", "destroy"),
+        #      ),
 
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
              help="If True, all communication between nodes are via public addresses"),
@@ -850,13 +850,34 @@ class SCTConfiguration(dict):
              help="Run post behavior actions in sct teardown step"),
 
         dict(name="post_behavior_db_nodes", env="SCT_POST_BEHAVIOR_DB_NODES", type=str,
-             help=""),
+             help="""
+                Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.
+
+                'destroy' - Destroy instances and credentials (default)
+                'keep' - Keep instances running and leave credentials alone
+                'keep-on-failure' - Keep instances if testrun failed
+             """,
+             choices=("keep", "keep-on-failure", "destroy")),
 
         dict(name="post_behavior_loader_nodes", env="SCT_POST_BEHAVIOR_LOADER_NODES", type=str,
-             help=""),
+             help="""
+                Failure/post test behavior, i.e. what to do with the loader cloud instances at the end of the test.
+
+                'destroy' - Destroy instances and credentials (default)
+                'keep' - Keep instances running and leave credentials alone
+                'keep-on-failure' - Keep instances if testrun failed
+             """,
+             choices=("keep", "keep-on-failure", "destroy")),
 
         dict(name="post_behavior_monitor_nodes", env="SCT_POST_BEHAVIOR_MONITOR_NODES", type=str,
-             help="")
+             help="""
+                Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.
+
+                'destroy' - Destroy instances and credentials (default)
+                'keep' - Keep instances running and leave credentials alone
+                'keep-on-failure' - Keep instances if testrun failed
+             """,
+             choices=("keep", "keep-on-failure", "destroy"))
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
