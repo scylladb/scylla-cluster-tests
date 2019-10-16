@@ -107,17 +107,16 @@ class OpenStackCluster(cluster.BaseCluster):  # pylint: disable=abstract-method,
             service_region = params.get('openstack_service_region', None)
             if cluster.OPENSTACK_SERVICE is None:
                 cluster.OPENSTACK_SERVICE = service
-            if params.get('failure_post_behavior') == 'destroy':
-                atexit.register(clean_openstack_credential, user,
-                                password,
-                                tenant,
-                                auth_version,
-                                auth_url,
-                                service_type,
-                                service_name,
-                                service_region,
-                                credential_key_name,
-                                credential_key_file)
+            self._set_post_behavior(clean_openstack_credential, user,
+                                    password,
+                                    tenant,
+                                    auth_version,
+                                    auth_url,
+                                    service_type,
+                                    service_name,
+                                    service_region,
+                                    credential_key_name,
+                                    credential_key_file)
         cluster.CREDENTIALS.append(credentials)
 
         self._openstack_image = openstack_image
@@ -131,6 +130,16 @@ class OpenStackCluster(cluster.BaseCluster):  # pylint: disable=abstract-method,
                                                node_prefix=node_prefix,
                                                n_nodes=n_nodes,
                                                params=params)
+
+    def _set_post_behavior(self, *args):
+        if "Scylla" in self.__class__.__name__ and self.params.get('post_behavior_db_nodes') == 'destroy':
+            atexit.register(*args)
+        elif "Loader" in self.__class__.__name__ and self.params.get('post_behavior_loader_nodes') == 'destroy':
+            atexit.register(*args)
+        elif "Monitor" in self.__class__.__name__ and self.params.get('post_behavior_monitor_nodes') == 'destroy':
+            atexit.register(*args)
+        else:
+            self.log.debug("Post behavior is not set")
 
     def __str__(self):
         return 'Cluster %s (Image: %s Type: %s)' % (self.name,
