@@ -434,7 +434,10 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                                        DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
                                        DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled'),
                                        DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out'),
-                                       DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL)]
+                                       DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server',
+                                                        severity=Severity.NORMAL),
+                                       DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed',
+                                                        severity=Severity.WARNING)]
 
         self.termination_event = threading.Event()
         self._running_nemesis = None
