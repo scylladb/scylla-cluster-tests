@@ -107,3 +107,19 @@ class TestBaseNode(unittest.TestCase):
         assert event_a["line_number"] == 1
         assert event_b["type"] == "REACTOR_STALLED"
         assert event_b["line_number"] == 4
+
+    def test_search_database_suppressed_messages(self):  # pylint: disable=invalid-name
+        self.node.database_log = os.path.join(os.path.dirname(
+            __file__), 'test_data', 'database_suppressed_messages.log')
+
+        _ = self.node.search_database_log(start_from_beginning=True)
+
+        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+
+        events = [json.loads(line) for line in events_file.readlines()]
+
+        event_a = events[-1]
+        print event_a
+
+        assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
+        assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])
