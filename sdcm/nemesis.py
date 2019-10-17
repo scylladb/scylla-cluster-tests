@@ -614,8 +614,9 @@ class Nemesis(object):
 
         # if keyspace doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces:
+            ip = self.target_node.ip_address
             stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 ' \
-                         '-schema keyspace="{}"'.format(ks)
+                         '-schema keyspace="{}" -node {}'.format(ks, ip)
             # create with stress tool
             cql_auth = self.cluster.get_db_auth()
             if cql_auth and 'user=' not in stress_cmd:
@@ -644,7 +645,10 @@ class Nemesis(object):
 
         # if key space doesn't exist or the table is empty, create it using c-s
         if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
-            self._prepare_test_table(ks=keyspace_truncate)
+            try:
+                self._prepare_test_table(ks=keyspace_truncate)
+            except:
+                raise ValueError('stress command failed, not trying to truncate because ks_truncate may not created')
 
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
