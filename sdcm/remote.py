@@ -20,6 +20,7 @@ import tempfile
 import time
 import getpass
 import socket
+import threading
 
 import six.moves
 from fabric import Connection, Config
@@ -28,6 +29,8 @@ from invoke.watchers import StreamWatcher, Responder
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
+
+LOGGER = logging.getLogger(__name__)
 
 
 # casue of this bug in astroid, and can't upgrade until python3
@@ -88,8 +91,7 @@ class CommandRunner(object):
         self.hostname = hostname
         self.user = user
         self.password = password
-        logger = logging.getLogger(__name__)
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.connection = None
 
     def __str__(self):
@@ -170,6 +172,9 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         self.connect_timeout = connect_timeout
         self._use_rsync = None
         self.known_hosts_file = tempfile.mkstemp()[1]
+        self._ssh_up_thread = None
+        self._ssh_is_up = threading.Event()
+        self._ssh_up_thread_termination = threading.Event()
         self.ssh_config = Config(overrides={
                                  'load_ssh_config': False,
                                  'UserKnownHostsFile': self.known_hosts_file,
@@ -182,12 +187,18 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                 config=self.ssh_config,
                                 connect_timeout=self.connect_timeout,
                                 connect_kwargs=self.connect_config)
+        self.start_ssh_up_thread()
+
+    def __del__(self):
+        self.stop_ssh_up_thread()
 
     @retrying(n=5, sleep_time=1, allowed_exceptions=(Exception, ), message="Reconnecting")
     def reconnect(self):
         self.log.debug('Reconnecting to host ...')
+        self.stop_ssh_up_thread()
         self.connection.close()
         self.connection.open()
+        self.start_ssh_up_thread()
 
     def ssh_debug_cmd(self):
         if self.key_file:
@@ -232,7 +243,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         return result
 
     def is_up(self, timeout=30):
-        return self._ssh_ping(timeout=timeout)
+        return self._ssh_is_up.wait(float(timeout))
 
     def _ssh_ping(self, timeout=30, verbose=False):
         cmd = 'true'
@@ -243,7 +254,26 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self.log.debug(details)
             return False
 
-    def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,too-many-branches
+    def ssh_ping_thread(self):
+        while not self._ssh_up_thread_termination.isSet():
+            result = self._ssh_ping()
+            if result:
+                self._ssh_is_up.set()
+            else:
+                self._ssh_is_up.clear()
+            self._ssh_up_thread_termination.wait(5)
+
+    def start_ssh_up_thread(self):
+        self._ssh_up_thread = threading.Thread(target=self.ssh_ping_thread)
+        self._ssh_up_thread.daemon = True
+        self._ssh_up_thread.start()
+
+    def stop_ssh_up_thread(self):
+        self._ssh_up_thread_termination.set()
+        self._ssh_up_thread.join(5)
+        self._ssh_up_thread = None
+
+    def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
                       preserve_perm=True, preserve_symlinks=False):
         """
         Copy files from the remote host to a local path.
