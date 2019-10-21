@@ -1116,32 +1116,32 @@ def filter_gce_instances_by_type(instances):
 
 BUILDERS = [
     {
-        "name": "aws-scylla-qa-builder3",
-        "public_ip": "18.235.64.163",
+        "name": "aws-eu-builder-2",
+        "public_ip": "34.249.55.96",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
     },
     {
-        "name": "aws-eu-west1-qa-builder1",
-        "public_ip": "18.203.132.87",
+        "name": "aws-eu-builder-3",
+        "public_ip": "34.248.136.231",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
     },
     {
-        "name": "aws-eu-west1-qa-builder2",
-        "public_ip": "34.244.95.165",
+        "name": "aws-eu-builder-4",
+        "public_ip": "99.81.48.181",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
     },
     {
-        "name": "aws-eu-west1-qa-builder4",
-        "public_ip": "34.253.184.117",
+        "name": "aws-eu-builder-5",
+        "public_ip": "18.200.171.172",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
     },
     {
-        "name": "aws-eu-west1-qa-builder4",
-        "public_ip": "52.211.130.106",
+        "name": "aws-eu-builder-6",
+        "public_ip": "99.81.50.63",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
     }
