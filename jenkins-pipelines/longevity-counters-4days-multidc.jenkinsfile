@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-counters-4days-multidc.yaml',
 
-    timeout: [time: 5820, unit: 'MINUTES'],
-    post_behaviour: 'keep'
+    timeout: [time: 5820, unit: 'MINUTES']
 )

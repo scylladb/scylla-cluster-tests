@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'enospc_test.EnospcTest.test_enospc_nodes',
     test_config: 'test-cases/features/enospc-30min.yaml',
 
-    timeout: [time: 60, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 60, unit: 'MINUTES']
 )

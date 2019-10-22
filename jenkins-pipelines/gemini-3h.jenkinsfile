@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'gemini_test.GeminiTest.test_random_load',
     test_config: 'test-cases/gemini/gemini-basic-3h.yaml',
 
-    timeout: [time: 530, unit: 'MINUTES'],
-    post_behaviour: 'keep'
+    timeout: [time: 530, unit: 'MINUTES']
 )
