@@ -5,7 +5,6 @@ n_loaders: 1
 n_monitor_nodes: 1
 monitor_branch: 'branch-2.1'
 user_prefix: manager-regression-DISTRO-VERSION
-failure_post_behavior: keep
 space_node_threshold: 6442
 ip_ssh_connections: 'public'
 
