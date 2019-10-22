@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'destroy_data_then_repair_test.CorruptThenRepair.test_destroy_data_then_repair_test_nodes',
     test_config: 'test-cases/destroy-data-then-repair.yaml',
 
-    timeout: [time: 10080, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 10080, unit: 'MINUTES']
 )

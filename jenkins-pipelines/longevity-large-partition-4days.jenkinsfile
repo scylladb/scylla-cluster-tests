@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'longevity_large_partition_test.LargePartitionLongevetyTest.test_large_partition_longevity',
     test_config: 'test-cases/longevity/longevity-large-partition-4days.yaml',
 
-    timeout: [time: 6540, unit: 'MINUTES'],
-    post_behaviour: 'keep'
+    timeout: [time: 6540, unit: 'MINUTES']
 )

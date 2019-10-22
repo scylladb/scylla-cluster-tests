@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'sla_per_user_system_test.SlaPerUserTest.test_read_throughput_1to5_ratio',
     test_config: 'test-cases/features/system-sla-test.yaml',
 
-    timeout: [time: 480, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 480, unit: 'MINUTES']
 )
