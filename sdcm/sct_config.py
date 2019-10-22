@@ -118,17 +118,6 @@ class SCTConfiguration(dict):
         dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_list,
              help="Number list of monitor nodes in multiple data centers"),
 
-        # dict(name="failure_post_behavior", env="SCT_FAILURE_POST_BEHAVIOR", type=str,
-        #      help="""
-        #         Failure/post test behavior. i.e. what to do with the cloud instances at the end of the test.
-
-        #         'destroy' - Destroy instances and credentials (default)
-        #         'keep' - Keep instances running and leave credentials alone
-        #         'stop' - Stop instances and leave credentials alone
-        #      """,
-        #      choices=("keep", "stop", "destroy"),
-        #      ),
-
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
              help="If True, all communication between nodes are via public addresses"),
 
