@@ -12,5 +12,4 @@ longevityPipeline(
     test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
 
     timeout: [time: 300, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
 )
