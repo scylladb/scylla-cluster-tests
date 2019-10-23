@@ -44,6 +44,7 @@ from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
+from sdcm.utils.thread import test_failing_function
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
@@ -180,6 +181,7 @@ class Setup(object):
     _test_name = None
     TAGS = dict()
     _logdir = None
+    _tester_obj = None
 
     @classmethod
     def test_id(cls):
@@ -208,6 +210,15 @@ class Setup(object):
                 test_id_file.write(str(test_id))
         else:
             LOGGER.warning("TestID already set!")
+
+    @classmethod
+    def tester_obj(cls):
+        return cls._tester_obj
+
+    @classmethod
+    def set_tester_obj(cls, tester_obj):
+        if not cls._tester_obj:
+            cls._tester_obj = tester_obj
 
     @classmethod
     def logdir(cls):
@@ -783,6 +794,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
 
+    @test_failing_function
     def journal_thread(self):
         read_from_timestamp = None
         while True:
@@ -901,6 +913,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                 self._notify_backtrace(last=False)
             self.n_coredumps = new_n_coredumps
 
+    @test_failing_function
     def backtrace_thread(self):
         """
         Keep reporting new coredumps found, every 30 seconds.
@@ -909,6 +922,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             self.termination_event.wait(15)
             self.get_backtraces()
 
+    @test_failing_function
     def db_log_reader_thread(self):
         """
         Keep reporting new events from db log, every 30 seconds.
@@ -2445,6 +2459,7 @@ def wait_for_init_wrap(method):
 
         queue = Queue.Queue()
 
+        @test_failing_function
         def node_setup(node):
             status = True
             try:
