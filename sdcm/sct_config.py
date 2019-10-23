@@ -657,6 +657,9 @@ class SCTConfiguration(dict):
             be provided by the test suite infrastructure.
             multiple commands can passed as a list"""),
 
+        dict(name="user_profile_table_count", env="SCT_USER_PROFILE_TABLE_COUNT", type=int,
+             help="""number of tables to create for template user c-s"""),
+
         # MgmtCliTest
         dict(name="scylla_mgmt_upgrade_to_repo", env="SCT_SCYLLA_MGMT_UPGRADE_TO_REPO", type=str,
              help="Url to the repo of scylla manager version to upgrade to for management tests"),

@@ -43,9 +43,9 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
         Run workload using user profiles
         """
         duration = self.params.get('cs_duration', default='50m')
-        user_profiles = self.params.get('cs_user_profiles')
+        user_profiles = self.params.get('cs_user_profiles', default=[])
         assert user_profiles is not None, 'No user profiles defined!'
-        for cs_profile in user_profiles.split():
+        for cs_profile in user_profiles:
             assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
             self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, duration))
             profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))

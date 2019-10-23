@@ -1,3 +1,4 @@
+import re
 import logging
 import time
 import uuid
@@ -717,7 +718,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self._ec2_user_data:
-                ec2_user_data = self._ec2_user_data
+                ec2_user_data = re.sub(r'(--totalnodes\s)(\d*)(\s)',
+                                       r'\g<1>{}\g<3>'.format(len(self.nodes) + count), self._ec2_user_data)
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
         if self.nodes and isinstance(ec2_user_data, str):

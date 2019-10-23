@@ -12,7 +12,7 @@ from collections import defaultdict
 
 import yaml
 import requests
-from requests import ConnectionError
+from requests import ConnectionError, HTTPError
 
 from sdcm.es import ES
 from sdcm.utils.common import get_job_name, retrying, remove_comments
@@ -139,12 +139,14 @@ class PrometheusDBStats(object):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
     @staticmethod
-    @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError,))
+    @retrying(n=5, sleep_time=7, allowed_exceptions=(ConnectionError, HTTPError))
     def request(url, post=False):
         if post:
             response = requests.post(url)
         else:
             response = requests.get(url)
+        response.raise_for_status()
+
         result = json.loads(response.content)
         LOGGER.debug("Response from Prometheus server: %s", str(result)[:200])
         if result["status"] == "success":

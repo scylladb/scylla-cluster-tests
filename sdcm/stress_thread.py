@@ -86,8 +86,14 @@ class CassandraStressThread(object):  # pylint: disable=too-many-instance-attrib
 
         # When using cassandra-stress with "user profile" the profile yaml should be provided
         if 'profile' in stress_cmd and not self.profile:
-            cs_profile = re.search('profile=(.*)yaml', stress_cmd).group(1) + 'yaml'
-            cs_profile = os.path.join(os.path.dirname(__file__), '../', 'data_dir', os.path.basename(cs_profile))
+            cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
+
+            # support of using -profile in sct test-case yaml, assumes they exists data_dir
+            # TODO: move those profile to their own directory
+            sct_cs_profile = os.path.join(os.path.dirname(__file__), '../', 'data_dir', os.path.basename(cs_profile))
+            if os.path.exists(sct_cs_profile):
+                cs_profile = sct_cs_profile
+
             with open(cs_profile, 'r') as yaml_stream:
                 profile = yaml.safe_load(yaml_stream)
                 keyspace_name = profile['keyspace']
@@ -120,7 +126,7 @@ class CassandraStressThread(object):  # pylint: disable=too-many-instance-attrib
         if self.profile:
             with open(self.profile) as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())
-            node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)))
+            node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
 
         stress_cmd_opt = stress_cmd.split()[1]
 

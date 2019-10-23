@@ -279,7 +279,12 @@ class Setup(object):
     @classmethod
     def get_startup_script(cls):
         post_boot_script = '#!/bin/bash'
+        post_boot_script += dedent(r'''
+               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+               sudo systemctl restart sshd
+               ''')
         if cls.RSYSLOG_ADDRESS:
+
             if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
                 post_boot_script += dedent('''
                        sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
