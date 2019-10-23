@@ -880,8 +880,10 @@ def get_ami_tags(ami_id, region_name):
     """
     ec2 = boto3.resource('ec2', region_name=region_name)
     test_image = ec2.Image(ami_id)
-
-    return {i['Key']: i['Value'] for i in test_image.tags}
+    if test_image.tags:
+        return {i['Key']: i['Value'] for i in test_image.tags}
+    else:
+        return {}
 
 
 def tag_ami(ami_id, tags_dict, region_name):
