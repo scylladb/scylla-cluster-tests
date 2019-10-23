@@ -211,6 +211,18 @@ class InfoEvent(SctEvent):
         return "{0}: message={1.message}".format(super(InfoEvent, self).__str__(), self)
 
 
+class ThreadFailedEvent(SctEvent):
+    def __init__(self, message, traceback):
+        super(ThreadFailedEvent, self).__init__()
+        self.message = message
+        self.severity = Severity.ERROR
+        self.traceback = str(traceback)
+        self.publish()
+
+    def __str__(self):
+        return f"{super().__str__()}: message={self.message}\n{self.traceback}"
+
+
 class CoreDumpEvent(SctEvent):
     def __init__(self, corefile_url, download_instructions, backtrace, node):
         super(CoreDumpEvent, self).__init__()

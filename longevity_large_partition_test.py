@@ -2,8 +2,6 @@ from longevity_test import LongevityTest
 
 
 class LargePartitionLongevetyTest(LongevityTest):
-    def __init__(self, *args, **kwargs):
-        super(LargePartitionLongevetyTest, self).__init__(*args, **kwargs)
 
     def test_large_partition_longevity(self):
         self._pre_create_schema()
