@@ -8,6 +8,7 @@ import base64
 from textwrap import dedent
 from threading import Thread
 from datetime import datetime
+from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 
 import yaml
 from botocore.exceptions import WaiterError, ClientError
@@ -15,7 +16,7 @@ import boto3
 
 from sdcm import cluster
 from sdcm import ec2_client
-from sdcm.utils.common import retrying, list_instances_aws
+from sdcm.utils.common import retrying, list_instances_aws, get_ami_tags
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
 from sdcm.remote import LocalCmdRunner
@@ -261,6 +262,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         """
         Update --bootstrap argument inside ec2_user_data string.
         """
+        if isinstance(ec2_user_data, dict):
+            ec2_user_data['scylla_yaml']['auto_bootstrap'] = enable_auto_bootstrap
+            return ec2_user_data
+
         if enable_auto_bootstrap:
             if '--bootstrap ' in ec2_user_data:
                 ec2_user_data.replace('--bootstrap false', '--bootstrap true')
@@ -321,10 +326,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         post_boot_script = cluster.Setup.get_startup_script()
         if self.aws_extra_network_interface:
             post_boot_script += self.configure_eth1_script()
-        if 'clustername' in ec2_user_data:
-            ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
+
+        if isinstance(ec2_user_data, dict):
+            ec2_user_data['post_configuration_script'] = base64.b64encode(post_boot_script).decode()
+            ec2_user_data = json.dumps(ec2_user_data)
         else:
-            ec2_user_data = post_boot_script
+            if 'clustername' in ec2_user_data:
+                ec2_user_data += " --base64postscript={0}".format(base64.b64encode(post_boot_script))
+            else:
+                ec2_user_data = post_boot_script
 
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
@@ -672,13 +682,20 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         cluster_uuid = cluster.Setup.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
+
         node_type = 'scylla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
-        user_data = ('--clustername %s '
-                     '--totalnodes %s' % (name, sum(n_nodes)))
-        if params.get('stop_service', default='true') == 'true':
+
+        scylla_cloud_image_version = get_ami_tags(ec2_ami_id[0], region_name=params.get(
+            'region_name').split()[0]).get('sci_version', '1')
+        if LooseVersion(scylla_cloud_image_version) >= LooseVersion('2'):
+            user_data = dict(scylla_yaml=dict(cluster_name=name), start_scylla_on_first_boot=False)
+        else:
+            user_data = ('--clustername %s '
+                         '--totalnodes %s' % (name, sum(n_nodes)))
             user_data += ' --stop-services'
+
         super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
                                                ec2_subnet_id=ec2_subnet_id,
                                                ec2_security_group_ids=ec2_security_group_ids,
@@ -703,7 +720,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                 ec2_user_data = self._ec2_user_data
             else:
                 ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
-        if self.nodes:
+        if self.nodes and isinstance(ec2_user_data, str):
             node_ips = [node.ip_address for node in self.nodes if node.is_seed]
             seeds = ",".join(node_ips)
 
