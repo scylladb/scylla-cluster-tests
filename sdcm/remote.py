@@ -283,6 +283,7 @@ class RemoteCmdRunner(CommandRunner):
         dst = os.path.abspath(dst)
 
         # If rsync is disabled or fails, try scp.
+        files_received = True
         try_scp = True
         if self.use_rsync():
             try:
@@ -310,8 +311,14 @@ class RemoteCmdRunner(CommandRunner):
                                                           escape=False)
                 local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                r = self.connection.local(scp)
-                self.log.info("Command {} with status {}".format(r.command, r.exited))
+                result = self.connection.local(scp, hide=True)
+                self.log.info("Command {} with status {}".format(result.command, result.exited))
+                if result.exited:
+                    files_received = False
+                # Avoid "already printed" message without real error
+                if result.stderr:
+                    self.log.info("Stderr: {}".format(result.stderr))
+                    files_received = False
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -319,6 +326,7 @@ class RemoteCmdRunner(CommandRunner):
             # for rsync we could use "--no-p --chmod=ugo=rwX" but those
             # options are only in very recent rsync versions
             self._set_umask_perms(dst)
+        return files_received
 
     def send_files(self, src, dst, delete_dst=False,
                    preserve_symlinks=False, verbose=False, ssh_timeout=None):
@@ -358,6 +366,7 @@ class RemoteCmdRunner(CommandRunner):
 
         # If rsync is disabled or fails, try scp.
         try_scp = True
+        files_sent = True
         if self.use_rsync():
             try:
                 local_sources = [six.moves.shlex_quote(path) for path in src]
@@ -407,8 +416,11 @@ class RemoteCmdRunner(CommandRunner):
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                r = self.connection.local(scp)
-                self.log.info('Command {} with status {}'.format(r.command, r.exited))
+                result = self.connection.local(scp)
+                self.log.info('Command {} with status {}'.format(result.command, result.exited))
+                if result.exited:
+                    files_sent = False
+        return files_sent
 
     def use_rsync(self):
         if self._use_rsync is not None:

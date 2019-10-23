@@ -1,0 +1,3 @@
+test_duration: 12240 # (60min * 200 nodes) + 240min to run nemesis after the cluster was grown
+n_db_nodes: 180
+cluster_target_size: 200

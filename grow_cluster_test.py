@@ -79,13 +79,18 @@ class GrowClusterTest(ClusterTester):
         self.monitors.reconfigure_scylla_monitoring()
 
     def grow_cluster(self, cluster_target_size, stress_cmd):
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
+                                    tester_obj=self)
         # 60 minutes should be long enough for adding each node
         nodes_to_add = cluster_target_size - self._cluster_starting_size
-        duration = 60 * nodes_to_add
+
+        # 240 min - run nemesis with load in parallel after the cluster was expanded
+        duration = (60 * nodes_to_add) + 240
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
                                                 duration=duration)
 
         time.sleep(2 * 60)
+
         start = datetime.datetime.now()
         self.log.info('Starting to grow cluster: %s' % str(start))
 
@@ -100,47 +105,13 @@ class GrowClusterTest(ClusterTester):
         self.log.info('Growing cluster finished: %s' % str(end))
         self.log.info('Growing cluster costs: %s' % str(end - start))
 
-        # Run 2 more minutes before stop c-s
+        # Run 2 more minutes before start nemesis
         time.sleep(2 * 60)
 
-        # Kill c-s when decommission is done
-        self.kill_stress_thread()
+        if self.params.get('nemesis_class_name').lower() != 'noopmonkey':
+            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
 
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
-        self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
-
-    def test_grow_3_to_5(self):
-        """
-        Shorter version of the cluster growth test.
-
-        1) Start a 1 node cluster
-        2) Start cassandra-stress on the loader node
-        3) Add a new node
-        4) Keep repeating 3) until we get to the target number of 5 nodes
-        """
-        self.grow_cluster(cluster_target_size=5,
-                          stress_cmd=self.get_stress_cmd())
-
-    def test_grow_3_to_4(self):
-        """
-        Shorter version of the cluster growth test.
-
-        1) Start a 1 node cluster
-        2) Start cassandra-stress on the loader node
-        3) Add a new node
-        """
-        self.grow_cluster(cluster_target_size=4,
-                          stress_cmd=self.get_stress_cmd())
-
-    def test_grow_3_to_30(self):
-        """
-        1) Start a 1 node cluster
-        2) Start cassandra-stress on the loader node
-        3) Add a new node
-        4) Keep repeating 3) until we get to the target number of 30 nodes
-        """
-        self.grow_cluster(cluster_target_size=30,
-                          stress_cmd=self.get_stress_cmd())
 
     def test_grow_x_to_y(self):
         """

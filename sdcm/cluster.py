@@ -540,6 +540,30 @@ class BaseNode(object):
         result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
         return 'server_encryption_options' in result.stdout.lower()
 
+    def extract_seeds_from_scylla_yaml(self):
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
+        wait.wait_for(func=self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml', timeout=300,
+                      throw_exc=True, src=SCYLLA_YAML_PATH, dst=yaml_dst_path)
+        with open(yaml_dst_path, 'r') as yaml_stream:
+            try:
+                conf_dict = yaml.safe_load(yaml_stream)
+            except Exception:
+                yaml_stream.seek(0)
+                self.log.error('Parsing failed. Scylla YAML config contents:')
+                self.log.exception(yaml_stream.read())
+                raise
+
+            try:
+                node_seeds = conf_dict['seed_provider'][0]['parameters'][0].get('seeds')
+            except Exception as details:
+                self.log.debug('Loaded YAML data structure: %s', conf_dict)
+                raise ValueError('Exception determining seed node ips: %s' % details)
+
+            if node_seeds:
+                return node_seeds.split(',')
+            else:
+                raise Exception('Seeds not found in the scylla.yaml')
+
     def is_centos7(self):
         return self.distro == Distro.CENTOS7
 
@@ -1337,7 +1361,8 @@ class BaseNode(object):
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
-        self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
+        wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
+                      timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
 
         with open(yaml_dst_path, 'r') as f:
             scylla_yaml_contents = f.read()
@@ -1468,8 +1493,8 @@ server_encryption_options:
             f.write(scylla_yaml_contents)
 
         self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
-        self.remoter.send_files(src=yaml_dst_path,
-                                dst='/tmp/scylla.yaml')
+        wait.wait_for(self.remoter.send_files, step=10, text='Waiting for copying scylla.yaml to node',
+                      timeout=300, throw_exc=True, src=yaml_dst_path, dst='/tmp/scylla.yaml')
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
         if append_scylla_args:

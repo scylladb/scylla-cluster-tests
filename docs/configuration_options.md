@@ -41,8 +41,9 @@
 | **<a name="append_scylla_args">append_scylla_args</a>**  | More arguments to append to scylla command line | N/A | SCT_APPEND_SCYLLA_ARGS
 | **<a name="append_scylla_yaml">append_scylla_yaml</a>**  | More configuration to append to /etc/scylla/scylla.yaml | N/A | SCT_APPEND_SCYLLA_YAML
 | **<a name="nemesis_class_name">nemesis_class_name</a>**  | Nemesis class to use (possible types in sdcm.nemesis). | NoOpMonkey | SCT_NEMESIS_CLASS_NAME
-| **<a name="nemesis_interval">nemesis_interval</a>**  | Nemesis sleep interval to use if None provided specifically in the test | N/A | SCT_NEMESIS_CLASS_NAME
-| **<a name="nemesis_during_prepare">nemesis_during_prepare</a>**  | Run nemesis during prepare stage of the test | False | SCT_NEMESIS_CLASS_NAME
+| **<a name="nemesis_interval">nemesis_interval</a>**  | Nemesis sleep interval to use if None provided specifically in the test | N/A | SCT_NEMESIS_INTERVAL
+| **<a name="nemesis_during_prepare">nemesis_during_prepare</a>**  | Run nemesis during prepare stage of the test | False | SCT_NEMESIS_DURING_PREPARE
+| **<a name="nemesis_run">nemesis_run</a>**  | Run nemesis or not. Used in scale test | True | SCT_NEMESIS_RUN
 | **<a name="space_node_threshold">space_node_threshold</a>**  | Space node threshold before starting nemesis (bytes)<br>The default value is 6GB (6x1024^3 bytes)<br>This value is supposed to reproduce<br>https://github.com/scylladb/scylla/issues/1140 | 6442450944 | SCT_SPACE_NODE_THRESHOLD
 | **<a name="stress_cmd">stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD
 | **<a name="gemini_url">gemini_url</a>**  | Url of download of the binaries of gemini tool | N/A | SCT_GEMINI_URL

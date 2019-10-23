@@ -1,0 +1,16 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    backend: 'aws',
+    aws_region: 'eu-west-1',
+    test_name: 'grow_cluster_test.GrowClusterTest.test_grow_x_to_y',
+    test_config: '''["test-cases/features/scale-cluster.yaml", "configurations/scale-180-200.yaml"]''',
+
+    timeout: [time: 12240, unit: 'MINUTES'],
+    post_behaviour: 'destroy'
+)
