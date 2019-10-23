@@ -533,7 +533,17 @@ class AWSNode(cluster.BaseNode):
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             try:
                 self.stop_scylla_server(verify_down=False)
-                self.remoter.run('sudo /usr/lib/scylla/scylla-ami/scylla_create_devices')
+
+                # the scylla_create_devices has been moved to the '/opt/scylladb' folder in the master branch
+                for create_devices_file in ['/usr/lib/scylla/scylla-ami/scylla_create_devices',
+                                            '/opt/scylladb/scylla-ami/scylla_create_devices']:
+                    result = self.remoter.run('sudo test -e %s' % create_devices_file, ignore_status=True)
+                    if result.exit_status == 0:
+                        self.remoter.run('sudo %s' % create_devices_file)
+                        break
+                else:
+                    raise IOError('scylla_create_devices file isn\'t found')
+
                 self.start_scylla_server(verify_up=False)
                 self.remoter.run(
                     'sudo sed -i -e "s/replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
