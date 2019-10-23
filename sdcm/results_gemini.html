@@ -4,6 +4,7 @@
     <h3>Test details</h3>
     <div>
         <ul>
+            <li><b>Test-id:</b> {{ test_id }}</li>
             <li>Start time: {{ start_time }}</li>
             <li>End time: {{ end_time }}</li>
             <li>Gemini command: <ul>
@@ -57,7 +58,26 @@
         </ul>
     </div>
     <h3>
-        <span>Test results </span>
+        <span>SCT test results </span>
+    </h3>
+    <div> {{ test_status[0] }} </div>
+    {% if test_status[1] and short_report %}
+        <div> Number of critical records : {{ test_status[1]|length }} </div>
+    {% elif test_status[1] and not short_report %}
+        <div>
+            <table class="longevity_critical_errors_table">
+                {% for line in test_status[1] %}
+                    <tr><td>{{ line }}</td></tr>
+                    {% if loop.index > 99 %}
+                        <tr><td> See more records in critical.log file</td></tr>
+                        {% break %}
+                    {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+    <h3>
+        <span>Gemini test results </span>
     </h3>
     <table class='gemini_result_table'>
         <tr>

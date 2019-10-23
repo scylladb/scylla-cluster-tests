@@ -156,7 +156,8 @@ class GeminiEmailReporter(BaseEmailReporter):
               'scylla_version', 'scylla_ami_id', 'scylla_instance_type',
               'number_of_db_nodes', 'number_of_oracle_nodes',
               'oracle_db_version', 'oracle_ami_id', 'oracle_instance_type',
-              "results", "status", 'test_name', 'start_time', 'end_time',
+              "results", "status", 'test_name', 'test_id', 'test_status',
+              'start_time', 'end_time',
               'build_url', 'nemesis_name', 'nemesis_details', 'test_id', 'document_id']
 
     def build_report(self, email_data):

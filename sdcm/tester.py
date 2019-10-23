@@ -64,8 +64,7 @@ from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, EVENTS_PROCESSES, FullScanEvent, \
-    Severity
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
@@ -1375,7 +1374,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         db_cluster_coredumps = None
 
         if self.db_cluster is not None:
-            db_cluster_errors = open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].critical_events_filename, 'r').read()
+            db_cluster_errors = self.get_critical_events()
             self.db_cluster.get_backtraces()
             db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
@@ -1766,3 +1765,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             region_name = self.params.get('aws_region').split()[0]
 
             tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
+
+    def get_critical_events(self):
+        return get_testrun_status(self.test_id, self.logdir)
