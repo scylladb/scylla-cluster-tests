@@ -7,6 +7,7 @@ from tenacity import RetryError
 
 import sdcm.cluster
 from sdcm.utils.common import Distro
+from unit_tests.dummy_remote import DummyRemote
 
 
 class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
@@ -35,26 +36,6 @@ class DummyCluster(sdcm.cluster.BaseScyllaCluster):
 
     def set_test_params(self, seeds_selector, seeds_num, db_type):
         self.params = {'seeds_selector': seeds_selector, 'seeds_num': seeds_num, 'db_type': db_type}
-
-
-class DummeyOutput(object):  # pylint: disable=too-few-public-methods
-    def __init__(self, stdout):
-        self.stdout = stdout
-
-
-class DummyRemote(object):  # pylint: disable=too-few-public-methods
-    def run(self, *args, **kwargs):  # pylint: disable=no-self-use
-        logging.info(args, kwargs)
-        return DummeyOutput(args[0])
-
-    @staticmethod
-    def is_up():
-        return True
-
-    @staticmethod
-    def receive_files(src, dst):
-        shutil.copy(src, dst)
-        return True
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
