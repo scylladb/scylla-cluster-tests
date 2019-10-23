@@ -327,8 +327,8 @@ class GrafanaEntity(BaseLogEntity):
         return result.exited == 0
 
     def install_phantom_js(self):
+        localrunner = LocalCmdRunner()
         if not self.phantomjs_installed:
-            localrunner = LocalCmdRunner()
             # pylint: disable=unused-variable
             phantomjs_base = self.phantomjs_base
             phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
@@ -340,10 +340,10 @@ class GrafanaEntity(BaseLogEntity):
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
             localrunner.run("bash -ce '%s'" % install_phantom_js_script)
-            localrunner.run(
-                "cd {0.phantomjs_base} && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js".format(self))
         else:
             LOGGER.debug("PhantomJS is already installed!")
+        localrunner.run(
+            "cd {0.phantomjs_base} && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js".format(self))
 
 
 class GrafanaScreenShot(GrafanaEntity):
