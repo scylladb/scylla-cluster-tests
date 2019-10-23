@@ -13,7 +13,6 @@
 
 # pylint: disable=too-many-lines
 
-from __future__ import absolute_import
 import queue
 import getpass
 import logging
@@ -24,11 +23,9 @@ import tempfile
 import threading
 import time
 import uuid
-import shutil
 import itertools
 from textwrap import dedent
 from datetime import datetime
-import atexit
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
@@ -62,11 +59,6 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                            "Encrypted": False}}]
 
 CREDENTIALS = []
-OPENSTACK_INSTANCES = []
-OPENSTACK_SERVICE = None
-LIBVIRT_DOMAINS = []
-LIBVIRT_IMAGES = []
-LIBVIRT_URI = 'qemu:///system'
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -95,78 +87,12 @@ def set_duration(duration):
     TEST_DURATION = duration
 
 
-def set_libvirt_uri(libvirt_uri):
-    # pylint: disable=global-statement
-    global LIBVIRT_URI
-    LIBVIRT_URI = libvirt_uri
-
-
-def clean_domain(domain_name):
-    # pylint: disable=global-statement
-    global LIBVIRT_URI
-    LOCALRUNNER.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
-                    ignore_status=True)
-
-    LOCALRUNNER.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
-                    ignore_status=True)
-
-
 def remove_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
 
 
-def cleanup_instances(behavior='destroy'):
-    # pylint: disable=global-statement
-    global OPENSTACK_INSTANCES
-    global OPENSTACK_SERVICE
-    global CREDENTIALS
-    global LIBVIRT_DOMAINS
-    global LIBVIRT_IMAGES
-
-    for openstack_instance in OPENSTACK_INSTANCES:
-        if behavior == 'destroy':
-            openstack_instance.destroy()
-
-    for cred in CREDENTIALS:
-        if behavior == 'destroy':
-            if hasattr(cred, 'destroy'):
-                cred.destroy()
-            else:
-                if OPENSTACK_SERVICE is not None:
-                    OPENSTACK_SERVICE.delete_key_pair(cred.key_pair_name)
-
-    for domain_name in LIBVIRT_DOMAINS:
-        clean_domain(domain_name)
-
-    for libvirt_image in LIBVIRT_IMAGES:
-        shutil.rmtree(libvirt_image, ignore_errors=True)
-
-
-def destroy_instances():
-    cleanup_instances(behavior='destroy')
-
-
-def stop_instances():
-    cleanup_instances(behavior='stop')
-
-
-def remove_cred_from_cleanup(cred):
-    # pylint: disable=global-statement
-    global CREDENTIALS
-    if cred in CREDENTIALS:
-        CREDENTIALS.remove(cred)
-
-
-def register_cleanup(cleanup='destroy'):
-    if cleanup == 'destroy':
-        atexit.register(destroy_instances)
-    elif cleanup == 'stop':
-        atexit.register(stop_instances)
-
-
-class Setup():
-
+class Setup:
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False

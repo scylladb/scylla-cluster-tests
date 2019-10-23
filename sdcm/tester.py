@@ -30,7 +30,6 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
 
-import libvirt
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.auth import PlainTextAuthProvider
@@ -41,13 +40,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 
 from sdcm.keystore import KeyStore
 from sdcm import cluster, nemesis, docker, cluster_baremetal, db_stats, wait
-from sdcm.cluster_libvirt import LoaderSetLibvirt
-from sdcm.cluster_openstack import LoaderSetOpenStack, get_openstack_service
-from sdcm.cluster_libvirt import MonitorSetLibvirt
-from sdcm.cluster_openstack import MonitorSetOpenStack
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
-from sdcm.cluster_libvirt import ScyllaLibvirtCluster
-from sdcm.cluster_openstack import ScyllaOpenStackCluster
 from sdcm.cluster import UserRemoteCredentials
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
@@ -56,7 +49,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, ScyllaCQLSession, \
+from sdcm.utils.common import log_run_info, retrying, ScyllaCQLSession, \
     get_non_system_ks_cf_list, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys
 from sdcm.utils.log import configure_logging
@@ -311,79 +304,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             nemesis_threads.append({'nemesis': getattr(nemesis, nemesis_name), 'num_threads': int(num)})
 
         return nemesis_threads
-
-    def get_cluster_openstack(self, loader_info, db_info, monitor_info):
-
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-        if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
-        if loader_info['type'] is None:
-            loader_info['type'] = self.params.get('openstack_instance_type_loader')
-        if db_info['n_nodes'] is None:
-            db_info['n_nodes'] = self.params.get('n_db_nodes')
-        if db_info['type'] is None:
-            db_info['type'] = self.params.get('openstack_instance_type_db')
-        if monitor_info['n_nodes'] is None:
-            monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
-        if monitor_info['type'] is None:
-            monitor_info['type'] = self.params.get('openstack_instance_type_monitor')
-        user_prefix = self.params.get('user_prefix', None)
-        user = self.params.get('openstack_user', None)
-        password = self.params.get('openstack_password', None)
-        tenant = self.params.get('openstack_tenant', None)
-        auth_version = self.params.get('openstack_auth_version', None)
-        auth_url = self.params.get('openstack_auth_url', None)
-        service_type = self.params.get('openstack_service_type', None)
-        service_name = self.params.get('openstack_service_name', None)
-        service_region = self.params.get('openstack_service_region', None)
-        service = get_openstack_service(user=user, password=password,
-                                        auth_version=auth_version,
-                                        auth_url=auth_url,
-                                        service_type=service_type,
-                                        service_name=service_name,
-                                        service_region=service_region,
-                                        tenant=tenant)
-        user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-
-        self.db_cluster = ScyllaOpenStackCluster(openstack_image=self.params.get('openstack_image'),
-                                                 openstack_image_username=self.params.get('openstack_image_username'),
-                                                 openstack_network=self.params.get('openstack_network'),
-                                                 openstack_instance_type=db_info['type'],
-                                                 service=service,
-                                                 credentials=self.credentials,
-                                                 user_prefix=user_prefix,
-                                                 n_nodes=db_info['n_nodes'],
-                                                 params=self.params)
-
-        scylla_repo = get_data_dir_path('scylla.repo')
-        self.loaders = LoaderSetOpenStack(openstack_image=self.params.get('openstack_image'),
-                                          openstack_image_username=self.params.get('openstack_image_username'),
-                                          openstack_network=self.params.get('openstack_network'),
-                                          openstack_instance_type=loader_info['type'],
-                                          service=service,
-                                          credentials=self.credentials,
-                                          scylla_repo=scylla_repo,
-                                          user_prefix=user_prefix,
-                                          n_nodes=loader_info['n_nodes'],
-                                          params=self.params)
-
-        if monitor_info['n_nodes'] > 0:
-            self.monitors = MonitorSetOpenStack(openstack_image=self.params.get('openstack_image'),
-                                                openstack_image_username=self.params.get('openstack_image_username'),
-                                                openstack_network=self.params.get('openstack_network'),
-                                                openstack_instance_type=monitor_info['type'],
-                                                service=service,
-                                                credentials=self.credentials,
-                                                scylla_repo=scylla_repo,
-                                                user_prefix=user_prefix,
-                                                n_nodes=monitor_info['n_nodes'],
-                                                params=self.params,
-                                                targets=dict(db_cluster=self.db_cluster,
-                                                             loaders=self.loaders)
-                                                )
-        else:
-            self.monitors = NoMonitorSet()
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
@@ -649,84 +569,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
-    def get_cluster_libvirt(self, loader_info, db_info, monitor_info):
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-
-        def _set_from_params(base_dict, dict_key, params_key):
-            if base_dict.get(dict_key) is None:
-                conf_dict = dict()
-                conf_dict[dict_key] = self.params.get(params_key)
-                return conf_dict
-            else:
-                return {}
-
-        loader_info.update(_set_from_params(loader_info, 'n_nodes', 'n_loaders'))
-        loader_info.update(_set_from_params(loader_info, 'image', 'libvirt_loader_image'))
-        loader_info.update(_set_from_params(loader_info, 'user', 'libvirt_loader_image_user'))
-        loader_info.update(_set_from_params(loader_info, 'password', 'libvirt_loader_image_password'))
-        loader_info.update(_set_from_params(loader_info, 'os_type', 'libvirt_loader_os_type'))
-        loader_info.update(_set_from_params(loader_info, 'os_variant', 'libvirt_loader_os_variant'))
-        loader_info.update(_set_from_params(loader_info, 'memory', 'libvirt_loader_memory'))
-        loader_info.update(_set_from_params(loader_info, 'bridge', 'libvirt_bridge'))
-        loader_info.update(_set_from_params(loader_info, 'uri', 'libvirt_uri'))
-
-        db_info.update(_set_from_params(db_info, 'n_nodes', 'n_db_nodes'))
-        db_info.update(_set_from_params(db_info, 'image', 'libvirt_db_image'))
-        db_info.update(_set_from_params(db_info, 'user', 'libvirt_db_image_user'))
-        db_info.update(_set_from_params(db_info, 'password', 'libvirt_db_image_password'))
-        db_info.update(_set_from_params(db_info, 'os_type', 'libvirt_db_os_type'))
-        db_info.update(_set_from_params(db_info, 'os_variant', 'libvirt_db_os_variant'))
-        db_info.update(_set_from_params(db_info, 'memory', 'libvirt_db_memory'))
-        db_info.update(_set_from_params(db_info, 'bridge', 'libvirt_bridge'))
-        db_info.update(_set_from_params(db_info, 'uri', 'libvirt_uri'))
-
-        monitor_info.update(_set_from_params(monitor_info, 'n_nodes', 'n_monitor_nodes'))
-        monitor_info.update(_set_from_params(monitor_info, 'image', 'libvirt_monitor_image'))
-        monitor_info.update(_set_from_params(monitor_info, 'user', 'libvirt_monitor_image_user'))
-        monitor_info.update(_set_from_params(monitor_info, 'password', 'libvirt_monitor_image_password'))
-        monitor_info.update(_set_from_params(monitor_info, 'os_type', 'libvirt_monitor_os_type'))
-        monitor_info.update(_set_from_params(monitor_info, 'os_variant', 'libvirt_monitor_os_variant'))
-        monitor_info.update(_set_from_params(monitor_info, 'memory', 'libvirt_monitor_memory'))
-        monitor_info.update(_set_from_params(monitor_info, 'bridge', 'libvirt_bridge'))
-        monitor_info.update(_set_from_params(monitor_info, 'uri', 'libvirt_uri'))
-
-        user_prefix = self.params.get('user_prefix', None)
-
-        libvirt_uri = self.params.get('libvirt_uri')
-        if libvirt_uri is None:
-            libvirt_uri = 'qemu:///system'
-        hypervisor = libvirt.open(libvirt_uri)
-        cluster.set_libvirt_uri(libvirt_uri)
-
-        if self.params.get('db_type') == 'scylla':
-            self.db_cluster = ScyllaLibvirtCluster(domain_info=db_info,
-                                                   hypervisor=hypervisor,
-                                                   user_prefix=user_prefix,
-                                                   n_nodes=db_info['n_nodes'],
-                                                   params=self.params)
-
-        elif self.params.get('db_type') == 'cassandra':
-            raise NotImplementedError('No cassandra libvirt cluster '
-                                      'implementation yet.')
-
-        self.loaders = LoaderSetLibvirt(domain_info=loader_info,
-                                        hypervisor=hypervisor,
-                                        user_prefix=user_prefix,
-                                        n_nodes=loader_info['n_nodes'],
-                                        params=self.params)
-
-        if monitor_info['n_nodes'] > 0:
-            self.monitors = MonitorSetLibvirt(domain_info=monitor_info,
-                                              hypervisor=hypervisor,
-                                              user_prefix=user_prefix,
-                                              n_nodes=monitor_info['n_nodes'],
-                                              params=self.params,
-                                              targets=dict(db_cluster=self.db_cluster,
-                                                           loaders=self.loaders)
-                                              )
-        else:
-            self.monitors = NoMonitorSet()
-
     def get_cluster_docker(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
 
@@ -795,13 +637,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if cluster_backend in ('aws', 'aws-siren'):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
-
-        elif cluster_backend == 'libvirt':
-            self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info,
-                                     monitor_info=monitor_info)
-        elif cluster_backend == 'openstack':
-            self.get_cluster_openstack(loader_info=loader_info, db_info=db_info,
-                                       monitor_info=monitor_info)
         elif cluster_backend == 'gce':
             self.get_cluster_gce(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
@@ -1469,7 +1304,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.db_cluster.set_keep_tag_on_failure()
 
         if self.credentials is not None:
-            cluster.remove_cred_from_cleanup(self.credentials)
             for credential in self.credentials:
                 credential.destroy()
             self.credentials = []
