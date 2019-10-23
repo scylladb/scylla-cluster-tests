@@ -9,6 +9,8 @@ from sdcm.cluster import BaseNode
 from sdcm.sct_events import start_events_device, stop_events_device
 from sdcm.sct_events import EVENTS_PROCESSES
 
+from unit_tests.dummy_remote import DummyRemote
+
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _database_log = None
@@ -31,17 +33,6 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     @database_log.setter
     def database_log(self, x):
         self._database_log = x
-
-
-class DummeyOutput(object):  # pylint: disable=too-few-public-methods
-    def __init__(self, stdout):
-        self.stdout = stdout
-
-
-class DummyRemote(object):  # pylint: disable=too-few-public-methods
-    def run(self, *args, **kwargs):  # pylint: disable=no-self-use
-        logging.info(args, kwargs)
-        return DummeyOutput(args[0])
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
