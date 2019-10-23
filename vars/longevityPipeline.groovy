@@ -102,6 +102,31 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Send email with result') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    echo "Start send email ..."
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "qa@scylladb.com"
+                                    echo "Email sent"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
