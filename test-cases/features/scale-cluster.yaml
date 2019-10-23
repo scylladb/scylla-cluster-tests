@@ -1,0 +1,18 @@
+cassandra_stress_threads: 500
+cassandra_stress_population_size: 10000000
+space_node_threshold: 100
+
+add_node_cnt: 1
+seeds_num: 5
+seeds_selector: 'first'
+
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+
+user_prefix: 'cluster-scale-test'
+failure_post_behavior: destroy
+
+nemesis_interval: 5
+nemesis_class_name: 'ChaosMonkey'
