@@ -243,7 +243,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self.log.debug(details)
             return False
 
-    def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
+    def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,too-many-branches
                       preserve_perm=True, preserve_symlinks=False):
         """
         Copy files from the remote host to a local path.
@@ -334,7 +334,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self._set_umask_perms(dst)
         return files_received
 
-    def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
+    def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,too-many-statements
                    preserve_symlinks=False, verbose=False):
         """
         Copy files from a local path to the remote host.
@@ -434,7 +434,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                     self.log.info('Command {} with status {}'.format(result.command, result.exited))
                     if result.exited:
                         files_sent = False
-            return files_sent
+        return files_sent
 
     def use_rsync(self):
         if self._use_rsync is not None:
