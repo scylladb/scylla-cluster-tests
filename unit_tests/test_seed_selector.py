@@ -54,6 +54,7 @@ class DummyRemote(object):  # pylint: disable=too-few-public-methods
     @staticmethod
     def receive_files(src, dst):
         shutil.copy(src, dst)
+        return True
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
