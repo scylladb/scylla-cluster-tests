@@ -23,6 +23,7 @@ import errno
 import threading
 import select
 import shutil
+import copy
 
 from functools import wraps
 from enum import Enum
@@ -229,17 +230,34 @@ class S3Storage(object):
 
     def upload_file(self, file_path, dest_dir=''):
         s3_url = self.generate_url(file_path, dest_dir)
+        s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
             LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
             print "Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url)
             self._bucket.upload_file(Filename=file_path,
-                                     Key="{}/{}".format(dest_dir, os.path.basename(file_path)),
+                                     Key=s3_obj,
                                      Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
+            LOGGER.info("Set public read access")
+            self.set_public_access(key=s3_obj)
             return s3_url
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.debug("Unable to upload to S3: %s", details)
             return ""
+
+    def set_public_access(self, key):
+        acl_obj = boto3.resource('s3').ObjectAcl(self.bucket_name, key)
+
+        grants = copy.deepcopy(acl_obj.grants)
+        grantees = {
+            'Grantee': {
+                "Type": "Group",
+                "URI": "http://acs.amazonaws.com/groups/global/AllUsers"
+            },
+            'Permission': "READ"
+        }
+        grants.append(grantees)
+        acl_obj.put(ACL='', AccessControlPolicy={'Grants': grants, 'Owner': acl_obj.owner})
 
     def download_file(self, link, dst_dir):
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
