@@ -595,6 +595,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
             seed_address=seed_address,
+            append_scylla_yaml=self.params.get('append_scylla_yaml'),
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:

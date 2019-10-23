@@ -39,6 +39,7 @@
 | **<a name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff | N/A | SCT_HINTED_HANDOFF
 | **<a name="authenticator">authenticator</a>**  | which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator | N/A | SCT_AUTHENTICATOR
 | **<a name="append_scylla_args">append_scylla_args</a>**  | More arguments to append to scylla command line | N/A | SCT_APPEND_SCYLLA_ARGS
+| **<a name="append_scylla_yaml">append_scylla_yaml</a>**  | More configuration to append to /etc/scylla/scylla.yaml | N/A | SCT_APPEND_SCYLLA_YAML
 | **<a name="nemesis_class_name">nemesis_class_name</a>**  | Nemesis class to use (possible types in sdcm.nemesis). | NoOpMonkey | SCT_NEMESIS_CLASS_NAME
 | **<a name="nemesis_interval">nemesis_interval</a>**  | Nemesis sleep interval to use if None provided specifically in the test | N/A | SCT_NEMESIS_CLASS_NAME
 | **<a name="nemesis_during_prepare">nemesis_during_prepare</a>**  | Run nemesis during prepare stage of the test | False | SCT_NEMESIS_CLASS_NAME

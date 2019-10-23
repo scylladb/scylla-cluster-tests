@@ -899,3 +899,15 @@ def update_certificates():
         localrunner.run('openssl x509 -enddate -noout -in data_dir/ssl_conf/db.crt')
     except Exception as ex:
         raise Exception('Failed to update certificates by openssl: %s' % ex)
+
+
+def download_encrypt_keys():
+    """
+    Download certificate files of encryption at-rest from S3 KeyStore
+    """
+    from sdcm.keystore import KeyStore
+    ks = KeyStore()
+    if not os.path.exists('./data_dir/encrypt_conf/CA.pem'):
+        ks.download_file('CA.pem', './data_dir/encrypt_conf/CA.pem')
+    if not os.path.exists('./data_dir/encrypt_conf/SCYLLADB.pem'):
+        ks.download_file('SCYLLADB.pem', './data_dir/encrypt_conf/SCYLLADB.pem')

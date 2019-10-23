@@ -12,6 +12,11 @@ class KeyStore(object):
         obj = self.s3.Object(KEYSTORE_S3_BUCKET, json_file)
         return json.loads(obj.get()["Body"].read())
 
+    def download_file(self, filename, dest_filename):
+        obj = self.s3.Object(KEYSTORE_S3_BUCKET, filename)
+        with open(dest_filename, 'w') as file_obj:
+            file_obj.write(obj.get()["Body"].read())
+
     def get_email_credentials(self):
         return self._get_json("email_config.json")
 

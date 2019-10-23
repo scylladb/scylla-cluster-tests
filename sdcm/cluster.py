@@ -1334,7 +1334,7 @@ class BaseNode(object):
 
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
-                     client_encrypt=None, append_conf=None, append_scylla_args=None, debug_install=False,
+                     client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         self.remoter.receive_files(src=yaml_file, dst=yaml_dst_path)
@@ -1452,8 +1452,17 @@ server_encryption_options:
             logger.debug("%s is a replacement node for '%s'." % (self.name, self.replacement_node_ip))
             scylla_yaml_contents += "\nreplace_address_first_boot: %s\n" % self.replacement_node_ip
 
-        if append_conf:
-            scylla_yaml_contents += append_conf
+        # system_key must be pre-created, kmip keys will be used for kmip server auth
+        if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
+            self.remoter.send_files(src='./data_dir/encrypt_conf',
+                                    dst='/tmp/')
+            self.remoter.run('sudo mv /tmp/encrypt_conf /etc/')
+            self.remoter.run('sudo mkdir /etc/encrypt_conf/system_key_dir/')
+            self.remoter.run('sudo chown -R scylla:scylla /etc/encrypt_conf/')
+            self.remoter.run('sudo md5sum /etc/encrypt_conf/*.pem', ignore_status=True)
+
+        if append_scylla_yaml:
+            scylla_yaml_contents += append_scylla_yaml
 
         with open(yaml_dst_path, 'w') as f:
             f.write(scylla_yaml_contents)
@@ -2811,7 +2820,7 @@ class BaseScyllaCluster(object):
                           server_encrypt=self._param_enabled('server_encrypt'),
                           client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled(  # pylint: disable=no-member
                               'client_encrypt'),
-                          append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),
+                          append_scylla_yaml=self.params.get('append_scylla_yaml'), append_scylla_args=self.get_scylla_args(),
                           hinted_handoff=self.params.get('hinted_handoff'),
                           authorizer=self.params.get('authorizer'),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
