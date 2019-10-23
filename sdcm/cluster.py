@@ -2121,7 +2121,7 @@ server_encryption_options:
         self.log.info('Gossipinfo schema version and status of all nodes: {}'.format(gossip_node_schemas))
 
         # Validate that ALL initiated nodes in the gossip
-        cluster_nodes = [node.private_ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
+        cluster_nodes = [node.ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
 
         not_in_gossip = list(set(cluster_nodes) - set(gossip_node_schemas.keys()))
         if not_in_gossip:
@@ -2156,7 +2156,7 @@ server_encryption_options:
         peers_details = ''
         try:
             gossip_node_schemas = self.validate_gossip_nodes_info()
-            status = gossip_node_schemas[self.private_ip_address]['status']
+            status = gossip_node_schemas[self.ip_address]['status']
             if status != 'NORMAL':
                 self.log.debug('Node status is {status}. Schema version can\'t be validated'. format(status=status))
                 return
@@ -2175,7 +2175,7 @@ server_encryption_options:
                     errors.append('Found nulls in system.peers on the node %s: %s' % (current_node_ip, peers_details))
 
                 peer_schema_version = line_splitted[6].strip()
-                gossip_node_schema_version = gossip_node_schemas[self.private_ip_address]['schema']
+                gossip_node_schema_version = gossip_node_schemas[self.ip_address]['schema']
                 if gossip_node_schema_version and peer_schema_version != gossip_node_schema_version:
                     errors.append('Expected schema version: %s. Wrong schema version found on the '
                                   'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
