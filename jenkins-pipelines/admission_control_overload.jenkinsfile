@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    aws_region: 'eu-west-1',
+    test_name: 'admission_control_overload_test.AdmissionControlOverloadTest',
+    test_config: 'test-cases/load/admission_control_overload_test.yaml',
+
+    timeout: [time: 90, unit: 'MINUTES']
+)

@@ -311,14 +311,24 @@ class RemoteCmdRunner(CommandRunner):
                                                           escape=False)
                 local_dest = six.moves.shlex_quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                result = self.connection.local(scp, hide=True)
-                self.log.info("Command {} with status {}".format(result.command, result.exited))
-                if result.exited:
-                    files_received = False
-                # Avoid "already printed" message without real error
-                if result.stderr:
-                    self.log.info("Stderr: {}".format(result.stderr))
-                    files_received = False
+                try:
+                    result = self.connection.local(scp, hide=True)
+                    self.log.info("Command {} with status {}".format(result.command, result.exited))
+
+                    if result.exited:
+                        files_received = False
+
+                    # Avoid "already printed" message without real error
+                    if result.stderr:
+                        self.log.info("Stderr: {}".format(result.stderr))
+                        files_received = False
+                except UnexpectedExit as details:
+                    if not details.result.exited and not details.result.stderr:
+                        pass
+                    else:
+                        pass
+                else:
+                    self.log.info("Command {} with status {}".format(result.command, result.exited))
 
         if not preserve_perm:
             # we have no way to tell scp to not try to preserve the
@@ -416,10 +426,17 @@ class RemoteCmdRunner(CommandRunner):
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                result = self.connection.local(scp)
-                self.log.info('Command {} with status {}'.format(result.command, result.exited))
-                if result.exited:
-                    files_sent = False
+                try:
+                    result = self.connection.local(scp)
+                except UnexpectedExit as details:
+                    if not details.result.exited and not details.result.stderr:
+                        pass
+                    else:
+                        pass
+                else:
+                    self.log.info('Command {} with status {}'.format(result.command, result.exited))
+                    if result.exited:
+                        files_sent = False
         return files_sent
 
     def use_rsync(self):

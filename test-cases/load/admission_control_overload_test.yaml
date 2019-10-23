@@ -1,0 +1,15 @@
+test_duration: 25
+
+prepare_write_cmd: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=10)' no-warmup cl=ONE -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore"
+stress_cmd_r: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(simple1=100)' no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore"
+stress_cmd_w: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=100)' no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=3000 -errors ignore"
+
+n_db_nodes: 1
+n_loaders: 12
+n_monitor_nodes: 1
+instance_type_db: 'i3.large'
+instance_type_loader: 'c4.4xlarge'
+instance_type_monitor: 't3.small'
+user_prefix: 'overload_admission_control'
+system_auth_rf: 1
+store_results_in_elasticsearch: False
