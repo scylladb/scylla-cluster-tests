@@ -11,7 +11,7 @@ import datetime
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
                              InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             KillTestEvent, Severity)
+                             KillTestEvent, Severity, ThreadFailedEvent)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -78,6 +78,14 @@ class SctEventsTests(unittest.TestCase):
         str(CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
                           node="node xy",
                           download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 ."))
+
+    def test_thread_failed_event(self):  # pylint: disable=no-self-use
+        try:
+            1 / 0
+        except ZeroDivisionError:
+            _full_traceback = traceback.format_exc()
+
+        str(ThreadFailedEvent(message='thread failed', traceback=_full_traceback))
 
     @staticmethod
     def test_scylla_log_event():

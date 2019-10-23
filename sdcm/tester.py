@@ -140,9 +140,8 @@ def teardown_on_exception(method):
 
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
-
-    def __init__(self, methodName='test'):  # pylint: disable=too-many-statements
-        super(ClusterTester, self).__init__(methodName=methodName)
+    def __init__(self, *args):  # pylint: disable=too-many-statements
+        super(ClusterTester, self).__init__(*args)
         self.result = None
         self.status = "RUNNING"
         self.params = SCTConfiguration()

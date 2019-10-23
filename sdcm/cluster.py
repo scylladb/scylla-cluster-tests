@@ -45,6 +45,7 @@ from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
+from sdcm.utils.thread import raise_event_on_failure
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent
 from sdcm.sct_events import EVENTS_PROCESSES
@@ -782,6 +783,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.log.error('Error retrieving remote node DB service log: %s',
                            details)
 
+    @raise_event_on_failure
     def journal_thread(self):
         read_from_timestamp = None
         while True:
@@ -900,6 +902,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 self._notify_backtrace(last=False)
             self.n_coredumps = new_n_coredumps
 
+    @raise_event_on_failure
     def backtrace_thread(self):
         """
         Keep reporting new coredumps found, every 30 seconds.
@@ -908,6 +911,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.termination_event.wait(15)
             self.get_backtraces()
 
+    @raise_event_on_failure
     def db_log_reader_thread(self):
         """
         Keep reporting new events from db log, every 30 seconds.
@@ -2483,6 +2487,7 @@ def wait_for_init_wrap(method):
 
         _queue = queue.Queue()
 
+        @raise_event_on_failure
         def node_setup(node):
             status = True
             try:
