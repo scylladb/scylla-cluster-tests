@@ -59,7 +59,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import get_data_dir_path, log_run_info, retrying, ScyllaCQLSession, \
     get_non_system_ks_cf_list, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, \
-    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
@@ -246,6 +246,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # download rpms for update_db_packages
         update_db_packages = self.params.get('update_db_packages', default=None)
         self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
+
+        append_scylla_yaml = self.params.get('append_scylla_yaml')
+        if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
+            download_encrypt_keys()
 
         self.init_resources()
 
@@ -827,26 +831,38 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
 
-        return CassandraStressThread(loader_set=self.loaders,
-                                     stress_cmd=stress_cmd,
-                                     timeout=timeout,
-                                     output_dir=cluster.Setup.logdir(),
-                                     stress_num=stress_num,
-                                     keyspace_num=keyspace_num,
-                                     profile=profile,
-                                     node_list=self.db_cluster.nodes,
-                                     round_robin=round_robin,
-                                     client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
-                                     keyspace_name=keyspace_name).run()
+        cs_thread = CassandraStressThread(loader_set=self.loaders,
+                                          stress_cmd=stress_cmd,
+                                          timeout=timeout,
+                                          output_dir=cluster.Setup.logdir(),
+                                          stress_num=stress_num,
+                                          keyspace_num=keyspace_num,
+                                          profile=profile,
+                                          node_list=self.db_cluster.nodes,
+                                          round_robin=round_robin,
+                                          client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
+                                          keyspace_name=keyspace_name).run()
+        scylla_encryption_options = self.params.get('scylla_encryption_options')
+        if scylla_encryption_options and 'write' in stress_cmd:
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            time.sleep(60)
+            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+        return cs_thread
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
 
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
-        return self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                    cluster.Setup.logdir(),
-                                                    node_list=self.db_cluster.nodes)
+        bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
+                                                            cluster.Setup.logdir(),
+                                                            node_list=self.db_cluster.nodes)
+        scylla_encryption_options = self.params.get('scylla_encryption_options')
+        if scylla_encryption_options and 'write' in stress_cmd:
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            time.sleep(60)
+            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+        return bench_thread
 
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments,unused-argument
                         round_robin=False, stats_aggregate_cmds=True,  # pylint: disable=too-many-arguments,unused-argument
@@ -1529,6 +1545,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                                     table_name=table_name,
                                                                                     compaction_strategy=compaction_strategy)
         node.run_cqlsh(cql_cmd)
+
+    def alter_table_encryption(self, table, scylla_encryption_options=None, upgradesstables=True):
+        """
+        Update table encryption
+        """
+        if scylla_encryption_options is None:
+            self.log.debug('scylla_encryption_options is not set, skipping to enable encryption at-rest for all test tables')
+        else:
+            with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                query = "ALTER TABLE {table} WITH scylla_encryption_options = {scylla_encryption_options};".format(
+                    table=table, scylla_encryption_options=scylla_encryption_options)
+                self.log.debug('enable encryption at-rest for table {table}, query:\n\t{query}'.format(**locals()))
+                session.execute(query)  # pylint: disable=no-member
+            if upgradesstables:
+                self.log.debug('upgrade sstables after encryption update')
+                for node in self.db_cluster.nodes:
+                    node.remoter.run('nodetool upgradesstables', verbose=True, ignore_status=True)
+
+    def disable_table_encryption(self, table, upgradesstables=True):
+        self.alter_table_encryption(
+            table, scylla_encryption_options="{'key_provider': 'none'}", upgradesstables=upgradesstables)
+
+    def alter_test_tables_encryption(self, scylla_encryption_options=None, upgradesstables=True):
+        for table in get_non_system_ks_cf_list(self.loaders.nodes[0], self.db_cluster.nodes[0], filter_out_mv=True):
+            self.alter_table_encryption(
+                table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),

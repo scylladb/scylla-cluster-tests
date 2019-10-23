@@ -1297,3 +1297,15 @@ def get_testrun_status(test_id=None, logdir=None):
             status = f.readlines()
 
     return status
+
+
+def download_encrypt_keys():
+    """
+    Download certificate files of encryption at-rest from S3 KeyStore
+    """
+    from sdcm.keystore import KeyStore
+    ks = KeyStore()
+    if not os.path.exists('./data_dir/encrypt_conf/CA.pem'):
+        ks.download_file('CA.pem', './data_dir/encrypt_conf/CA.pem')
+    if not os.path.exists('./data_dir/encrypt_conf/SCYLLADB.pem'):
+        ks.download_file('SCYLLADB.pem', './data_dir/encrypt_conf/SCYLLADB.pem')
