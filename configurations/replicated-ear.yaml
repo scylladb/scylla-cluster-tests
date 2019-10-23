@@ -1,0 +1,2 @@
+
+scylla_encryption_options: "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'ReplicatedKeyProviderFactory'}"
