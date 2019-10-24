@@ -1184,7 +1184,10 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             text = '%s: Waiting for DB services to be up' % self
         wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout, throw_exc=True)
         self.db_init_finished = True
-        self._report_housekeeping_uuid()
+        try:
+            self._report_housekeeping_uuid()
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
     def apt_running(self):
         try:
