@@ -36,9 +36,15 @@ def call() {
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
 
-            string(defaultValue: "destroy",
-                   description: 'keep|destroy',
-                   name: 'post_behaviour')
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+                   description: 'keep|keep-on-failure|destroy',
+                   name: 'post_behavior_db_nodes')
+            string(defaultValue: "${pipelineParams.get('post_behavior_loader_nodes', 'destroy')}",
+                   description: 'keep|keep-on-failure|destroy',
+                   name: 'post_behavior_loader_nodes')
+            string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
+                   description: 'keep|keep-on-failure|destroy',
+                   name: 'post_behavior_monitor_nodes')
 
             string(defaultValue: '360',
                    description: 'timeout for jenkins job in minutes',
@@ -102,7 +108,9 @@ def call() {
                                 if [[ ! -z "${params.update_db_packages}" ]]; then
                                     export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
                                 fi
-                                export SCT_FAILURE_POST_BEHAVIOR="${params.post_behaviour}"
+                                export SCT_POST_BEHAVIOR_DB_NODES="${pipelineParams.params.get('post_behaviour_db_nodes', '')}"
+                                export SCT_POST_BEHAVIOR_LOADER_NODES="${pipelineParams.params.get('post_behaviour_loader_nodes', '')}"
+                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${pipelineParams.params.get('post_behaviour_monitor_nodes', '')}"
                                 export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )

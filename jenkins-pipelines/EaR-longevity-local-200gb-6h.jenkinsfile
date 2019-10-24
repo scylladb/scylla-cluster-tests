@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml", "configurations/local-ear.yaml"]''',
 
-    timeout: [time: 550, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 550, unit: 'MINUTES']
 )

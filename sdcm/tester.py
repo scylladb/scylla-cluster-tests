@@ -142,8 +142,9 @@ def teardown_on_exception(method):
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
-    def __init__(self, methodName='test'):
+    def __init__(self, methodName='test'):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(methodName=methodName)
+        self.result = None
         self.status = "RUNNING"
         self.params = SCTConfiguration()
         self.params.verify_configuration()
@@ -1477,7 +1478,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.credentials is not None:
             cluster.remove_cred_from_cleanup(self.credentials)
-            # if self._failure_post_behavior == 'destroy':
             for credential in self.credentials:
                 credential.destroy()
             self.credentials = []

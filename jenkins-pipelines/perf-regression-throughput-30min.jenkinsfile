@@ -12,6 +12,5 @@ perfRegressionParallelPipeline(
     test_config: 'tests/perf-regression-latency-500gb-30min.yaml',
     sub_tests: ['test_write', 'test_read' 'test_mixed'],
 
-    timeout: [time: 60, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 60, unit: 'MINUTES']
 )

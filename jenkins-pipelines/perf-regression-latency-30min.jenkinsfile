@@ -11,6 +11,5 @@ longevityPipeline(
     test_name: 'performance_regression_test.PerformanceRegressionTest.test_latency',
     test_config: 'tests/perf-regression-latency-500gb-30min.yaml',
 
-    timeout: [time: 60, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 60, unit: 'MINUTES']
 )

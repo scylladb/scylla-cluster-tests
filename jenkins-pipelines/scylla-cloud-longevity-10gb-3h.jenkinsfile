@@ -10,6 +10,5 @@ scyllaCloudLongevityPipeline(
     test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
     n_db_nodes: '3',
 
-    timeout: [time: 260, unit: 'MINUTES'],
-    post_behaviour: 'destroy'
+    timeout: [time: 260, unit: 'MINUTES']
 )
