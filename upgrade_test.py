@@ -392,6 +392,17 @@ class UpgradeTest(FillDatabaseData):
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
+    def fill_and_verify_db_data(self, note, pre_fill=False, rewrite_data=True):
+        if pre_fill:
+            self.log.info('Populate DB with many types of tables and data')
+            self.fill_db_data()
+        self.log.info('Run some Queries to verify data %s', note)
+        self.verify_db_data()
+        if rewrite_data:
+            self.clean_db_data()
+            self.log.info('Re-Populate DB with many types of tables and data')
+            self.fill_db_data()
+
     def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """
         Upgrade half of nodes in the cluster, and start special read workload
@@ -415,14 +426,7 @@ class UpgradeTest(FillDatabaseData):
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
-        # pylint: disable=too-many-locals, too-many-statements
-        self.log.info('Populate DB with many types of tables and data')
-        self.fill_db_data()
-        self.log.info('Run some Queries to verify data BEFORE UPGRADE')
-        self.verify_db_data()
-        self.clean_db_data()
-        self.log.info('Re-Populate DB with many types of tables and data')
-        self.fill_db_data()
+        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
         self.log.info('Starting c-s write workload during entire test')
@@ -474,6 +478,7 @@ class UpgradeTest(FillDatabaseData):
         read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
         # wait for the read workload to finish
         self.verify_stress_thread(read_stress_queue)
+        self.fill_and_verify_db_data('after upgraded one node')
 
         # read workload
         self.log.info('Starting c-s read workload for 10m')
@@ -500,11 +505,15 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
         time.sleep(60)
 
+        self.fill_and_verify_db_data('after upgraded two nodes')
+
         # rollback second node
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
         self.rollback_node(self.db_cluster.nodes[indexes[1]])
         self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
         self.db_cluster.nodes[indexes[1]].check_node_health()
+
+        self.fill_and_verify_db_data('after rollback the second node')
 
         for i in indexes[1:]:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
@@ -512,6 +521,7 @@ class UpgradeTest(FillDatabaseData):
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
             self.db_cluster.node_to_upgrade.check_node_health()
+            self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
 
         # wait for the 20m read workload to finish
         self.verify_stress_thread(read_20m_cs_thread_pool)
@@ -534,8 +544,7 @@ class UpgradeTest(FillDatabaseData):
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
 
-        self.log.info('Run some Queries to verify data AFTER UPGRADE')
-        self.verify_db_data()
+        self.fill_and_verify_db_data('AFTER UPGRADE', rewrite_data=False)
 
         # complex workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s complex workload to verify data by simple read')
