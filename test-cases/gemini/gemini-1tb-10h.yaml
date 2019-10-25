@@ -11,13 +11,13 @@ store_results_in_elasticsearch: False
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
 # the below cmd runs about 3 hours
-gemini_cmd: "gemini -d --duration 36000s -c 128 -p 100000000 -m mixed -f"
+gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 100 -m mixed -f --non-interactive --cql-features normal"
 gemini_version: 'latest'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i3.16xlarge'
-ami_id_db_oracle: 'ami-0081311880c437b65' # ScyllaDB 2.3.3 us-east-1 AMI
+ami_id_db_oracle: 'ami-0feaef6667612ad07' # ScyllaDB 3.0.10 us-east-1 AMI
 append_scylla_args_oracle: '--enable-cache false'
 
 send_email: true
