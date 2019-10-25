@@ -1,7 +1,7 @@
 #!groovy
 
 def call(String git_branch, List base_versions_list) {
-    def clean_branch_name = git_branch - 'origin/' - 'branch-'
+    def clean_branch_name = git_branch.tokenize('-')[-1]
     if (is_enterprise_version(clean_branch_name)) {
         return base_versions_list
     } else {
