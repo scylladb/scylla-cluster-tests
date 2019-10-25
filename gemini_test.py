@@ -27,13 +27,17 @@ class GeminiTest(ClusterTester):
     Test Scylla with gemini - tool for testing data integrity
     https://github.com/scylladb/gemini
     """
-    gemini_results = None
+    gemini_results = {
+        "cmd": "N/A",
+        "status": "Not Running",
+        "results": [],
+        'errors': {}
+    }
 
     def test_random_load(self):
         """
         Run gemini tool
         """
-        self.gemini_results = None
         cmd = self.params.get('gemini_cmd')
 
         self.log.debug('Start gemini benchmark')
@@ -45,7 +49,6 @@ class GeminiTest(ClusterTester):
             self.fail(self.gemini_results['results'])
 
     def test_load_random_with_nemesis(self):
-        self.gemini_results = None
 
         cmd = self.params.get('gemini_cmd')
 
