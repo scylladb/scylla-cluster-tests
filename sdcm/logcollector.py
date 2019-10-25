@@ -497,12 +497,18 @@ class LogCollector(object):
     def create_remote_storage_dir(self, node, path=''):
         if not path:
             path = node.name
-        remote_dir = os.path.join(self.node_remote_dir, path)
-        result = node.remoter.run('mkdir -p {}'.format(remote_dir), ignore_status=True)
+        try:
+            remote_dir = os.path.join(self.node_remote_dir, path)
+            result = node.remoter.run('mkdir -p {}'.format(remote_dir), ignore_status=True)
 
-        if result.exited > 0:
-            LOGGER.error(
-                'Remote storing folder not created.\n{}'.format(result))
+            if result.exited > 0:
+                LOGGER.error(
+                    'Remote storing folder not created.\n{}'.format(result))
+                remote_dir = self.node_remote_dir
+
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error("Error during creating remote directory %s", details)
+            remote_dir = self.node_remote_dir
 
         return remote_dir
 
