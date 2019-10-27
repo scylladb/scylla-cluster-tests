@@ -1913,12 +1913,12 @@ server_encryption_options:
         SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
         self.remoter.run("sudo cat {} | grep -v '<client_encrypt>' > {}".format(SCYLLA_YAML_PATH, SCYLLA_YAML_PATH_TMP))
         self.remoter.run("sudo mv -f {} {}".format(SCYLLA_YAML_PATH_TMP, SCYLLA_YAML_PATH))
-        self.config_setup(client_encrypt=True)
+        self.parent_cluster.node_config_setup(node=self, client_encrypt=True)
         self.stop_scylla()
         self.start_scylla()
 
     def disable_client_encrypt(self):
-        self.config_setup(client_encrypt=False)
+        self.parent_cluster.node_config_setup(node=self, client_encrypt=False)
         self.stop_scylla()
         self.start_scylla()
 
@@ -1985,7 +1985,8 @@ server_encryption_options:
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits=12):
         self.stop_scylla()
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
-        self.config_setup(murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+        self.parent_cluster.node_config_setup(
+            node=self, murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.start_scylla()
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
@@ -2795,15 +2796,17 @@ class BaseScyllaCluster(object):
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_config_setup(self, node, seed_address, endpoint_snitch):
+    def node_config_setup(self, node, seed_address, endpoint_snitch, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
         node.config_setup(seed_address=seed_address, cluster_name=self.name,
                           enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,
                           authenticator=self.params.get('authenticator'),
                           server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=self._param_enabled('client_encrypt'),
+                          client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled(  # pylint: disable=no-member
+                              'client_encrypt'),
                           append_conf=self.params.get('append_conf'), append_scylla_args=self.get_scylla_args(),
                           hinted_handoff=self.params.get('hinted_handoff'),
-                          authorizer=self.params.get('authorizer'))
+                          authorizer=self.params.get('authorizer'),
+                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
