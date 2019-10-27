@@ -584,7 +584,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                               enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
-    def node_config_setup(self, node, seed_address, endpoint_snitch, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
+    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
         setup_params = dict(
             enable_exp=self._param_enabled('experimental'),
             endpoint_snitch=endpoint_snitch,
