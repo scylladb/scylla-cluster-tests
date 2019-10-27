@@ -21,6 +21,7 @@ import time
 import types
 import random
 import unittest
+import json
 
 from uuid import uuid4
 from functools import wraps
@@ -1770,7 +1771,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         email_data = self.get_email_data()
         if email_data:
             email_data["reporter"] = self.email_reporter.__class__.__name__
-            import json
+
             f = os.path.join(self.logdir, "email_data.json")  # pylint: disable=invalid-name
             with open(f, "w") as fp:  # pylint: disable=invalid-name
                 json.dump(email_data, fp)  # pylint: disable=invalid-name

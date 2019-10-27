@@ -24,7 +24,7 @@
                 <tr>
                     <th>Nemesis name</th>
                     <th>Count</th>
-                    <th>Runs</th>
+                    <th>Successful Runs</th>
                     <th>Failures</th></tr>
             {% for name, detail in nemesis_details.items() %}
                 <tr>
@@ -62,18 +62,12 @@
     </h3>
     <div> {{ test_status[0] }} </div>
     {% if test_status[1] and short_report %}
-        <div> Number of critical records : {{ test_status[1]|length }} </div>
+        <div> See attached html report for full details of critical errors </div>
     {% elif test_status[1] and not short_report %}
         <div>
-            <table class="longevity_critical_errors_table">
-                {% for line in test_status[1] %}
-                    <tr><td>{{ line }}</td></tr>
-                    {% if loop.index > 99 %}
-                        <tr><td> See more records in critical.log file</td></tr>
-                        {% break %}
-                    {% endif %}
-                {% endfor %}
-            </table>
+            {% for line in test_status[1] %}
+                <pre>{{ line }}</pre>
+            {% endfor %}
         </div>
     {% endif %}
     <h3>

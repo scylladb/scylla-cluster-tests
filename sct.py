@@ -473,7 +473,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
         LOGGER.warning("No reporter found")
     else:
         if "Gemini" in reporter:
-            reporter = GeminiEmailReporter(email_recipients.split(','), logdir=testrun_dir)
+            reporter = GeminiEmailReporter(email_recipients, logdir=testrun_dir)
             reporter.send_report(test_results)
         elif "Longevity" in reporter:
             reporter = LongevityEmailReporter(email_recipients, logdir=testrun_dir)

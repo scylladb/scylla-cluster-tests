@@ -3009,10 +3009,11 @@ class BaseLoaderSet(object):
 
     @property
     def gemini_version(self):
-        result = self.nodes[0].remoter.run('cd $HOME; ./gemini --version')  # pylint: disable=no-member
-        # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
-        # take only version number - 1.0.1
-        self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
+        if not self._gemini_version:
+            result = self.nodes[0].remoter.run('cd $HOME; ./gemini --version')  # pylint: disable=no-member
+            # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
+            # take only version number - 1.0.1
+            self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
         return self._gemini_version
 
     def install_gemini(self, node):
