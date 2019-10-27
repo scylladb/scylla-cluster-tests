@@ -141,9 +141,8 @@ def teardown_on_exception(method):
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
-    def __init__(self, *args):
-        super(ClusterTester, self).__init__(*args)
-        self.result = None
+    def __init__(self, methodName='test'):
+        super(ClusterTester, self).__init__(methodName=methodName)
         self.status = "RUNNING"
         self.params = SCTConfiguration()
         self.params.verify_configuration()
@@ -163,7 +162,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
-        cluster.Setup.set_tester_obj(self)
         cluster.set_ip_ssh_connections(ip_ssh_connections)
         self.log.debug("Behavior on failure/post test is '%s'",
                        self._failure_post_behavior)
@@ -198,11 +196,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
-
-    def run(self, result=None):
-        self.result = self.defaultTestResult() if result is None else result
-        result = super(ClusterTester, self).run(self.result)
-        return result
 
     @property
     def test_id(self):
