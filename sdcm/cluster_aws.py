@@ -738,19 +738,20 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                               enable_auto_bootstrap=enable_auto_bootstrap)
         return added_nodes
 
-    def node_config_setup(self, node, seed_address, endpoint_snitch):
+    def node_config_setup(self, node, seed_address, endpoint_snitch, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
         setup_params = dict(
             enable_exp=self._param_enabled('experimental'),
             endpoint_snitch=endpoint_snitch,
             authenticator=self.params.get('authenticator'),
             server_encrypt=self._param_enabled('server_encrypt'),
-            client_encrypt=self._param_enabled('client_encrypt'),
+            client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
             alternator_port=self.params.get('alternator_port'),
             seed_address=seed_address,
             append_scylla_yaml=self.params.get('append_scylla_yaml'),
+            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
