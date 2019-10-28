@@ -144,8 +144,9 @@ class SCTConfiguration(dict):
 
                 Default: Use public IPs to connect to instances (public)
                 Use private IPs to connect to instances (private)
+                Use IPv6 IPs to connect to instances (ipv6)
              """,
-             choices=("public", "private"),
+             choices=("public", "private", "ipv6"),
              ),
 
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO", type=str,

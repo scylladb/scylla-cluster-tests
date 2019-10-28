@@ -22,7 +22,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
+                   description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
@@ -38,6 +38,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('tag_ami_with_result', 'false')}",
                    description: 'true|false',
                    name: 'tag_ami_with_result')
+
+            string(defaultValue: "${pipelineParams.get('ip_ssh_connections', '')}",
+                   description: 'private|public|ipv6',
+                   name: 'ip_ssh_connections')
         }
         options {
             timestamps()
@@ -99,6 +103,7 @@ def call(Map pipelineParams) {
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
                                     export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
+                                    export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
 
                                     echo "start test ......."
                                     ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
