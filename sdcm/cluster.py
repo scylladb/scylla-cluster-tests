@@ -684,25 +684,23 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     @property
     def public_ip_address(self):
-        return self._get_public_ip_address()
-
-    @property
-    def private_ip_address(self):
-        return self._get_private_ip_address()
-
-    def _get_public_ip_address(self):
         public_ips, _ = self._refresh_instance_state()
         if public_ips:
             return public_ips[0]
         else:
             return None
 
-    def _get_private_ip_address(self):
+    @property
+    def private_ip_address(self):
         _, private_ips = self._refresh_instance_state()
         if private_ips:
             return private_ips[0]
         else:
             return None
+
+    @property
+    def ipv6_ip_address(self):
+        raise NotImplementedError()
 
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
@@ -721,7 +719,9 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
     @property
     def ip_address(self):
-        if Setup.INTRA_NODE_COMM_PUBLIC:
+        if IP_SSH_CONNECTIONS == "ipv6":
+            return self.ipv6_ip_address
+        elif Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -732,8 +732,9 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         the communication address for usage between the test and the nodes
         :return:
         """
-
-        if IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
+        if IP_SSH_CONNECTIONS == "ipv6":
+            return self.ipv6_ip_address
+        elif IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -930,10 +931,11 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         self._db_log_reader_thread.start()
 
     def __str__(self):
-        return 'Node %s [%s | %s] (seed: %s)' % (self.name,
-                                                 self.public_ip_address,
-                                                 self.private_ip_address,
-                                                 self.is_seed)
+        return 'Node %s [%s | %s%s] (seed: %s)' % (self.name,
+                                                   self.public_ip_address,
+                                                   self.private_ip_address,
+                                                   " | %s" % self.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else "",
+                                                   self.is_seed)
 
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
@@ -1181,6 +1183,18 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
+    # Configuration node-exporter.service when use IPv6
+    def set_web_listen_address(self):
+        node_exporter_file = '/usr/lib/systemd/system/node-exporter.service'
+        find_web_param = self.remoter.run('grep "web.listen-address" %s' % node_exporter_file,
+                                          ignore_status=True)
+        if find_web_param.exit_status == 1:
+            cmd = """sudo sh -c "sed -i 's|ExecStart=/usr/bin/node_exporter  --collector.interrupts|""" \
+                  """ExecStart=/usr/bin/node_exporter  --collector.interrupts """ \
+                  """--web.listen-address="[%s]:9100"|g' %s" """ % (self.ip_address, node_exporter_file)
+            self.remoter.run(cmd)
+            self.remoter.run('sudo systemctl restart node-exporter.service')
+
     def apt_running(self):
         try:
             result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
@@ -1372,7 +1386,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
-                     alternator_port=None, listen_on_all_interfaces=False):
+                     alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1388,11 +1402,11 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
             # Set listen_address
             pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
             # Set rpc_address
             pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
 
         if listen_on_all_interfaces:
@@ -1423,6 +1437,24 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         if hinted_handoff == 'disabled':
             pattern = re.compile('[# ]*hinted_handoff_enabled:.*')
             scylla_yaml_contents = pattern.sub('hinted_handoff_enabled: false', scylla_yaml_contents, count=1)
+
+        if ip_ssh_connections == 'ipv6':
+            self.log.debug('Enable IPv6 DNS lookup')
+            pattern = re.compile('enable_ipv6_dns_lookup:.*')
+            if pattern.findall(scylla_yaml_contents):
+                scylla_yaml_contents = pattern.sub('enable_ipv6_dns_lookup: true', scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nenable_ipv6_dns_lookup: true\n"
+
+            # Set prometheus_address
+            pattern = re.compile('\n[# ]*prometheus_address:.*')
+            scylla_yaml_contents = pattern.sub('\nprometheus_address: {0}'.format(self.ip_address),
+                                               scylla_yaml_contents)
+
+            # Set broadcast_rpc_address
+            pattern = re.compile('\n[# ]*broadcast_rpc_address:.*')
+            scylla_yaml_contents = pattern.sub('\nbroadcast_rpc_address: {0}'.format(self.ip_address),
+                                               scylla_yaml_contents)
 
         if murmur3_partitioner_ignore_msb_bits:
             self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(
@@ -2374,6 +2406,9 @@ class BaseCluster(object):  # pylint: disable=too-many-instance-attributes
 
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
+
+    def get_node_external_ips(self):
+        return [node.external_address for node in self.nodes]
 
     def get_node_database_errors(self):
         errors = {}
@@ -3457,7 +3492,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
-                "http://{0.external_address}:{1.grafana_port}".format(node, self))
+                "http://[{0.external_address}]:{1.grafana_port}".format(node, self))
             return
 
         self.install_scylla_monitoring(node)
@@ -3471,7 +3506,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         # be captured.
         self.grafana_start_time = time.time()
         EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
-            "http://{0.external_address}:{1.grafana_port}".format(node, self))
+            "http://[{0.external_address}]:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:
@@ -3579,7 +3614,8 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         node.remoter.run("bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
-        db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+        db_targets_list = ["[%s]:9180" %
+                           n.ip_address for n in self.targets["db_cluster"].nodes]
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3591,7 +3627,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
             with open(local_template_tmp) as output_file:
                 templ_yaml = yaml.load(output_file, Loader=yaml.SafeLoader)  # to override avocado
                 self.log.debug("Configs %s" % templ_yaml)  # pylint: disable=no-member
-            loader_targets_list = ["%s:9103" % n.ip_address for n in self.targets["loaders"].nodes]
+            loader_targets_list = ["[%s]:9103" % n.ip_address for n in self.targets["loaders"].nodes]
 
             # remove those jobs if exists, for support of 'reuse_cluster: true'
             def remove_sct_metrics(metric):
@@ -3664,7 +3700,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:  # pylint: disable=no-member
-            db_targets_list = [n.ip_address for n in self.targets["db_cluster"].nodes]  # node exporter + scylladb
+            db_targets_list = ["[%s]:9180" % n.ip_address for n in self.targets["db_cluster"].nodes]
             self._monitoring_targets = " ".join(db_targets_list)  # pylint: disable=attribute-defined-outside-init
             configure_script = dedent("""
                         cd {0.monitor_install_path}
@@ -3697,7 +3733,8 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         def _register_grafana_json(json_filename):
-            url = "http://{0.external_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
+            # added "[]" / "\\" for IPv6 support
+            url = "'http://\\[{0.external_address}\\]:{1.grafana_port}/api/dashboards/db'".format(node, self)
             json_path = get_data_dir_path(json_filename)
             result = LOCALRUNNER.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                      (url, json_path))
@@ -3725,7 +3762,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         self.download_scylla_monitoring(node)
 
     def get_grafana_annotations(self, node):
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        annotations_url = "http://[{node_ip}]:{grafana_port}/api/annotations"
         try:
             res = requests.get(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port))
             if res.ok:
@@ -3735,7 +3772,7 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         return ""
 
     def set_grafana_annotations(self, node, annotations_data):
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        annotations_url = "http://[{node_ip}]:{grafana_port}/api/annotations"
         res = requests.post(annotations_url.format(node_ip=node.external_address, grafana_port=self.grafana_port),
                             data=annotations_data, headers={'Content-Type': 'application/json'})
         self.log.info("posting annotations result: %s", res)  # pylint: disable=no-member

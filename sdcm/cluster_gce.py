@@ -140,6 +140,11 @@ class GCENode(cluster.BaseNode):
         self.log.warning('Method is not implemented for GCENode')
         return ''
 
+    @property
+    def ipv6_ip_address(self):
+        raise NotImplementedError('On GCE, VPC networks only support IPv4 unicast traffic. '
+                                  'They do not support IPv6 traffic within the network.')
+
 
 class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method
 

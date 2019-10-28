@@ -159,7 +159,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log = logging.getLogger(__name__)
         self.logdir = cluster.Setup.logdir()
 
-        ip_ssh_connections = self.params.get(key='ip_ssh_connections', default='public')
+        ip_ssh_connections = self.params.get(key='ip_ssh_connections')
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
         cluster.set_ip_ssh_connections(ip_ssh_connections)
@@ -281,7 +281,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('repair system_auth keyspace ...')
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
-        db_node_address = self.db_cluster.nodes[0].private_ip_address
+        db_node_address = self.db_cluster.nodes[0].ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
         self.monitors.wait_for_init()
 
@@ -1049,8 +1049,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _create_session(self, node, keyspace, user, password, compression,  # pylint: disable=too-many-arguments
                         protocol_version, load_balancing_policy=None,
-                        port=None, ssl_opts=None):
-        node_ips = [node.public_ip_address]
+                        port=None, ssl_opts=None, node_ips=None):
         if not port:
             port = node.CQL_PORT
 
@@ -1095,11 +1094,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None):
-
-        wlrr = WhiteListRoundRobinPolicy(self.db_cluster.get_node_public_ips())
+        # TODO: ask Bentsi why it was reverted (PR #1236)
+        node_ips = self.db_cluster.get_node_external_ips()
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts)
+                                    port=port, ssl_opts=ssl_opts, node_ips=node_ips)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                                  password=None, compression=True,
@@ -1109,7 +1109,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         wlrr = WhiteListRoundRobinPolicy([node.external_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts)
+                                    port=port, ssl_opts=ssl_opts, node_ips=[node.external_address])
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
