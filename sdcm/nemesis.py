@@ -56,6 +56,11 @@ class FilesNotCorrupted(Exception):
     pass
 
 
+class UnsupportedNemesis(Exception):
+    """ raised from within a nemesis execution to skip this nemesis"""
+    pass
+
+
 class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
@@ -131,11 +136,16 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         self.log.info('Interval: %s s', interval)
         self.interval = interval
         while not self.termination_event.isSet():
+            cur_interval = interval
             self.set_target_node()
             self._set_current_disruption(report=False)
-            self.disrupt()
-            self.target_node.running_nemesis = None
-            self.termination_event.wait(timeout=interval)
+            try:
+                self.disrupt()
+            except UnsupportedNemesis:
+                cur_interval = 0
+            finally:
+                self.target_node.running_nemesis = None
+                self.termination_event.wait(timeout=cur_interval)
 
     def report(self):
         if self.duration_list:
@@ -848,8 +858,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
     def disrupt_mgmt_repair_cli(self):
         self._set_current_disruption('ManagementRepair')
         if not self.cluster.params.get('use_mgmt', default=None):
-            self.log.warning('Scylla-manager configuration is not defined!')
-            return
+            raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
 
         manager_node = self.monitoring_set.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
@@ -1049,7 +1058,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         # pylint: disable=too-many-locals
         self._set_current_disruption('NetworkRandomInterruption')
         if not self.cluster.aws_extra_network_interface:
-            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
@@ -1103,7 +1112,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
     def disrupt_network_block(self):
         self._set_current_disruption('BlockNetwork')
         if not self.cluster.aws_extra_network_interface:
-            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
 
         selected_option = "--loss 100%"
         list_of_timeout_options = [10, 60, 120, 300, 500]
@@ -1119,7 +1128,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         self._set_current_disruption('StopStartNetworkInterfaces')
         if not self.cluster.aws_extra_network_interface:
-            raise ValueError("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = random.choice(list_of_timeout_options)
@@ -1177,9 +1186,16 @@ def log_time_elapsed_and_status(method):
             'end': 0,
             'duration': 0,
             'node': str(args[0].target_node),
+            'type': 'end',
         }
         try:
             result = method(*args, **kwargs)
+        except UnsupportedNemesis as exp:
+            log_info.update({'type': 'skipped', 'skip_reason': str(exp)})
+            logging.info("skipping %s", args[0].get_disrupt_name())
+            logging.info("cause of: %s", str(exp))
+            raise
+
         except Exception as details:  # pylint: disable=broad-except
             details = str(details)
             args[0].error_list.append(details)
@@ -1203,7 +1219,7 @@ def log_time_elapsed_and_status(method):
             del log_info['operation']
 
             args[0].update_stats(disrupt, status, log_info)
-            DisruptionEvent(type='end', name=disrupt, status=status, **log_info)
+            DisruptionEvent(name=disrupt, status=status, **log_info)
             args[0].cluster.check_cluster_health()
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
