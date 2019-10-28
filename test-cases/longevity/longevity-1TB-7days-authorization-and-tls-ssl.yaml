@@ -40,3 +40,4 @@ authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
 use_mgmt: true
+nemesis_during_prepare: false
