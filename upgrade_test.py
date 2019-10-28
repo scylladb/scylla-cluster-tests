@@ -185,6 +185,8 @@ class UpgradeTest(FillDatabaseData):
                         r'sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
         if self.params.get('test_sst3', default=None):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
+        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+            node.remoter.run("echo 'enable_3_1_0_compatibility_mode: true' |sudo tee --append /etc/scylla/scylla.yaml")
         authorization_in_upgrade = self.params.get('authorization_in_upgrade', default=None)
         if authorization_in_upgrade:
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
@@ -268,6 +270,9 @@ class UpgradeTest(FillDatabaseData):
         if self.params.get('test_sst3', default=None):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
+        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+            node.remoter.run(
+                r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
         if self.params.get('remove_authorization_in_rollback', default=None):
             node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         node.start_scylla_server()
