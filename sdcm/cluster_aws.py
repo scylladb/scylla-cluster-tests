@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines
+
 import re
 import logging
 import time
@@ -287,6 +289,26 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
+    # This is workaround for issue #5179: IPv6 - routing in scylla AMI isn't configured properly
+    @staticmethod
+    def network_config_ipv6_workaround_script():  # pylint: disable=invalid-name
+        return dedent("""
+            BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
+            MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
+            IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
+
+            for param in IPV6_AUTOCONF IPV6_DEFROUTE
+            do
+                res=`sudo grep "$param" /etc/sysconfig/network-scripts/ifcfg-eth0`
+                if [[ "${res}x" == "x" ]]
+                then
+                    sudo sh -c  "echo \"$param=yes\" >> /etc/sysconfig/network-scripts/ifcfg-eth0"
+                fi
+            done
+
+            sudo ip r a $IPv6_CIDR dev eth0
+        """)
+
     @staticmethod
     def configure_eth1_script():
         return dedent("""
@@ -335,6 +357,9 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         post_boot_script = cluster.Setup.get_startup_script()
         if self.aws_extra_network_interface:
             post_boot_script += self.configure_eth1_script()
+
+        if self.params.get('ip_ssh_connections') == 'ipv6':
+            post_boot_script += self.network_config_ipv6_workaround_script()
 
         if isinstance(ec2_user_data, dict):
             ec2_user_data['post_configuration_script'] = base64.b64encode(post_boot_script).decode()
@@ -450,8 +475,9 @@ class AWSNode(cluster.BaseNode):
         the communication address for usage between the test and the nodes
         :return:
         """
-
-        if cluster.IP_SSH_CONNECTIONS == 'public' or cluster.Setup.INTRA_NODE_COMM_PUBLIC:
+        if self.parent_cluster.params.get("ip_ssh_connections") == "ipv6":
+            return self.ipv6_ip_address
+        elif cluster.IP_SSH_CONNECTIONS == 'public' or cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self._instance.private_ip_address
@@ -466,6 +492,10 @@ class AWSNode(cluster.BaseNode):
             return self._eth1_private_ip_address
 
         return self._instance.private_ip_address
+
+    @property
+    def ipv6_ip_address(self):
+        return self._instance.network_interfaces[0].ipv6_addresses[0]["Ipv6Address"]
 
     def _refresh_instance_state(self):
         raise NotImplementedError()
@@ -783,6 +813,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             seed_address=seed_address,
             append_scylla_yaml=self.params.get('append_scylla_yaml'),
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+            ip_ssh_connections=self.params.get('ip_ssh_connections'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
@@ -839,6 +870,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                     endpoint_snitch = "Ec2MultiRegionSnitch"
                 node.datacenter_setup(self.datacenter)
             self.node_config_setup(node, seed_address, endpoint_snitch)
+
+            if self.params.get('ip_ssh_connections') == 'ipv6':
+                node.set_web_listen_address()
 
             node.stop_scylla_server(verify_down=False)
             node.start_scylla_server(verify_up=False)

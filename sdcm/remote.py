@@ -476,7 +476,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         """
         if escape:
             paths = [_scp_remote_escape(path) for path in paths]
-        return '%s@%s:"%s"' % (self.user, self.hostname, " ".join(paths))
+        return '%s@[%s]:"%s"' % (self.user, self.hostname, " ".join(paths))
 
     def _make_scp_cmd(self, src, dst, connect_timeout=300, alive_interval=300):
         """
