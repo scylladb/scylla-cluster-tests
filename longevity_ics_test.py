@@ -2,12 +2,13 @@ from longevity_test import LongevityTest
 
 
 class IcsLongevetyTest(LongevityTest):
-    def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None, single_column=False, compaction='IncrementalCompactionStrategy'):
+    def _pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None, single_column=False, compaction='IncrementalCompactionStrategy'):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
         """
-        columns = {'"C0"': 'blob'} if single_column else {'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'}
+        columns = {'"C0"': 'blob'} if single_column else {'"C0"': 'blob',
+                                                          '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'}
         self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
         for i in xrange(1, keyspace_num+1):
             keyspace_name = 'keyspace{}'.format(i)
@@ -17,10 +18,10 @@ class IcsLongevetyTest(LongevityTest):
                               columns=columns, compaction=compaction,
                               scylla_encryption_options=scylla_encryption_options)
 
-    def test_ics_single_column_longevity(self):
-        self._pre_create_schema(single_column=True)
+    def test_ics_1_column_longevity(self):
+        self._pre_create_schema_with_compaction(single_column=True)
         self.test_custom_time()
 
     def test_ics_longevity(self):
-        self._pre_create_schema()
+        self._pre_create_schema_with_compaction()
         self.test_custom_time()
