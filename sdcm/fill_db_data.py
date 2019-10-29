@@ -18,6 +18,7 @@ __author__ = 'Roy Dahan'
 # pylint: disable=too-many-lines,eval-used
 import logging
 import random
+import time
 from collections import OrderedDict
 from uuid import UUID
 
@@ -2879,13 +2880,19 @@ class FillDatabaseData(ClusterTester):
             self.cql_insert_data_to_simple_tables(session, rows=insert_rows)
 
     def cql_create_tables(self, session):
+        truncates = []
         # Run through the list of items and create all tables
         for item in self.all_verification_items:
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for create_table in item['create_tables']:
                     session.execute(create_table)
                 for truncate in item['truncates']:
-                    session.execute(truncate)
+                    truncates.append(truncate)
+        # Sleep a while after creating test tables to avoid schema disagreement.
+        # Refs: https://github.com/scylladb/scylla/issues/5235
+        time.sleep(30)
+        for truncate in truncates:
+            session.execute(truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         # pylint: disable=too-many-nested-blocks
