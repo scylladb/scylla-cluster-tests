@@ -3742,15 +3742,14 @@ class BaseMonitorSet(object):  # pylint: disable=too-many-public-methods,too-man
         if not test_start_time:
             self.log.error("No start time for test")  # pylint: disable=no-member
             return {}
-        start_time = str(test_start_time).split('.')[0] + '000'
 
         for node in self.nodes:  # pylint: disable=no-member
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
-                                                     test_start_time=start_time)
+                                                     test_start_time=test_start_time)
             screenshots = screenshot_collector.collect(node, self.logdir)  # pylint: disable=no-member
             screenshots = [S3Storage().upload_file(screenshot, Setup.test_id()) for screenshot in screenshots]
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
-                                                  test_start_time=start_time)
+                                                  test_start_time=test_start_time)
             snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
