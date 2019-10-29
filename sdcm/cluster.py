@@ -1797,7 +1797,19 @@ server_encryption_options:
         """
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
-        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
+        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
+            # related issue: https://github.com/scylladb/scylla/issues/5181
+            # a known kernel bug will cause scylla_io_setup fails in executing iotune.
+            # The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
+            # the config files are copied from a succeed gce instance (same instance type, same test).
+            self.remoter.run(
+                'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
+            for conf in ['io.conf', 'io_properties.yaml']:
+                self.remoter.send_files(src=os.path.join('./configurations/', conf), dst='/tmp/')
+                self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
+        else:
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
+
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
