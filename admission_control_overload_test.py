@@ -43,15 +43,17 @@ class AdmissionControlOverloadTest(ClusterTester):
                     now = time.time()
                     if self.check_prometheus_metrics(start_time=start_time, now=now):
                         is_ever_triggered = True
+                        self.kill_stress_thread()
                     start_time = now
                     time.sleep(10)
 
-            results = []
-            for stress in stress_res:
-                try:
-                    results.append(self.get_stress_results(stress))
-                except exceptions.CommandTimedOut as ex:
-                    self.log.debug('some c-s timed out\n{}'.format(ex))
+            if not is_ever_triggered:
+                results = []
+                for stress in stress_res:
+                    try:
+                        results.append(self.get_stress_results(stress))
+                    except exceptions.CommandTimedOut as ex:
+                        self.log.debug('some c-s timed out\n{}'.format(ex))
 
         return is_ever_triggered
 
