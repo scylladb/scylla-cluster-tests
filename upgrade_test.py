@@ -543,8 +543,6 @@ class UpgradeTest(FillDatabaseData):
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
 
-        self.fill_and_verify_db_data('AFTER UPGRADE', rewrite_data=False)
-
         # complex workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s complex workload to verify data by simple read')
         stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
