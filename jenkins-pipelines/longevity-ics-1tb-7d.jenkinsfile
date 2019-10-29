@@ -8,7 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'longevity_ics_test.IcsLongevetyTest.test_ics_single_column_longevity',
+    test_name: 'longevity_ics_test.IcsLongevetyTest.test_ics_1_column_longevity',
     test_config: 'test-cases/longevity/longevity-ics-1TB-7days.yaml',
 
     timeout: [time: 10960, unit: 'MINUTES'],
