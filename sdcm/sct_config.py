@@ -778,7 +778,7 @@ class SCTConfiguration(dict):
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure."""),
 
-        dict(name="stress_cmd_read_20m", env="SCT_STRESS_CMD_READ_20M", type=str_or_list,
+        dict(name="stress_cmd_read_40m", env="SCT_STRESS_CMD_READ_40M", type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
