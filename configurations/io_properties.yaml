@@ -1,0 +1,6 @@
+disks:
+  - mountpoint: /var/lib/scylla
+    read_iops: 540317
+    read_bandwidth: 1914761472
+    write_iops: 300319
+    write_bandwidth: 1162022400

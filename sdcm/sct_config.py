@@ -875,7 +875,9 @@ class SCTConfiguration(dict):
                 'keep' - Keep instances running and leave credentials alone
                 'keep-on-failure' - Keep instances if testrun failed
              """,
-             choices=("keep", "keep-on-failure", "destroy"))
+             choices=("keep", "keep-on-failure", "destroy")),
+        dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
+             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
