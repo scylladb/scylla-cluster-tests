@@ -816,6 +816,9 @@ class SCTConfiguration(dict):
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT",  type=str,
              help="How to transport logs: rsyslog or ssh"),
+
+        dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
+             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'failure_post_behavior',
