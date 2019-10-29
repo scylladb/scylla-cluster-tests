@@ -24,9 +24,9 @@ LOGGER = logging.getLogger(__name__)
 
 class CollectingNode(object):  # pylint: disable=too-few-public-methods
 
-    def __init__(self, name, ssh_login_info, instance, global_ip):
-        self.remoter = RemoteCmdRunner(**ssh_login_info)
+    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None):
         self.name = name
+        self.remoter = RemoteCmdRunner(**ssh_login_info) if ssh_login_info else None
         self._instance = instance
         self.external_address = global_ip
 
@@ -63,6 +63,9 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        if not node.remoter:
+            return None
+
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
@@ -110,6 +113,7 @@ class FileLog(CommandLog):
         return path
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        makedirs(local_dst)
         if self.search_locally and local_search_path:
             search_pattern = self.name if not node else "/".join([node.name, self.name])
             local_logfiles = self.find_local_files(local_search_path, search_pattern)
@@ -514,6 +518,8 @@ class LogCollector(object):
 
     @staticmethod
     def collect_log_remotely(node, cmd, log_filename):  # pylint: disable=unused-argument
+        if not node.remoter:
+            return False
         collect_log_command = "{cmd} >& {log_filename}".format(**locals())
         result = node.remoter.run(
             collect_log_command, ignore_status=True, verbose=True)
@@ -529,14 +535,16 @@ class LogCollector(object):
         else:
             archive_name = os.path.join(archive_dir, os.path.basename(log_filename))
         log_filename = os.path.basename(log_filename)
-        node.remoter.run(
-            "cd {archive_dir}; tar -czf {archive_name}.tar.gz {log_filename}".format(**locals()), ignore_status=True)
+        if node.remoter:
+            node.remoter.run(
+                "cd {archive_dir}; tar -czf {archive_name}.tar.gz {log_filename}".format(**locals()), ignore_status=True)
         return "{}.tar.gz".format(archive_name)
 
     @staticmethod
     def receive_log(node, remote_log_path, local_dir):
         makedirs(local_dir)
-        node.remoter.receive_files(src=remote_log_path, dst=local_dir)
+        if node.remoter:
+            node.remoter.receive_files(src=remote_log_path, dst=local_dir)
         return local_dir
 
     @staticmethod
@@ -545,29 +553,47 @@ class LogCollector(object):
         return s3_link
 
     def collect_logs(self, local_search_path=None):
-        if not self.nodes:
-            LOGGER.warning('No any running instances for %s', self.cluster_log_type)
-            return None
-
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
             local_node_dir = os.path.join(self.local_dir, node.name)
-            os.makedirs(local_node_dir)
             for log_entity in self.log_entities:
                 try:
                     log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
                 except Exception as details:  # pylint: disable=unused-variable, broad-except
                     LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
-        try:
-            workers_number = int(len(self.nodes) / 2)
-            workers_number = len(self.nodes) if workers_number < 2 else workers_number
-            ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(collect_logs_per_node)
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error('Error occured during collecting logs %s', details)
+
+        if self.nodes:
+            try:
+                workers_number = int(len(self.nodes) / 2)
+                workers_number = len(self.nodes) if workers_number < 2 else workers_number
+                ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(collect_logs_per_node)
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error('Error occured during collecting logs %s', details)
+
+        if not os.listdir(self.local_dir):
+            LOGGER.warning('Directory %s is empty', self.local_dir)
+            return None
+
         final_archive = self.archive_dir_with_zip64(self.local_dir)
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
         return s3_link
+
+    def collect_logs_for_inactive_nodes(self, local_search_path=None):
+        node_names = set([node.name for node in self.nodes])
+        if not local_search_path:
+            return
+        for root, _, _ in os.walk(local_search_path):
+            if self.cluster_log_type in root:
+                node_dirs = set([dir_name for dir_name in os.listdir(
+                    root) if os.path.isdir(os.path.join(root, dir_name))])
+                if len(node_names) != len(node_dirs):
+                    inactive_nodes = node_dirs.difference(node_names)
+                    for dir_name in inactive_nodes:
+                        for entity in self.log_entities:
+                            entity.collect(CollectingNode(name=dir_name),
+                                           os.path.join(self.local_dir, dir_name),
+                                           local_search_path=os.path.join(root, dir_name))
 
     def update_db_info(self):
         pass
@@ -625,6 +651,10 @@ class ScyllaLogCollector(LogCollector):
                                command='sudo coredumpctl info')
                     ]
     cluster_log_type = "db-cluster"
+
+    def collect_logs(self, local_search_path=None):
+        self.collect_logs_for_inactive_nodes(local_search_path)
+        return super(ScyllaLogCollector, self).collect_logs(local_search_path)
 
 
 class LoaderLogCollector(LogCollector):
