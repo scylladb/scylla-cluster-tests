@@ -211,7 +211,7 @@ class Nemesis(object):
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         self.target_node.restart()
         self.log.info('Waiting scylla services to start after node restart')
-        self.target_node.wait_db_up(timeout=14400)
+        self.target_node.wait_db_up(timeout=28800)  # 8 hours
         self.log.info('Waiting JMX services to start after node restart')
         self.target_node.wait_jmx_up()
         self.repair_nodetool_repair()
