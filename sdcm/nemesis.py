@@ -514,7 +514,8 @@ class Nemesis(object):
 
         with DbEventsFilter(type='NO_SPACE_ERROR'), \
                 DbEventsFilter(type='BACKTRACE', line='No space left on device'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device'):
+                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device'), \
+                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device'):
             for node in nodes:
                 result = node.remoter.run('cat /proc/mounts')
                 if '/var/lib/scylla' not in result.stdout:
