@@ -152,7 +152,7 @@ class PrometheusSnapshots(BaseLogEntity):
 
         self.current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException,),
+    @retrying(n=3, sleep_time=10, allowed_exceptions=(PrometheusSnapshotErrorException, Exception),
               message='Create prometheus snapshot')
     def create_prometheus_snapshot(self, node):
         prometheus_client = PrometheusDBStats(host=node.external_address)
@@ -168,7 +168,7 @@ class PrometheusSnapshots(BaseLogEntity):
     def get_prometheus_snapshot_remote(self, node):
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
-        except PrometheusSnapshotErrorException as details:
+        except (PrometheusSnapshotErrorException, Exception) as details:  # pylint: disable=broad-except
             LOGGER.warning(
                 'Create prometheus snapshot failed %s.\nUse prometheus data directory', details)
             node.remoter.run('docker stop aprom', ignore_status=True)
