@@ -104,18 +104,32 @@ class SctEventsTests(unittest.TestCase):
 
         print str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test'))
 
-    @staticmethod
-    def test_filter():
+    def test_filter(self):
+        log_content_before = self.get_event_logs()
+
         enospc_line = "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
-        with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
+        enospc_line_2 = "2019-10-29T12:19:49+00:00  ip-172-30-0-184 !WARNING | scylla: [shard 2] storage_service - " \
+                        "Commitlog error: std::filesystem::__cxx11::filesystem_error (error system:28, filesystem error: open failed: No space left on device [/var/lib/scylla/hints/2/172.30.0.116/HintsLog-1-36028797019122576.log])"
+        with DbEventsFilter(type='NO_SPACE_ERROR'), \
+                DbEventsFilter(type='BACKTRACE', line='No space left on device'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device'), \
+                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device'):
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
+
+            DatabaseLogEvent(type="FILESYSTEM_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                      line=enospc_line_2)
+
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
+
+        log_content_after = self.get_event_logs()
+
+        self.assertEqual(log_content_before, log_content_after)
 
     def test_filter_repair(self):
 
