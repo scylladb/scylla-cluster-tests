@@ -135,6 +135,15 @@ class SCTConfiguration(dict):
         dict(name="cloud_credentials_path", env="SCT_CLOUD_CREDENTIALS_PATH", type=str,
              help="""Path to your user credentials. qa key are downloaded automatically from S3 bucket"""),
 
+        dict(name="cloud_prom_bearer_token", env="SCT_CLOUD_PROM_BEARER_TOKEN", type=str,
+             help="""scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance"""),
+
+        dict(name="cloud_prom_path", env="SCT_CLOUD_PROM_PATH", type=str,
+             help="""scylla cloud promproxy path to federate monitoring data into our monitoring instance"""),
+
+        dict(name="cloud_prom_host", env="SCT_CLOUD_PROM_HOST", type=str,
+             help="""scylla cloud promproxy hostname to federate monitoring data into our monitoring instance"""),
+
         dict(name="ip_ssh_connections", env="SCT_IP_SSH_CONNECTIONS", type=str,
              help="""
                 Type of IP used to connect to machine instances.

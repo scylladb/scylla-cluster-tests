@@ -3606,8 +3606,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         node.remoter.run("bash -ce '%s'" % install_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
-        db_targets_list = ["[%s]:9180" %
-                           n.ip_address for n in self.targets["db_cluster"].nodes]
+        cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
+
         if sct_metrics:
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
@@ -3630,7 +3630,16 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
                                        static_configs=[dict(targets=loader_targets_list)]))
 
-            if self.params.get('gemini_cmd', None):
+            if cloud_prom_bearer_token:
+                cloud_prom_path = self.params.get('cloud_prom_path')
+                cloud_prom_host = self.params.get('cloud_prom_host')
+                scrape_configs.append(dict(job_name="scylla_cloud_cluster", honor_labels=True, scrape_interval='15s',
+                                           metrics_path=cloud_prom_path, scheme='https',
+                                           params={'match[]': ['{job=~".+"}']},
+                                           bearer_token=cloud_prom_bearer_token,
+                                           static_configs=[dict(targets=[cloud_prom_host])]))
+
+            if self.params.get('gemini_cmd'):
                 gemini_loader_targets_list = ["%s:2112" % n.ip_address for n in self.targets["loaders"].nodes]
                 scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
                                            static_configs=[dict(targets=gemini_loader_targets_list)]))
@@ -3641,14 +3650,10 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             with open(local_template, "w") as output_file:
                 yaml.safe_dump(templ_yaml, output_file, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True)
+
             LOCALRUNNER.run(f"rm -rf {temp_dir}")
-        self._monitoring_targets = " ".join(db_targets_list)  # pylint: disable=attribute-defined-outside-init
-        configure_script = dedent("""
-            cd {0.monitor_install_path}
-            mkdir -p {0.monitoring_conf_dir}
-            python3 genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
-        """.format(self))
-        node.remoter.run("bash -ce '%s'" % configure_script, verbose=True)
+
+        self.reconfigure_scylla_monitoring()
         if alert_manager:
             self.configure_alert_manager(node)
 
@@ -3700,6 +3705,14 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                         python3 genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
                     """.format(self))
             node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
+
+            if self.params.get('cloud_prom_bearer_token', None):
+                cloud_prom_script = dedent("""
+                                        echo "targets: [] " > {0.monitoring_conf_dir}/scylla_servers.yml
+                                        echo "targets: [] " > {0.monitoring_conf_dir}/node_exporter_servers.yml
+                                    """.format(self))
+
+                node.remoter.run("sudo bash -ce '%s'" % cloud_prom_script, verbose=True)
 
     def start_scylla_monitoring(self, node):
         node.remoter.run("cp {0.monitor_install_path}/prometheus/scylla_manager_servers.example.yml"
