@@ -139,7 +139,7 @@ class LongevityEmailReporter(BaseEmailReporter):
               'test_status', 'test_name', 'start_time', 'end_time',
               'build_url', 'scylla_version', 'scylla_ami_id',
               'scylla_instance_type', 'number_of_db_nodes',
-              'nemesis_name', 'nemesis_details', 'test_id', 'document_id']
+              'nemesis_name', 'nemesis_details', 'test_id']
 
     def build_report(self, email_data):
         report_file = os.path.join(self.logdir, 'email_report.html')
@@ -158,7 +158,7 @@ class GeminiEmailReporter(BaseEmailReporter):
               'oracle_db_version', 'oracle_ami_id', 'oracle_instance_type',
               "results", "status", 'test_name', 'test_id', 'test_status',
               'start_time', 'end_time',
-              'build_url', 'nemesis_name', 'nemesis_details', 'test_id', 'document_id']
+              'build_url', 'nemesis_name', 'nemesis_details', 'test_id']
 
     def build_report(self, email_data):
         self.log.info('Prepare result to send in email')

@@ -175,7 +175,6 @@ class Setup(object):
     RSYSLOG_ADDRESS = None
 
     _test_id = None
-    _es_doc_id = None
     _test_name = None
     TAGS = dict()
     _logdir = None
