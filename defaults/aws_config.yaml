@@ -22,7 +22,7 @@ regions_data:
     ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
 
 
-aws_root_disk_size_monitor: 20  # GB, remove this field if default disk size should be used
+aws_root_disk_size_monitor: 35  # GB, remove this field if default disk size should be used
 aws_root_disk_size_db: 15
 aws_root_disk_name_monitor: "/dev/sda1"  # use "/dev/xvda" for Debian 8 image
 ami_db_scylla_user: 'centos'
