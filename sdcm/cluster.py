@@ -3721,7 +3721,7 @@ class BaseMonitorSet(object):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
-        sct_dashboard_file = self.get_sct_dashboards_config()
+        sct_dashboard_file = self.get_sct_dashboards_config(node)
         node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
 
     def add_sct_dashboards_to_grafana(self, node):
