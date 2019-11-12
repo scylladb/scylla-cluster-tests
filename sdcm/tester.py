@@ -1776,6 +1776,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             with open(f, "w") as fp:  # pylint: disable=invalid-name
                 json.dump(email_data, fp)  # pylint: disable=invalid-name
 
+        if cluster.get_username() == "jenkins":
+            self.log.info("Email will be sent by pipeline stage")
+            return
+
         if send_email and email_data:
             try:
                 if self.email_reporter:
