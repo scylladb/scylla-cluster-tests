@@ -16,7 +16,6 @@ instance_type_db: 'i3.4xlarge'
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 user_prefix: 'longevity-36gb-in-memory'
-failure_post_behavior: keep
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
 
