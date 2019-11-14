@@ -2522,9 +2522,10 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
     def set_seeds(self, wait_for_timeout=300):
         seeds_selector = self.params.get('seeds_selector')  # pylint: disable=no-member
         seeds_num = self.params.get('seeds_num')  # pylint: disable=no-member
+        cluster_backend = self.params.get('cluster_backend')  # pylint: disable=no-member
 
         seed_nodes_ips = None
-        if seeds_selector == 'reflector' or Setup.REUSE_CLUSTER:
+        if seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
             node = self.nodes[0]  # pylint: disable=no-member
             node.wait_ssh_up()
             # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
