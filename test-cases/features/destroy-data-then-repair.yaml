@@ -12,5 +12,3 @@ instance_type_db: 'i3.large'
 
 nemesis_interval: 15
 user_prefix: 'cases-repair'
-
-failure_post_behavior: destroy

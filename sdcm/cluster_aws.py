@@ -33,6 +33,8 @@ SPOT_FLEET_LIMIT = 50
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 # pylint: disable=too-many-lines
+
+
 def create_tags_list():
     tags_list = [{'Key': k, 'Value': v} for k, v in cluster.create_common_tags().items()]
     if cluster.TEST_DURATION >= 24 * 60:

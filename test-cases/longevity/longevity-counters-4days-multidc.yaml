@@ -12,7 +12,6 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.2xlarge'
 
 user_prefix: longevity-counters-4d
-failure_post_behavior: keep
 
 space_node_threshold: 6442
 

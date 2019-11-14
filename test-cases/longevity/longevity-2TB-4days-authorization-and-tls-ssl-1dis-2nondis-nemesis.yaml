@@ -29,7 +29,6 @@ nemesis_interval: 30
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-tls-2tb-4d-1dis-2nondis'
-failure_post_behavior: destroy
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true
