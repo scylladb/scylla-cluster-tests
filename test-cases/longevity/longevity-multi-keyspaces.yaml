@@ -23,7 +23,6 @@ aws_root_disk_size_monitor: 40
 
 user_prefix: 'longevity-1000-keyspaces'
 
-failure_post_behavior: keep
 store_results_in_elasticsearch: False
 
 # disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
