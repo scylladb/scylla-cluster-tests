@@ -793,6 +793,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if cluster_backend == 'aws' or cluster_backend == 'aws-siren':
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
+
         elif cluster_backend == 'libvirt':
             self.get_cluster_libvirt(loader_info=loader_info, db_info=db_info,
                                      monitor_info=monitor_info)
