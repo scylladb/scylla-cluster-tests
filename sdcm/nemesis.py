@@ -91,6 +91,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.start_time = time.time()
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
+        self.task_used_streaming = None
         self._random_sequence = None
         self._add_drop_column_max_per_drop = 5
         self._add_drop_column_max_per_add = 5
@@ -1716,6 +1717,106 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         finally:
             self.target_node.remoter.run("sudo /sbin/ifup eth1")
 
+    def break_streaming_task_and_rebuild(self, task='decommission'):  # pylint: disable=too-many-statements
+        """
+        Stop streaming task in middle and rebuild the data on the node.
+        """
+        def decommission_post_action():
+            decommission_done = self.target_node.search_database_log('DECOMMISSIONING: done', start_from_beginning=True)
+
+            ips = []
+            seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
+            status = self.cluster.get_nodetool_status(verification_node=seed_nodes[0])
+            self.log.debug(status)
+            for dc_info in status.values():
+                try:
+                    ips.extend(dc_info.keys())
+                except Exception:  # pylint: disable=broad-except
+                    self.log.debug(dc_info)
+
+            if self.target_node.ip_address not in ips or decommission_done:
+                self.log.error(
+                    'The target node is decommission unexpectedly, decommission might complete before stopping it. Re-add a new node')
+                self._terminate_cluster_node(self.target_node)
+                new_node = self._add_and_init_new_cluster_node()
+                new_node.running_nemesis = None
+
+        def streaming_task_thread(nodetool_task='rebuild'):
+            """
+            Execute some nodetool command to start persistent streaming
+            task: decommission | rebuild | repair
+            """
+            if nodetool_task in ['repair', 'rebuild']:
+                self._destroy_data_and_restart_scylla()
+
+            try:
+                self.target_node.run_nodetool(nodetool_task)
+            except Exception:  # pylint: disable=broad-except
+                self.log.debug('%s is stopped' % nodetool_task)
+
+        self.task_used_streaming = None
+        streaming_thread = threading.Thread(target=streaming_task_thread, kwargs={'nodetool_task': task})
+        streaming_thread.start()
+
+        def is_streaming_started():
+            stream_pattern = "range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"
+            streaming_logs = self.target_node.search_database_log(stream_pattern, start_from_beginning=False)
+            self.log.debug(streaming_logs)
+            if streaming_logs:
+                self.task_used_streaming = True
+
+            # In latest master, repair always won't use streaming
+            repair_logs = self.target_node.search_database_log('repair - Repair 1 out of', start_from_beginning=False)
+            self.log.debug(repair_logs)
+            return len(streaming_logs) > 0 and len(repair_logs) > 0
+
+        wait.wait_for(func=is_streaming_started, timeout=200, step=1,
+                      text='Wait for streaming starts', throw_exc=False)
+        self.log.debug('wait for random between 10s to 10m')
+        time.sleep(random.randint(10, 600))
+
+        self.log.info('Interrupt the task (%s) to trigger streaming error' % task)
+        if random.randint(0, 1) == 0:
+            self.log.debug('Interrupt the task by pkill')
+            self.target_node.remoter.run('sudo pkill -9 -f %s' % task, ignore_status=True)
+        else:
+            self.log.debug('Interrupt the task by hard reboot')
+            self.target_node.reboot(hard=True, verify_ssh=True)
+        streaming_thread.join(60)
+
+        decommission_post_action()
+
+        if self.task_used_streaming:
+            err = self.target_node.search_database_log('streaming.*err', start_from_beginning=False)
+            self.log.debug(err)
+        else:
+            self.log.debug(
+                'Streaming is not used. In latest Scylla, it is optional to use streaming for rebuild and decommission, and repair will not use streaming.')
+        self.log.info('Recover the target node by a final rebuild')
+        self.repair_nodetool_rebuild()
+
+    def disrupt_decommission_streaming_err(self):
+        """
+        Stop decommission in middle to trigger some streaming fails, then rebuild the data on the node.
+        If the node is decommission unexpectedly, need to re-add a new node to cluster.
+        """
+        self._set_current_disruption('DecommissionStreamingErr')
+        self.break_streaming_task_and_rebuild(task='decommission')
+
+    def disrupt_rebuild_streaming_err(self):
+        """
+        Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
+        """
+        self._set_current_disruption('RebuildStreamingErr')
+        self.break_streaming_task_and_rebuild(task='rebuild')
+
+    def disrupt_repair_streaming_err(self):
+        """
+        Stop repair in middle to trigger some streaming fails, then rebuild the data on the node.
+        """
+        self._set_current_disruption('RepairStreamingErr')
+        self.break_streaming_task_and_rebuild(task='repair')
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -2391,6 +2492,33 @@ class GeminiNonDisruptiveChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class DecommissionStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_decommission_streaming_err()
+
+
+class RebuildStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_rebuild_streaming_err()
+
+
+class RepairStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_repair_streaming_err()
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
