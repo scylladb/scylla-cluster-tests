@@ -14,7 +14,6 @@ instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
 
 user_prefix: 'perf-regression'
-failure_post_behavior: destroy
 space_node_threshold: 644245094
 
 send_email: true

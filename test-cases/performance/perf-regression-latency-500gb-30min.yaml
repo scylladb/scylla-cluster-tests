@@ -17,7 +17,6 @@ instance_type_monitor: 't3.small'
 instance_type_db: 'i3.4xlarge'
 
 user_prefix: 'perf-regression-latency'
-failure_post_behavior: destroy
 space_node_threshold: 644245094
 ami_id_db_scylla_desc: 'VERSION_DESC'
 
