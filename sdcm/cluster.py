@@ -74,6 +74,7 @@ TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
+SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
 
@@ -1863,6 +1864,7 @@ server_encryption_options:
         """.format(mgmt_user=mgmt_user, rsa_id_dst=rsa_id_dst, rsa_id_dst_pub=rsa_id_dst_pub))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
+        self.config_scylla_manager_yaml(segments_per_repair=10)
         if self.is_docker():
             self.remoter.run('sudo supervisorctl restart scylla-manager')
             res = self.remoter.run('sudo supervisorctl status scylla-manager')
@@ -1893,6 +1895,15 @@ server_encryption_options:
         self.remoter.run(cmd, ignore_status=True, verbose=True)
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
+
+    def config_scylla_manager_yaml(self, segments_per_repair=None):
+        scylla_manager_yaml_path_tmp = "/tmp/scylla-manager.yaml"
+        if segments_per_repair:
+            self.remoter.run("sudo cat {} | grep -v 'segments_per_repair' > {}".format(SCYLLA_MANAGER_YAML_PATH, scylla_manager_yaml_path_tmp))
+            self.remoter.run("sudo echo 'segments_per_repair={}' >> {}".format(segments_per_repair, scylla_manager_yaml_path_tmp))
+            self.remoter.run("sudo mv -f {} {}".format(scylla_manager_yaml_path_tmp, SCYLLA_MANAGER_YAML_PATH))
+        self.log.debug("Scylla Manager updated YAML configuration read from: {} is:".format(SCYLLA_MANAGER_YAML_PATH))
+        self.remoter.run('sudo cat {}'.format(SCYLLA_MANAGER_YAML_PATH))
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
