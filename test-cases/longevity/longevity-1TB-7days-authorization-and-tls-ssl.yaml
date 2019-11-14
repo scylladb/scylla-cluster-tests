@@ -29,7 +29,6 @@ nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 
 user_prefix: 'longevity-tls-1tb-7d'
-failure_post_behavior: keep
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true

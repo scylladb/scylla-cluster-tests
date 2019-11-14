@@ -17,7 +17,6 @@ nemesis_during_prepare: false
 
 user_prefix: 'longevity-100gb-48h-cloud-limited-tls'
 
-failure_post_behavior: keep
 space_node_threshold: 644245094
 
 use_mgmt: true

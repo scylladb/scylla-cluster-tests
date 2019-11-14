@@ -17,7 +17,6 @@ nemesis_during_prepare: false
 
 user_prefix: 'longevity-encrypt-at-rest-200gb-6h-tls'
 
-failure_post_behavior: keep
 space_node_threshold: 644245094
 
 use_mgmt: true

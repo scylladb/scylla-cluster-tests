@@ -18,7 +18,6 @@ nemesis_during_prepare: false
 
 user_prefix: 'longevity-200gb-48h-verify-limited-tls'
 
-failure_post_behavior: keep
 space_node_threshold: 644245094
 
 use_mgmt: true

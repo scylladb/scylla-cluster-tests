@@ -1223,7 +1223,7 @@ def get_post_behavior_actions(config):
 
     for key in action_per_type:
         config_key = 'post_behavior_{}'.format(key)
-        action_per_type[key] = config.get(config_key, 'destroy')
+        action_per_type[key] = config.get(config_key)
 
     return action_per_type
 
