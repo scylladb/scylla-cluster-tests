@@ -9,6 +9,4 @@ n_monitor_nodes: 1
 
 user_prefix: 'google-snitch'
 
-failure_post_behavior: destroy
-
 endpoint_snitch: 'GoogleCloudSnitch'

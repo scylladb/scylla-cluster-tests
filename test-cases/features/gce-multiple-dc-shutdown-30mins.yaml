@@ -8,4 +8,3 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 user_prefix: 'gce-multi-dc-shutdown-1-7'
-failure_post_behavior: destroy
