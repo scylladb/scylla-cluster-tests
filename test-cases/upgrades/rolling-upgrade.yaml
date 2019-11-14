@@ -19,7 +19,6 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 user_prefix: 'rolling-upgrade'
-failure_post_behavior: destroy
 
 authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
