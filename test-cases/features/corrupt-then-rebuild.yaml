@@ -12,6 +12,5 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.2xlarge'
 
 user_prefix: 'cases-rebuild'
-failure_post_behavior: destroy
 
 round_robin: true

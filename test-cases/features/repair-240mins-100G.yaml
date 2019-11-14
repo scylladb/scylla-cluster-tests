@@ -13,5 +13,4 @@ nemesis_class_name: 'CorruptThenRepairMonkey'
 nemesis_interval: 30
 user_prefix: 'cases-repair-100gb'
 
-failure_post_behavior: destroy
 space_node_threshold: 107374182400

@@ -12,7 +12,6 @@ instance_type_db: 'i3.large'
 
 user_prefix: 'cases-refresh-100mb'
 
-failure_post_behavior: destroy
 # 100M (300000 rows)
 sstable_url: 'https://s3.amazonaws.com/scylla-qa-team/keyspace1.standard1.100M.tar.gz'
 sstable_file: '/var/tmp/keyspace1.standard1.100M.tar.gz'
