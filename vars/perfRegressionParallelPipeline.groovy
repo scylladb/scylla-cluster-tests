@@ -78,9 +78,9 @@ def call(Map pipelineParams) {
                                             exit 1
                                         fi
 
-                                        export SCT_POST_BEHAVIOR_DB_NODES="${pipelineParams.params.get('post_behaviour_db_nodes', '')}"
-                                        export SCT_POST_BEHAVIOR_LOADER_NODES="${pipelineParams.params.get('post_behaviour_loader_nodes', '')}"
-                                        export SCT_POST_BEHAVIOR_MONITOR_NODES="${pipelineParams.params.get('post_behaviour_monitor_nodes', '')}"
+                                        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                        export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                        export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
                                         export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
