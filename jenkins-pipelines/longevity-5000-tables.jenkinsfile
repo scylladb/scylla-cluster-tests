@@ -12,5 +12,4 @@ longevityPipeline(
     test_config: 'test-cases/longevity/longevity-5000-tables.yaml',
 
     timeout: [time: 2940, unit: 'MINUTES'],
-    post_behaviour: 'keep'
 )

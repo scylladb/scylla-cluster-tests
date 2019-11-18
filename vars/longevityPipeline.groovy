@@ -39,7 +39,7 @@ def call(Map pipelineParams) {
                    description: 'true|false',
                    name: 'tag_ami_with_result')
 
-            string(defaultValue: "${pipelineParams.get('ip_ssh_connections', '')}",
+            string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
         }
@@ -95,9 +95,9 @@ def call(Map pipelineParams) {
                                         exit 1
                                     fi
 
-                                    export SCT_POST_BEHAVIOR_DB_NODES="${pipelineParams.params.get('post_behaviour_db_nodes', '')}"
-                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${pipelineParams.params.get('post_behaviour_loader_nodes', '')}"
-                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${pipelineParams.params.get('post_behaviour_monitor_nodes', '')}"
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
                                     export SCT_INSTANCE_PROVISION="${pipelineParams.params.get('provision_type', '')}"
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
@@ -186,9 +186,9 @@ def call(Map pipelineParams) {
 
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
-                                    export SCT_POST_BEHAVIOR_DB_NODES="${pipelineParams.params.get('post_behaviour_db_nodes', '')}"
-                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${pipelineParams.params.get('post_behaviour_loader_nodes', '')}"
-                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${pipelineParams.params.get('post_behaviour_monitor_nodes', '')}"
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
                                     echo "start clean resources ..."
                                     ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct
