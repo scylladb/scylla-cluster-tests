@@ -207,12 +207,12 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:60'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:9'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0fd79a6f4ca83b0d6 ami-03d6caf668ad59911')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-00b5ac462978479c9 ami-0d911e53781d8a542')
 
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
