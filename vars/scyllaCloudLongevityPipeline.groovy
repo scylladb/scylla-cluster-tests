@@ -89,9 +89,9 @@ def call(Map pipelineParams) {
                             export SCT_REGION_NAME=eu-west-1
                             export SCT_CONFIG_FILES="['${pipelineParams.test_config}', '`realpath ../siren-tests/test_results/scylla_cloud.yaml`']"
 
-                            export SCT_POST_BEHAVIOR_DB_NODES="${pipelineParams.params.get('post_behaviour_db_nodes', '')}"
-                            export SCT_POST_BEHAVIOR_LOADER_NODES="${pipelineParams.params.get('post_behaviour_loader_nodes', '')}"
-                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${pipelineParams.params.get('post_behaviour_monitor_nodes', '')}"
+                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
                             export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
@@ -116,7 +116,7 @@ def call(Map pipelineParams) {
                          }
                     }
 
-                    if (pipelineParams.params.post_behaviour == 'destroy') {
+                    if (pipelineParams.params.post_behavior == 'destroy') {
                         dir('siren-tests') {
                                 sh '''
                                 #!/bin/bash
