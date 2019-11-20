@@ -44,7 +44,7 @@ backtrace_decoding: false
 
 logs_transport: "rsyslog"
 
-send_email: true
+send_email: false
 email_recipients: ['qa@scylladb.com']
 
 collect_logs: false
