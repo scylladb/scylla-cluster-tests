@@ -335,7 +335,6 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
     def _scylla_bench_prepare_table(self):
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             session.execute("""
                 CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
                 AND durable_writes = true;
@@ -510,7 +509,6 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
             try:
                 with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
-                    # pylint: disable=no-member
                     self.log.debug('Run query: {}'.format(query))
                     session.execute(query)
             except Exception as ex:
