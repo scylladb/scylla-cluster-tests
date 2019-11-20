@@ -2860,7 +2860,6 @@ class FillDatabaseData(ClusterTester):
     def fill_db_data_for_truncate_test(self, insert_rows):
         # Prepare connection and keyspace
         with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2951,7 +2950,6 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2971,7 +2969,6 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -2983,6 +2980,5 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             session.execute("DROP KEYSPACE keyspace1;")
             session.execute("DROP KEYSPACE ks_no_range_ghost_test;")

@@ -10,8 +10,7 @@ class KeyStore():
         self.s3 = boto3.resource("s3")
 
     def _get_json(self, json_file):
-        # TODO: remove no-member when https://github.com/PyCQA/pylint/issues/3134 is fixed
-        obj = self.s3.Object(KEYSTORE_S3_BUCKET, json_file)  # pylint: disable=no-member
+        obj = self.s3.Object(KEYSTORE_S3_BUCKET, json_file)
         return json.loads(obj.get()["Body"].read())
 
     def download_file(self, filename, dest_filename):

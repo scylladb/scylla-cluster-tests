@@ -2566,13 +2566,13 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
             self.params.get('append_scylla_args')
 
     def set_seeds(self, wait_for_timeout=300):
-        seeds_selector = self.params.get('seeds_selector')  # pylint: disable=no-member
-        seeds_num = self.params.get('seeds_num')  # pylint: disable=no-member
-        cluster_backend = self.params.get('cluster_backend')  # pylint: disable=no-member
+        seeds_selector = self.params.get('seeds_selector')
+        seeds_num = self.params.get('seeds_num')
+        cluster_backend = self.params.get('cluster_backend')
 
         seed_nodes_ips = None
         if seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
-            node = self.nodes[0]  # pylint: disable=no-member
+            node = self.nodes[0]
             node.wait_ssh_up()
             # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
             # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
@@ -2581,14 +2581,14 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
                                            timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
-                selected_nodes = random.sample(self.nodes, seeds_num)  # pylint: disable=no-member
+                selected_nodes = random.sample(self.nodes, seeds_num)
             # seeds_selector == 'first'
             else:
-                selected_nodes = self.nodes[:seeds_num]  # pylint: disable=no-member
+                selected_nodes = self.nodes[:seeds_num]
 
             seed_nodes_ips = [node.ip_address for node in selected_nodes]
 
-        for node in self.nodes:  # pylint: disable=no-member
+        for node in self.nodes:
             if node.ip_address in seed_nodes_ips:
                 node.is_seed = True
         assert seed_nodes_ips, "We should have at least one selected seed by now"
@@ -2596,25 +2596,25 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
     @property
     def seed_nodes_ips(self):
         if not self._seed_nodes_ips:
-            self._seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]  # pylint: disable=no-member
+            self._seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
             assert self._seed_nodes_ips, "We should have at least one selected seed by now"
         return self._seed_nodes_ips
 
     @property
     def seed_nodes(self):
         if not self._seed_nodes:
-            self._seed_nodes = [node for node in self.nodes if node.is_seed]  # pylint: disable=no-member
+            self._seed_nodes = [node for node in self.nodes if node.is_seed]
             assert self._seed_nodes, "We should have at least one selected seed by now"
         return self._seed_nodes
 
     @property
     def non_seed_nodes(self):
         if not self._non_seed_nodes:
-            self._non_seed_nodes = [node for node in self.nodes if not node.is_seed]  # pylint: disable=no-member
+            self._non_seed_nodes = [node for node in self.nodes if not node.is_seed]
         return self._non_seed_nodes
 
     def validate_seeds_on_all_nodes(self):
-        for node in self.nodes:  # pylint: disable=no-member
+        for node in self.nodes:
             yaml_seeds_ips = node.extract_seeds_from_scylla_yaml()
             for ip in yaml_seeds_ips:
                 assert ip in self.seed_nodes_ips, \
@@ -3048,12 +3048,12 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
         Check if reflector updated the scylla.yaml with selected seed IP
         """
         if not node:
-            node = self.nodes[0]  # pylint: disable=no-member
+            node = self.nodes[0]
 
         seed_nodes_ips = node.extract_seeds_from_scylla_yaml()
         # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
         # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
-        return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_ips]  # pylint: disable=no-member
+        return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_ips]
 
 
 class BaseLoaderSet():
@@ -3784,7 +3784,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         """.format(self))
         node.remoter.run("bash -ce '%s'" % kill_script)
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=invalid-name
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
@@ -3792,14 +3792,14 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             self.log.error("No start time for test")
             return {}
 
-        for node in self.nodes:  # pylint: disable=no-member
+        for node in self.nodes:
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time)
-            screenshots = screenshot_collector.collect(node, self.logdir)  # pylint: disable=no-member
+            screenshots = screenshot_collector.collect(node, self.logdir)
             screenshots = [S3Storage().upload_file(screenshot, Setup.test_id()) for screenshot in screenshots]
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
                                                   test_start_time=test_start_time)
-            snapshots = snapshots_collector.collect(node, self.logdir)  # pylint: disable=no-member
+            snapshots = snapshots_collector.collect(node, self.logdir)
         return {'screenshots': screenshots, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):
@@ -3825,29 +3825,25 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             try:
                 collector = PrometheusSnapshots(name='prometheus_snapshot')
 
-                snapshot_archive = collector.collect(node, self.logdir)  # pylint: disable=no-member
-                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))  # pylint: disable=no-member
+                snapshot_archive = collector.collect(node, self.logdir)
+                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
 
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
             except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Error downloading prometheus data dir: %s',
-                               str(details))
+                self.log.error('Error downloading prometheus data dir: %s', str(details))
                 return ""
 
     def get_prometheus_snapshot(self, node):
         collector = PrometheusSnapshots(name="prometheus_data")
 
-        return collector.collect(node, self.logdir)  # pylint: disable=no-member
+        return collector.collect(node, self.logdir)
 
     def download_monitoring_data_stack(self):
 
-        for node in self.nodes:  # pylint: disable=no-member
+        for node in self.nodes:
             collector = MonitoringStack(name="monitoring-stack")
-
-            local_path_to_monitor_stack = collector.collect(node, self.logdir)  # pylint: disable=no-member
-            # pylint: disable=no-member
-            self.log.info('Path to monitoring stack {}'.format(
-                local_path_to_monitor_stack))
+            local_path_to_monitor_stack = collector.collect(node, self.logdir)
+            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
 
             return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
 

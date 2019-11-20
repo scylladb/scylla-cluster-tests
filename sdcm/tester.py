@@ -18,7 +18,6 @@ import re
 import os
 import logging
 import time
-import types
 import random
 import unittest
 import json
@@ -274,7 +273,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('change RF of system_auth to %s', system_auth_rf)
             node = self.db_cluster.nodes[0]
             with self.cql_connection_patient(node) as session:
-                # pylint: disable=no-member
                 session.execute("ALTER KEYSPACE system_auth WITH replication = "
                                 "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
                                 "'replication_factor': %s};" % system_auth_rf)
@@ -992,7 +990,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
         try:
             with self.cql_connection_patient(db_node) as session:
-                # pylint: disable=no-member
                 self.log.info('Will run command "{}"'.format(cmd))
                 result = session.execute(SimpleStatement(cmd, fetch_size=page_size,
                                                          consistency_level=ConsistencyLevel.ONE))
@@ -1168,8 +1165,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
         execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
         with self.cql_connection_patient(execution_node) as session:
-            # pylint: disable=no-member
-            if isinstance(replication_factor, types.IntType):
+            if isinstance(replication_factor, int):
                 execution_result = session.execute(
                     query % (keyspace_name, "'class':'{}', 'replication_factor':{}".format(
                         replication_strategy if replication_strategy else "SimpleStrategy",
@@ -1233,7 +1229,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if compact_storage:
             query += ' AND COMPACT STORAGE'
         with self.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
-            # pylint: disable=no-member
             session.execute(query)
         time.sleep(0.2)
 
@@ -1560,7 +1555,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 query = "ALTER TABLE {table} WITH scylla_encryption_options = {scylla_encryption_options};".format(
                     table=table, scylla_encryption_options=scylla_encryption_options)
                 self.log.debug('enable encryption at-rest for table {table}, query:\n\t{query}'.format(**locals()))
-                session.execute(query)  # pylint: disable=no-member
+                session.execute(query)
             if upgradesstables:
                 self.log.debug('upgrade sstables after encryption update')
                 for node in self.db_cluster.nodes:

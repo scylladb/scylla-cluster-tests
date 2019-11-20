@@ -385,7 +385,6 @@ class LongevityTest(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS keyspace1
                 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
@@ -443,7 +442,7 @@ class LongevityTest(ClusterTester):
 
             with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
                 try:
-                    session.execute(keyspace_definition)  # pylint: disable=no-member
+                    session.execute(keyspace_definition)
                 except AlreadyExists:
                     self.log.debug("keyspace [{}] exists".format(keyspace_name))
 
@@ -456,7 +455,7 @@ class LongevityTest(ClusterTester):
                     table_name = 'table{}'.format(i)
                     query = table_template.substitute(table_name=table_name)
                     try:
-                        session.execute(query)  # pylint: disable=no-member
+                        session.execute(query)
                     except AlreadyExists:
                         self.log.debug('table [{}] exists'.format(table_name))
                     self.log.debug('{} Created'.format(table_name))
@@ -464,7 +463,7 @@ class LongevityTest(ClusterTester):
                     for definition in profile_yaml.get('extra_definitions', []):
                         query = string.Template(definition).substitute(table_name=table_name)
                         try:
-                            session.execute(query)  # pylint: disable=no-member
+                            session.execute(query)
                         except (AlreadyExists, InvalidRequest) as exc:
                             self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
 
