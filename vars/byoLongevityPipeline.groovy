@@ -36,13 +36,13 @@ def call() {
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
 
-            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "keep-on-failure",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
-            string(defaultValue: "${pipelineParams.get('post_behavior_loader_nodes', 'destroy')}",
+            string(defaultValue: "destroy",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_loader_nodes')
-            string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
+            string(defaultValue: "keep-on-failure",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
 
