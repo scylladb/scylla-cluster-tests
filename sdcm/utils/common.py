@@ -340,7 +340,7 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
         self.num_workers = num_workers
         self.disable_logging = disable_logging
 
-    def run(self, func):
+    def run(self, func, ignore_exception=False):
 
         def func_wrap(fun):
             def inner(*args, **kwargs):
@@ -357,11 +357,27 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
                 return return_val
             return inner
 
+        results = []
         with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
             LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
             if not self.disable_logging:
                 func = func_wrap(func)
-            return list(pool.map(func, self.objects, timeout=self.timeout))
+            futures = []
+
+            for obj in self.objects:
+                futures.append(pool.submit(func, obj))
+
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    result = future.result(self.timeout)
+                    results.append(result)
+                except Exception:  # pylint disable=broad-except
+                    if ignore_exception:
+                        results.append(None)
+                        continue
+                    raise
+
+        return results
 
 
 def clean_cloud_instances(tags_dict):
@@ -1207,7 +1223,7 @@ def get_builder_by_test_id(test_id):
             return None
 
     search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=len(BUILDERS))
-    results = search_obj.run(search_test_id_on_builder)
+    results = search_obj.run(search_test_id_on_builder, ignore_exception=True)
     found_builders = [builder for builder in results if builder]
     if not found_builders:
         LOGGER.info("Nothing found for %s", test_id)
