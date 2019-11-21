@@ -1589,6 +1589,7 @@ server_encryption_options:
             mkdir -p ~/.cassandra/
             cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
             sudo mkdir -p /etc/scylla/
+            sudo rm -rf /etc/scylla/ssl_conf/
             sudo mv -f /tmp/ssl_conf/ /etc/scylla/
         """)
         self.remoter.run('bash -cxe "%s"' % setup_script)
@@ -2418,17 +2419,6 @@ class BaseCluster(object):  # pylint: disable=too-many-instance-attributes
                 errors.update({node.name: node_errors})
         return errors
 
-    def _param_enabled(self, param):
-        param = self.params.get(param)
-        if isinstance(param, str):
-            return True if param and param.lower() == 'true' else False
-        elif isinstance(param, bool):
-            return param
-        elif param is None:
-            return False
-        else:
-            raise ValueError('Unsupported type: {}'.format(type(param)))
-
     def destroy(self):
         self.log.info('Destroy nodes')
         for node in self.nodes:
@@ -2933,10 +2923,10 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
 
     def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
         node.config_setup(seed_address=seed_address, cluster_name=self.name,  # pylint: disable=no-member
-                          enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,  # pylint: disable=no-member
+                          enable_exp=self.params.get('experimental'), endpoint_snitch=endpoint_snitch,  # pylint: disable=no-member
                           authenticator=self.params.get('authenticator'),  # pylint: disable=no-member
-                          server_encrypt=self._param_enabled('server_encrypt'),  # pylint: disable=no-member
-                          client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled(  # pylint: disable=no-member
+                          server_encrypt=self.params.get('server_encrypt'),  # pylint: disable=no-member
+                          client_encrypt=client_encrypt if client_encrypt is not None else self.params.get(  # pylint: disable=no-member
                               'client_encrypt'),
                           append_scylla_yaml=self.params.get('append_scylla_yaml'), append_scylla_args=self.get_scylla_args(),  # pylint: disable=no-member
                           hinted_handoff=self.params.get('hinted_handoff'),  # pylint: disable=no-member
@@ -2995,14 +2985,16 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
 
         node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
-        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
+        self.clean_replacement_node_ip(node)
 
-    def clean_replacement_node_ip(self, node, seed_address, endpoint_snitch):
+    @staticmethod
+    def clean_replacement_node_ip(node):
         if node.replacement_node_ip:
             # If this is a replacement node, we need to set back configuration in case
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
-            self.node_config_setup(node, seed_address, endpoint_snitch)
+            node.remoter.run(
+                'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
