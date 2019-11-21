@@ -2937,7 +2937,7 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
                           enable_exp=self._param_enabled('experimental'), endpoint_snitch=endpoint_snitch,
                           authenticator=self.params.get('authenticator'),
                           server_encrypt=self._param_enabled('server_encrypt'),
-                          client_encrypt=client_encrypt if client_encrypt is None else self._param_enabled(
+                          client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled(
                               'client_encrypt'),
                           append_scylla_yaml=self.params.get('append_scylla_yaml'), append_scylla_args=self.get_scylla_args(),
                           hinted_handoff=self.params.get('hinted_handoff'),
