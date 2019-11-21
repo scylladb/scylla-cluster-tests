@@ -512,11 +512,12 @@ class Nemesis(object):
                 self.log.error(str(details))
             return search_database_enospc(node) > orig_errors
 
-        with DbEventsFilter(type='NO_SPACE_ERROR'), \
-                DbEventsFilter(type='BACKTRACE', line='No space left on device'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device'), \
-                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device'):
-            for node in nodes:
+        for node in nodes:
+            with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
+                    DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
+                    DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
+                    DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+
                 result = node.remoter.run('cat /proc/mounts')
                 if '/var/lib/scylla' not in result.stdout:
                     self.log.error("Scylla doesn't use an individual storage, skip enospc test")

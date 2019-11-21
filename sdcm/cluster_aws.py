@@ -409,8 +409,10 @@ class AWSNode(cluster.BaseNode):
         event_filters = ()
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
-            event_filters = DbEventsFilter(type="DATABASE_ERROR"), DbEventsFilter(type="SCHEMA_FAILURE"), \
-                DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type="FILESYSTEM_ERROR")
+            event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
+                DbEventsFilter(type="SCHEMA_FAILURE", node=self), \
+                DbEventsFilter(type="NO_SPACE_ERROR", node=self), \
+                DbEventsFilter(type="FILESYSTEM_ERROR", node=self)
 
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
