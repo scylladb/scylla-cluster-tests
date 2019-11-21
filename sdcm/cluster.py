@@ -3003,7 +3003,7 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
             # If this is a replacement node, we need to set back configuration in case
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
-            self.node_config_setup(node, seed_address, endpoint_snitch)
+            node.remoter.run('sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
