@@ -620,7 +620,7 @@ class AWSNode(cluster.BaseNode):
 
                 self.start_scylla_server(verify_up=False)
                 self.remoter.run(
-                    'sudo sed -i -e "s/replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
+                    'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
                 self.remoter.run("sudo sed -e '/auto_bootstrap:.*/s/True/False/g' -i /etc/scylla/scylla.yaml")
             finally:
                 if event_filters:
@@ -803,11 +803,11 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
         setup_params = dict(
-            enable_exp=self._param_enabled('experimental'),
+            enable_exp=self.params.get('experimental'),
             endpoint_snitch=endpoint_snitch,
             authenticator=self.params.get('authenticator'),
-            server_encrypt=self._param_enabled('server_encrypt'),
-            client_encrypt=client_encrypt if client_encrypt is not None else self._param_enabled('client_encrypt'),
+            server_encrypt=self.params.get('server_encrypt'),
+            client_encrypt=client_encrypt if client_encrypt is not None else self.params.get('client_encrypt'),
             append_scylla_args=self.get_scylla_args(),
             authorizer=self.params.get('authorizer'),
             hinted_handoff=self.params.get('hinted_handoff'),
@@ -884,7 +884,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.check_nodes_status()
-        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
+        self.clean_replacement_node_ip(node)
 
     def destroy(self):
         self.stop_nemesis()
