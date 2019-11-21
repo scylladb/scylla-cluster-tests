@@ -1524,6 +1524,7 @@ server_encryption_options:
             mkdir -p ~/.cassandra/
             cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
             sudo mkdir -p /etc/scylla/
+            sudo rm -rf /etc/scylla/ssl_conf/
             sudo mv -f /tmp/ssl_conf/ /etc/scylla/
         """)
         self.remoter.run('bash -cxe "%s"' % setup_script)
@@ -2905,14 +2906,16 @@ class BaseScyllaCluster(object):
 
         node.wait_db_up(timeout=timeout)
         node.wait_jmx_up()
-        self.clean_replacement_node_ip(node, seed_address, endpoint_snitch)
+        self.clean_replacement_node_ip(node)
 
-    def clean_replacement_node_ip(self, node, seed_address, endpoint_snitch):
+    @staticmethod
+    def clean_replacement_node_ip(node):
         if node.replacement_node_ip:
             # If this is a replacement node, we need to set back configuration in case
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
-            self.node_config_setup(node, seed_address, endpoint_snitch)
+            node.remoter.run(
+                'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
