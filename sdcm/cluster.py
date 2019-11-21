@@ -1590,6 +1590,7 @@ server_encryption_options:
             mkdir -p ~/.cassandra/
             cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
             sudo mkdir -p /etc/scylla/
+            sudo rm -rf /etc/scylla/ssl_conf/
             sudo mv -f /tmp/ssl_conf/ /etc/scylla/
         """)
         self.remoter.run('bash -cxe "%s"' % setup_script)
