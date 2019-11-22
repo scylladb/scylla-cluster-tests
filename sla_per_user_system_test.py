@@ -75,8 +75,8 @@ class SlaPerUserTest(LongevityTest):
 
     @staticmethod
     def user_to_scheduler_group(test_users, scheduler_shares):
-        for user, shares in test_users.iteritems():
-            for scheduler_group, sg_shares in scheduler_shares.iteritems():
+        for user, shares in test_users.items():
+            for scheduler_group, sg_shares in scheduler_shares.items():
                 if shares[0] in sg_shares:
                     test_users[user].append(scheduler_group)
                     break

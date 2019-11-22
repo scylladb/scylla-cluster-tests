@@ -23,7 +23,7 @@
     <div>
         <span> Setup Details: </span>
         <ul>
-        {% for key, val in setup_details.iteritems()|sort %}
+        {% for key, val in setup_details.items()|sort %}
             <li>
                 {{ key }}: <span class="blue"> {{ val }} </span>
             </li>

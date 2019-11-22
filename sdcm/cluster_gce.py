@@ -188,7 +188,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if self._gce_n_local_ssd:
             identifier += 'Local SSD: %s | ' % self._gce_n_local_ssd
         if self._add_disks:
-            for disk_type, disk_size in self._add_disks.iteritems():
+            for disk_type, disk_size in self._add_disks.items():
                 if int(disk_size):
                     identifier += '%s: %s | ' % (disk_type, disk_size)
         identifier += 'Type: %s' % self._gce_instance_type
@@ -250,7 +250,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         for i in range(self._gce_n_local_ssd):
             gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
         if self._add_disks:
-            for disk_type, disk_size in self._add_disks.iteritems():
+            for disk_type, disk_size in self._add_disks.items():
                 disk_size = int(disk_size)
                 if disk_size:
                     gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
