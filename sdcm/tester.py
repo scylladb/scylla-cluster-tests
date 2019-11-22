@@ -1174,7 +1174,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 assert replication_factor, "At least one datacenter/replication_factor pair is needed"
                 options = ', '.join(["'{}':{}".format(dc_name, dc_specific_replication_factor) for
-                                     dc_name, dc_specific_replication_factor in replication_factor.iteritems()])
+                                     dc_name, dc_specific_replication_factor in replication_factor.items()])
                 execution_result = session.execute(
                     query % (keyspace_name, "'class':'{}', {}".format(
                         replication_strategy if replication_strategy else "NetworkTopologyStrategy",
