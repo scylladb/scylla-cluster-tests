@@ -429,7 +429,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         total_items = sum([len(value) for _, value in instances.items()])
 
     if verbose:
-        LOGGER.info("Found total of %s instances.", len(total_items))
+        LOGGER.info("Found total of {} instances.".format(total_items))
 
     return instances
 
