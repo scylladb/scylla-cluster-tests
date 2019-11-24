@@ -9,7 +9,7 @@ LOGGER = getLogger(__name__)
 CLOUD_PROVIDERS = ("aws", "gce")
 
 
-class CloudInstance():  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
     def __init__(self, cloud, name, region_az, state, lifecycle, instance_type, owner, create_time):  # pylint: disable=too-many-arguments
         self.cloud = cloud
         self.name = name
@@ -21,7 +21,7 @@ class CloudInstance():  # pylint: disable=too-few-public-methods,too-many-instan
         self.create_time = create_time
 
 
-class CloudInstances():
+class CloudInstances:
 
     def __init__(self):
         self.instances = {prov: [] for prov in CLOUD_PROVIDERS}
@@ -32,7 +32,7 @@ class CloudInstances():
         return self.instances[item]
 
     def get_aws_instances(self):
-        aws_instances = list_instances_aws()
+        aws_instances = list_instances_aws(verbose=True)
         for instance in aws_instances:
             tags = aws_tags_to_dict(instance.get('Tags'))
             cloud_instance = CloudInstance(
@@ -49,7 +49,7 @@ class CloudInstances():
         self.all_instances += self.instances["aws"]
 
     def get_gce_instances(self):
-        gce_instances = list_instances_gce()
+        gce_instances = list_instances_gce(verbose=True)
         for instance in gce_instances:
             tags = gce_meta_to_dict(instance.extra['metadata'])
             cloud_instance = CloudInstance(
@@ -71,7 +71,7 @@ class CloudInstances():
         self.get_gce_instances()
 
 
-def notify_by_email(general_report, detailed_report, recipients):
+def notify_by_email(general_report: GeneralReport, detailed_report: DetailedReport, recipients: list):
     email_client = Email()
     LOGGER.info("Sending email to '%s'", recipients)
     email_client.send(subject="Cloud resources report - {}".format(datetime.now()),
