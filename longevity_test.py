@@ -513,7 +513,7 @@ class LongevityTest(ClusterTester):
             prefix, suffix = os.path.splitext(os.path.basename(cs_profile))
             table_name = "table%s" % idx
 
-            with tempfile.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False) as file_obj:
+            with tempfile.NamedTemporaryFile(mode='w+', prefix=prefix, suffix=suffix, delete=False, encoding='utf-8') as file_obj:
                 output = template.substitute(table_name=table_name)
                 file_obj.write(output)
                 profile_dst = file_obj.name

@@ -2290,7 +2290,7 @@ server_encryption_options:
     def run_startup_script(self):
         startup_script_remote_path = '/tmp/sct-startup.sh'
 
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp_file:
             tmp_file.write(Setup.get_startup_script())
             tmp_file.flush()
             self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)
