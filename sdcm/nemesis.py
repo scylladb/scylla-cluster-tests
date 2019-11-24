@@ -29,8 +29,6 @@ import re
 import traceback
 from collections import OrderedDict
 
-from cassandra import InvalidRequest
-
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
@@ -644,41 +642,17 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
         # if keyspace doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces:
-            ip = self.target_node.ip_address
-            stress_cmd = 'cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 ' \
-                         '-schema keyspace="{}" -node {}'.format(ks, ip)
-            # create with stress tool
-            cql_auth = self.cluster.get_db_auth()
-            if cql_auth and 'user=' not in stress_cmd:
-                # put the credentials into the right place into -mode section
-                stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*cql_auth), stress_cmd)
-
-            self.target_node.remoter.run(stress_cmd, verbose=True, ignore_status=True)
+            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema 'replication(factor=3)' -log interval=5"
+            cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=ks)
+            cs_thread.verify_results()
 
     def disrupt_truncate(self):
         self._set_current_disruption('TruncateMonkey {}'.format(self.target_node))
 
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
-        table_truncate_count = 0
 
-        # get the count of the truncate table
-        test_keyspaces = self.cluster.get_test_keyspaces()
-        cql = "SELECT COUNT(*) FROM {}.{}".format(keyspace_truncate, table)
-        with self.tester.cql_connection_patient(self.target_node) as session:
-            try:
-                data = session.execute(cql)
-                table_truncate_count = data[0].count
-            except InvalidRequest:
-                self.log.warning("Keyspace ks_truncate does not exist")
-        self.log.debug("table_truncate_count=%d", table_truncate_count)
-
-        # if key space doesn't exist or the table is empty, create it using c-s
-        if not (keyspace_truncate in test_keyspaces and table_truncate_count >= 1):
-            try:
-                self._prepare_test_table(ks=keyspace_truncate)
-            except:
-                raise ValueError('stress command failed, not trying to truncate because ks_truncate may not created')
+        self._prepare_test_table(ks=keyspace_truncate)
 
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
