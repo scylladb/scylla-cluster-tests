@@ -5,7 +5,7 @@ import tempfile
 import jinja2
 
 
-class BaseReport():
+class BaseReport:
 
     def __init__(self, cloud_instances, html_template):
         self.cloud_instances = cloud_instances
@@ -30,7 +30,8 @@ class BaseReport():
         return self.render_template()
 
     def to_file(self):
-        with tempfile.NamedTemporaryFile(prefix='cloud-report_', delete=False, suffix='.html') as report_file:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         prefix='cloud-report_', delete=False, suffix='.html') as report_file:
             report_file.write(self.to_html())
             return report_file.name
 
