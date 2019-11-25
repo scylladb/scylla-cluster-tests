@@ -270,7 +270,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
     def stop_ssh_up_thread(self):
         self._ssh_up_thread_termination.set()
-        self._ssh_up_thread.join(5)
+        if self._ssh_up_thread:
+            self._ssh_up_thread.join(5)
         self._ssh_up_thread = None
 
     def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
