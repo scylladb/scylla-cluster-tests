@@ -340,7 +340,7 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
         self.num_workers = num_workers
         self.disable_logging = disable_logging
 
-    def run(self, func, ignore_exception=False):
+    def run(self, func, ignore_exceptions=False):
 
         def func_wrap(fun):
             def inner(*args, **kwargs):
@@ -367,17 +367,27 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
             for obj in self.objects:
                 futures.append(pool.submit(func, obj))
 
-            for future in concurrent.futures.as_completed(futures):
+            for future in futures:
                 try:
                     result = future.result(self.timeout)
-                    results.append(result)
-                except Exception:  # pylint disable=broad-except
-                    if ignore_exception:
-                        results.append(None)
+                    results.append(FutureResult(exc=None, result=result))
+                except Exception as ex:  # pylint disable=broad-except
+                    if ignore_exceptions:
+                        LOGGER.warning('Error happend during running %s:\n%s', func.__name__, ex)
+                        results.append(FutureResult(exc=ex, result=None))
                         continue
                     raise
 
         return results
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class FutureResult:
+    exc: Exception
+    result: object
 
 
 def clean_cloud_instances(tags_dict):
