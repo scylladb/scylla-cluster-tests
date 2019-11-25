@@ -7,6 +7,12 @@ def call() {
                 label getJenkinsLabels(params.backend, params.aws_region)
             }
         }
+
+        environment {
+            AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+            AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+		}
+
          parameters {
 
             string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
