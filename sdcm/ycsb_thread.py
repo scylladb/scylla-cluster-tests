@@ -91,12 +91,12 @@ class YcsbStressThread(object):  # pylint: disable=too-many-instance-attributes
                 secretKey =
             """)
 
-            with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
+            with tempfile.NamedTemporaryFile() as tmp_file:
                 tmp_file.write(dynamodb_teample)
                 tmp_file.flush()
                 loader.remoter.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
 
-            with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
+            with tempfile.NamedTemporaryFile() as tmp_file:
                 tmp_file.write(aws_empty_file)
                 tmp_file.flush()
                 loader.remoter.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
