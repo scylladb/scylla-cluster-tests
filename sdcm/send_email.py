@@ -104,8 +104,8 @@ class BaseEmailReporter(object):
     def save_html_to_file(self, results, html_file_path=""):
         if html_file_path:
             html = self.render_to_html(results)
-            with open(html_file_path, "w") as html_file:
-                html_file.write(html)
+            with open(html_file_path, "wb") as html_file:
+                html_file.write(html.encode('utf-8'))
             self.log.info("HTML report saved to '%s'.", html_file_path)
         else:
             self.log.error("File for HTML report is missing")
