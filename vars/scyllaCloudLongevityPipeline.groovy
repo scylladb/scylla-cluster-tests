@@ -7,6 +7,10 @@ def call(Map pipelineParams) {
                 label "aws-eu-west1-qa-builder1"
             }
         }
+        environment {
+            AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+            AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+		}
         parameters {
             string(defaultValue: 'i3.large',
                    description: 'any type support by scylla cloud',

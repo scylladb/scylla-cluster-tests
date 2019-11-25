@@ -8,7 +8,11 @@ def call(Map pipelineParams) {
                 label getJenkinsLabels(params.backend, params.aws_region)
             }
         }
-         parameters {
+        environment {
+            AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+            AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+		}
+        parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
