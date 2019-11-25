@@ -25,6 +25,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behaviour', 'destroy')}",
                    description: 'keep|destroy',
                    name: 'post_behaviour')
+            booleanParam(defaultValue: "${pipelineParams.get('workaround_kernel_bug_for_iotune', false)}",
+                 description: 'Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend',
+                 name: 'workaround_kernel_bug_for_iotune')
         }
         options {
             timestamps()
@@ -66,6 +69,8 @@ def call(Map pipelineParams) {
                                             export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
+
+                                            export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
 
                                             echo "start test ......."
                                             ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
