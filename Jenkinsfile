@@ -4,6 +4,11 @@ pipeline {
       label "sct-builders"
     }
   }
+  environment {
+     AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+     AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+  }
+
   options {
       timestamps()
       timeout(time: 1, unit: 'HOURS')
