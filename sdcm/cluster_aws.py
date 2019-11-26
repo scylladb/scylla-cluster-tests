@@ -416,10 +416,6 @@ class AWSNode(cluster.BaseNode):
         self._instance_wait_safe(self._instance.wait_until_running)
         self._eth1_private_ip_address = None
         self.eip_allocation_id = None
-        if len(self._instance.network_interfaces) == 2:
-            self.allocate_and_attach_elastic_ip()
-
-        self._wait_public_ip()
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
@@ -431,6 +427,9 @@ class AWSNode(cluster.BaseNode):
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
+        if len(self._instance.network_interfaces) == 2:
+            self.allocate_and_attach_elastic_ip()
+        self._wait_public_ip()
         if not cluster.Setup.REUSE_CLUSTER:
             tags_list = create_tags_list()
             tags_list.append({'Key': 'Name', 'Value': name})
