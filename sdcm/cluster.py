@@ -1400,13 +1400,14 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             scylla_yaml_contents = pattern.sub('seeds: "{0}"'.format(seed_address),
                                                scylla_yaml_contents)
 
+            # NOTICE: the following configuration always have to use private_ip_address for multi-region to work
             # Set listen_address
             pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
                                                scylla_yaml_contents)
             # Set rpc_address
             pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
                                                scylla_yaml_contents)
 
         if listen_on_all_interfaces:
@@ -1454,6 +1455,15 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
             # Set broadcast_rpc_address
             pattern = re.compile('\n[# ]*broadcast_rpc_address:.*')
             scylla_yaml_contents = pattern.sub('\nbroadcast_rpc_address: {0}'.format(self.ip_address),
+                                               scylla_yaml_contents)
+
+            # Set listen_address
+            pattern = re.compile('listen_address:.*')
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
+                                               scylla_yaml_contents)
+            # Set rpc_address
+            pattern = re.compile('\n[# ]*rpc_address:.*')
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
 
         if murmur3_partitioner_ignore_msb_bits:
