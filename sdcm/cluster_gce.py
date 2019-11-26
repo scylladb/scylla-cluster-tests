@@ -177,7 +177,6 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._add_disks = add_disks
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix
-        gce_region_names = gce_region_names if gce_region_names else ['us-east1-b']
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
                                          cluster_prefix=cluster_prefix,
                                          node_prefix=node_prefix,
