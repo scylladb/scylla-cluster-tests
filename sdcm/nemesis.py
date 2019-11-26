@@ -671,6 +671,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
             keyspace_table=keyspace_table, name=name, val=val)
+        self.log.info('_modify_table_property: {}'.format(cmd))
         with self.tester.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
 
