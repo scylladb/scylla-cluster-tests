@@ -460,6 +460,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              credentials=self.credentials,
                              user_prefix=user_prefix,
                              params=self.params,
+                             gce_datacenter=gce_datacenter,
                              )
         self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
                                            gce_image_type=db_info['disk_type'],
@@ -469,7 +470,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            services=services,
                                            n_nodes=db_info['n_nodes'],
                                            add_disks=cluster_additional_disks,
-                                           gce_datacenter=gce_datacenter,
                                            **common_params)
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}

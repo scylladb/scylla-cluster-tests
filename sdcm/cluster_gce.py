@@ -357,7 +357,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
-                 user_prefix=None, n_nodes=10, add_disks=None, params=None):
+                 user_prefix=None, n_nodes=10, add_disks=None, params=None, gce_datacenter=None):
         # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
@@ -377,7 +377,9 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
                             add_disks=add_disks,
-                            params=params)
+                            params=params,
+                            gce_region_names=gce_datacenter
+                            )
 
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
@@ -385,7 +387,7 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=1,
-                 targets=None, add_disks=None, params=None):
+                 targets=None, add_disks=None, params=None, gce_datacenter=None):
         # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
@@ -408,4 +410,6 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
                             add_disks=add_disks,
-                            params=params)
+                            params=params,
+                            gce_region_names=gce_datacenter
+                            )
