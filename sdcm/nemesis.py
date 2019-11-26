@@ -1037,7 +1037,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        query = 'avg(irate(node_network_receive_bytes_total{instance=~"%s", device="eth0"}[30s]))' % self.target_node.ip_address
+        query = 'avg(irate(node_network_receive_bytes_total{instance=~".*?%s.*?", device="eth0"}[30s]))' % \
+                self.target_node.ip_address
         now = time.time()
         results = prometheus_stats.query(query=query, start=now - 600, end=now)
         avg_bitrate_per_node = max([float(avg_rate) for _, avg_rate in results[0]["values"]])
