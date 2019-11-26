@@ -335,14 +335,52 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
     """
 
     def __init__(self, objects, timeout=6, num_workers=None, disable_logging=False):
+        """Constructor for ParallelObject
+
+        Build instances of Parallel object. Item of objects is used as parameter for
+        func which will be run in parallel.
+
+        :param objects: if item in object is list, it will be upacked to func argument, ex *arg
+                if item in object is dict, it will be upacked to func keyword argument, ex **kwarg
+                if item in object is any other type, will be passed to func as is.
+                if function accept list as parameter, the item shuld be list of list item = [[]]
+
+        :type objects: Any
+        :param timeout: timeout for running future, defaults to 6
+        :type timeout: number, optional
+        :param num_workers: num of parallel threads, defaults to None
+        :type num_workers: int, optional
+        :param disable_logging: disable logging for running func, defaults to False
+        :type disable_logging: bool, optional
+        """
         self.objects = objects
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
 
     def run(self, func, ignore_exceptions=False):
+        """Run callable object "func" in parallel
+
+        Allow to run callable object in parallel.
+        if ignore_exceptions is true,  return
+        list of FutureResult object instances which contains
+        two attributes:
+            - result - result of callable object execution
+            - exc - exception object, if happened during run
+        if ignore_exceptions is False, then running will
+        terminated on future where happened exception or by timeout
+        what has stepped first.
+
+        :param func: Callable object to run in parallel
+        :type func: Callable
+        :param ignore_exceptions: ignore exception and return result, defaults to False
+        :type ignore_exceptions: bool, optional
+        :returns: list of FutureResult object
+        :rtype: {List[FutureResult]}
+        """
 
         def func_wrap(fun):
+            @wraps(fun)
             def inner(*args, **kwargs):
                 thread_name = threading.current_thread().name
                 fun_args = args
@@ -365,7 +403,12 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
             futures = []
 
             for obj in self.objects:
-                futures.append(pool.submit(func, obj))
+                if isinstance(obj, (list, tuple)):
+                    futures.append(pool.submit(func, *obj))
+                elif isinstance(obj, dict):
+                    futures.append(pool.submit(func, **obj))
+                else:
+                    futures.append(pool.submit(func, obj))
 
             for future in futures:
                 try:
@@ -373,21 +416,37 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
                     results.append(FutureResult(exc=None, result=result))
                 except Exception as ex:  # pylint disable=broad-except
                     if ignore_exceptions:
-                        LOGGER.warning('Error happend during running %s:\n%s', func.__name__, ex)
+                        LOGGER.warning('Error happened during running %s in %s:\n%s',
+                                       func.__name__,
+                                       future,
+                                       ex.__class__.__name__)
                         results.append(FutureResult(exc=ex, result=None))
                         continue
+                    LOGGER.error('Error occured during running %s:\n%s',
+                                 func.__name__,
+                                 ex.__traceback__)
                     raise
 
         return results
 
 
-from dataclasses import dataclass
-
-
-@dataclass
 class FutureResult:
-    exc: Exception
-    result: object
+    """Object for result of future in ParallelObject
+
+    Return as a result of ParallelObject.run method
+    and contain result of func was run in parallel
+    and exception if it happend during run.
+    """
+
+    def __init__(self, result=None, exc=None):
+        self.result = result
+        self.exc = exc
+
+    def __getitem__(self, key):
+        return self.__dict__[key]
+
+    def __setitem__(self, key, value):
+        self.__dict__[key] = value
 
 
 def clean_cloud_instances(tags_dict):
@@ -440,7 +499,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100).run(get_instances)
+    ParallelObject(aws_regions, timeout=100).run(get_instances, ignore_exceptions=True)
 
     for curr_region_name in instances:
         if running:
@@ -508,7 +567,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(elastic_ips.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100).run(get_elastic_ips)
+    ParallelObject(aws_regions, timeout=100).run(get_elastic_ips, ignore_exceptions=True)
 
     if not group_as_region:
         elastic_ips = list(itertools.chain(*list(elastic_ips.values())))  # flatten the list of lists
@@ -1176,36 +1235,36 @@ def filter_gce_instances_by_type(instances):
 
 
 BUILDERS = [
-    {
+    [{
         "name": "aws-eu-builder-2",
         "public_ip": "34.249.55.96",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    },
-    {
+    }],
+    [{
         "name": "aws-eu-builder-3",
         "public_ip": "34.248.136.231",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    },
-    {
+    }],
+    [{
         "name": "aws-eu-builder-4",
         "public_ip": "99.81.48.181",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    },
-    {
+    }],
+    [{
         "name": "aws-eu-builder-5",
         "public_ip": "18.200.171.172",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    },
-    {
+    }],
+    [{
         "name": "aws-eu-builder-6",
         "public_ip": "99.81.50.63",
         "user": "jenkins",
         "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }
+    }]
 ]
 
 
@@ -1233,8 +1292,8 @@ def get_builder_by_test_id(test_id):
             return None
 
     search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=len(BUILDERS))
-    results = search_obj.run(search_test_id_on_builder, ignore_exception=True)
-    found_builders = [builder for builder in results if builder]
+    all_results = search_obj.run(search_test_id_on_builder, ignore_exceptions=True)
+    found_builders = [obj.result for obj in all_results if not obj.exc and obj.result]
     if not found_builders:
         LOGGER.info("Nothing found for %s", test_id)
 

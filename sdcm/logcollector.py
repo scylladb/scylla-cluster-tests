@@ -566,7 +566,8 @@ class LogCollector():
             try:
                 workers_number = int(len(self.nodes) / 2)
                 workers_number = len(self.nodes) if workers_number < 2 else workers_number
-                ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(collect_logs_per_node)
+                ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(
+                    collect_logs_per_node, ignore_exceptions=True)
             except Exception as details:  # pylint: disable=broad-except
                 LOGGER.error('Error occured during collecting logs %s', details)
 
