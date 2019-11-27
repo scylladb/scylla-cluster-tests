@@ -511,39 +511,32 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     @property
     def distro(self):
         # Distro attribute won't be changed, only need to detect once.
+        if not self._distro:
+            self.log.info("Trying to detect Linux distribution...")
+            result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
+            if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
+                self._distro = Distro.CENTOS7
+            elif 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
+                self._distro = Distro.RHEL7
+            else:
+                result = self.remoter.run('cat /etc/issue', ignore_status=True)
+                if 'Ubuntu 14.04' in result.stdout:
+                    self._distro = Distro.UBUNTU14
+                elif 'Ubuntu 16.04' in result.stdout:
+                    self._distro = Distro.UBUNTU16
+                elif 'Ubuntu 18.04' in result.stdout:
+                    self._distro = Distro.UBUNTU18
+                elif 'Debian GNU/Linux 8' in result.stdout:
+                    self._distro = Distro.DEBIAN8
+                elif 'Debian GNU/Linux 9' in result.stdout:
+                    self._distro = Distro.DEBIAN9
+
+            if not self._distro:
+                self.log.error("Unable to detect Linux distribution name")
+                self._distro = Distro.UNKNOWN
+            self.log.info("Detected Linux distribution: {}".format(self._distro.name))
+
         return self._distro
-
-    @distro.setter
-    def distro(self, new_distro):
-        self._distro = new_distro
-
-    def probe_distro(self):
-        # Probe the distro type
-        distro = None
-
-        result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
-        if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
-            distro = Distro.CENTOS7
-        if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
-            distro = Distro.RHEL7
-
-        if not distro:
-            result = self.remoter.run('cat /etc/issue', ignore_status=True)
-            if 'Ubuntu 14.04' in result.stdout:
-                distro = Distro.UBUNTU14
-            elif 'Ubuntu 16.04' in result.stdout:
-                distro = Distro.UBUNTU16
-            elif 'Ubuntu 18.04' in result.stdout:
-                distro = Distro.UBUNTU18
-            elif 'Debian GNU/Linux 8' in result.stdout:
-                distro = Distro.DEBIAN8
-            elif 'Debian GNU/Linux 9' in result.stdout:
-                distro = Distro.DEBIAN9
-
-        if not distro:
-            self.log.debug("Failed to detect the distro name, %s" % result.stdout)
-
-        return distro
 
     @property
     def is_client_encrypt(self):
@@ -1058,8 +1051,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-        if not self.distro:
-            self.distro = self.probe_distro()
 
     def is_port_used(self, port, service_name):
         try:
