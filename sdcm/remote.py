@@ -27,6 +27,7 @@ from shlex import quote
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
+from paramiko import SSHException
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
@@ -38,6 +39,13 @@ LOGGER = logging.getLogger(__name__)
 # https://github.com/PyCQA/pylint/issues/1965
 # pylint: disable=too-many-function-args
 class OutputCheckError(Exception):
+
+    """
+    Remote command output check failed.
+    """
+
+
+class SSHConnectTimeoutError(Exception):
 
     """
     Remote command output check failed.
@@ -213,6 +221,9 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             connect_timeout=300, verbose=True,
             log_file=None, retry=1, watchers=None):
         self.connection.connect_timeout = connect_timeout
+        if not self.is_up(timeout=connect_timeout):
+            err_msg = "Unable to run '{}': failed connecting to '{}' during {}s"
+            raise SSHConnectTimeoutError(err_msg.format(cmd, self.hostname, connect_timeout))
         watchers = watchers if watchers else []
         if verbose:
             watchers.append(OutputWatcher(self.log))
@@ -231,6 +242,10 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 setattr(_result, 'duration', time.time() - start_time)
                 setattr(_result, 'exit_status', _result.exited)
                 return _result
+            except SSHException as ex:
+                LOGGER.error(ex)
+                self._ssh_is_up.clear()
+                raise
             except Exception as details:  # pylint: disable=broad-except
                 if hasattr(details, "result"):
                     self._print_command_results(details.result, verbose)   # pylint: disable=no-member
@@ -245,10 +260,9 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
     def is_up(self, timeout=30):
         return self._ssh_is_up.wait(float(timeout))
 
-    def _ssh_ping(self, timeout=30, verbose=False):
-        cmd = 'true'
+    def _ssh_ping(self, timeout=30):
         try:
-            result = self.run(cmd, timeout=timeout, verbose=verbose)
+            result = self.connection.run("true", timeout=timeout, warn=False, encoding='utf-8', hide=True)
             return result.ok
         except Exception as details:  # pylint: disable=broad-except
             self.log.debug(details)
