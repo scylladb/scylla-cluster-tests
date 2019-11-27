@@ -11,14 +11,6 @@ class CreateGCENodeError(Exception):
     pass
 
 
-def gce_create_metadata_old(extra_meta=None):
-    tags = cluster.create_common_tags()
-    tags['startup-script'] = cluster.Setup.get_startup_script()
-    if extra_meta:
-        tags.update(extra_meta)
-    return tags
-
-
 def gce_create_metadata(extra_meta=None):
     meta = cluster.create_common_tags()
     if extra_meta:
@@ -304,14 +296,13 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instances_by_nodetype = list_instances_gce(tags_dict={'TestId': test_id, 'NodeType': self.node_type})
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
-        ips = self._node_public_ips or self._node_private_ips
         attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
         for node_zone in instances_by_zone:
             # Filter nodes by zone and by ip addresses
-            if getattr(node_zone, attr_name)[0] not in ips:
+            if not getattr(node_zone, attr_name):
                 continue
             for node_nodetype in instances_by_nodetype:
-                if node_zone.id == node_nodetype.id:
+                if node_zone.uuid == node_nodetype.uuid:
                     instances.append(node_zone)
 
         def sort_by_index(node):
@@ -341,6 +332,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         nodes = []
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
+            if not instances:
+                raise RuntimeError("No nodes found for testId %s " % (cluster.Setup.test_id(),))
         else:
             instances = self._create_instances(count, dc_idx)
 

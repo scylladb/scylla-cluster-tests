@@ -544,13 +544,11 @@ def gce_meta_to_dict(metadata):
 
 def filter_gce_by_tags(tags_dict, instances):
     filtered_instances = []
-    print("DEBUG (filter_gce_by_tags) >> " + str(instances))
     for instance in instances:
         tags = gce_meta_to_dict(instance.extra['metadata'])
         found_keys = set(k for k in tags_dict if k in tags and tags_dict[k] == tags[k])
         if found_keys == set(tags_dict.keys()):
             filtered_instances.append(instance)
-    print("DEBUG (filter_gce_by_tags) >> " + str(filtered_instances))
     return filtered_instances
 
 
