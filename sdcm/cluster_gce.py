@@ -71,9 +71,6 @@ class GCENode(cluster.BaseNode):
                 keep_alive = True
             if keep_alive:
                 self._instance_wait_safe(self._gce_service.ex_set_node_tags, self._instance, ['keep-alive'])
-            self.log.info("Meta for the instance: %s " % (gce_create_metadata({'Name': name,
-                                                                               'NodeIndex': node_index,
-                                                                               'NodeType': node_type}),))
             self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
                                      self._instance, metadata=gce_create_metadata({'Name': name,
                                                                                    'NodeIndex': node_index,
