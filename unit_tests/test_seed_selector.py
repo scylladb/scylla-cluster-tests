@@ -7,7 +7,6 @@ import os.path
 from tenacity import RetryError
 
 import sdcm.cluster
-from sdcm.utils.common import Distro
 from unit_tests.dummy_remote import DummyRemote
 
 
@@ -63,8 +62,6 @@ class TestSeedSelector(unittest.TestCase):
                                                 ssh_login_info=dict(key_file='~/.ssh/scylla-test')))
         for node in self.cluster.nodes:
             node.remoter = DummyRemote()
-            # need to set distro for "reflector" test
-            node.distro = Distro.CENTOS7
 
     def test_first_2_seeds(self):
         self.setup_cluster(nodes_number=3)
