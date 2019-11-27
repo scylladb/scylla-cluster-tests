@@ -2554,7 +2554,6 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         self.termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
-        self._seed_node_rebooted = False
         self._seed_nodes_ips = []
         self._seed_nodes = []
         self._non_seed_nodes = []
@@ -2983,18 +2982,8 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks)
-
-            seed_address_list = seed_address.split(',')
-            if node.ip_address not in seed_address_list:
-                wait.wait_for(func=lambda: self._seed_node_rebooted is True,
-                              step=30,
-                              text='Wait for seed node to be up after reboot')
-            node.restart()
-            node.wait_ssh_up()
-
-            if node.ip_address in seed_address_list:
-                self.log.info('Seed node is up after reboot')  # pylint: disable=no-member
-                self._seed_node_rebooted = True
+            # not sure why we need this reboot
+            node.reboot(hard=False, verify_ssh=True)
 
             self.log.info('io.conf right after reboot')  # pylint: disable=no-member
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
