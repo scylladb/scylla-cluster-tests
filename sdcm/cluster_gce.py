@@ -11,12 +11,20 @@ class CreateGCENodeError(Exception):
     pass
 
 
-def gce_create_metadata(extra_meta=None):
+def gce_create_metadata_old(extra_meta=None):
     tags = cluster.create_common_tags()
     tags['startup-script'] = cluster.Setup.get_startup_script()
     if extra_meta:
         tags.update(extra_meta)
     return tags
+
+
+def gce_create_metadata(extra_meta=None):
+    meta = cluster.create_common_tags()
+    if extra_meta:
+        meta.update(extra_meta)
+    tags_list = [{'key': str(k), 'value': str(v)} for k, v in meta.items()]
+    return {'items': tags_list}
 
 
 class GCENode(cluster.BaseNode):
@@ -46,27 +54,30 @@ class GCENode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
         if not cluster.Setup.REUSE_CLUSTER:
-            metadata = []
-            ex_metadata = {'Name': name,
-                           'NodeIndex': node_index,
-                           'NodeType': node_type}
-            ex_metadata = gce_create_metadata(ex_metadata)
+            keep_alive = False
             if cluster.TEST_DURATION >= 24 * 60:
                 self.log.info('Test duration set to %s. '
                               'Tagging node with "keep-alive"',
                               cluster.TEST_DURATION)
-                metadata.append('keep-alive')
+                keep_alive = True
             elif "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
                 self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-                metadata.append('keep-alive')
+                keep_alive = True
             elif "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
                 self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-                metadata.append('keep-alive')
+                keep_alive = True
             elif "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
                 self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-                metadata.append('keep-alive')
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, metadata, ex_metadata)
+                keep_alive = True
+            if keep_alive:
+                self._instance_wait_safe(self._gce_service.ex_set_node_tags, self._instance, ['keep-alive'])
+            self.log.info("Meta for the instance: %s " % (gce_create_metadata({'Name': name,
+                                                                               'NodeIndex': node_index,
+                                                                               'NodeType': node_type}),))
+            self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
+                                     self._instance, metadata=gce_create_metadata({'Name': name,
+                                                                                   'NodeIndex': node_index,
+                                                                                   'NodeType': node_type}))
 
     def set_keep_tag(self):
         if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
