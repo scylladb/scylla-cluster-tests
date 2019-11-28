@@ -447,6 +447,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
+        self._kernel_version = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
 
@@ -1776,6 +1777,17 @@ server_encryption_options:
         self.log.debug("Found disks: %s", disks)
         return disks
 
+    @property
+    def kernel_version(self):
+        if not self._kernel_version:
+            res = self.remoter.run("uname -r", ignore_status=True)
+            if res.exit_status:
+                self._kernel_version = "unknown"
+            else:
+                self._kernel_version = res.stdout.strip()
+            self.log.info("Found kernel version: {}".format(self._kernel_version))
+        return self._kernel_version
+
     @log_run_info
     def scylla_setup(self, disks):
         """
@@ -1784,11 +1796,14 @@ server_encryption_options:
         """
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
-        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
-            # related issue: https://github.com/scylladb/scylla/issues/5181
-            # a known kernel bug will cause scylla_io_setup fails in executing iotune.
-            # The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
-            # the config files are copied from a succeed gce instance (same instance type, same test).
+        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune') or "3.10.0-1062" in self.kernel_version:
+            self.log.warning(dedent("""
+                Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
+                related issue: https://github.com/scylladb/scylla/issues/5181
+                known kernel bug will cause scylla_io_setup fails in executing iotune.
+                The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
+                the config files are copied from a succeed GCE instance (same instance type, same test
+            """.format(self.kernel_version)))
             self.remoter.run(
                 'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
             for conf in ['io.conf', 'io_properties.yaml']:
