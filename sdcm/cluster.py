@@ -3043,8 +3043,8 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
-        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" %  # pylint: disable=no-member
-                      self.nodes[0].check_node_health())  # pylint: disable=no-member
+        self.log.info("{} nodes configured and stated.".format(node_list))  # pylint: disable=no-member
+        node_list[0].check_node_health()
 
     def restart_scylla(self, nodes=None):
         if nodes:
