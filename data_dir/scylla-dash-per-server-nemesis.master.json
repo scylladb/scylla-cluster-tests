@@ -17,7 +17,7 @@
         "gnetId": null,
         "graphTooltip": 1,
         "hideControls": true,
-        "id": 2,
+        "id": null,
         "links": [],
         "refresh": "30s",
         "rows": [

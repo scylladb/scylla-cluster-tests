@@ -24,6 +24,7 @@ import time
 import uuid
 import yaml
 import shutil
+import json
 
 from base64 import decodestring
 
@@ -3274,9 +3275,10 @@ class BaseMonitorSet(object):
         def _register_grafana_json(json_filename):
             url = "http://{0.public_ip_address}:{1.grafana_port}/api/dashboards/db".format(node, self)
             json_path = get_data_dir_path(json_filename)
-            result = localrunner.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
-                                     (url, json_path))
-            return result.exited == 0
+            with open(json_path, "r") as fp:
+                dashboard_json = json.load(fp)
+                result = requests.post(url, json=dashboard_json)
+            return result.status_code == 200
 
         wait.wait_for(_register_grafana_json, step=10,
                       text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
