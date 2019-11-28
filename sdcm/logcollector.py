@@ -281,6 +281,31 @@ class MonitoringStack(BaseLogEntity):
             LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
             return ""
 
+    @staticmethod
+    def dashboard_exists(node, uid):
+        """Check on Grafana server, that dashboard exists
+
+        Send request to Grafana and validate that dashboard with uid
+        provided as "uid" parameter is available and could be requested
+
+        Arguments:
+            node {CollectingNode} -- Remote host with grafana server
+            uid {str} -- uid of grafana dashboard
+
+        Returns:
+            bool -- return True if exists, false otherwise
+        """
+        checked_dashboard_url = "http://{node_ip}:{grafana_port}/api/dashboards/db/{uid}"
+        try:
+            res = requests.get(checked_dashboard_url.format(node_ip=node.external_address,
+                                                            grafana_port=MonitoringStack.grafana_port,
+                                                            uid=uid))
+            return bool(res.ok and res.json())
+
+        except Exception as ex:  # pylint: disable=broad-except
+            LOGGER.warning("Error during checking if dashboard is exists. %s", ex)
+            return False
+
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         local_archive = self.get_monitoring_data_stack(node, local_dst)
         if not local_archive:
@@ -304,11 +329,14 @@ class GrafanaEntity(BaseLogEntity):
     """
     grafana_entity_names = [
         {
-            'name': 'per-server-metrics-nemesis',
-            'path': 'dashboard/db/scylla-{scr_name}-{version}'},
+            'name': 'scylla-per-server-metrics-nemesis',
+            'path': 'dashboard/db/{dashboard_name}-{version}',
+            'resolution': '1920px*7000px',
+        },
         {
-            'name': 'overview-metrics',
-            'path': 'd/overview-{version}/scylla-{scr_name}'
+            'name': 'overview',
+            'path': 'd/overview-{version}/scylla-{dashboard_name}',
+            'resolution': '1920px*4000px'
         }
     ]
     grafana_port = 3000
@@ -358,11 +386,10 @@ class GrafanaScreenShot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-    resolution = '1920px*4000px'
 
-    def _get_screenshot_link(self, grafana_url, screenshot_path):
-        LocalCmdRunner().run("cd {0.phantomjs_base} && bin/phantomjs r.js \"{1}\" \"{2}\" {0.resolution}".format(
-            self, grafana_url, screenshot_path), ignore_status=True)
+    def _get_screenshot_link(self, grafana_url, screenshot_path, resolution="1920x1280"):
+        LocalCmdRunner().run("cd {0.phantomjs_base} && bin/phantomjs r.js \"{1}\" \"{2}\" {3}".format(
+            self, grafana_url, screenshot_path, resolution), ignore_status=True)
 
     def get_grafana_screenshot(self, node, local_dst):
         """
@@ -374,9 +401,16 @@ class GrafanaScreenShot(GrafanaEntity):
 
             for screenshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
+                dashboard_exists = MonitoringStack.dashboard_exists(node,
+                                                                    uid="-".join([screenshot['name'],
+                                                                                  version])
+                                                                    )
+                if not dashboard_exists:
+                    version = "master"
+
                 path = screenshot['path'].format(
                     version=version,
-                    scr_name=screenshot['name'])
+                    dashboard_name=screenshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
                     node_ip=node.external_address,
                     grafana_port=self.grafana_port,
@@ -386,7 +420,7 @@ class GrafanaScreenShot(GrafanaEntity):
                 screenshot_path = os.path.join(local_dst,
                                                "%s-%s-%s-%s.png" % (self.name, screenshot['name'],
                                                                     datetime_now, node.name))
-                self._get_screenshot_link(grafana_url, screenshot_path)
+                self._get_screenshot_link(grafana_url, screenshot_path, screenshot['resolution'])
                 screenshots.append(screenshot_path)
 
             return screenshots
@@ -425,7 +459,7 @@ class GrafanaSnapshot(GrafanaEntity):
 
     def get_grafana_snapshot(self, node):
         """
-            Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
+            Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
         try:
@@ -433,9 +467,16 @@ class GrafanaSnapshot(GrafanaEntity):
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
+                dashboard_exists = MonitoringStack.dashboard_exists(node,
+                                                                    uid="-".join([snapshot['name'],
+                                                                                  version])
+                                                                    )
+                if not dashboard_exists:
+                    version = "master"
+
                 path = snapshot['path'].format(
                     version=version,
-                    scr_name=snapshot['name'])
+                    dashboard_name=snapshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
                     node_ip=node.external_address,
                     grafana_port=self.grafana_port,
