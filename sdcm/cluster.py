@@ -1676,6 +1676,7 @@ server_encryption_options:
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
         """
+        self.log.info("Installing Scylla...")
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
@@ -1740,6 +1741,7 @@ server_encryption_options:
                 'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
 
     def install_scylla_debuginfo(self):
+        self.log.info("Installing Scylla debug info...")
         if not self.scylla_version:
             self.get_scylla_version()
         if self.is_rhel_like():
@@ -2975,7 +2977,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         :param node: scylla node object
         :param verbose:
         """
-        node.wait_ssh_up(verbose=verbose)
+        node.wait_ssh_up(verbose=verbose, timeout=timeout)
         # update repo cache and system after system is up
         node.update_repo_cache()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
@@ -3002,14 +3004,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks)
-            # not sure why we need this reboot
-            node.reboot(hard=False, verify_ssh=True)
+            # # not sure why we need this reboot
+            # node.reboot(hard=False, verify_ssh=True)
+            node.stop_scylla_server()
+            node.start_scylla_server()
 
             self.log.info('io.conf right after reboot')
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
-        node.wait_db_up(timeout=timeout)
-        node.wait_jmx_up()
         self.clean_replacement_node_ip(node)
 
     @staticmethod
