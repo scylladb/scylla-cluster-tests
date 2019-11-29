@@ -327,13 +327,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
         self.logdir = os.path.join(base_logdir, self.name)
         makedirs(self.logdir)
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
 
         ssh_login_info['hostname'] = self.external_address
 
         self.remoter = RemoteCmdRunner(**ssh_login_info)
         self._ssh_login_info = ssh_login_info
 
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.debug(self.remoter.ssh_debug_cmd())
 
         self._journal_thread = None
