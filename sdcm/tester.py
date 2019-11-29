@@ -261,17 +261,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # sync test_start_time with ES
             self.start_time = self.get_test_start_time()
 
-        # change RF of system_auth
-        system_auth_rf = self.params.get('system_auth_rf', default=3)
-        if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
-            self.log.info('change RF of system_auth to %s', system_auth_rf)
-            node = self.db_cluster.nodes[0]
-            with self.cql_connection_patient(node) as session:
-                session.execute("ALTER KEYSPACE system_auth WITH replication = "
-                                "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
-                                "'replication_factor': %s};" % system_auth_rf)
-            self.log.info('repair system_auth keyspace ...')
-            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
+        self.set_system_auth_rf()
+
         db_node_address = self.db_cluster.nodes[0].ip_address
         self.loaders.wait_for_init(db_node_address=db_node_address)
 
@@ -290,6 +281,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.start_time = time.time()
 
         self.db_cluster.validate_seeds_on_all_nodes()
+
+    def set_system_auth_rf(self):
+        # change RF of system_auth
+        system_auth_rf = self.params.get('system_auth_rf')
+        if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
+            self.log.info('change RF of system_auth to %s', system_auth_rf)
+            node = self.db_cluster.nodes[0]
+            credentials = self.db_cluster.get_db_auth()
+            username, password = credentials if credentials else (None, None)
+            with self.cql_connection_patient(node, user=username, password=password) as session:
+                session.execute("ALTER KEYSPACE system_auth WITH replication = "
+                                "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
+                                "'replication_factor': %s};" % system_auth_rf)
+            self.log.info('repair system_auth keyspace ...')
+            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
     def get_nemesis_class(self):
         """
