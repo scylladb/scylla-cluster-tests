@@ -33,6 +33,7 @@ from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
 import requests
 from paramiko import SSHException
+from paramiko.ssh_exception import NoValidConnectionsError
 
 
 from sdcm.collectd import ScyllaCollectdSetup
@@ -2022,7 +2023,7 @@ server_encryption_options:
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(CommandTimedOut,),
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(CommandTimedOut, NoValidConnectionsError,),
               message="Failed to stop scylla.server, retrying...")
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
