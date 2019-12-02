@@ -268,7 +268,7 @@ class SlaPerUserTest(LongevityTest):
         # Read from cache and disk
         def mixed(max_rows_for_read):
             if not max_rows_for_read:
-                max_rows_for_cache_read = self.num_of_partitions
+                max_rows_for_read = self.num_of_partitions
             return "'dist=gauss(1..%d, %d, %d)'" % (max_rows_for_read,
                                                     int(max_rows_for_read / 2),
                                                     int(max_rows_for_read * 0.05))
