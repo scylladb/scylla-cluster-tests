@@ -262,7 +262,7 @@ class SlaPerUserTest(LongevityTest):
 
         def cache_only(max_rows_for_read):
             if not max_rows_for_read:
-                max_rows_for_cache_read = self.num_of_partitions * 0.25
+                max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=1..%d' % max_rows_for_read
 
         # Read from cache and disk
@@ -270,13 +270,13 @@ class SlaPerUserTest(LongevityTest):
             if not max_rows_for_read:
                 max_rows_for_cache_read = self.num_of_partitions
             return "'dist=gauss(1..%d, %d, %d)'" % (max_rows_for_read,
-                                                    max_rows_for_read / 2,
-                                                    max_rows_for_read * 0.05)
+                                                    int(max_rows_for_read / 2),
+                                                    int(max_rows_for_read * 0.05))
 
         def disk_only(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = self.num_of_partitions * 0.3
-            return 'seq=%d..%d' % (max_rows_for_read+(self.num_of_partitions*0.3), self.num_of_partitions)
+            return 'seq=%d..%d' % (max_rows_for_read, max_rows_for_read+int(self.num_of_partitions*0.25))
 
         user_name = user['user'].name
 
@@ -374,7 +374,6 @@ class SlaPerUserTest(LongevityTest):
         read_users = []
 
         session = self.prepare_schema()
-        self.create_test_data(rows_amount=2000000000)
 
         # Define Service Levels/Roles/Users
         for share in shares:
@@ -387,13 +386,14 @@ class SlaPerUserTest(LongevityTest):
         self.create_auths(entities_list_of_dict=read_users)
 
         # Define stress commands
-        read_cmds = [self.define_read_cassandra_stress_command(user=read_users[0], load_type=self.MIXED_LOAD,
-                                                               workload_type=self.WORKLOAD_THROUGHPUT, threads=200,
-                                                               stress_duration_min=stress_duration),
-                     self.define_read_cassandra_stress_command(user=read_users[1], load_type=self.MIXED_LOAD,
-                                                               workload_type=self.WORKLOAD_LATENCY, threads=250,
-                                                               stress_duration_min=stress_duration)
-                     ]
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0], load_type=self.MIXED_LOAD,
+                                                                            workload_type=self.WORKLOAD_THROUGHPUT, threads=200,
+                                                                            stress_duration_min=stress_duration),
+                     'latency': self.define_read_cassandra_stress_command(user=read_users[1],
+                                                                          load_type=self.MIXED_LOAD,
+                                                                          workload_type=self.WORKLOAD_LATENCY, threads=250,
+                                                                          stress_duration_min=stress_duration)
+                     }
 
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds)
 
@@ -412,18 +412,18 @@ class SlaPerUserTest(LongevityTest):
         Expected results: latency 99th of user950 workload when it runs in parallel with workload of user190 is not
                           significant increased relatively to latency of runed alone user950 workload
         """
-        stress_duration = 10  # minutes
+        stress_duration = 5  # minutes
         shares = [190, 950]
         # Select part of the record to warm the cache (all this data will be in the cache).
         # This amount of data will be read during the test from cache
-        max_key_for_read = self.num_of_partitions*0.3
+        max_key_for_read = int(self.num_of_partitions*0.5)
         read_users = []
 
         session = self.prepare_schema()
-        self.create_test_data(rows_amount=300000000)
+        self.create_test_data()
 
         # Warm up the cache to guarantee the read will be from disk
-        self.warm_up_cache_before_test(max_key_for_read=max_key_for_read, stress_duration=60)
+        self.warm_up_cache_before_test(max_key_for_read=max_key_for_read, stress_duration=30)
 
         # Define Service Levels/Roles/Users
         for share in shares:
@@ -435,15 +435,15 @@ class SlaPerUserTest(LongevityTest):
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
 
-        read_cmds = [self.define_read_cassandra_stress_command(user=read_users[0], load_type=self.CACHE_ONLY_LOAD,
-                                                               workload_type=self.WORKLOAD_THROUGHPUT, threads=200,
-                                                               stress_duration_min=stress_duration,
-                                                               max_rows_for_read=max_key_for_read),
-                     self.define_read_cassandra_stress_command(user=read_users[1], load_type=self.CACHE_ONLY_LOAD,
-                                                               workload_type=self.WORKLOAD_LATENCY, threads=250,
-                                                               stress_duration_min=stress_duration,
-                                                               max_rows_for_read=max_key_for_read)
-                     ]
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0], load_type=self.CACHE_ONLY_LOAD,
+                                                                            workload_type=self.WORKLOAD_THROUGHPUT, threads=200,
+                                                                            stress_duration_min=stress_duration,
+                                                                            max_rows_for_read=max_key_for_read),
+                     'latency': self.define_read_cassandra_stress_command(user=read_users[1], load_type=self.CACHE_ONLY_LOAD,
+                                                                          workload_type=self.WORKLOAD_LATENCY, threads=250,
+                                                                          stress_duration_min=stress_duration,
+                                                                          max_rows_for_read=max_key_for_read)
+                     }
 
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds)
 
@@ -465,12 +465,16 @@ class SlaPerUserTest(LongevityTest):
         stress_duration = 5  # minutes
 
         session = self.prepare_schema()
-        self.create_test_data(rows_amount=2000000000)
+        self.create_test_data()
+
+        for node in self.db_cluster.nodes:
+            node.stop_scylla_server(verify_up=False, verify_down=True)
+            node.start_scylla_server(verify_up=True, verify_down=False)
 
         # Select part of the record to warm the cache (all this data will be in the cache).
         # cassandra-stress "-pop" parameter will start from more then "max_key_for_cache" row number
         # (for read from the disk)
-        max_key_for_cache = self.num_of_partitions*0.3
+        max_key_for_cache = int(self.num_of_partitions*0.25)
         # Warm up the cache to guarantee the read will be from disk
         self.warm_up_cache_before_test(max_key_for_read=max_key_for_cache, stress_duration=30)
 
@@ -490,12 +494,17 @@ class SlaPerUserTest(LongevityTest):
                                                                             load_type=self.DISK_ONLY_LOAD,
                                                                             workload_type=self.WORKLOAD_THROUGHPUT, threads=200,
                                                                             stress_duration_min=stress_duration,
-                                                                            max_rows_for_read=max_key_for_cache),
+                                                                            max_rows_for_read=max_key_for_cache*2),
                      'latency': self.define_read_cassandra_stress_command(user=read_users[1],
                                                                           load_type=self.DISK_ONLY_LOAD,
                                                                           workload_type=self.WORKLOAD_LATENCY, threads=250,
                                                                           stress_duration_min=stress_duration,
-                                                                          max_rows_for_read=max_key_for_cache)
+                                                                          max_rows_for_read=max_key_for_cache*3),
+                     'latency_only': self.define_read_cassandra_stress_command(user=read_users[1],
+                                                                               load_type=self.DISK_ONLY_LOAD,
+                                                                               workload_type=self.WORKLOAD_LATENCY, threads=250,
+                                                                               stress_duration_min=stress_duration,
+                                                                               max_rows_for_read=max_key_for_cache)
                      }
 
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds, latency_user=read_users[1])
@@ -505,7 +514,8 @@ class SlaPerUserTest(LongevityTest):
             # Run latency workload
             test_start_time = time.time()
             self.log.debug('Start latency only workload')
-            read_queue = self.run_stress_and_verify_threads(params={'stress_cmd': [read_cmds['latency']],
+            read_queue = self.run_stress_and_verify_threads(params={'stress_cmd': [read_cmds.get('latency_only')
+                                                                                   or read_cmds['latency']],
                                                                     'round_robin': True})
 
             latency_99_for_latency_workload = self.get_c_s_stats(read_queue=read_queue, users=[latency_user],
