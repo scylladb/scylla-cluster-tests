@@ -2267,6 +2267,25 @@ server_encryption_options:
         result = self.remoter.run("sudo bash -ce '%s'" % cmds)
         LOGGER.debug(result.stdout)
 
+    def create_swap_file(self, size=1024):
+        """Create swap file on instance
+
+        Create swap file on instance with size 1MB * 1024 = 1GB
+        :param size: size of swap file in MB, defaults to 1024MB
+        :type size: number, optional
+        """
+        commands = dedent("""sudo /bin/dd if=/dev/zero of=/var/sct_configured_swapfile bs=1M count={}
+                          sudo /sbin/mkswap /var/sct_configured_swapfile
+                          sudo chmod 600 /var/sct_configured_swapfile
+                          sudo /sbin/swapon /var/sct_configured_swapfile""".format(size))
+        self.log.info("Add swap file to loader %s", self)
+        result = self.remoter.run(commands, ignore_status=True)
+        if not result.ok:
+            self.log.warning("Swap file was not created on loader node %s.\nError details: %s", self, result.stderr)
+        result = self.remoter.run("grep /sct_configured_swapfile /proc/swaps", ignore_status=True)
+        if "sct_configured_swapfile" not in result.stdout:
+            self.log.warning("Swap file is not used on loader node %s.\nError details: %s", self, result.stderr)
+
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes
     """
@@ -3046,6 +3065,13 @@ class BaseLoaderSet():
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
+        # add swap file
+        if not Setup.REUSE_CLUSTER:
+            swap_size = self.params.get("loader_swap_size")
+            if not swap_size:
+                self.log.info("Swap file is not configured")
+            else:
+                node.create_swap_file(swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
 
