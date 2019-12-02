@@ -284,6 +284,11 @@ class HealthcheckTask(ManagerTask):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
 
+class BackupTask(ManagerTask):
+    def __init__(self, task_id, cluster_id, scylla_manager):
+        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=scylla_manager)
+
+
 class ManagerCluster(ScyllaManagerBase):
 
     def __init__(self, manager_node, cluster_id, ssh_identity_file=None, client_encrypt=False):
@@ -292,6 +297,58 @@ class ManagerCluster(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
         self.ssh_identity_file = ssh_identity_file
+
+    def create_backup_task(self, location_list, retention=None, num_retries=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
+                           rate_limit_list=None, keyspace_list=None, interval='', dry_run=False, force=False, show_tables=None,
+                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None):
+        arguments = []
+        location_string = '--location ' + ','.join(location_list)
+        arguments.append(location_string)
+        if retention:
+            retention_string = '--retention ' + str(retention)
+            arguments.append(retention_string)
+        if num_retries:
+            num_retries_string = '--num-retries ' + str(num_retries)
+            arguments.append(num_retries_string)
+        if rate_limit_list:
+            rate_limit_string = '--rate-limit ' + ','.join(rate_limit_list)
+            arguments.append(rate_limit_string)
+        if keyspace_list:
+            keyspace_string = '--keyspace ' + ','.join(keyspace_list)
+            arguments.append(keyspace_string)
+        if interval:
+            interval_string = '--interval ' + interval
+            arguments.append(interval_string)
+        if dry_run:
+            dry_run_string = '--dry-run'
+            arguments.append(dry_run_string)
+        if force:
+            force_string = '--force'
+            arguments.append(force_string)
+        if show_tables:
+            show_tables_string = '--show-tables ' + str(show_tables)
+            arguments.append(show_tables_string)
+        if snapshot_parallel_list:
+            snapshot_parallel_string = '--snapshot-parallel ' + ','.join(snapshot_parallel_list)
+            arguments.append(snapshot_parallel_string)
+        if start_date:
+            start_date_string = '--start-date ' + start_date
+            arguments.append(start_date_string)
+        if upload_parallel_list:
+            upload_parallel_string = '--upload-parallel ' + ','.join(upload_parallel_list)
+            arguments.append(upload_parallel_string)
+        command = "backup -c {} ".format(self.id) + ' '.join(arguments)
+        res = self.sctool.run(cmd=command, parse_table_res=False)
+        if not res.stdout:
+            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(command))
+
+        if res.stderr:
+            LOGGER.debug("Encountered an error on '{}' command response".format(command))
+            raise ScyllaManagerError(res.stderr)
+
+        task_id = res.stdout.strip()
+        LOGGER.debug("Created task id is: {}".format(task_id))
+        return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
 
     def create_repair_task(self):
         cmd = "repair -c {}".format(self.id)
