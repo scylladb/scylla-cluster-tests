@@ -14,12 +14,10 @@ import datetime
 import enum
 from enum import Enum
 import zmq
-import requests
 import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.utils.grafana import GrafanaEventAggragator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -536,73 +534,19 @@ class PrometheusDumper(threading.Thread):
         self.stop_event.set()
 
 
-class GrafanaAnnotator(threading.Thread):
-    def __init__(self):
-        self.stop_event = threading.Event()
-        self.url_set = threading.Event()
-        self.grafana_base_url = ''
-
-        self.auth = ('admin', 'admin')
-        super(GrafanaAnnotator, self).__init__()
-
-    def set_grafana_url(self, grafana_base_url):
-        self.grafana_base_url = grafana_base_url
-        self.url_set.set()
-
-    def run(self):
-        for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
-            # waiting until the monitor url is set, and we can start using the api
-            self.url_set.wait()
-            if self.grafana_base_url:
-                event_type = getattr(message_data, 'type', None)
-                tags = [event_class, message_data.severity.name, 'events']
-                if event_type:
-                    tags += [event_type]
-                annotate_data = {
-                    "time": int(message_data.timestamp * 1000.0),
-                    "tags": tags,
-                    "isRegion": False,
-                    "text": str(message_data)
-                }
-                try:
-                    res = requests.post(self.grafana_base_url + '/api/annotations', json=annotate_data, auth=self.auth)
-                    res.raise_for_status()
-                    LOGGER.info(res.text)
-                except requests.exceptions.RequestException as ex:
-                    LOGGER.warning("Failed to annotate an event in grafana [%s]", str(ex))
-
-    def terminate(self):
-        self.url_set.set()
-        self.stop_event.set()
-
-    def find_dashboard(self, query='nemesis'):
-        res = requests.get(self.grafana_base_url + '/api/search', params={'query': query}, auth=self.auth).json()
-        return res[0]
-
-    def find_panel(self, dashboard, panel_title_prefix="Requests Served per"):
-        dashboard_data = requests.get(self.grafana_base_url +
-                                      '/api/dashboards/uid/{}'.format(dashboard['uid']), auth=self.auth).json()
-        for row in dashboard_data['dashboard']['rows']:
-            for panel in row['panels']:
-                if panel['title'].startswith(panel_title_prefix):
-                    panel_id = panel['id']
-                    return panel_id, panel
-
-        LOGGER.error("Failed to find panel id that match [%s]", panel_title_prefix)
-        return None
-
-
 EVENTS_PROCESSES = dict()
 
 
-def start_events_device(log_dir, timeout=5, params=None):
+def start_events_device(log_dir, timeout=5):
+    from sdcm.utils.grafana import GrafanaEventAggragator, GrafanaAnnotator
+
     EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
     EVENTS_PROCESSES['MainDevice'].start()
     EVENTS_PROCESSES['MainDevice'].ready_event.wait(timeout=timeout)
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
-    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'] = GrafanaEventAggragator(params)
+    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'] = GrafanaEventAggragator()
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
@@ -625,7 +569,6 @@ def stop_events_device():
 
 
 def set_grafana_url(url):
-    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(url)
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].set_grafana_url(url)
 
 
