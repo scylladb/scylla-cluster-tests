@@ -582,3 +582,6 @@ class TestStatsMixin(Stats):
 
             return result['_source'].get(key, None)
         return None
+
+    def get_test_start_time(self):
+        return self._stats['test_details'].get('start_time', None)
