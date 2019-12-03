@@ -5343,6 +5343,11 @@
                       },
                       {
                         "selected": false,
+                        "text": "ScyllaBenchEvent",
+                        "value": "ScyllaBenchEvent"
+                      },
+                      {
+                        "selected": false,
                         "text": "DatabaseLogEvent",
                         "value": "DatabaseLogEvent"
                       },
@@ -5367,7 +5372,7 @@
                         "value": "ClusterHealthValidatorEvent"
                       }
                     ],
-                    "query": "InfoEvent, CassandraStressEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, SpotTerminationEvent, ClusterHealthValidatorEvent",
+                    "query": "InfoEvent, CassandraStressEvent, ScyllaBenchEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, SpotTerminationEvent, ClusterHealthValidatorEvent",
                     "skipUrlSync": false,
                     "type": "custom"
                   }
