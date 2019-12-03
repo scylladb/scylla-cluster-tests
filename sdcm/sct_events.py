@@ -391,6 +391,26 @@ class CassandraStressEvent(SctEvent):
             super(CassandraStressEvent, self).__str__(), self)
 
 
+class ScyllaBenchEvent(SctEvent):
+    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
+        super(ScyllaBenchEvent, self).__init__()
+        self.type = type
+        self.node = str(node)
+        self.stress_cmd = stress_cmd
+        self.log_file_name = log_file_name
+        self.severity = severity
+        self.errors = errors
+        self.publish()
+
+    def __str__(self):
+        if self.errors:
+            return "{0}: type={1.type} node={1.node}\n{2}".format(
+                super(ScyllaBenchEvent, self).__str__(), self, "\n".join(self.errors))
+
+        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
+            super(ScyllaBenchEvent, self).__str__(), self)
+
+
 class YcsbStressEvent(SctEvent):
     def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
         super(YcsbStressEvent, self).__init__()

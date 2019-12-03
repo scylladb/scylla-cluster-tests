@@ -54,7 +54,10 @@ class LongevityTest(ClusterTester):
             if stress_cmd.startswith('cassandra-stress'):
                 stress_queue.append(self.run_stress_thread(**params))
             elif stress_cmd.startswith('scylla-bench'):
-                stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False))
+                stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
+                                                                 stats_aggregate_cmds=False,
+                                                                 round_robin=self.params.get('round_robin',
+                                                                                             default=False)))
             elif stress_cmd.startswith('bin/ycsb'):
                 stress_queue.append(self.run_ycsb_thread(**params))
             time.sleep(10)
