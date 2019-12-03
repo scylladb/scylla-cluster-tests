@@ -1,3 +1,4 @@
+# pylint: disable=invalid-name
 import unittest
 import time
 import logging
@@ -131,7 +132,7 @@ class ParallelObjectTester(unittest.TestCase):
         results = parallel_object.run(dummy_func_with_several_parameters)
         returned_results = [r.result for r in results]
         expected_results = [(timeout, msg)
-                            for timeout, msg in self.unpacking_args]  # pylint: disable=unnecessary-comprehension
+                            for timeout, msg in self.unpacking_args]
         self.assertListEqual(returned_results, expected_results)
 
     def test_unpack_kwargs_for_func(self):
