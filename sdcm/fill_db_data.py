@@ -2171,7 +2171,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ["TRUNCATE empty_blob_test"],
             'inserts': ["INSERT INTO empty_blob_test (k, b) VALUES (0, 0x)"],
             'queries': ["SELECT * FROM empty_blob_test"],
-            'results': [[[0, '']]],
+            'results': [[[0, b'']]],
             'min_version': '',
             'max_version': '',
             'skip': ''},
