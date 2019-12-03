@@ -19,6 +19,7 @@ import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.utils.grafana import GrafanaEventAggragator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -594,16 +595,18 @@ class GrafanaAnnotator(threading.Thread):
 EVENTS_PROCESSES = dict()
 
 
-def start_events_device(log_dir, timeout=5):
+def start_events_device(log_dir, timeout=5, params=None):
     EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
     EVENTS_PROCESSES['MainDevice'].start()
     EVENTS_PROCESSES['MainDevice'].ready_event.wait(timeout=timeout)
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
+    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'] = GrafanaEventAggragator(params)
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
+    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].start()
 
     # default filters
     EVENTS_PROCESSES['default_filter'] = []
@@ -612,13 +615,18 @@ def start_events_device(log_dir, timeout=5):
 
 
 def stop_events_device():
-    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR', 'MainDevice']
+    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR', 'EVENTS_GRAFANA_AGGRAGATOR', 'MainDevice']
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
             EVENTS_PROCESSES[proc_name].terminate()
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
             EVENTS_PROCESSES[proc_name].join(timeout=60)
+
+
+def set_grafana_url(url):
+    EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(url)
+    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].set_grafana_url(url)
 
 
 atexit.register(stop_events_device)
