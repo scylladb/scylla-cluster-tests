@@ -423,13 +423,13 @@ class ParallelObject(object):  # pylint: disable=too-few-public-methods
                         continue
                     LOGGER.error('Error occured during running %s:\n%s',
                                  func.__name__,
-                                 ex.__traceback__)
+                                 str(ex))
                     raise
 
         return results
 
 
-class FutureResult:
+class FutureResult(object):
     """Object for result of future in ParallelObject
 
     Return as a result of ParallelObject.run method
