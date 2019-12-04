@@ -94,7 +94,7 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # 
                            alive_interval, user, port)
 
 
-class CommandRunner():
+class CommandRunner:
     def __init__(self, hostname, user='root', password=''):
         self.hostname = hostname
         self.user = user
@@ -113,8 +113,8 @@ class CommandRunner():
         if not self.connection:
             self.connection = Connection(*args, **kwargs)
 
-    def _print_command_results(self, result, verbose=True):
-
+    def _print_command_results(self, result, verbose, ignore_status):
+        """When verbose=True and ignore_status=True that means nothing will be printed in any case"""
         if verbose and not result.failed:
             if result.stderr:
                 self.log.info('STDERR: {}'.format(result.stderr))
@@ -122,7 +122,7 @@ class CommandRunner():
             self.log.info('Command "{}" finished with status {}'.format(result.command, result.exited))
             return
 
-        if verbose and result.failed:
+        if verbose and result.failed and not ignore_status:
             self.log.error('Error executing command: "{}"; Exit status: {}'.format(result.command, result.exited))
             if result.stdout:
                 self.log.debug('STDOUT: {}'.format(result.stdout[-240:]))
@@ -156,13 +156,13 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
         except (Failure, UnexpectedExit) as details:
             if hasattr(details, "result"):
-                self._print_command_results(details.result, verbose)
+                self._print_command_results(details.result, verbose, ignore_status)
             raise
 
         setattr(result, 'duration', time.time() - start_time)
         setattr(result, 'exit_status', result.exited)
 
-        self._print_command_results(result, verbose)
+        self._print_command_results(result, verbose, ignore_status)
 
         return result
 
@@ -248,13 +248,11 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 raise
             except Exception as details:  # pylint: disable=broad-except
                 if hasattr(details, "result"):
-                    self._print_command_results(details.result, verbose)   # pylint: disable=no-member
+                    self._print_command_results(details.result, verbose, ignore_status)   # pylint: disable=no-member
                 raise
 
         result = _run()
-        self._print_command_results(result, verbose)
-        #result.stdout = result.stdout.encode(encoding='utf-8')
-        #result.stderr = result.stderr.encode(encoding='utf-8')
+        self._print_command_results(result, verbose, ignore_status)
         return result
 
     def is_up(self, timeout=30):
