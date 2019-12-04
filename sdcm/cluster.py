@@ -1672,17 +1672,19 @@ server_encryption_options:
         for version_cmd in version_commands:
             try:
                 result = self.remoter.run(version_cmd)
-            except Exception as ex:
+                self.log.info("'scylla --version' output: %s", result.stdout)
+            except Exception as ex:  # pylint: disable=broad-except
                 self.log.error('Failed getting scylla version: %s', ex)
             else:
                 match = re.match(r"((\d+)\.(\d+)\.([\d\w]+)\.?([\d\w]+)?).*", result.stdout)
                 if match:
                     scylla_version = match.group(1)
-                    self.log.info("Found ScyllaDB version: %s" % scylla_version)
+                    self.log.info("Found ScyllaDB version: %s", scylla_version)
                     self.scylla_version = scylla_version
                     return scylla_version
                 else:
-                    self.log.error("Unknown ScyllaDB version")
+                    self.log.error("Unmatched ScyllaDB version, not caching it")
+        return None
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
