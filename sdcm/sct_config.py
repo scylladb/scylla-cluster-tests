@@ -90,14 +90,14 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
 
-    available_backends = ['aws', 'gce', 'docker', 'libvirt', 'baremetal', 'openstack', 'aws-siren']
+    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
              help="a list of config files that would be used"),
 
         dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", type=str,
-             help="backend that will be used, aws/gce/docker/libvirt/openstack"),
+             help="backend that will be used, aws/gce/docker"),
 
         dict(name="test_duration", env="SCT_TEST_DURATION", type=int,
              help="""
@@ -483,68 +483,6 @@ class SCTConfiguration(dict):
 
         dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str, help=""),
 
-        # libvirt config options
-
-        dict(name="libvirt_uri", env="SCT_LIBVIRT_URI", type=str,
-             help=""),
-
-        dict(name="libvirt_bridge", env="SCT_LIBVIRT_BRIDGE", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_image", env="SCT_LIBVIRT_LOADER_IMAGE", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_image_user", env="SCT_LIBVIRT_LOADER_IMAGE_USER", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_image_password", env="SCT_LIBVIRT_LOADER_IMAGE_PASSWORD", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_os_type", env="SCT_LIBVIRT_LOADER_OS_TYPE", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_os_variant", env="SCT_LIBVIRT_LOADER_OS_VARIANT", type=str,
-             help=""),
-
-        dict(name="libvirt_loader_memory", env="SCT_LIBVIRT_LOADER_MEMORY", type=int,
-             help=""),
-
-        dict(name="libvirt_db_image", env="SCT_LIBVIRT_DB_IMAGE", type=str,
-             help=""),
-
-        dict(name="libvirt_db_image_user", env="SCT_LIBVIRT_DB_IMAGE_USER", type=str,
-             help=""),
-
-        dict(name="libvirt_db_image_password", env="SCT_LIBVIRT_DB_IMAGE_PASSWORD", type=str,
-             help=""),
-
-        dict(name="libvirt_db_os_type", env="SCT_LIBVIRT_DB_OS_TYPE", type=str,
-             help=""),
-
-        dict(name="libvirt_db_os_variant", env="SCT_LIBVIRT_DB_OS_VARIANT", type=str,
-             help=""),
-
-        dict(name="libvirt_db_memory", env="SCT_LIBVIRT_DB_MEMORY", type=int,
-             help=""),
-
-        dict(name="libvirt_monitor_image", env="SCT_LIBVIRT_MONITOR_IMAGE", type=str,
-             help=""),
-
-        dict(name="libvirt_monitor_image_user", env="SCT_LIBVIRT_MONITOR_IMAGE_USER", type=str,
-             help=""),
-
-        dict(name="libvirt_monitor_image_password", env="SCT_LIBVIRT_MONITOR_IMAGE_PASSWORD", type=str,
-             help=""),
-
-        dict(name="libvirt_monitor_os_type", env="SCT_LIBVIRT_MONITOR_OS_TYPE", type=str,
-             help=""),
-
-        dict(name="libvirt_monitor_os_variant", env="SCT_LIBVIRT_MONITOR_OS_VARIANT", type=str,
-             help=""),
-
-        dict(name="libvirt_monitor_memory", env="SCT_LIBVIRT_MONITOR_MEMORY", type=int,
-             help=""),
-
         # baremetal config options
 
         dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP", type=str_or_list,
@@ -560,57 +498,10 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="monitor_nodes_private_ip", env="SCT_MONITOR_NODES_PRIVATE_IP", type=str_or_list,
-
              help=""),
 
         dict(name="monitor_nodes_public_ip", env="SCT_MONITOR_NODES_PUBLIC_IP", type=str_or_list,
-
              help=""),
-
-        # openstack config options
-
-        dict(name="openstack_user", env="SCT_OPENSTACK_USER", type=str,
-             help=""),
-
-        dict(name="openstack_password", env="SCT_OPENSTACK_PASSWORD", type=str,
-             help=""),
-
-        dict(name="openstack_tenant", env="SCT_OPENSTACK_TENANT", type=str,
-             help=""),
-
-        dict(name="openstack_auth_version", env="SCT_OPENSTACK_AUTH_VERSION", type=str,
-             help=""),
-
-        dict(name="openstack_auth_url", env="SCT_OPENSTACK_AUTH_URL", type=str,
-             help=""),
-
-        dict(name="openstack_service_type", env="SCT_OPENSTACK_SERVICE_TYPE", type=str,
-             help=""),
-
-        dict(name="openstack_service_name", env="SCT_OPENSTACK_SERVICE_NAME", type=str,
-             help=""),
-
-        dict(name="openstack_service_region", env="SCT_OPENSTACK_SERVICE_REGION", type=str,
-             help=""),
-
-        dict(name="openstack_instance_type_loader", env="SCT_OPENSTACK_INSTANCE_TYPE_LOADER", type=str,
-             help=""),
-
-        dict(name="openstack_instance_type_db", env="SCT_OPENSTACK_INSTANCE_TYPE_DB", type=str,
-             help=""),
-
-        dict(name="openstack_instance_type_monitor", env="SCT_OPENSTACK_INSTANCE_TYPE_MONITOR", type=str,
-             help=""),
-
-        dict(name="openstack_image", env="SCT_OPENSTACK_IMAGE", type=str,
-             help=""),
-
-        dict(name="openstack_image_username", env="SCT_OPENSTACK_IMAGE_USERNAME", type=str,
-             help=""),
-
-        dict(name="openstack_network", env="SCT_OPENSTACK_NETWORK", type=str,
-             help=""),
-
 
         # test specific config parameters
 
@@ -743,6 +634,9 @@ class SCTConfiguration(dict):
         dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
              help=""),
 
+        dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
+             help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
+
         dict(name="authorization_in_upgrade", env="SCT_AUTHORIZATION_IN_UPGRADE", type=str,
              help="Which Authorization to enable after upgrade"),
 
@@ -786,7 +680,7 @@ class SCTConfiguration(dict):
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure."""),
 
-        dict(name="stress_cmd_read_20m", env="SCT_STRESS_CMD_READ_20M", type=str_or_list,
+        dict(name="stress_cmd_read_80m", env="SCT_STRESS_CMD_READ_80M", type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
@@ -875,7 +769,9 @@ class SCTConfiguration(dict):
                 'keep' - Keep instances running and leave credentials alone
                 'keep-on-failure' - Keep instances if testrun failed
              """,
-             choices=("keep", "keep-on-failure", "destroy"))
+             choices=("keep", "keep-on-failure", "destroy")),
+        dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
+             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
@@ -895,14 +791,8 @@ class SCTConfiguration(dict):
 
         'docker': ['docker_image', 'user_credentials_path', 'scylla_repo'],
 
-        'libvirt':  ['libvirt_uri', 'libvirt_bridge', 'scylla_repo'],
-
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
-        'openstack': ['openstack_user', 'openstack_password', 'openstack_tenant', 'openstack_auth_version',
-                      'openstack_auth_url', 'openstack_service_type', 'openstack_service_name', 'openstack_service_region',
-                      'openstack_instance_type_loader', 'openstack_instance_type_db', 'openstack_instance_type_monitor',
-                      'openstack_image', 'openstack_image_username', 'openstack_network'],
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "security_group_ids", "subnet_id",
                       "cloud_credentials_path", "authenticator_user", "authenticator_password", "db_nodes_public_ip",
                       "db_nodes_private_ip", "nemesis_filter_seeds"]
@@ -912,9 +802,7 @@ class SCTConfiguration(dict):
         "aws": [sct_abs_path('defaults/aws_config.yaml')],
         "gce": [sct_abs_path('defaults/gce_config.yaml')],
         "docker": [sct_abs_path('defaults/docker_config.yaml')],
-        "libvirt": [sct_abs_path('defaults/libvirt_config.yaml')],
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
-        "openstack": [sct_abs_path('defaults/openstack_config.yaml')],
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')]
     }
 

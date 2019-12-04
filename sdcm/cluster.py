@@ -13,7 +13,6 @@
 
 # pylint: disable=too-many-lines
 
-from __future__ import absolute_import
 import queue
 import getpass
 import logging
@@ -24,16 +23,15 @@ import tempfile
 import threading
 import time
 import uuid
-import shutil
 import itertools
 from textwrap import dedent
 from datetime import datetime
-import atexit
 
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
 import requests
 from paramiko import SSHException
+from paramiko.ssh_exception import NoValidConnectionsError
 
 
 from sdcm.collectd import ScyllaCollectdSetup
@@ -62,11 +60,6 @@ SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                            "Encrypted": False}}]
 
 CREDENTIALS = []
-OPENSTACK_INSTANCES = []
-OPENSTACK_SERVICE = None
-LIBVIRT_DOMAINS = []
-LIBVIRT_IMAGES = []
-LIBVIRT_URI = 'qemu:///system'
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -95,78 +88,12 @@ def set_duration(duration):
     TEST_DURATION = duration
 
 
-def set_libvirt_uri(libvirt_uri):
-    # pylint: disable=global-statement
-    global LIBVIRT_URI
-    LIBVIRT_URI = libvirt_uri
-
-
-def clean_domain(domain_name):
-    # pylint: disable=global-statement
-    global LIBVIRT_URI
-    LOCALRUNNER.run('virsh -c %s destroy %s' % (LIBVIRT_URI, domain_name),
-                    ignore_status=True)
-
-    LOCALRUNNER.run('virsh -c %s undefine %s' % (LIBVIRT_URI, domain_name),
-                    ignore_status=True)
-
-
 def remove_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
 
 
-def cleanup_instances(behavior='destroy'):
-    # pylint: disable=global-statement
-    global OPENSTACK_INSTANCES
-    global OPENSTACK_SERVICE
-    global CREDENTIALS
-    global LIBVIRT_DOMAINS
-    global LIBVIRT_IMAGES
-
-    for openstack_instance in OPENSTACK_INSTANCES:
-        if behavior == 'destroy':
-            openstack_instance.destroy()
-
-    for cred in CREDENTIALS:
-        if behavior == 'destroy':
-            if hasattr(cred, 'destroy'):
-                cred.destroy()
-            else:
-                if OPENSTACK_SERVICE is not None:
-                    OPENSTACK_SERVICE.delete_key_pair(cred.key_pair_name)
-
-    for domain_name in LIBVIRT_DOMAINS:
-        clean_domain(domain_name)
-
-    for libvirt_image in LIBVIRT_IMAGES:
-        shutil.rmtree(libvirt_image, ignore_errors=True)
-
-
-def destroy_instances():
-    cleanup_instances(behavior='destroy')
-
-
-def stop_instances():
-    cleanup_instances(behavior='stop')
-
-
-def remove_cred_from_cleanup(cred):
-    # pylint: disable=global-statement
-    global CREDENTIALS
-    if cred in CREDENTIALS:
-        CREDENTIALS.remove(cred)
-
-
-def register_cleanup(cleanup='destroy'):
-    if cleanup == 'destroy':
-        atexit.register(destroy_instances)
-    elif cleanup == 'stop':
-        atexit.register(stop_instances)
-
-
-class Setup():
-
+class Setup:
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
@@ -448,6 +375,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._distro = None
+        self._kernel_version = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
 
@@ -511,39 +439,32 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     @property
     def distro(self):
         # Distro attribute won't be changed, only need to detect once.
+        if not self._distro:
+            self.log.info("Trying to detect Linux distribution...")
+            result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
+            if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
+                self._distro = Distro.CENTOS7
+            elif 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
+                self._distro = Distro.RHEL7
+            else:
+                result = self.remoter.run('cat /etc/issue', ignore_status=True)
+                if 'Ubuntu 14.04' in result.stdout:
+                    self._distro = Distro.UBUNTU14
+                elif 'Ubuntu 16.04' in result.stdout:
+                    self._distro = Distro.UBUNTU16
+                elif 'Ubuntu 18.04' in result.stdout:
+                    self._distro = Distro.UBUNTU18
+                elif 'Debian GNU/Linux 8' in result.stdout:
+                    self._distro = Distro.DEBIAN8
+                elif 'Debian GNU/Linux 9' in result.stdout:
+                    self._distro = Distro.DEBIAN9
+
+            if not self._distro:
+                self.log.error("Unable to detect Linux distribution name")
+                self._distro = Distro.UNKNOWN
+            self.log.info("Detected Linux distribution: {}".format(self._distro.name))
+
         return self._distro
-
-    @distro.setter
-    def distro(self, new_distro):
-        self._distro = new_distro
-
-    def probe_distro(self):
-        # Probe the distro type
-        distro = None
-
-        result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
-        if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
-            distro = Distro.CENTOS7
-        if 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
-            distro = Distro.RHEL7
-
-        if not distro:
-            result = self.remoter.run('cat /etc/issue', ignore_status=True)
-            if 'Ubuntu 14.04' in result.stdout:
-                distro = Distro.UBUNTU14
-            elif 'Ubuntu 16.04' in result.stdout:
-                distro = Distro.UBUNTU16
-            elif 'Ubuntu 18.04' in result.stdout:
-                distro = Distro.UBUNTU18
-            elif 'Debian GNU/Linux 8' in result.stdout:
-                distro = Distro.DEBIAN8
-            elif 'Debian GNU/Linux 9' in result.stdout:
-                distro = Distro.DEBIAN9
-
-        if not distro:
-            self.log.debug("Failed to detect the distro name, %s" % result.stdout)
-
-        return distro
 
     @property
     def is_client_encrypt(self):
@@ -1058,8 +979,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if verbose:
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-        if not self.distro:
-            self.distro = self.probe_distro()
 
     def is_port_used(self, port, service_name):
         try:
@@ -1684,6 +1603,7 @@ server_encryption_options:
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
         """
+        self.log.info("Installing Scylla...")
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
@@ -1748,6 +1668,7 @@ server_encryption_options:
                 'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
 
     def install_scylla_debuginfo(self):
+        self.log.info("Installing Scylla debug info...")
         if not self.scylla_version:
             self.get_scylla_version()
         if self.is_rhel_like():
@@ -1789,6 +1710,17 @@ server_encryption_options:
         self.log.debug("Found disks: %s", disks)
         return disks
 
+    @property
+    def kernel_version(self):
+        if not self._kernel_version:
+            res = self.remoter.run("uname -r", ignore_status=True)
+            if res.exit_status:
+                self._kernel_version = "unknown"
+            else:
+                self._kernel_version = res.stdout.strip()
+            self.log.info("Found kernel version: {}".format(self._kernel_version))
+        return self._kernel_version
+
     @log_run_info
     def scylla_setup(self, disks):
         """
@@ -1797,7 +1729,22 @@ server_encryption_options:
         """
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
-        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
+        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune') or "3.10.0-1062" in self.kernel_version:
+            self.log.warning(dedent("""
+                Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
+                related issue: https://github.com/scylladb/scylla/issues/5181
+                known kernel bug will cause scylla_io_setup fails in executing iotune.
+                The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
+                the config files are copied from a succeed GCE instance (same instance type, same test
+            """.format(self.kernel_version)))
+            self.remoter.run(
+                'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
+            for conf in ['io.conf', 'io_properties.yaml']:
+                self.remoter.send_files(src=os.path.join('./configurations/', conf), dst='/tmp/')
+                self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
+        else:
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
+
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
@@ -2015,6 +1962,8 @@ server_encryption_options:
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(CommandTimedOut, NoValidConnectionsError,),
+              message="Failed to stop scylla.server, retrying...")
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
@@ -2318,7 +2267,7 @@ server_encryption_options:
         LOGGER.debug(result.stdout)
 
 
-class BaseCluster():  # pylint: disable=too-many-instance-attributes
+class BaseCluster:  # pylint: disable=too-many-instance-attributes
     """
     Cluster of Node objects.
     """
@@ -2548,13 +2497,12 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
-class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
+class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
 
     def __init__(self, *args, **kwargs):
         self.termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
-        self._seed_node_rebooted = False
         self._seed_nodes_ips = []
         self._seed_nodes = []
         self._non_seed_nodes = []
@@ -2956,7 +2904,7 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
         :param node: scylla node object
         :param verbose:
         """
-        node.wait_ssh_up(verbose=verbose)
+        node.wait_ssh_up(verbose=verbose, timeout=timeout)
         # update repo cache and system after system is up
         node.update_repo_cache()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
@@ -2983,24 +2931,14 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
             node.scylla_setup(disks)
-
-            seed_address_list = seed_address.split(',')
-            if node.ip_address not in seed_address_list:
-                wait.wait_for(func=lambda: self._seed_node_rebooted is True,
-                              step=30,
-                              text='Wait for seed node to be up after reboot')
-            node.restart()
-            node.wait_ssh_up()
-
-            if node.ip_address in seed_address_list:
-                self.log.info('Seed node is up after reboot')
-                self._seed_node_rebooted = True
+            # # not sure why we need this reboot
+            # node.reboot(hard=False, verify_ssh=True)
+            node.stop_scylla_server()
+            node.start_scylla_server()
 
             self.log.info('io.conf right after reboot')
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
-        node.wait_db_up(timeout=timeout)
-        node.wait_jmx_up()
         self.clean_replacement_node_ip(node)
 
     @staticmethod
@@ -3037,8 +2975,8 @@ class BaseScyllaCluster():  # pylint: disable=too-many-public-methods
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
-        self.log.info("All DB nodes configured and stated. ScyllaDB status:\n%s" %
-                      self.nodes[0].check_node_health())
+        self.log.info("{} nodes configured and stated.".format(node_list))
+        node_list[0].check_node_health()
 
     def restart_scylla(self, nodes=None):
         if nodes:

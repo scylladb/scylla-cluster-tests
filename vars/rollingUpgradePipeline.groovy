@@ -31,6 +31,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
+            booleanParam(defaultValue: "${pipelineParams.get('workaround_kernel_bug_for_iotune', false)}",
+                 description: 'Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend',
+                 name: 'workaround_kernel_bug_for_iotune')
         }
         options {
             timestamps()
@@ -48,40 +51,44 @@ def call(Map pipelineParams) {
                             def base_version = version;
                             tasks["${base_version}"] = {
                                 node(getJenkinsLabels(params.backend, pipelineParams.aws_region)){
+                                    withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
 
-                                    wrap([$class: 'BuildUser']) {
-                                        dir('scylla-cluster-tests') {
-                                            checkout scm
+                                        wrap([$class: 'BuildUser']) {
+                                            dir('scylla-cluster-tests') {
+                                                checkout scm
 
-                                            sh """
-                                            #!/bin/bash
-                                            set -xe
-                                            env
-                                            export SCT_NEW_CONFIG=yes
-                                            export SCT_CLUSTER_BACKEND=gce
+                                                sh """
+                                                #!/bin/bash
+                                                set -xe
+                                                env
+                                                export SCT_NEW_CONFIG=yes
+                                                export SCT_CLUSTER_BACKEND=gce
 
-                                            export SCT_CONFIG_FILES=${pipelineParams.test_config}
-                                            export SCT_SCYLLA_VERSION=${base_version}
-                                            export SCT_NEW_SCYLLA_REPO=${pipelineParams.params.new_scylla_repo}
+                                                export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                                                export SCT_SCYLLA_VERSION=${base_version}
+                                                export SCT_NEW_SCYLLA_REPO=${pipelineParams.params.new_scylla_repo}
 
-                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                            export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
-                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+                                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                                export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
+                                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
-                                            export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
-                                            export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
-                                            export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
+                                                export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
+                                                export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
+                                                export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
-                                            echo "start test ......."
-                                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
-                                            echo "end test ....."
-                                            """
+                                                export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
+
+                                                echo "start test ......."
+                                                ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
+                                                echo "end test ....."
+                                                """
+                                            }
                                         }
                                     }
-
                                 }
                             }
                         }

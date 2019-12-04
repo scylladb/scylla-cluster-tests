@@ -27,7 +27,7 @@ class GCENode(cluster.BaseNode):
 
     def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
-                 base_logdir=None, dc_idx=0, node_type=None):
+                 base_logdir=None, dc_idx=0):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
         self._instance = gce_instance
         self._gce_service = gce_service
@@ -63,10 +63,6 @@ class GCENode(cluster.BaseNode):
                 keep_alive = True
             if keep_alive:
                 self._instance_wait_safe(self._gce_service.ex_set_node_tags, self._instance, ['keep-alive'])
-            self._instance_wait_safe(self._gce_service.ex_set_node_metadata,
-                                     self._instance, metadata=gce_create_metadata({'Name': name,
-                                                                                   'NodeIndex': node_index,
-                                                                                   'NodeType': node_type}))
 
     def set_keep_tag(self):
         if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
@@ -271,8 +267,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                           image=self._gce_image,
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=gce_create_metadata({'NodeType': self.node_type}))
-
+                                                          ex_metadata=gce_create_metadata(
+                                                              {'Name': name,
+                                                               'NodeIndex': node_index,
+                                                               'NodeType': self.node_type})
+                                                          )
         self.log.info('Created instance %s', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
@@ -322,8 +321,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            node_prefix=self.node_prefix,
                            node_index=node_index,
                            base_logdir=self.logdir,
-                           dc_idx=dc_idx,
-                           node_type=self.node_type)
+                           dc_idx=dc_idx)
         except Exception as ex:
             raise CreateGCENodeError('Failed to create node: %s' % ex)
 

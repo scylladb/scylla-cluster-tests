@@ -64,14 +64,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertIn('docker_image', conf.dump_config())
         self.assertEqual(conf.get('docker_image'), 'scylladb/scylla')
 
-    def test_06_libvirt(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'libvirt'
-        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        conf = SCTConfiguration()
-        conf.verify_configuration()
-        self.assertIn('libvirt_uri', conf.dump_config())
-        self.assertEqual(conf.get('libvirt_uri'), 'qemu:///system')
-
     def test_07_baremetal_exception(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'baremetal'
         conf = SCTConfiguration()
@@ -121,13 +113,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
-
-    def test_11_openstack(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'openstack'
-        conf = SCTConfiguration()
-        conf.verify_configuration()
-        self.assertIn('openstack_auth_url', conf.dump_config())
-        self.assertEqual(conf.get('openstack_auth_url'), 'http://1.2.3.4:5000')
 
     def test_12_scylla_version_ami(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
