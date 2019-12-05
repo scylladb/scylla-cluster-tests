@@ -39,7 +39,7 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
+from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, SSHConnectTimeoutError
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
@@ -726,6 +726,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         else:
             raise Exception("Unknown logs transport: %s" % logs_transport)
 
+    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _get_coredump_backtraces(self, last=True):
         """
         Get coredump backtraces.
@@ -739,18 +740,24 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 backtrace_cmd += ' -1'
             return self.remoter.run(backtrace_cmd,
                                     verbose=False, ignore_status=True)
+        except (SSHException, SSHConnectTimeoutError):
+            raise
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving core dump backtraces : %s',
                            details)
+            raise
 
+    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _upload_coredump(self, coredump):
         try:
             if self.is_debian() or self.is_ubuntu():
-                self.remoter.run('sudo apt-get install -y pigz')
+                self.remoter.run('sudo apt-get install -y pigz', verbose=False, ignore_status=True)
             else:
-                self.remoter.run('sudo yum install -y pigz')
+                self.remoter.run('sudo yum install -y pigz', verbose=False, ignore_status=True)
             self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
+        except (SSHException, SSHConnectTimeoutError):
+            raise
         except Exception as ex:  # pylint: disable=broad-except
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
 
@@ -758,8 +765,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         coredump_id = os.path.basename(coredump)[:-3]
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
         self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
-        self.remoter.run("sudo curl --request PUT --upload-file "
-                         "'%s' '%s'" % (coredump, upload_url))
+        try:
+            self.remoter.run("sudo curl --request PUT --upload-file "
+                             "'%s' '%s'" % (coredump, upload_url))
+        except (SSHException, SSHConnectTimeoutError):
+            raise
+        except Exception as ex:
+            self.log.error("Failed to upload coredump '%s': %s", coredump, ex)
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
@@ -794,6 +806,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         for line in output.splitlines():
             self.log.error(line)
 
+    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _get_n_coredumps(self):
         """
         Get the number of coredumps stored on this Node.
@@ -802,7 +815,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         :rtype: int
         """
         n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1'
-        result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
+        try:
+            result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
+        except (SSHException, SSHConnectTimeoutError):
+            raise
+        except Exception as ex:
+            self.log.error("Failed to get coredump count: %s", ex)
+            return 0
         if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
             return 0
         return len(result.stdout.splitlines())
