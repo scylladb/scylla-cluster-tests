@@ -103,24 +103,25 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
-        instances = self._ec2_services[dc_idx].create_instances(ImageId=ami_id,
-                                                                UserData=ec2_user_data,
-                                                                MinCount=count,
-                                                                MaxCount=count,
-                                                                KeyName=self._credentials[dc_idx].key_pair_name,
-                                                                BlockDeviceMappings=self._ec2_block_device_mappings,
-                                                                NetworkInterfaces=interfaces,
-                                                                InstanceType=self._ec2_instance_type,
-                                                                IamInstanceProfile={
-                                                                    'Name': self.params.get('aws_instance_profile_name')
-                                                                },
-                                                                TagSpecifications=[
-                                                                    {
-                                                                        'ResourceType': 'instance',
-                                                                        'Tags': tags_list if tags_list else []
-                                                                    },
-                                                                ],
-                                                                )
+        params = dict(ImageId=ami_id,
+                      UserData=ec2_user_data,
+                      MinCount=count,
+                      MaxCount=count,
+                      KeyName=self._credentials[dc_idx].key_pair_name,
+                      BlockDeviceMappings=self._ec2_block_device_mappings,
+                      NetworkInterfaces=interfaces,
+                      InstanceType=self._ec2_instance_type,
+                      TagSpecifications=[
+                          {
+                              'ResourceType': 'instance',
+                              'Tags': tags_list if tags_list else []
+                          },
+                      ]
+                      )
+        instance_profile = self.params.get('aws_instance_profile_name')
+        if instance_profile:
+            params['IamInstanceProfile'] = {'Name': instance_profile}
+        instances = self._ec2_services[dc_idx].create_instances(**params)
         self.log.debug("Created instances: %s." % instances)
         return instances
 
