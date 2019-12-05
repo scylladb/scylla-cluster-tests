@@ -39,7 +39,7 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
+from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, SSHConnectTimeoutError
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs
@@ -74,6 +74,7 @@ SCYLLA_DIR = "/var/lib/scylla"
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
+NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError)
 
 
 def set_ip_ssh_connections(ip_type):
@@ -726,6 +727,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         else:
             raise Exception("Unknown logs transport: %s" % logs_transport)
 
+    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Reconnecting")
     def _get_coredump_backtraces(self, last=True):
         """
         Get coredump backtraces.
@@ -739,10 +741,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 backtrace_cmd += ' -1'
             return self.remoter.run(backtrace_cmd,
                                     verbose=False, ignore_status=True)
+        except NETWORK_EXCEPTIONS:
+            raise
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving core dump backtraces : %s',
                            details)
 
+    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Reconnecting")
     def _upload_coredump(self, coredump):
         try:
             if self.is_debian() or self.is_ubuntu():
@@ -751,6 +756,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 self.remoter.run('sudo yum install -y pigz')
             self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
+        except NETWORK_EXCEPTIONS:
+            raise
         except Exception as ex:  # pylint: disable=broad-except
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
 
@@ -794,6 +801,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         for line in output.splitlines():
             self.log.error(line)
 
+    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Reconnecting")
     def _get_n_coredumps(self):
         """
         Get the number of coredumps stored on this Node.
@@ -801,8 +809,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         :return: Number of coredumps
         :rtype: int
         """
-        n_backtraces_cmd = 'sudo coredumpctl --no-pager --no-legend 2>&1'
-        result = self.remoter.run(n_backtraces_cmd, verbose=False, ignore_status=True)
+        try:
+            result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
+        except NETWORK_EXCEPTIONS:
+            raise
         if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
             return 0
         return len(result.stdout.splitlines())
