@@ -12,7 +12,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
 		}
         parameters {
-            string(defaultValue: 'i3.large',
+            string(defaultValue: "${pipelineParams.get('db_instance_type', 'i3.xlarge')}",
                    description: 'any type support by scylla cloud',
                    name: 'db_instance_type')
 
