@@ -77,12 +77,11 @@ class EC2Client():
                       LaunchSpecification={'ImageId': image_id,
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
-                                           'IamInstanceProfile': {
-                                               'Name': aws_instance_profile
-                                           },
                                            },
                       ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
                       )
+        if aws_instance_profile:
+            params['LaunchSpecification']['IamInstanceProfile'] = {'Name': aws_instance_profile}
         LOGGER.debug("block_device_mappings: %s", block_device_mappings)
         if block_device_mappings:
             params['LaunchSpecification']['BlockDeviceMappings'] = block_device_mappings
@@ -113,15 +112,11 @@ class EC2Client():
                              'InstanceType': instance_type,
                              'NetworkInterfaces': network_if,
                              'Placement': {'AvailabilityZone': region_name},
-                             'IamInstanceProfile': {
-                                 'Name': aws_instance_profile
-                             },
                              'TagSpecifications': [
                                  {
                                      'ResourceType': 'instance',
                                      'Tags': tags_list
                                  }
-
                              ]
                              },
                         ],
@@ -129,6 +124,8 @@ class EC2Client():
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
                         }
+        if aws_instance_profile:
+            fleet_config['LaunchSpecifications'][0]['IamInstanceProfile'] = {'Name': aws_instance_profile}
         if key_pair:
             fleet_config['LaunchSpecifications'][0].update({'KeyName': key_pair})
         if user_data:
