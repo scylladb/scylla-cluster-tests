@@ -726,7 +726,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         else:
             raise Exception("Unknown logs transport: %s" % logs_transport)
 
-    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
+    @retrying(n=10, sleep_time=20, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _get_coredump_backtraces(self, last=True):
         """
         Get coredump backtraces.
@@ -747,20 +747,19 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                            details)
             raise
 
-    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
+    @retrying(n=10, sleep_time=20, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _upload_coredump(self, coredump):
         try:
             if self.is_debian() or self.is_ubuntu():
-                self.remoter.run('sudo apt-get install -y pigz', verbose=False, ignore_status=True)
+                self.remoter.run('sudo apt-get install -y pigz', ignore_status=True)
             else:
-                self.remoter.run('sudo yum install -y pigz', verbose=False, ignore_status=True)
+                self.remoter.run('sudo yum install -y pigz', ignore_status=True)
             self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
         except (SSHException, SSHConnectTimeoutError):
             raise
         except Exception as ex:  # pylint: disable=broad-except
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
-
         base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
@@ -806,7 +805,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         for line in output.splitlines():
             self.log.error(line)
 
-    @retrying(n=200, sleep_time=1, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
+    @retrying(n=10, sleep_time=20, allowed_exceptions=(SSHException, SSHConnectTimeoutError), message="Reconnecting")
     def _get_n_coredumps(self):
         """
         Get the number of coredumps stored on this Node.
