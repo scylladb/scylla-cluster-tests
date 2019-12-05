@@ -421,15 +421,18 @@ class AWSNode(cluster.BaseNode):
                           'key_file': credentials.key_file}
         self._spot_aws_termination_task = None
 
+        if len(self._instance.network_interfaces) == 2:
+            # first we need to configure the both networks so we'll have public ip
+            self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx)
+
+        self._wait_public_ip()
         super(AWSNode, self).__init__(name=name,
                                       parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
-        if len(self._instance.network_interfaces) == 2:
-            self.allocate_and_attach_elastic_ip()
-        self._wait_public_ip()
+
         if not cluster.Setup.REUSE_CLUSTER:
             tags_list = create_tags_list()
             tags_list.append({'Key': 'Name', 'Value': name})
@@ -502,12 +505,12 @@ class AWSNode(cluster.BaseNode):
     def _refresh_instance_state(self):
         raise NotImplementedError()
 
-    def allocate_and_attach_elastic_ip(self):
+    def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx):
         primary_interface = [
             interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
         if primary_interface.association_attribute is None:
             # create and attach EIP
-            client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
+            client = boto3.client('ec2', region_name=parent_cluster.region_names[dc_idx])
             response = client.allocate_address(Domain='vpc')
 
             self.eip_allocation_id = response['AllocationId']

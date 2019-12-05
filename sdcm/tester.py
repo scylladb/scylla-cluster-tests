@@ -258,6 +258,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.create_stats:
             self.create_test_stats()
+            # sync test_start_time with ES
+            self.start_time = self.get_test_start_time()
 
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf', default=3)

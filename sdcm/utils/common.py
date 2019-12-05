@@ -415,18 +415,14 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
                     result = future.result(self.timeout)
                     results.append(FutureResult(exc=None, result=result))
                 except Exception as ex:  # pylint disable=broad-except
+                    LOGGER.warning('Error happened during running %s in %s:\n%s',
+                                   func.__name__,
+                                   future,
+                                   ex.__class__.__name__)
                     if ignore_exceptions:
-                        LOGGER.warning('Error happened during running %s in %s:\n%s',
-                                       func.__name__,
-                                       future,
-                                       ex.__class__.__name__)
                         results.append(FutureResult(exc=ex, result=None))
                         continue
-                    LOGGER.error('Error occured during running %s:\n%s',
-                                 func.__name__,
-                                 ex.__traceback__)
                     raise
-
         return results
 
 
@@ -1234,38 +1230,52 @@ def filter_gce_instances_by_type(instances):
     return filtered_instances
 
 
-BUILDERS = [
-    [{
-        "name": "aws-eu-builder-2",
-        "public_ip": "34.249.55.96",
-        "user": "jenkins",
-        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }],
-    [{
-        "name": "aws-eu-builder-3",
-        "public_ip": "34.248.136.231",
-        "user": "jenkins",
-        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }],
-    [{
-        "name": "aws-eu-builder-4",
-        "public_ip": "99.81.48.181",
-        "user": "jenkins",
-        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }],
-    [{
-        "name": "aws-eu-builder-5",
-        "public_ip": "18.200.171.172",
-        "user": "jenkins",
-        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }],
-    [{
-        "name": "aws-eu-builder-6",
-        "public_ip": "99.81.50.63",
-        "user": "jenkins",
-        "key_file": os.path.expanduser("~/.ssh/scylla-qa-ec2")
-    }]
-]
+SSH_KEY_DIR = "~/.ssh"
+SSH_KEY_AWS_DEFAULT = "scylla-qa-ec2"
+SSH_KEY_GCE_DEFAULT = "scylla-test"
+
+
+def get_aws_builders(tags=None):
+    builders = []
+    ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_AWS_DEFAULT)
+
+    aws_builders = list_instances_aws(tags_dict=tags)
+
+    for aws_builder in aws_builders:
+        builder_name = [tag["Value"] for tag in aws_builder["Tags"] if tag["Key"] == "Name"][0]
+        builders.append({"builder": {
+            "public_ip": aws_builder["PublicIpAddress"],
+            "name": builder_name,
+            "user": "jenkins",
+            "key_file": os.path.expanduser(ssh_key_path)
+        }})
+
+    return builders
+
+
+def get_gce_builders(tags=None):
+    builders = []
+    ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_GCE_DEFAULT)
+
+    gce_builders = list_instances_gce(tags_dict=tags)
+
+    for gce_builder in gce_builders:
+        builders.append({"builder": {
+            "public_ip": gce_builder.public_ips[0],
+            "name": gce_builder.name,
+            "user": "scylla-test",
+            "key_file": os.path.expanduser(ssh_key_path)
+        }})
+
+    return builders
+
+
+def list_builders():
+    builder_tag = {"NodeType": "Builder"}
+    aws_builders = get_aws_builders(builder_tag)
+    gce_builders = get_gce_builders(builder_tag)
+
+    return aws_builders + gce_builders
 
 
 def get_builder_by_test_id(test_id):
@@ -1274,10 +1284,13 @@ def get_builder_by_test_id(test_id):
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
 
+    builders = list_builders()
+
     def search_test_id_on_builder(builder):
         remoter = RemoteCmdRunner(builder['public_ip'],
-                                  user=builder['user'],
-                                  key_file=builder['key_file'])
+                                  user=builder["user"],
+                                  key_file=builder["key_file"])
+
         LOGGER.info('Search on %s', builder['name'])
         result = remoter.run("find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder,
                                                                                             test_id=test_id),
@@ -1286,14 +1299,17 @@ def get_builder_by_test_id(test_id):
         if not result.exited and not result.stderr:
             path = result.stdout.strip()
             LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
-            return {"builder": builder, "path": os.path.dirname(path)}
+            return {
+                "builder": builder,
+                "path": os.path.dirname(path)
+            }
         else:
             LOGGER.info("Nothing found")
             return None
 
-    search_obj = ParallelObject(BUILDERS, timeout=30, num_workers=len(BUILDERS))
-    all_results = search_obj.run(search_test_id_on_builder, ignore_exceptions=True)
-    found_builders = [obj.result for obj in all_results if not obj.exc and obj.result]
+    search_obj = ParallelObject(builders, timeout=30, num_workers=len(builders))
+    results = search_obj.run(search_test_id_on_builder, ignore_exceptions=True)
+    found_builders = [builder.result for builder in results if not builder.exc and builder.result]
     if not found_builders:
         LOGGER.info("Nothing found for %s", test_id)
 
