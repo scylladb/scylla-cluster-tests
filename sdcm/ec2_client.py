@@ -62,7 +62,8 @@ class EC2Client():
             return self._get_ec2_client()
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments
-                               user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None):
+                               user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
+                               aws_instance_profile=None):
         """
         Create a spot instance request
         :return: list of request id-s
@@ -76,6 +77,9 @@ class EC2Client():
                       LaunchSpecification={'ImageId': image_id,
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
+                                           'IamInstanceProfile': {
+                                               'Name': aws_instance_profile
+                                           },
                                            },
                       ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
                       )
@@ -99,7 +103,7 @@ class EC2Client():
         return request_ids
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                            block_device_mappings=None, tags_list=None):
+                            block_device_mappings=None, tags_list=None, aws_instance_profile=None):
 
         tags_list = tags_list if tags_list else []
         spot_price = self._get_spot_price(instance_type)
@@ -109,6 +113,9 @@ class EC2Client():
                              'InstanceType': instance_type,
                              'NetworkInterfaces': network_if,
                              'Placement': {'AvailabilityZone': region_name},
+                             'IamInstanceProfile': {
+                                 'Name': aws_instance_profile
+                             },
                              'TagSpecifications': [
                                  {
                                      'ResourceType': 'instance',
@@ -291,7 +298,7 @@ class EC2Client():
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
-                              count=1, duration=0, block_device_mappings=None, tags_list=None):
+                              count=1, duration=0, block_device_mappings=None, tags_list=None, aws_instance_profile=None):
         """
         Create spot instances
 
@@ -315,7 +322,8 @@ class EC2Client():
 
         request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
                                                   key_pair, user_data, count, duration,
-                                                  block_device_mappings=block_device_mappings)
+                                                  block_device_mappings=block_device_mappings,
+                                                  aws_instance_profile=aws_instance_profile)
         instance_ids, resp = self._wait_for_request_done(request_ids)
 
         if not instance_ids:
@@ -331,7 +339,7 @@ class EC2Client():
         return instances
 
     def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                          block_device_mappings=None, tags_list=None):
+                          block_device_mappings=None, tags_list=None, aws_instance_profile=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -350,7 +358,8 @@ class EC2Client():
         tags_list = tags_list if tags_list else []
 
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
-                                              user_data, count, block_device_mappings=block_device_mappings, tags_list=tags_list)
+                                              user_data, count, block_device_mappings=block_device_mappings,
+                                              tags_list=tags_list, aws_instance_profile=aws_instance_profile)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR

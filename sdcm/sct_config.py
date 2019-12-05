@@ -422,6 +422,9 @@ class SCTConfiguration(dict):
         dict(name="aws_extra_network_interface", env="SCT_AWS_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
 
+        dict(name="aws_instance_profile_name", env="SCT_AWS_INSTANCE_PROFILE_NAME", type=str,
+             help="This is the name of the instance profile to set on all instances"),
+
         dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
              help="If True, would tag the ami with the test final result"),
 

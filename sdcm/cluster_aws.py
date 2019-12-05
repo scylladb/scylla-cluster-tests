@@ -111,6 +111,9 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                                 BlockDeviceMappings=self._ec2_block_device_mappings,
                                                                 NetworkInterfaces=interfaces,
                                                                 InstanceType=self._ec2_instance_type,
+                                                                IamInstanceProfile={
+                                                                    'Name': self.params.get('aws_instance_profile_name')
+                                                                },
                                                                 TagSpecifications=[
                                                                     {
                                                                         'ResourceType': 'instance',
@@ -134,6 +137,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            user_data=ec2_user_data,
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
+                           aws_instance_profile=self.params.get('aws_instance_profile_name'),
                            tags_list=tags_list if tags_list else [])
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
