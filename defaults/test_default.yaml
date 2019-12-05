@@ -4,7 +4,7 @@ ip_ssh_connections: 'private'
 
 mgmt_port: 10090
 scylla_repo_m: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-2019.1.repo'
-scylla_mgmt_repo: 'http://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-1.4.repo'
+scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
 mgmt_segments_per_repair: 10
 
 experimental: true
