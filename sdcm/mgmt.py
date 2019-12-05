@@ -284,6 +284,11 @@ class HealthcheckTask(ManagerTask):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
 
+class BackupTask(ManagerTask):
+    def __init__(self, task_id, cluster_id, scylla_manager):
+        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=scylla_manager)
+
+
 class ManagerCluster(ScyllaManagerBase):
 
     def __init__(self, manager_node, cluster_id, ssh_identity_file=None, client_encrypt=False):
@@ -292,6 +297,29 @@ class ManagerCluster(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
         self.ssh_identity_file = ssh_identity_file
+
+    def create_backup_task(self, param_dict):
+        arguments = []
+        for arg, value in param_dict.items():
+            if isinstance(value, (str, int)) and value:
+                arguments.append('--{} {}'.format(arg, str(value)))
+            if isinstance(value, bool) and value:
+                arguments.append('--{}'.format(arg))
+            if isinstance(value, list) and value:
+                arguments.append('--{} {}'.format(arg, ','.join(value)))
+
+        command = "backup -c {} ".format(self.id) + ' '.join(arguments)
+        res = self.sctool.run(cmd=command, parse_table_res=False)
+        if not res.stdout:
+            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(command))
+
+        if res.stderr:
+            LOGGER.debug("Encountered an error on '{}' command response".format(command))
+            raise ScyllaManagerError(res.stderr)
+
+        task_id = res.stdout.strip()
+        LOGGER.debug("Created task id is: {}".format(task_id))
+        return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
 
     def create_repair_task(self):
         cmd = "repair -c {}".format(self.id)
