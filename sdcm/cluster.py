@@ -35,7 +35,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError
+from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
 from sdcm.prometheus import start_metrics_server
 from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
@@ -69,6 +69,7 @@ TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
+SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
 
@@ -1555,6 +1556,19 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
+    def install_manager_agent(self, auth_token, manager_scylla_repo):
+        self.download_scylla_manager_repo(manager_scylla_repo)
+        install_and_config_agent_command = dedent(r"""
+            yum install -y scylla-manager-agent
+            sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+            scyllamgr_ssl_cert_gen
+            sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+            sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+            sed -i 's/#https/https/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+            systemctl restart scylla-manager-agent
+        """.format(auth_token))
+        self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
+
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -1775,7 +1789,7 @@ server_encryption_options:
         time.sleep(5)
 
     # pylint: disable=too-many-branches,too-many-statements
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo):
+    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, auth_token, segments_per_repair):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -1865,12 +1879,23 @@ server_encryption_options:
         """.format(mgmt_user=mgmt_user, rsa_id_dst=rsa_id_dst, rsa_id_dst_pub=rsa_id_dst_pub))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
+        self.config_scylla_manager_yaml(segments_per_repair=segments_per_repair)
+
         if self.is_docker():
             self.remoter.run('sudo supervisorctl restart scylla-manager')
             res = self.remoter.run('sudo supervisorctl status scylla-manager')
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
             res = self.remoter.run('sudo systemctl status scylla-manager.service')
+
+        if self.is_rhel_like():  # TODO: Add debian and ubuntu support
+            configuring_manager_command = dedent("""
+            scyllamgr_ssl_cert_gen
+            sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
+            sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
+            systemctl restart scylla-manager
+            """.format(auth_token))  # pylint: disable=too-many-format-args
+            self.remoter.run('sudo bash -cxe "%s"' % configuring_manager_command)
 
         if not res or "Active: failed" in res.stdout:
             raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
@@ -1895,6 +1920,10 @@ server_encryption_options:
         self.remoter.run(cmd, ignore_status=True, verbose=True)
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
+
+    def config_scylla_manager_yaml(self, segments_per_repair):
+        yaml_attr = "repair:\n  segments_per_repair: %d\n" % segments_per_repair
+        self.remoter.run("""sudo sh -c 'echo "{}" >> {}'""".format(yaml_attr, SCYLLA_MANAGER_YAML_PATH))
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -3484,12 +3513,25 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             node.remoter.run('sudo yum install screen -y')
         else:
             node.remoter.run('sudo apt-get install screen -y')
-        self.install_scylla_manager(node)
+        if self.params.get("use_mgmt", default=None):
+            self.install_scylla_manager(node, auth_token=kwargs["auth_token"])
 
-    def install_scylla_manager(self, node):
+    def install_scylla_manager(self, node, auth_token):
+        self.mgmt_auth_token = auth_token  # pylint: disable=attribute-defined-outside-init
         if self.params.get('use_mgmt', default=None):
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'))
+                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
+                              segments_per_repair=self.params.get('mgmt_segments_per_repair'))
+            wait.wait_for(func=self.is_manager_up, step=20, text='Waiting until the manager client is up',
+                          timeout=300, throw_exc=True)
+
+    def is_manager_up(self):
+        manager_tool = get_scylla_manager_tool(manager_node=self.nodes[0])  # pylint: disable=no-member
+        try:
+            LOGGER.debug(manager_tool.version)
+            return True
+        except ScyllaManagerError:
+            return False
 
     def configure_ngrok(self):
         port = self.local_metrics_addr.split(':')[1]
@@ -3521,7 +3563,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             return self.local_metrics_addr
 
     @wait_for_init_wrap
-    def wait_for_init(self):
+    def wait_for_init(self, *args, **kwargs):
         pass
 
     @staticmethod
