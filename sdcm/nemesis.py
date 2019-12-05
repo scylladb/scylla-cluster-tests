@@ -29,7 +29,6 @@ import re
 import traceback
 from collections import OrderedDict
 
-from enum import Enum
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
@@ -41,6 +40,7 @@ from sdcm import mgmt
 from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 from sdcm.db_stats import PrometheusDBStats
+from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -57,20 +57,6 @@ class FilesNotCorrupted(Exception):
 
 class UnsupportedNemesis(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
-
-
-class CompactionStrategy(Enum):
-    LEVELED = "LeveledCompactionStrategy"
-    SIZE_TIERED = "SizeTieredCompactionStrategy"
-    TIME_WINDOW = "TimeWindowCompactionStrategy"
-    INCREMENTAL = "IncrementalCompactionStrategy"
-
-    @classmethod
-    def from_str(cls, output_str):
-        try:
-            return CompactionStrategy[CompactionStrategy(output_str).name]
-        except AttributeError as attr_err:
-            raise ValueError("Could not recognize compaction strategy value: {} - {}".format(output_str, attr_err))
 
 
 class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -671,44 +657,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
-    def _get_compaction_strategy(self, node, keyspace, table):
-        """Get a given table compaction strategy
-
-        Arguments:
-            node {str} -- ip of db_node
-            keyspace
-            table
-        """
-        list_tables_compaction = node.run_cqlsh('SELECT keyspace_name, table_name, compaction FROM system_schema.tables',
-                                                split=True)
-        compaction = 'N/A'
-        for row in list_tables_compaction:
-            if '|' not in row:
-                continue
-            list_stripped_values = [val.strip() for val in row.split('|')]
-            if list_stripped_values[0] == keyspace and list_stripped_values[1] == table:
-                compaction = CompactionStrategy.from_str(output_str=list_stripped_values[2].split("'")[3])
-        self.log.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction.value))
-        return compaction
-
-    def _get_non_system_ks_cf_list(self, node):
-        """Get all not system keyspace.tables pairs
-
-        Arguments:
-            db_node_ip {str} -- ip of db_node
-        """
-        list_all_tables = node.run_cqlsh(
-            'SELECT keyspace_name, table_name from system_schema.tables', split=True)
-
-        avaialable_ks_cf = []
-        for row in list_all_tables:
-            if '|' not in row:
-                continue
-            avaialable_ks_cf.append('.'.join([name.strip() for name in row.split('|')]))
-        non_system_ks_cf_list = [ks_cf for ks_cf in avaialable_ks_cf[1:] if 'system' not in ks_cf]
-        self.log.debug("Non-system keyspaces-tables list is: {}".format(non_system_ks_cf_list))
-        return non_system_ks_cf_list
-
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False, modify_all_tables=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
@@ -770,14 +718,16 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
-        # TODO: Sub-properties for each of compaction strategies should also be tested
-        ks_cfs = self._get_non_system_ks_cf_list(node=self.target_node)
+        list_additional_params = get_compaction_random_additional_params()
+        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                           db_node=self.target_node)
         if not ks_cfs:
             self.log.error('Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
             return
         keyspace_table = random.choice(ks_cfs)
         keyspace, table = keyspace_table.split('.')
-        cur_compaction_strategy = self._get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
+        cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace,
+                                                          table=table)
         if cur_compaction_strategy != CompactionStrategy.INCREMENTAL:
             new_compaction_strategy = CompactionStrategy.INCREMENTAL
         else:
@@ -785,6 +735,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 CompactionStrategy) if strategy != CompactionStrategy.INCREMENTAL])
         new_compaction_strategy_as_dict = {'class': new_compaction_strategy.value}
 
+        if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
+            for param in list_additional_params:
+                new_compaction_strategy_as_dict.update(param)
         cmd = "ALTER TABLE {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
         self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
         self.target_node.run_cqlsh(cmd)
