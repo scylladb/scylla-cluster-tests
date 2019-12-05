@@ -3494,7 +3494,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         if self.params.get('use_mgmt', default=None):
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
                               scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
-                              segments_per_repair=self.params.get('mgmt_segments_per_repair', 10))
+                              segments_per_repair=self.params.get('mgmt_segments_per_repair'))
             wait.wait_for(func=self.is_manager_up, step=20, text='Waiting until the manager client is up',
                           timeout=300, throw_exc=True)
 

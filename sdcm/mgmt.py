@@ -758,6 +758,8 @@ class SCTool():
 
         if replace_broken_unicode_values:
             res.stdout = res.stdout.replace('���', '│')
+            # Minor band-aid to fix a unique error with the output of some sctool command
+            # (So far - specifically cluster status)
 
         if is_verify_errorless_result:
             verify_errorless_result(cmd=cmd, res=res)
