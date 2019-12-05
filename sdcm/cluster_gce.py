@@ -12,11 +12,11 @@ class CreateGCENodeError(Exception):
 
 
 def gce_create_metadata(extra_meta=None):
-    meta = cluster.create_common_tags()
+    tags = cluster.create_common_tags()
+    tags['startup-script'] = cluster.Setup.get_startup_script()
     if extra_meta:
-        meta.update(extra_meta)
-    tags_list = [{'key': str(k), 'value': str(v)} for k, v in meta.items()]
-    return {'items': tags_list}
+        tags.update(extra_meta)
+    return tags
 
 
 class GCENode(cluster.BaseNode):
