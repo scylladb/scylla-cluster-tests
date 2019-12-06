@@ -89,7 +89,7 @@ class retrying():  # pylint: disable=invalid-name,too-few-public-methods
                 return func(*args, **kwargs)
             for i in range(self.n):
                 try:
-                    if self.message:
+                    if self.message and i > 0:
                         LOGGER.info("%s [try #%s]", self.message, i)
                     return func(*args, **kwargs)
                 except self.allowed_exceptions as ex:
