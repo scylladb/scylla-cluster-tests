@@ -80,8 +80,7 @@ SCYLLA_DIR = "/var/lib/scylla"
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
-NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError,
-                      ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError)
+NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError)
 
 
 def set_ip_ssh_connections(ip_type):
