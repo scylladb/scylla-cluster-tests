@@ -15,7 +15,7 @@ import requests
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                retrying, ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               makedirs, filter_gce_instances_by_type)
+                               makedirs, filter_gce_instances_by_type, get_sct_root_path)
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LocalCmdRunner, RemoteCmdRunner
 
@@ -342,6 +342,7 @@ class GrafanaEntity(BaseLogEntity):
     grafana_port = 3000
     grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
     phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
+    sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
         test_start_time = kwargs.pop("test_start_time", None)
@@ -350,32 +351,42 @@ class GrafanaEntity(BaseLogEntity):
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
         super(GrafanaEntity, self).__init__(*args, **kwargs)
+        self.phantomjs_dir = None
         self.install_phantom_js()
 
     @property
     def phantomjs_installed(self):
-        result = LocalCmdRunner().run("test -d {}".format(self.phantomjs_base),
-                                      ignore_status=True, verbose=False)
-        return result.exited == 0
+        if os.path.exists(os.path.join("/", self.phantomjs_base)):
+            self.phantomjs_dir = os.path.join("/", self.phantomjs_base)
+            return True
+        elif os.path.exists(os.path.join(self.sct_base_path, self.phantomjs_base)):
+            self.phantomjs_dir = os.path.join(self.sct_base_path, self.phantomjs_base)
+            return True
+        else:
+            return False
 
     def install_phantom_js(self):
+        """Install phantom_js to sct root dir
+
+        If sct runs outside the docker container,
+        sct will install the phantomjs to
+        sct root dir
+        """
         localrunner = LocalCmdRunner()
         if not self.phantomjs_installed:
+            LOGGER.debug("Installing phantomjs to sct root dir")
             # pylint: disable=unused-variable
-            phantomjs_base = self.phantomjs_base
-            phantomjs_tar = "{phantomjs_base}.tar.bz2".format(**locals())
+            phantomjs_tar = "{0.phantomjs_base}.tar.bz2".format(self)
             phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(
                 **locals())
             install_phantom_js_script = dedent("""
-                rm -rf {phantomjs_base}*
                 curl {phantomjs_url} -o {phantomjs_tar} -L
                 tar xvfj {phantomjs_tar}
             """.format(**locals()))
             localrunner.run("bash -ce '%s'" % install_phantom_js_script)
+            self.phantomjs_dir = os.path.join(self.sct_base_path, self.phantomjs_base)
         else:
             LOGGER.debug("PhantomJS is already installed!")
-        localrunner.run(
-            "cd {0.phantomjs_base} && sed -e 's/200);/10000);/' examples/rasterize.js |grep -v 'use strict' > r.js".format(self))
 
 
 class GrafanaScreenShot(GrafanaEntity):
@@ -388,7 +399,7 @@ class GrafanaScreenShot(GrafanaEntity):
     """
 
     def _get_screenshot_link(self, grafana_url, screenshot_path, resolution="1920x1280"):
-        LocalCmdRunner().run("cd {0.phantomjs_base} && bin/phantomjs r.js \"{1}\" \"{2}\" {3}".format(
+        LocalCmdRunner().run("cd {0.phantomjs_dir} && bin/phantomjs {0.sct_base_path}/data_dir/make_screenshot.js \"{1}\" \"{2}\" {3}".format(
             self, grafana_url, screenshot_path, resolution), ignore_status=True)
 
     def get_grafana_screenshot(self, node, local_dst):
@@ -445,7 +456,9 @@ class GrafanaSnapshot(GrafanaEntity):
 
     def _get_shared_snapshot_link(self, grafana_url):
         result = LocalCmdRunner().run(
-            "cd {0.phantomjs_base} && bin/phantomjs ../data_dir/share_snapshot.js \"{1}\"".format(self, grafana_url))
+            "cd {0.phantomjs_dir} && bin/phantomjs {0.sct_base_path}/data_dir/share_snapshot.js \"{1}\"".format(
+                self, grafana_url),
+            ignore_status=True)
         # since there is only one monitoring node returning here
         output = result.stdout.strip()
         if "Error" in output:
