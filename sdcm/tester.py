@@ -1192,9 +1192,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
-    def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments
+    def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches
                      speculative_retry=None, read_repair=None, compression=None,
-                     gc_grace=None, columns=None,
+                     gc_grace=None, columns=None, compaction=None,
                      compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None):
 
         # pylint: disable=too-many-locals
@@ -1220,6 +1220,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # will default to lz4 compression
             query += ' AND compression = {}'
 
+        if compaction is not None:
+            query += " AND compaction={'class': '%s'}" % compaction
+
         if read_repair is not None:
             query = '%s AND read_repair_chance=%f' % (query, read_repair)
         if gc_grace is not None:
@@ -1233,6 +1236,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
+        self.log.debug('CQL query to execute: {}'.format(query))
         with self.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             # pylint: disable=no-member
             session.execute(query)

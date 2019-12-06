@@ -40,6 +40,7 @@ from sdcm import mgmt
 from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 from sdcm.db_stats import PrometheusDBStats
+from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -666,7 +667,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
-    def _modify_table_property(self, name, val, filter_out_table_with_counter=False):
+    def _modify_table_property(self, name, val, filter_out_table_with_counter=False, modify_all_tables=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
@@ -722,6 +723,34 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             default: bloom_filter_fp_chance = 0.01
         """
         self._modify_table_property(name="bloom_filter_fp_chance", val=random.random() / 2)
+
+    def toggle_table_ics(self):
+        """
+            Alters a non-system table compaction strategy from ICS to any-other and vise versa.
+        """
+        list_additional_params = get_compaction_random_additional_params()
+        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                           db_node=self.target_node)
+        if not ks_cfs:
+            self.log.error('Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
+            return
+        keyspace_table = random.choice(ks_cfs)
+        keyspace, table = keyspace_table.split('.')
+        cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace,
+                                                          table=table)
+        if cur_compaction_strategy != CompactionStrategy.INCREMENTAL:
+            new_compaction_strategy = CompactionStrategy.INCREMENTAL
+        else:
+            new_compaction_strategy = random.choice([strategy for strategy in list(
+                CompactionStrategy) if strategy != CompactionStrategy.INCREMENTAL])
+        new_compaction_strategy_as_dict = {'class': new_compaction_strategy.value}
+
+        if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
+            for param in list_additional_params:
+                new_compaction_strategy_as_dict.update(param)
+        cmd = "ALTER TABLE {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
+        self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
+        self.target_node.run_cqlsh(cmd)
 
     def modify_table_compaction(self):
         """
@@ -834,6 +863,10 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
                    "'%spercentile'" % random.randint(1, 99),
                    "'%sms'" % random.randint(1, 1000))
         self._modify_table_property(name="speculative_retry", val=random.choice(options))
+
+    def disrupt_toggle_table_ics(self):
+        self._set_current_disruption('ToggleTableICS')
+        self.toggle_table_ics()
 
     def disrupt_modify_table(self):
         # randomly select and run one of disrupt_modify_table* methods
@@ -1472,6 +1505,13 @@ class ModifyTableMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_modify_table()
+
+
+class ToggleTableIcsMonkey(Nemesis):
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_toggle_table_ics()
 
 
 class MgmtRepair(Nemesis):
