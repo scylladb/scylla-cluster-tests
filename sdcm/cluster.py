@@ -45,8 +45,7 @@ from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro,
     get_latest_gemini_version, get_my_ip, makedirs
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent
-from sdcm.sct_events import EVENTS_PROCESSES
+    ClusterHealthValidatorEvent, set_grafana_url
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
@@ -3504,8 +3503,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
-            EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
-                "http://[{0.external_address}]:{1.grafana_port}".format(node, self))
+            set_grafana_url("http://[{0.external_address}]:{1.grafana_port}".format(node, self))
             return
 
         self.install_scylla_monitoring(node)
@@ -3518,8 +3516,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].set_grafana_url(
-            "http://[{0.external_address}]:{1.grafana_port}".format(node, self))
+        set_grafana_url("http://[{0.external_address}]:{1.grafana_port}".format(node, self))
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:

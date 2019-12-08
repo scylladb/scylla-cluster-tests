@@ -425,7 +425,6 @@ class AWSNode(cluster.BaseNode):
                           'user': ami_username,
                           'key_file': credentials.key_file}
         self._spot_aws_termination_task = None
-
         if len(self._instance.network_interfaces) == 2:
             # first we need to configure the both networks so we'll have public ip
             self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx)
