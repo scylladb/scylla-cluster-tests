@@ -96,10 +96,61 @@ class MgmtCliTest(ClusterTester):
         4) test_client_encryption
         :return:
         """
+        self.test_basic_backup()
         self.test_repair_multiple_keyspace_types()
         self.test_mgmt_cluster_crud()
         self.test_mgmt_cluster_healthcheck()
         self.test_client_encryption()
+
+    def update_cred_file(self):
+        # FIXME: add to the nodes not in the same region as the bucket the bucket's region
+        # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
+        cred_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
+        region = 'us-east-1'
+        for node in self.db_cluster.nodes:
+            node.remoter.run(f'sudo chmod o+w {cred_file}')
+            node.remoter.run(f"sudo echo -e \"s3:\n   region: {region}\" >> {cred_file}")
+            node.remoter.run('sudo systemctl restart scylla-manager-agent')
+
+    def create_ks_and_tables(self, num_ks, num_table):
+        for keyspace in range(num_ks):
+            self.create_keyspace(f'ks00{keyspace}', 1)
+            for table in range(num_table):
+                self.create_table(f'table00{table}', keyspace_name=f'ks00{keyspace}')
+                # FIXME: improve the structure + data insertion
+                # can use this function to populate tables better?
+                # self.populate_data_parallel()
+
+    def verify_backup_success(self):
+        pass
+
+    def test_basic_backup(self):
+        self.log.info('starting test_basic_backup')
+        self.update_cred_file()
+        location_list = ['s3:manager-backup-tests-us']
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        self._generate_load()
+        backup_task = mgr_cluster.create_backup_task({'location': location_list})
+        task_status = backup_task.wait_and_get_final_status()
+        self.log.info(f'backup task finished with status {task_status}')
+        self.verify_backup_success()
+        self.log.info('finishing test_basic_backup')
+
+    def test_backup_multiple_ks_tables(self):
+        self.log.info('starting test_backup_multiple_ks_tables')
+        self.update_cred_file()
+        location_list = ['s3:manager-backup-tests-us']
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        self.create_ks_and_tables(10, 100)
+        backup_task = mgr_cluster.create_backup_task({'location': location_list})
+        task_status = backup_task.wait_and_get_final_status()
+        self.log.info(f'backup task finished with status {task_status}')
+        self.verify_backup_success()
+        self.log.info('finishing test_backup_multiple_ks_tables')
 
     def test_client_encryption(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
