@@ -305,7 +305,16 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             # For corruption we need to remove all files that their names are started from "mc-220-" (MC format)
             # Old format: "system-truncated-ka-" (system-truncated-ka-7-Data.db)
             # Search for "<digit>-" substring
-            file_name_template = re.search(r"(.*-\d+)-", file_name).group(1)
+
+            try:
+                file_name_template = re.search(r"(.*-\d+)-", file_name).group(1)
+            except Exception as error:  # pylint: disable=broad-except
+                self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
+                               'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
+                                                                                     ks_cf_for_destroy=ks_cf_for_destroy))
+                self.log.debug('Error: {}'.format(error))
+                continue
+
             file_for_destroy = one_file.replace(file_name, file_name_template + '-*')
             self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
             if file_for_destroy:
