@@ -29,6 +29,8 @@ import re
 import traceback
 from collections import OrderedDict
 
+from invoke import UnexpectedExit
+
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
@@ -750,7 +752,12 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
                 new_compaction_strategy_as_dict.update(param)
         cmd = "ALTER TABLE {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
         self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
-        self.target_node.run_cqlsh(cmd)
+        try:
+            self.target_node.run_cqlsh(cmd)
+        except UnexpectedExit as unexpected_exit:
+            if "Unable to find compaction strategy" in str(unexpected_exit):
+                raise UnsupportedNemesis("for this nemesis to work, you need ICS supported scylla version.")
+            raise unexpected_exit
 
     def modify_table_compaction(self):
         """
