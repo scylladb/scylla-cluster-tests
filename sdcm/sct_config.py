@@ -735,6 +735,9 @@ class SCTConfiguration(dict):
         dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
              help=""),
 
+        dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
+             help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
+
         dict(name="authorization_in_upgrade", env="SCT_AUTHORIZATION_IN_UPGRADE", type=str,
              help="Which Authorization to enable after upgrade"),
 
@@ -778,7 +781,7 @@ class SCTConfiguration(dict):
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure."""),
 
-        dict(name="stress_cmd_read_20m", env="SCT_STRESS_CMD_READ_20M", type=str_or_list,
+        dict(name="stress_cmd_read_80m", env="SCT_STRESS_CMD_READ_80M", type=str_or_list,
 
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to

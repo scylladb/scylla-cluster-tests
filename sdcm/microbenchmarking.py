@@ -41,7 +41,7 @@ class EmptyResultFolder(Exception):
         return "MBM: {0.message}".format(self)
 
 
-class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
+class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=too-many-instance-attributes
     allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
     higher_better = ('frag/s',)
     lower_better = ('avg aio',)

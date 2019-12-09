@@ -812,7 +812,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                 backtrace_cmd += ' -1'
             return self.remoter.run(backtrace_cmd,
                                     verbose=False, ignore_status=True)
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
+        except NETWORK_EXCEPTIONS:
             raise
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving core dump backtraces : %s',
@@ -827,7 +827,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
                 self.remoter.run('sudo yum install -y pigz')
             self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
             coredump += '.gz'
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
+        except NETWORK_EXCEPTIONS:
             raise
         except Exception as ex:  # pylint: disable=broad-except
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
@@ -882,7 +882,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         """
         try:
             result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
+        except NETWORK_EXCEPTIONS:
             raise
         if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
             return 0

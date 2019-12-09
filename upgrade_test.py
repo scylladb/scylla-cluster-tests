@@ -185,6 +185,8 @@ class UpgradeTest(FillDatabaseData):
                         r'sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
         if self.params.get('test_sst3', default=None):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
+        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+            node.remoter.run("echo 'enable_3_1_0_compatibility_mode: true' |sudo tee --append /etc/scylla/scylla.yaml")
         authorization_in_upgrade = self.params.get('authorization_in_upgrade', default=None)
         if authorization_in_upgrade:
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
@@ -268,6 +270,9 @@ class UpgradeTest(FillDatabaseData):
         if self.params.get('test_sst3', default=None):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
+        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+            node.remoter.run(
+                r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
         if self.params.get('remove_authorization_in_rollback', default=None):
             node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         node.start_scylla_server()
@@ -497,15 +502,14 @@ class UpgradeTest(FillDatabaseData):
 
         # wait for the 10m read workload to finish
         self.verify_stress_thread(read_10m_cs_thread_pool)
+        self.fill_and_verify_db_data('after upgraded two nodes')
 
-        # read workload (20m)
-        self.log.info('Starting c-s read workload for 20m')
-        stress_cmd_read_20m = self.params.get('stress_cmd_read_20m')
-        read_20m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_20m)
+        # read workload (80m)
+        self.log.info('Starting c-s read workload for 80m')
+        stress_cmd_read_80m = self.params.get('stress_cmd_read_80m')
+        read_80m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_80m)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
         time.sleep(60)
-
-        self.fill_and_verify_db_data('after upgraded two nodes')
 
         # rollback second node
         self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
@@ -523,8 +527,8 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
             self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
 
-        # wait for the 20m read workload to finish
-        self.verify_stress_thread(read_20m_cs_thread_pool)
+        # wait for the 80m read workload to finish
+        self.verify_stress_thread(read_80m_cs_thread_pool)
 
         self.verify_stress_thread(entire_write_cs_thread_pool)
 
@@ -543,8 +547,6 @@ class UpgradeTest(FillDatabaseData):
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
-
-        self.fill_and_verify_db_data('AFTER UPGRADE', rewrite_data=False)
 
         # complex workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s complex workload to verify data by simple read')
