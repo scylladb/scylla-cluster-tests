@@ -157,10 +157,16 @@ class Distro(Enum):
 
 
 def get_data_dir_path(*args):
+    sct_root_path = get_sct_root_path()
+    data_dir = os.path.join(sct_root_path, "data_dir", *args)
+    return os.path.abspath(data_dir)
+
+
+def get_sct_root_path():
     import sdcm  # pylint: disable=import-outside-toplevel
     sdcm_path = os.path.realpath(sdcm.__path__[0])
-    data_dir = os.path.join(sdcm_path, "../data_dir", *args)
-    return os.path.abspath(data_dir)
+    sct_root_dir = os.path.join(sdcm_path, "..")
+    return os.path.abspath(sct_root_dir)
 
 
 def get_job_name():
