@@ -2833,17 +2833,19 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             verification_node = random.choice(self.nodes)  # pylint: disable=no-member
         status = {}
         res = verification_node.run_nodetool('status')
-        data_centers = res.stdout.strip().split("Data center: ")
+        data_centers = res.stdout.strip().split("Datacenter: ")
         for dc in data_centers:
             if dc:
                 lines = dc.splitlines()
                 dc_name = lines[0]
                 status[dc_name] = {}
                 for line in lines[1:]:
+                    if line.startswith('--'):  # ignore the title line in result
+                        continue
                     try:
-                        state, ip, load, _, tokens, owns, host_id, rack = line.split()
+                        state, ip, load, load_unit, tokens, owns, host_id, rack = line.split()
                         node_info = {'state': state,
-                                     'load': load,
+                                     'load': '%s%s' % (load, load_unit),
                                      'tokens': tokens,
                                      'owns': owns,
                                      'host_id': host_id,
