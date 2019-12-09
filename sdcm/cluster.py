@@ -368,6 +368,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         self.termination_event = threading.Event()
         self._running_nemesis = None
+        self.set_hostname()
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -2324,6 +2325,9 @@ server_encryption_options:
         result = self.remoter.run("grep /sct_configured_swapfile /proc/swaps", ignore_status=True)
         if "sct_configured_swapfile" not in result.stdout:
             self.log.warning("Swap file is not used on loader node %s.\nError details: %s", self, result.stderr)
+
+    def set_hostname(self):
+        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
 
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes

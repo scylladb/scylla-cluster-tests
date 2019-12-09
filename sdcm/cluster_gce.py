@@ -101,6 +101,9 @@ class GCENode(cluster.BaseNode):
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
 
+    def set_hostname(self):
+        self.log.debug("Hostname for node %s left as is", self.name)
+
     def restart(self):
         # When using local_ssd disks in GCE, there is no option to Stop and Start an instance.
         # So, for now we will keep restart the same as hard reboot.

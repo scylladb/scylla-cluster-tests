@@ -460,6 +460,16 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
 
+    def set_hostname(self):
+        self.log.info('Changing hostname to %s', self.name)
+        result = self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name), ignore_status=True)
+        if result.ok:
+            self.log.debug('Hostname has been changed. Restarting systemd-journald')
+            self.remoter.run('sudo systemctl restart systemd-journald', ignore_status=True)
+            self.log.debug('Continue node %s set up', self.name)
+        else:
+            self.log.warning('Hostname has not been changed. Error: %s.\n Continue with old name', result.stderr)
+
     @property
     def is_spot(self):
         return bool(self._instance.instance_lifecycle and 'spot' in self._instance.instance_lifecycle.lower())
@@ -857,7 +867,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             return 'Failed to start Scylla Server.' in result.stdout
 
         if not cluster.Setup.REUSE_CLUSTER:
-
             node.wait_ssh_up(verbose=verbose)
             wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
             node.install_scylla_debuginfo()
