@@ -868,7 +868,7 @@ class SCTConfiguration(dict):
             num_of_regions = len(self.get('region_name', '').split())
             num_of_db_nodes_sets = len(str(self.get('n_db_nodes', '')).split(' '))
             if num_of_db_nodes_sets > num_of_regions:
-                for region in regions_data.keys()[:num_of_db_nodes_sets]:
+                for region in list(regions_data.keys())[:num_of_db_nodes_sets]:
                     for key, value in regions_data[region].items():
                         if key not in self.keys():
                             self[key] = value

@@ -22,3 +22,5 @@ mgmt_port: 10090
 
 scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-enterprise-2019.1.repo'
 # scylla_mgmt_upgrade_to_repo: 'path to repo for upgrade'
+
+aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
