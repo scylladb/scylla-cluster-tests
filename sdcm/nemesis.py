@@ -1592,7 +1592,7 @@ class MgmtRepair(Nemesis):
 
 class AbortRepairMonkey(Nemesis):
 
-    disruptive = False
+    disruptive = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -1708,7 +1708,6 @@ class NonDisruptiveMonkey(Nemesis):
         #  - RefreshBigMonkey -
         #  - NoCorruptRepairMonkey
         #  - MgmtRepair
-        #  - AbortRepairMonkey
 
     def __init__(self, *args, **kwargs):
         super(NonDisruptiveMonkey, self).__init__(*args, **kwargs)
