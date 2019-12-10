@@ -46,23 +46,12 @@ class GCENode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
         if not cluster.Setup.REUSE_CLUSTER:
-            keep_alive = False
             if cluster.TEST_DURATION >= 24 * 60:
                 self.log.info('Test duration set to %s. '
                               'Tagging node with "keep-alive"',
                               cluster.TEST_DURATION)
-                keep_alive = True
-            elif "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-                keep_alive = True
-            elif "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-                keep_alive = True
-            elif "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-                self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-                keep_alive = True
-            if keep_alive:
                 self._instance_wait_safe(self._gce_service.ex_set_node_tags, self._instance, ['keep-alive'])
+            self.set_keep_tag()
 
     def set_keep_tag(self):
         if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:

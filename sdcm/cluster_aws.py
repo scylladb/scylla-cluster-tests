@@ -182,12 +182,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         tags_list = create_tags_list()
         tags_list.append({'Key': 'NodeType', 'Value': self.node_type})
-        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
-        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
-        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -437,26 +431,18 @@ class AWSNode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
         if not cluster.Setup.REUSE_CLUSTER:
-            tags_list = create_tags_list()
-            tags_list.append({'Key': 'Name', 'Value': name})
-            tags_list.append({'Key': 'NodeIndex', 'Value': str(node_index)})
-            tags_list.append({'Key': 'NodeType', 'Value': node_type})
-            if cluster.TEST_DURATION >= 24 * 60:
-                self.log.info('Test duration set to %s. '
-                              'Tagging node with {"keep": "alive"}',
-                              cluster.TEST_DURATION)
-            if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-                self.log.info('Keep db cluster %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-                tags_list.append({'Key': 'keep', 'Value': 'alive'})
-            if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-                self.log.info('Keep loader cluster %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-                tags_list.append({'Key': 'keep', 'Value': 'alive'})
-            if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-                self.log.info('Keep monitor cluster %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-                tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
-            self._ec2_service.create_tags(Resources=[self._instance.id],
-                                          Tags=tags_list)
+            self.set_node_tags(name, node_index, node_type)
+            self.set_keep_tag()
+
+    def set_node_tags(self, name=None, node_index=None, node_type=None):
+        tags_list = create_tags_list()
+        tags_list.append({'Key': 'Name', 'Value': name})
+        tags_list.append({'Key': 'NodeIndex', 'Value': str(node_index)})
+        tags_list.append({'Key': 'NodeType', 'Value': node_type})
+
+        self._ec2_service.create_tags(Resources=[self._instance.id],
+                                      Tags=tags_list)
 
     def set_keep_tag(self):
         tags_list = []
@@ -470,8 +456,9 @@ class AWSNode(cluster.BaseNode):
             self.log.info('Keep monitor cluster %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
             tags_list.append({'Key': 'keep', 'Value': 'alive'})
 
-        self._ec2_service.create_tags(Resources=[self._instance.id],
-                                      Tags=tags_list)
+        if tags_list:
+            self._ec2_service.create_tags(Resources=[self._instance.id],
+                                          Tags=tags_list)
 
     @property
     def is_spot(self):
