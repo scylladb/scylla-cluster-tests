@@ -51,7 +51,7 @@ class LongevityTest(ClusterTester):
 
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
-            if stress_cmd.startswith('cassandra-stress'):
+            if 'cassandra-stress'in stress_cmd:
                 stress_queue.append(self.run_stress_thread(**params))
             elif stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
