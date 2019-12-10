@@ -2,6 +2,8 @@ import logging
 import random
 from enum import Enum
 
+import yaml
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -35,7 +37,10 @@ def get_compaction_strategy(node, keyspace, table):
             continue
         list_stripped_values = [val.strip() for val in row.split('|')]
         if list_stripped_values[0] == keyspace and list_stripped_values[1] == table:
-            compaction = CompactionStrategy.from_str(output_str=list_stripped_values[2].split("'")[3])
+            dict_compaction_values = yaml.load(list_stripped_values[2])
+            compaction = CompactionStrategy.from_str(output_str=dict_compaction_values['class'])
+            break
+
     LOGGER.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction.value))
     return compaction
 
