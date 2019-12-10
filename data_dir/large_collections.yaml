@@ -1,0 +1,87 @@
+keyspace: large_collection_test
+
+keyspace_definition: |
+
+  CREATE KEYSPACE large_collection_test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  AND durable_writes = true;
+
+table: table_with_large_collection
+
+table_definition: |
+
+  CREATE TABLE large_collection_test.table_with_large_collection (
+    pk_id text PRIMARY KEY,
+    init_time timestamp,
+    user_name text,
+    device_id text,
+    start_time timestamp,
+    field_id text,
+    new_num int,
+    self_desc text,
+    age int,
+    comment text,
+    message1 text,
+    message2 text,
+    message3 text,
+    message4 text,
+    country_id text,
+    area_id text,
+    type_name text,
+    types_num int,
+    process_num int,
+    weight decimal,
+    users_name list<text>,
+    users_desc list<text>,
+    users_comment list<text>,
+    pay_num int,
+    question text,
+    messageid text,
+    testflag int,
+    pid text,
+    ppid text,
+    users_task list<text>
+  ) WITH bloom_filter_fp_chance = 0.01
+    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+    AND comment = 'Request for unit level UIs'
+    AND compaction = {'class': 'SizeTieredCompactionStrategy'}
+    AND compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+    AND crc_check_chance = 1.0
+    AND dclocal_read_repair_chance = 0.1
+    AND default_time_to_live = 0
+    AND gc_grace_seconds = 864000
+    AND max_index_interval = 2048
+    AND memtable_flush_period_in_ms = 0
+    AND min_index_interval = 128
+    AND read_repair_chance = 0.0
+    AND speculative_retry = '99.0PERCENTILE';
+
+columnspec:
+  - name: pk_id
+    population: exp(1..10000000)
+
+  - name: clientappname
+    size: fixed(5)
+
+# Need to populate the list field with big elements and many of them (about 40MB per list).
+# >>> math.sqrt(40 * 1024 * 1024)
+# 6476.344648024841
+
+  - name: users_name
+    size: fixed(6476)
+
+  - name: users_desc
+    size: fixed(6476)
+
+  - name: users_comment
+    size: fixed(6476)
+
+  - name: users_task
+    size: fixed(6476)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from large_collection_test.table_with_large_collection where pk_id = ?
+    fields: samerow
