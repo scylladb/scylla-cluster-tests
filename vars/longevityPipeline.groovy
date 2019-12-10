@@ -11,7 +11,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-		}
+        }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
@@ -130,8 +130,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                    def email_recipients = groovy.json.JsonOutput.toJson(pipelineParams.get('email_recipients', 'qa@scylladb.com'))
 
                                     sh """
                                     #!/bin/bash
@@ -140,7 +139,7 @@ def call(Map pipelineParams) {
                                     env
 
                                     echo "Start send email ..."
-                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "qa@scylladb.com"
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
                                     echo "Email sent"
                                     """
                                 }

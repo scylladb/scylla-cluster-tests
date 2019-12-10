@@ -20,6 +20,3 @@ db_type: mixed_scylla
 instance_type_db_oracle: 'i3.8xlarge'
 ami_id_db_oracle: 'ami-0c20f6998065c9ca6' # ScyllaDB 3.0.6 eu-west-1
 append_scylla_args_oracle: '--enable-cache false'
-
-send_email: true
-email_recipients: ['rnd-internal@scylladb.com']
