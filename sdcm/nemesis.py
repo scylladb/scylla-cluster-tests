@@ -22,27 +22,27 @@ import logging
 import random
 import time
 import datetime
-import string
 import threading
 import os
 import re
 import traceback
-from collections import OrderedDict
 
+from collections import OrderedDict
 from invoke import UnexpectedExit
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.common import retrying, remote_get_file, get_non_system_ks_cf_list
+from sdcm.utils.common import retrying, remote_get_file, get_non_system_ks_cf_list, get_db_tables, \
+    generate_random_string
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm import mgmt
-from sdcm import wait
+from sdcm import mgmt, wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
+from test_lib.cql_types import CQLTypeBuilder
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -85,6 +85,11 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
         self._random_sequence = None
+        self._add_drop_column_max_per_drop = 5
+        self._add_drop_column_max_per_add = 5
+        self._add_drop_column_max_column_name_size = 10
+        self._add_drop_column_columns_info = {}
+        self._add_drop_column_target_table = []
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -689,10 +694,163 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         with self.tester.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
 
+    def _get_all_tables_with_no_compact_storage(self):
+        keyspaces = []
+        output = {}
+        with self.tester.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
+            query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
+            for result_rows in query_result:
+                keyspaces.extend([row.lower() for row in result_rows if not row.lower().startswith("system")])
+            for ks in keyspaces:
+                tables = get_db_tables(session, ks, with_compact_storage=False)
+                if not tables:
+                    continue
+                output[ks] = tables
+        return output
+
+    def _add_drop_column_get_target_table(self, stored_target_table: list):
+        current_tables = self._get_all_tables_with_no_compact_storage()
+        if stored_target_table:
+            if stored_target_table[1] in current_tables.get(stored_target_table[0], []):
+                return stored_target_table
+        if not current_tables:
+            return None
+        ks_name = next(iter(current_tables.keys()))
+        table_name = current_tables[ks_name][0]
+        return [ks_name, table_name]
+
+    @staticmethod
+    def _add_drop_column_get_added_columns_info(target_table: list, added_fields):
+        ks = added_fields.get(target_table[0], None)
+        if ks is None:
+            output = {'column_names': {}, 'column_types': {}}
+            added_fields[target_table[0]] = {target_table[1]: output}
+            return output
+        table = ks.get(target_table[1], None)
+        if table is not None:
+            return table
+        ks[target_table[1]] = output = {'column_names': {}, 'column_types': {}}
+        return output
+
+    @staticmethod
+    def _random_column_name(avoid_names=None, max_name_size=5):
+        if avoid_names is None:
+            avoid_names = []
+        while True:
+            column_name = generate_random_string(max_name_size)
+            if column_name not in avoid_names:
+                break
+        return column_name
+
+    def _add_drop_column_create_table(self):
+        self.target_node.run_cqlsh(
+            "CREATE KEYSPACE IF NOT EXISTS add_drop_column_ks WITH replication = "
+            "{'class': 'SimpleStrategy', 'replication_factor': 3};")
+        self.target_node.run_cqlsh(
+            "CREATE TABLE IF NOT EXISTS add_drop_column_ks.add_drop_column_table "
+            "( col1 bigint, PRIMARY KEY(col1) );")
+        self._add_drop_column_target_table = ['add_drop_column_ks', 'add_drop_column_table']
+
+    def _add_drop_column_generate_columns_to_drop(self, added_columns_info):  # pylint: disable=too-many-branches
+        drop = []
+        for num in range(random.randrange(1, min(  # pylint: disable=unused-variable
+                len(added_columns_info['column_names']) + 1, self._add_drop_column_max_per_drop + 1
+        ))):
+            choice = [n for n in added_columns_info['column_names'] if n not in drop]
+            if choice:
+                column_name = random.choice(choice)
+                drop.append(column_name)
+        return drop
+
+    def _add_drop_column_run_cql_query(self, cmd, ks):  # pylint: disable=too-many-branches
+        try:
+            with self.tester.cql_connection_patient(self.target_node, keyspace=ks) as session:
+                session.execute(cmd)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
+            return False
+        return True
+
+    def _add_drop_column_generate_columns_to_add(self, added_columns_info):
+        add = []
+        #  pylint: disable=unused-variable
+        for num in range(random.randrange(1, self._add_drop_column_max_per_add)):
+            added_columns_info = self._add_drop_column_get_added_columns_info(self._add_drop_column_target_table,
+                                                                              self._add_drop_column_columns_info)
+            new_column_name = self._random_column_name(added_columns_info['column_names'].keys(),
+                                                       self._add_drop_column_max_column_name_size)
+            new_column_type = CQLTypeBuilder.get_random(added_columns_info['column_types'], allow_levels=10,
+                                                        avoid_types=['counter'])
+            if new_column_type is None:
+                continue
+            add.append([new_column_name, new_column_type])
+        return add
+
+    def _add_drop_column(self, drop=True, add=True):  # pylint: disable=too-many-branches
+        self._add_drop_column_target_table = self._add_drop_column_get_target_table(
+            self._add_drop_column_target_table)
+        if self._add_drop_column_target_table is None:
+            return
+        added_columns_info = self._add_drop_column_get_added_columns_info(self._add_drop_column_target_table,
+                                                                          self._add_drop_column_columns_info)
+        added_columns_info.get('column_names', None)
+        if not added_columns_info['column_names']:
+            drop = False
+        if drop:
+            drop = self._add_drop_column_generate_columns_to_drop(added_columns_info)
+        if add:
+            add = self._add_drop_column_generate_columns_to_add(added_columns_info)
+        if not add and not drop:
+            return
+        # TBD: Scylla does not support DROP and ADD in the same statement
+        if add:
+            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
+                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
+                for column_name, column_type in add:
+                    added_columns_info['column_names'][column_name] = column_type
+                    column_type.remember_variant(added_columns_info['column_types'])
+        if drop:
+            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} DROP ( {', '.join(drop)} );"
+            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
+                for column_name in drop:
+                    column_type = added_columns_info['column_names'][column_name]
+                    column_type.forget_variant(added_columns_info['column_types'])
+                    del added_columns_info['column_names'][column_name]
+
+    def disrupt_add_remove_column(self):
+        """
+        It searches for table that allow add/drop columns (non compact storage table) and create it if no such table.
+        If table is not self-created, add and/or drop columns from that table and quit.
+        If table is self-created, run cassandra-stress for 3 minutes on it and,
+            in the same time run cycle of adding and/or dropping columns.
+        It keeps tracking what columns where added and never drops column that were added by someone else.
+        """
+        self.log.debug("AddDropColumnMonkey: Started")
+        self._add_drop_column_target_table = self._add_drop_column_get_target_table(
+            self._add_drop_column_target_table)
+        if self._add_drop_column_target_table is not None:
+            if self._add_drop_column_target_table != ['add_drop_column_ks', 'add_drop_column_table']:
+                self._set_current_disruption(f'AddDropColumnMonkey Singular {self.target_node}')
+                self._add_drop_column()
+                return
+        self._set_current_disruption(f'AddDropColumnMonkey Self-stress {self.target_node}')
+        self._add_drop_column_create_table()
+        stress_cmd = "cassandra-stress user profile=/tmp/cs_profile_add_remove_column.yaml " \
+                     "duration=3m no-warmup 'ops(insert=3,read1=1)' cl=ALL -rate threads=4"
+        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd,
+                                                  keyspace_name=self._add_drop_column_target_table[0])
+        start_time = time.time()
+        end_time = start_time + 600
+        while time.time() < end_time:
+            self._add_drop_column()
+            time.sleep(1)
+        cs_thread.kill()
+
     def modify_table_comment(self):
         # default: comment = ''
-        prop_val = ''.join(random.choice(string.ascii_letters) for _ in range(24))
-        self._modify_table_property(name="comment", val="'%s'" % prop_val)
+        prop_val = generate_random_string(24)
+        self._modify_table_property(name="comment", val=f"'{prop_val}'")
 
     def modify_table_gc_grace_time(self):
         """
@@ -1618,6 +1776,15 @@ class ModifyTableMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_modify_table()
+
+
+class AddDropColumnMonkey(Nemesis):
+
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_add_remove_column()
 
 
 class ToggleTableIcsMonkey(Nemesis):
