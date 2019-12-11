@@ -3501,6 +3501,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         node.wait_ssh_up()
         # update repo cache and system after system is up
         node.update_repo_cache()
+        self.mgmt_auth_token = kwargs["auth_token"]  # pylint: disable=attribute-defined-outside-init
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
@@ -3524,10 +3525,9 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         else:
             node.remoter.run('sudo apt-get install screen -y')
         if self.params.get("use_mgmt", default=None):
-            self.install_scylla_manager(node, auth_token=kwargs["auth_token"])
+            self.install_scylla_manager(node, auth_token=self.mgmt_auth_token)
 
     def install_scylla_manager(self, node, auth_token):
-        self.mgmt_auth_token = auth_token  # pylint: disable=attribute-defined-outside-init
         if self.params.get('use_mgmt', default=None):
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
                               scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
