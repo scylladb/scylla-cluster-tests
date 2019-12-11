@@ -18,14 +18,13 @@ import uuid
 import time
 import logging
 import concurrent.futures
-
 import yaml
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
-from sdcm.utils.common import FileFollowerThread, makedirs
+from sdcm.utils.common import FileFollowerThread, makedirs, generate_random_string
 from sdcm.sct_events import CassandraStressLogEvent, Severity
 
 LOGGER = logging.getLogger(__name__)
@@ -77,6 +76,8 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         self.executor = None
         self.results_futures = []
+        self.shell_marker = generate_random_string(20)
+        #  This marker is used to mark shell commands, in order to be able to kill them later
         self.max_workers = 0
 
     def create_stress_cmd(self, node, loader_idx, keyspace_idx):
@@ -135,21 +136,21 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
         log_dir = os.path.join(self.output_dir, self.loader_set.name)
         if not os.path.exists(log_dir):
             makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-k%s-%s.log' %
-                                     (loader_idx, cpu_idx, keyspace_idx, uuid.uuid4()))
+        log_file_name = os.path.join(log_dir,
+                                     f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
         # This tag will be output in the header of c-stress result,
         # we parse it to know the loader & cpu info in _parse_cs_summary().
-        tag = 'TAG: loader_idx:%s-cpu_idx:%s-keyspace_idx:%s' % (loader_idx, cpu_idx, keyspace_idx)
+        tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
 
         if self.stress_num > 1:
-            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, stress_cmd)
+            node_cmd = f'taskset -c {cpu_idx} bash -c "STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}"'
         else:
-            node_cmd = stress_cmd
+            node_cmd = f'bash -c "STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd};" '
 
-        node_cmd = 'echo %s; %s' % (tag, node_cmd)
+        node_cmd = f'echo {tag}; {node_cmd}'
 
         CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
@@ -192,6 +193,17 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                         time.sleep(30)
 
         return self
+
+    def kill(self):
+        if self.round_robin:
+            self.stress_num = 1
+            loaders = [self.loader_set.get_loader()]
+        else:
+            loaders = self.loader_set.nodes
+        for loader in loaders:
+            loader.remoter.run(cmd=f"pkill -9 -f {self.shell_marker}",
+                               timeout=self.timeout,
+                               ignore_status=True)
 
     def get_results(self):
         ret = []

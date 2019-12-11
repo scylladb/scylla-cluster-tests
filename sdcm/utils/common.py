@@ -25,6 +25,7 @@ import threading
 import select
 import shutil
 import copy
+import string
 from urllib.parse import urlparse
 
 from functools import wraps
@@ -156,6 +157,11 @@ class Distro(Enum):
     UBUNTU18 = 5
     DEBIAN8 = 6
     DEBIAN9 = 7
+
+
+def generate_random_string(length):
+    return random.choice(string.ascii_uppercase) + ''.join(
+        random.choice(string.ascii_uppercase + string.digits) for x in range(length - 1))
 
 
 def get_data_dir_path(*args):
@@ -989,6 +995,25 @@ def tag_ami(ami_id, tags_dict, region_name):
     test_image.create_tags(Tags=tags)
 
     LOGGER.info("tagged %s with %s", ami_id, tags)
+
+
+def get_db_tables(session, ks, with_compact_storage=True):
+    """
+    Return tables from keystore based on their compact storage feature
+    Arguments:
+        session -- DB session
+        ks -- Keypsace name
+        with_compact_storage -- If True, return non compact tables, if False, return compact tables
+
+    """
+    output = []
+    for table in session.cluster.metadata.keyspaces[ks].tables.keys():
+        table_code = session.cluster.metadata.keyspaces[ks].tables[table].as_cql_query()
+        if with_compact_storage is None:
+            output.append(table)
+        elif ("with compact storage" in table_code.lower()) == with_compact_storage:
+            output.append(table)
+    return output
 
 
 def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,
