@@ -2836,6 +2836,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                         pass
         return status
 
+    @staticmethod
+    def get_nodetool_info(node):
+        """
+            Runs nodetool info and generates status structure.
+            Info format:
+
+            :param node: node to run the nodetool on
+            :return: dict
+        """
+        res = node.run_nodetool('info')
+        info_res = yaml.load(res.stdout)
+        return info_res
+
     def check_cluster_health(self):
         for node in self.nodes:
             node.check_node_health()

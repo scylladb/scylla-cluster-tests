@@ -87,6 +87,21 @@ class MgmtCliTest(ClusterTester):
 
         self.create_table(table_name, keyspace_name=keyspace_name)
 
+    def download_file_from_backup_repo(self, local, bucket, cluster_id):
+        self.log.info('Will download files for each db machine')
+        cmd = f'''sudo yum install -y python-pip
+                  sudo pip install awscli
+                  sudo pip install boto3
+                  mkdir -p {local}'''
+        for node in self.db_cluster.nodes:
+            node.remoter.run(f'bash -cxe "{cmd}"')
+            nodetool_info = self.db_cluster.get_nodetool_info(node)
+            node_id = nodetool_info['ID']
+            region_name = nodetool_info['Data Center']
+            source_path = f's3://{bucket}/backup/sst/cluster/{cluster_id}/dc/{region_name}/node/{node_id}/keyspace/'
+            download_cmd = f'aws s3 cp {source_path} {local} --recursive'
+            node.remoter.run(download_cmd)
+
     def test_manager_sanity(self):
         """
         Test steps:
@@ -121,8 +136,22 @@ class MgmtCliTest(ClusterTester):
                 # can use this function to populate tables better?
                 # self.populate_data_parallel()
 
-    def verify_backup_success(self):
-        pass
+    # pylint: disable=too-many-arguments
+    def verify_backup_success(self, bucket, cluster_id, keyspace_name='keyspace1', table_name='standard1',
+                              local='/tmp/backup', truncate=True):
+        self.download_file_from_backup_repo(local=local, bucket=bucket, cluster_id=cluster_id)
+        node = self.db_cluster.nodes[0]
+        path_to_tmp = f'{local}/{keyspace_name}/table/{table_name}'
+        table_id = node.remoter.run(f'ls {path_to_tmp}').stdout.strip()
+        path_to_upload = f'/var/lib/scylla/data/{keyspace_name}/{table_name}-{table_id}/upload'
+        node.remoter.run(f'sudo cp {path_to_tmp}/{table_id}/* {path_to_upload}/.')
+        node.remoter.run(f'sudo chown scylla:scylla -Rf {path_to_upload}')
+        if truncate:
+            node.run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
+        node.run_nodetool(sub_cmd='refresh', args=f'-- {keyspace_name} {table_name}')
+        limit = 10
+        after_restore = node.run_cqlsh(f'SELECT * FROM {keyspace_name}.{table_name} LIMIT {limit}').stdout
+        assert len(after_restore.strip().splitlines()[2:-2]) == limit
 
     def test_basic_backup(self):
         self.log.info('starting test_basic_backup')
@@ -133,9 +162,8 @@ class MgmtCliTest(ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         self._generate_load()
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
-        task_status = backup_task.wait_and_get_final_status()
-        self.log.info(f'backup task finished with status {task_status}')
-        self.verify_backup_success()
+        backup_task.wait_for_status(list_status=[TaskStatus.DONE])
+        self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
         self.log.info('finishing test_basic_backup')
 
     def test_backup_multiple_ks_tables(self):
@@ -147,9 +175,8 @@ class MgmtCliTest(ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         self.create_ks_and_tables(10, 100)
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
-        task_status = backup_task.wait_and_get_final_status()
-        self.log.info(f'backup task finished with status {task_status}')
-        self.verify_backup_success()
+        backup_task.wait_for_status(list_status=[TaskStatus.DONE])
+        self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
         self.log.info('finishing test_backup_multiple_ks_tables')
 
     def test_client_encryption(self):
