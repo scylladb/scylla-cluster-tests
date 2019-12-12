@@ -1335,14 +1335,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             scylla_yaml_contents = pattern.sub('seeds: "{0}"'.format(seed_address),
                                                scylla_yaml_contents)
 
-            # NOTICE: the following configuration always have to use private_ip_address for multi-region to work
             # Set listen_address
             pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
             # Set rpc_address
             pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
+            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
                                                scylla_yaml_contents)
 
         if listen_on_all_interfaces:
@@ -3401,7 +3400,7 @@ class BaseLoaderSet():
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
-            ips = ",".join([n.private_ip_address for n in node_list])
+            ips = ",".join([n.ip_address for n in node_list])
             bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
             result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(stress_cmd.strip(), ips, bench_log),
                                       timeout=timeout,

@@ -1473,8 +1473,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
         query = '(sum(node_filesystem_size{{mountpoint="{0.scylla_dir}", ' \
-            'instance=~"{1.private_ip_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
-            'instance=~"{1.private_ip_address}"}}))'.format(self, node)
+            'instance=~"{1.ip_address}"}})-sum(node_filesystem_avail{{mountpoint="{0.scylla_dir}", ' \
+            'instance=~"{1.ip_address}"}}))'.format(self, node)
         res = self.prometheus_db.query(query=query, start=time.time(), end=time.time())
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
