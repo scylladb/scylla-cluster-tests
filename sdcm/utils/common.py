@@ -1321,7 +1321,10 @@ def clean_aws_instances_according_post_behavior(params, config, logdir):  # pyli
         if action == 'destroy':
             instances_ids = [instance['InstanceId'] for instance in instances]
             LOGGER.info('Clean next instances %s', instances_ids)
-            client.terminate_instances(InstanceIds=instances_ids)
+            try:
+                client.terminate_instances(InstanceIds=instances_ids)
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error("Error during instance termination: %s", details)
         elif action == 'keep-on-failure':
             if status:
                 LOGGER.info('Run failed. Leave instances running')
@@ -1352,7 +1355,7 @@ def clean_gce_instances_according_post_behavior(params, config, logdir):  # pyli
 
     def apply_action(instances, action):
         if action == 'destroy':
-            for instance in filtered_instances['db_nodes']:
+            for instance in instances:
                 LOGGER.info('Destroying instance: %s', instance.name)
                 instance.destroy()
                 LOGGER.info('Destroyed instance: %s', instance.name)

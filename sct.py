@@ -105,9 +105,9 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
 
         for _test_id in test_id:
             params['TestId'] = _test_id
-            if backend == 'aws':
+            if 'aws' in backend:
                 clean_aws_instances_according_post_behavior(params, config, logdir)
-            if backend == 'gce':
+            if 'gce' in backend:
                 clean_gce_instances_according_post_behavior(params, config, logdir)
 
     else:
