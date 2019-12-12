@@ -3501,7 +3501,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         node.wait_ssh_up()
         # update repo cache and system after system is up
         node.update_repo_cache()
-        self.mgmt_auth_token = kwargs["auth_token"]  # pylint: disable=attribute-defined-outside-init
+        self.mgmt_auth_token = kwargs.get("auth_token", default=None)  # pylint: disable=attribute-defined-outside-init
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
