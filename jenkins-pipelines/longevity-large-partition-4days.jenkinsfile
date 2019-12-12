@@ -8,7 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'longevity_large_partition_test.LargePartitionLongevetyTest.test_large_partition_longevity',
+    test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
     test_config: 'test-cases/longevity/longevity-large-partition-4days.yaml',
 
     timeout: [time: 6540, unit: 'MINUTES']
