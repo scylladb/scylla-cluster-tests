@@ -83,6 +83,7 @@ def call(Map pipelineParams) {
                                                 export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
 
                                                 export SCT_COLLECT_LOGS=true
+                                                export SCT_EXECUTE_POST_BEHAVIOR=true
                                                 echo "start test ......."
                                                 ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                                 echo "end test ....."
