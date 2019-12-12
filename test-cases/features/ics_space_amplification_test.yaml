@@ -17,3 +17,5 @@ client_encrypt: false
 
 use_mgmt: false
 nemesis_during_prepare: false
+
+append_scylla_args: '--compaction-enforce-min-threshold 1'
