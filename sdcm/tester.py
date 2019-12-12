@@ -173,6 +173,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
         cluster.Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        if cluster.Setup.BACKTRACE_DECODING:
+            cluster.Setup.set_decoding_queue()
         cluster.Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or cluster.Setup.MULTI_REGION)
 

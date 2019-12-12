@@ -106,6 +106,7 @@ class Setup:
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
     RSYSLOG_ADDRESS = None
+    DECODING_QUEUE = None
 
     _test_id = None
     _test_name = None
@@ -152,6 +153,10 @@ class Setup:
     @classmethod
     def set_multi_region(cls, multi_region):
         cls.MULTI_REGION = multi_region
+
+    @classmethod
+    def set_decoding_queue(cls):
+        cls.DECODING_QUEUE = queue.Queue()
 
     @classmethod
     def set_intra_node_comm_public(cls, intra_node_comm_public):
@@ -343,6 +348,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._backtrace_thread = None
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
+        self._decoding_backtraces_thread = None
         self._init_system = None
         self.db_init_finished = False
 
@@ -751,7 +757,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on uploading coredump")
     def _upload_coredump(self, coredump):
-        try:
+        return "https://scylladb.com", "See university"
+        try:  # pylint: disable=unreachable
             if self.is_debian() or self.is_ubuntu():
                 self.remoter.run('sudo apt-get install -y pigz')
             else:
@@ -916,6 +923,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.start_journal_thread()
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
+        if 'monitor' in self.name:
+            self.start_decode_on_monitor_node_thread()
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
@@ -931,6 +940,11 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self._journal_thread.join(timeout)
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
+        if self._decoding_backtraces_thread:
+            Setup.DECODING_QUEUE.put(None)
+            Setup.DECODING_QUEUE.join()
+            self._decoding_backtraces_thread.join(timeout)
+            self._decoding_backtraces_thread = None
 
     def get_cpumodel(self):
         """Get cpu model from /proc/cpuinfo
@@ -1264,16 +1278,78 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             for backtrace in backtraces:
                 if Setup.BACKTRACE_DECODING:
                     if backtrace['event'].raw_backtrace:
-                        try:
-                            scylla_debug_info = self.get_scylla_debuginfo_file()
-                            output = self.remoter.run(
-                                'addr2line -Cpife {0} {1}'.format(scylla_debug_info, " ".join(backtrace['event'].raw_backtrace.split('\n'))), verbose=False)
-                            backtrace['event'].add_backtrace_info(backtrace=output.stdout)
-                        except Exception:  # pylint: disable=broad-except
-                            self.log.exception("failed to decode backtrace")
-                backtrace['event'].publish()
+                        scylla_debug_info = self.get_scylla_debuginfo_file()
+                        self.log.debug('Debug info file %s', scylla_debug_info)
+                        Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
+                                                  "event": backtrace['event']})
+                else:
+                    backtrace['event'].publish()
 
         return matches
+
+    def start_decode_on_monitor_node_thread(self):
+        self._decoding_backtraces_thread = threading.Thread(target=self.decode_backtrace)
+        self._decoding_backtraces_thread.daemon = True
+        self._decoding_backtraces_thread.start()
+
+    def decode_backtrace(self):
+        while True:
+            event = None
+            obj = None
+            try:
+                obj = Setup.DECODING_QUEUE.get(timeout=5)
+                if obj is None:
+                    Setup.DECODING_QUEUE.task_done()
+                    break
+                event = obj["event"]
+                debug_path_on_monitor = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
+                output = self.decode_raw_backtrace(debug_path_on_monitor, " ".join(event.raw_backtrace.split('\n')))
+                event.add_backtrace_info(backtrace=output.stdout)
+                Setup.DECODING_QUEUE.task_done()
+            except queue.Empty:
+                pass
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error("failed to decode backtrace %s", details)
+            finally:
+                if event:
+                    event.publish()
+
+            if self.termination_event.isSet() and Setup.DECODING_QUEUE.empty():
+                break
+
+    def copy_scylla_debug_info(self, node, scylla_debug_file):
+        """Copy scylla debug file from db-node to monitor-node
+
+        Copy via builder
+        :param node: db node
+        :type node: BaseNode
+        :param scylla_debug_file: path to scylla_debug_file on db-node
+        :type scylla_debug_file: str
+        :returns: path on monitor node
+        :rtype: {str}
+        """
+        if not os.path.exists(os.path.join(node.logdir, os.path.basename(scylla_debug_file))):
+            node.remoter.receive_files(scylla_debug_file, node.logdir)
+        res = self.remoter.run(
+            "test -f {}".format(os.path.join("/tmp", os.path.basename(scylla_debug_file))), ignore_status=True, verbose=False)
+        if res.exited != 0:
+            self.remoter.send_files(os.path.join(node.logdir, os.path.basename(scylla_debug_file)), "/tmp")
+        LOGGER.debug("File on monitor node %s: %s", self,
+                     os.path.join("/tmp", os.path.basename(scylla_debug_file)))
+        return os.path.join("/tmp", os.path.basename(scylla_debug_file))
+
+    def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
+        """run decode backtrace on monitor node
+
+        Decode backtrace on monitor node
+        :param scylla_debug_file: file path on db-node
+        :type scylla_debug_file: str
+        :param raw_backtrace: string with backtrace data
+        :type raw_backtrace: str
+        :returns: result of bactrace
+        :rtype: {str}
+        """
+        return self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_file, raw_backtrace), verbose=True)
 
     def get_scylla_debuginfo_file(self):
         """
@@ -1289,7 +1365,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             return scylla_debug_info
 
         # then try the relocatable location
-        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla.bin*.debug')
+        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug', ignore_status=True)
         if results.stdout.strip():
             return results.stdout.strip()
 
