@@ -18,6 +18,7 @@ import time
 import os
 
 from sdcm.tester import ClusterTester
+from sdcm.cluster import get_username
 from sdcm.utils.common import format_timestamp
 
 
@@ -80,6 +81,7 @@ class GeminiTest(ClusterTester):
 
         return {
             "subject": 'Gemini - test results: {}'.format(start_time),
+            "username": get_username(),
             "gemini_cmd": self.gemini_results['cmd'],
             "gemini_version": self.loaders.gemini_version,
             "scylla_version": scylla_version,
