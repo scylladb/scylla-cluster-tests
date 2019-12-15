@@ -25,6 +25,7 @@ from cassandra import AlreadyExists, InvalidRequest
 
 
 from sdcm.tester import ClusterTester
+from sdcm.cluster import get_username
 from sdcm.utils.alternator import create_table as alternator_create_table
 from sdcm.utils.common import format_timestamp
 
@@ -485,6 +486,7 @@ class LongevityTest(ClusterTester):
         critical = self.get_critical_events()
         return {
             'subject': 'Result {}: {}'.format(subject_name, start_time),
+            'username': get_username(),
             'grafana_screenshots': grafana_dataset.get('screenshots', []),
             'grafana_snapshots': grafana_dataset.get('snapshots', []),
             'test_status': ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
