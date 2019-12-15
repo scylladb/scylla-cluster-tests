@@ -13,7 +13,6 @@
 |-- gce_config.yaml
 |-- azure_config.yaml
 |-- docker_config.yaml
-|-- libvirt_config.yaml
 
 # test case files which are taken from command line
 /tests-cases

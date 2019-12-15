@@ -2,7 +2,7 @@
 | Parameter | Description  | Default | Override environment<br>variable
 | :-------  | :----------  | :------ | :-------------------------------
 | **<a name="config_files">config_files</a>**  | a list of config files that would be used | N/A | SCT_CONFIG_FILES
-| **<a name="cluster_backend">cluster_backend</a>**  | backend that will be used, aws/gce/docker/libvirt/openstack | docker | SCT_CLUSTER_BACKEND
+| **<a name="cluster_backend">cluster_backend</a>**  | backend that will be used, aws/gce/docker | docker | SCT_CLUSTER_BACKEND
 | **<a name="test_duration">test_duration</a>**  | Test duration (min). Parameter used to keep instances produced by tests that are<br>supposed to run longer than 24 hours from being killed | 600 | SCT_TEST_DURATION
 | **<a name="n_db_nodes">n_db_nodes</a>**  | Number list of database nodes in multiple data centers. | 3 | SCT_N_DB_NODES
 | **<a name="n_loaders">n_loaders</a>**  | Number list of loader nodes in multiple data centers | 1 | SCT_N_LOADERS
@@ -84,26 +84,6 @@
 | **<a name="gce_root_disk_size_db">gce_root_disk_size_db</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_DB
 | **<a name="gce_n_local_ssd_disk_db">gce_n_local_ssd_disk_db</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_DB
 | **<a name="docker_image">docker_image</a>**  |  | N/A | SCT_DOCKER_IMAGE
-| **<a name="libvirt_uri">libvirt_uri</a>**  |  | N/A | SCT_LIBVIRT_URI
-| **<a name="libvirt_bridge">libvirt_bridge</a>**  |  | N/A | SCT_LIBVIRT_BRIDGE
-| **<a name="libvirt_loader_image">libvirt_loader_image</a>**  |  | N/A | SCT_LIBVIRT_LOADER_IMAGE
-| **<a name="libvirt_loader_image_user">libvirt_loader_image_user</a>**  |  | N/A | SCT_LIBVIRT_LOADER_IMAGE_USER
-| **<a name="libvirt_loader_image_password">libvirt_loader_image_password</a>**  |  | N/A | SCT_LIBVIRT_LOADER_IMAGE_PASSWORD
-| **<a name="libvirt_loader_os_type">libvirt_loader_os_type</a>**  |  | N/A | SCT_LIBVIRT_LOADER_OS_TYPE
-| **<a name="libvirt_loader_os_variant">libvirt_loader_os_variant</a>**  |  | N/A | SCT_LIBVIRT_LOADER_OS_VARIANT
-| **<a name="libvirt_loader_memory">libvirt_loader_memory</a>**  |  | N/A | SCT_LIBVIRT_LOADER_MEMORY
-| **<a name="libvirt_db_image">libvirt_db_image</a>**  |  | N/A | SCT_LIBVIRT_DB_IMAGE
-| **<a name="libvirt_db_image_user">libvirt_db_image_user</a>**  |  | N/A | SCT_LIBVIRT_DB_IMAGE_USER
-| **<a name="libvirt_db_image_password">libvirt_db_image_password</a>**  |  | N/A | SCT_LIBVIRT_DB_IMAGE_PASSWORD
-| **<a name="libvirt_db_os_type">libvirt_db_os_type</a>**  |  | N/A | SCT_LIBVIRT_DB_OS_TYPE
-| **<a name="libvirt_db_os_variant">libvirt_db_os_variant</a>**  |  | N/A | SCT_LIBVIRT_DB_OS_VARIANT
-| **<a name="libvirt_db_memory">libvirt_db_memory</a>**  |  | N/A | SCT_LIBVIRT_DB_MEMORY
-| **<a name="libvirt_monitor_image">libvirt_monitor_image</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_IMAGE
-| **<a name="libvirt_monitor_image_user">libvirt_monitor_image_user</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_IMAGE_USER
-| **<a name="libvirt_monitor_image_password">libvirt_monitor_image_password</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_IMAGE_PASSWORD
-| **<a name="libvirt_monitor_os_type">libvirt_monitor_os_type</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_OS_TYPE
-| **<a name="libvirt_monitor_os_variant">libvirt_monitor_os_variant</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_OS_VARIANT
-| **<a name="libvirt_monitor_memory">libvirt_monitor_memory</a>**  |  | N/A | SCT_LIBVIRT_MONITOR_MEMORY
 | **<a name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
 | **<a name="db_nodes_public_ip">db_nodes_public_ip</a>**  |  | N/A | SCT_DB_NODES_PUBLIC_IP
 | **<a name="loader_nodes_private_ip">loader_nodes_private_ip</a>**  |  | N/A | SCT_LOADER_NODES_PRIVATE_IP
