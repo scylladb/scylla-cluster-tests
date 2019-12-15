@@ -128,10 +128,14 @@ class MgmtCliTest(ClusterTester):
         self.test_client_encryption()
 
     def test_backup_feature(self):
-        with self.subTest():
+        with self.subTest('Basic Backup Test'):
             self.test_basic_backup()
-        with self.subTest():
+        with self.subTest('Backup Multiple KS\' and Tables'):
             self.test_backup_multiple_ks_tables()
+        with self.subTest('Backup to Location with path'):
+            self.test_backup_location_with_path()
+        with self.subTest('Test Backup Rate Limit'):
+            self.test_backup_rate_limit()
 
     def update_cred_file(self):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
@@ -202,7 +206,6 @@ class MgmtCliTest(ClusterTester):
         self.log.info('finishing test_backup_multiple_ks_tables')
 
     def test_backup_location_with_path(self):
-        # TODO: add this test to the test_backup
         self.log.info('starting test_backup_location_with_path')
         self.update_cred_file()
         location_list = ['s3:manager-backup-tests-us/path_testing/']
@@ -218,7 +221,6 @@ class MgmtCliTest(ClusterTester):
         self.log.info('finishing test_backup_location_with_path')
 
     def test_backup_rate_limit(self):
-        # TODO: add this test to the test_backup
         self.log.info('starting test_backup_rate_limit')
         self.update_cred_file()
         location_list = ['s3:manager-backup-tests-us']
