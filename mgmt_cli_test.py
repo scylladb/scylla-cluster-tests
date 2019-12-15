@@ -117,6 +117,12 @@ class MgmtCliTest(ClusterTester):
         self.test_mgmt_cluster_healthcheck()
         self.test_client_encryption()
 
+    def test_backup_feature(self):
+        with self.subTest():
+            self.test_basic_backup()
+        with self.subTest():
+            self.test_backup_multiple_ks_tables()
+
     def update_cred_file(self):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
         # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary

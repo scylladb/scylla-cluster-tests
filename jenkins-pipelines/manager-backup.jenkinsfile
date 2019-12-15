@@ -1,0 +1,19 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    backend: 'aws',
+    ip_ssh_connections: 'public',
+    aws_region: '''["us-east-1", "us-west-2"]''',
+    test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
+    test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
+
+    timeout: [time: 500, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'keep-on-failure'
+)
