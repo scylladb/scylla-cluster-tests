@@ -4,7 +4,7 @@ KEYSPACES_COMPRESSION_MAP = {'keyspace_lz4': 'LZ4', 'keyspace_deflate': 'Deflate
 DICT_DEFAULT_BLOB_COLUMNS = {'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'}
 
 
-class IcsLongevetyTest(LongevityTest):
+class IcsLongevityTest(LongevityTest):
     def _pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None,  # pylint: disable=too-many-arguments
                                            compaction='IncrementalCompactionStrategy', compression=None,
                                            create_all_keyspaces_table=True):  # pylint: disable=too-many-arguments
