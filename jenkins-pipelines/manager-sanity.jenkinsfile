@@ -7,6 +7,7 @@ longevityPipeline(
     params: params,
 
     backend: 'aws',
+    scylla_version: '3.1.2'
     ip_ssh_connections: 'public',
     aws_region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
