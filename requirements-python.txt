@@ -1,5 +1,4 @@
 PyYAML==5.1
-libvirt-python==5.7.0
 fabric==2.5.0
 invoke==1.3.0
 boto3==1.9.200

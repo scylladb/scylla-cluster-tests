@@ -5,7 +5,6 @@ yum -y update
 # Python dependencies
 yum install -y python-devel python-pip
 pip install --upgrade pip
-yum install -y libvirt-devel  # needed for libvirt-python PIP package
 
 # Needed for PhantomJS
 yum install -y freetype-devel libpng-devel bzip2 bitmap-fonts fontconfig

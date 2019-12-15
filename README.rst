@@ -148,26 +148,6 @@ All the test run configurations are stored in ``tests`` directory.
 Important: Some tests use custom hardcoded operations due to their nature,
 so those tests won't honor what is set in ``data_dir/your_config.yaml``.
 
-Setup Notes - Making your regular user able to access qemu:///session
----------------------------------------------------------------------
-
-You might want to setup libvirt to access the qemu system session as your regular
-user. You might want to refer to [3], in case that is not available, here's the
-gist of the procedure:
-
-With Fedora 20 onwards, virt-manager implements PolicyKit (I recommend reading the man page). If you want to allow a certain group of users access to virt-manager without providing root credentials, you can create a new rules file in /etc/polkit-1/rules.d and add a rule to permit users who are local, logged in, and in the group you specify (wheel in the example below) access to the virt-manager software::
-
-    sudo vim /etc/polkit-1/rules.d/80-libvirt.rules
-
-And then write::
-
-    polkit.addRule(function(action, subject) {
-      if (action.id == "org.libvirt.unix.manage" && subject.local && subject.active && subject.isInGroup("wheel")) {
-          return polkit.Result.YES;
-      }
-    });
-
-
 Run the tests
 =============
 
@@ -196,46 +176,6 @@ Running a test with already provisioned cluster, you can get the test_id in the 
     export SCT_REUSE_CLUSTER=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
 
 
-Libvirt
--------
-
-In order to run tests using the libvirt backend, you'll need:
-
-1. One qcow2 base image with CentOS 7 installed. This image needs to have a user
-   named 'centos', and this user needs to be configured to not require a password
-   when running commands with sudo.
-
-2. `cp data_dir/scylla.yaml data_dir/your_config.yaml`
-
-3. Edit the configuration file (data_dir/your_config.yaml) to add the path to
-   the CentOS image mentioned on step 1, as well as tweak values present in the
-   `libvirt:` session of that file. One of the values you might want to tweak is
-   the scylla yum repository used to install scylla on the CentOS 7 VM.
-
-With that said and done, you can run your test using the command line::
-
-    hydra run-test longevity_test.LongevityTest.test_custom_time --backend libvirt --config data_dir/scylla-lmr.yaml
-
-
-OpenStack
----------
-
-In order to run tests using the openstack backend, you'll need:
-
-1. A deployed OpenStack lab
-2. One CentOS 7 image. This image needs to have a user
-   named 'centos', and this user needs to be configured to not require a password
-   when running commands with sudo.
-
-3. `cp data_dir/scylla.yaml data_dir/your_config.yaml`
-
-4. Edit the configuration file (data_dir/your_config.yaml) to tweak values present
-   in the `openstack:` session of that file. One of the values you might want to
-   tweak is the scylla yum repository used to install scylla on the CentOS 7 image.
-
-With that said and done, you can run your test using the command line::
-
-    hydra run-test longevity_test.LongevityTest.test_custom_time --backend openstack --config data_dir/scylla-lmr.yaml
 
 GCE - Google Compute Engine
 ---------------------------
@@ -260,7 +200,7 @@ With that said and done, you can run your test using the command line::
 
 What you can do while the test is running to see what's happening::
 
-    tail -f ~/sct-results/latest/job.log
+    tail -f ~/sct-results/latest/sct.log
 
 Test operations
 ===============
