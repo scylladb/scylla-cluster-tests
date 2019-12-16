@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    backend: 'aws',
+    aws_region: 'eu-west-1',
+    test_name: 'sla_per_user_system_test.SlaPerUserTest.test_read_50perc_write_50perc_load',
+    test_config: 'test-cases/features/system-sla-test.yaml',
+
+    timeout: [time: 480, unit: 'MINUTES']
+)
