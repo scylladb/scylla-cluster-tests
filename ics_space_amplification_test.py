@@ -1,10 +1,12 @@
 import math
 import time
 
-from longevity_ics_test import IcsLongevetyTest
+from longevity_test import LongevityTest
 from sdcm.cluster import SCYLLA_DIR
-from sdcm.utils.common import retrying
+from test_lib.compaction import CompactionStrategy
 
+DICT_KEYSPACES_COMPRESSION = {'keyspace_lz4': 'LZ4', 'keyspace_deflate': 'Deflate', 'keyspace_snappy': 'Snappy'}
+DICT_DEFAULT_BLOB_COLUMNS = {'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'}
 KB_SIZE = 2 ** 10
 MB_SIZE = KB_SIZE * 1024
 GB_SIZE = MB_SIZE * 1024
@@ -15,7 +17,31 @@ AVAIL_SIZE_METRIC = 'node_filesystem_avail_bytes'
 AVAIL_SIZE_METRIC_OLD = 'node_filesystem_avail'
 
 
-class IcsSpaceAmplificationTest(IcsLongevetyTest):
+class IcsSpaceAmplificationTest(LongevityTest):
+
+    def _pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None,  # pylint: disable=too-many-arguments
+                                           compaction=CompactionStrategy.INCREMENTAL.value, compression=None,
+                                           create_all_keyspaces_table=True):
+        """
+        This method enables creating specific configuration for a table. for example, define specific compaction parameters.
+        """
+        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
+        for i in range(1, keyspace_num + 1):
+            keyspace_name = 'keyspace{}'.format(i)
+            self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
+            self.log.debug('{} Created'.format(keyspace_name))
+            self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
+                              compact_storage=True,
+                              columns=DICT_DEFAULT_BLOB_COLUMNS, compaction=compaction, compression=compression,
+                              scylla_encryption_options=scylla_encryption_options)
+        if create_all_keyspaces_table:
+            for keyspace_name, keyspace_compression in DICT_KEYSPACES_COMPRESSION.items():
+                self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
+                self.log.debug('{} Created'.format(keyspace_name))
+                self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
+                                  compact_storage=True, columns=DICT_DEFAULT_BLOB_COLUMNS,
+                                  compaction=compaction, compression=keyspace_compression,
+                                  scylla_encryption_options=scylla_encryption_options)
 
     def _get_used_capacity_gb(self, node):  # pylint: disable=too-many-locals
         # example: node_filesystem_size_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
@@ -147,18 +173,6 @@ class IcsSpaceAmplificationTest(IcsLongevetyTest):
         for node in self.db_cluster.nodes:
             dict_nodes_used_capacity[node.private_ip_address] = self._get_used_capacity_gb(node=node)
         return dict_nodes_used_capacity
-
-    @retrying(n=80, sleep_time=60, allowed_exceptions=(AssertionError,))
-    def wait_no_compactions_running(self):
-        compaction_query = "sum(scylla_compaction_manager_compactions{})"
-        now = time.time()
-        results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
-        self.log.debug("scylla_compaction_manager_compactions: {results}".format(
-            **dict(locals(), **globals())))
-        # if all are zeros the result will be False, otherwise there are still compactions
-        if results:
-            assert any([float(v[1]) for v in results[0]["values"]]) is False, \
-                "Waiting until all compactions settle down"
 
     def test_ics_space_amplification(self):  # pylint: disable=too-many-locals
         """
