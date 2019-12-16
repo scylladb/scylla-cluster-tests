@@ -15,6 +15,7 @@
 
 import os
 import time
+from random import randint
 
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
@@ -77,6 +78,14 @@ class MgmtCliTest(ClusterTester):
             Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
         return [[node, getattr(node, ip_addr_attr)] for node in self.db_cluster.nodes]
 
+    def get_all_dcs_names(self):
+        regions_names = set()
+        for node in self.db_cluster.nodes:
+            data_center = self.db_cluster.get_nodetool_info(node)['Data Center']
+            regions_names.add(data_center)
+            node.region = data_center
+        return regions_names
+
     def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):
         self.log.info("creating keyspace {}".format(keyspace_name))
         keyspace_existence = self.create_keyspace(keyspace_name, 1, strategy)
@@ -97,6 +106,7 @@ class MgmtCliTest(ClusterTester):
             node.remoter.run(f'bash -cxe "{cmd}"')
             nodetool_info = self.db_cluster.get_nodetool_info(node)
             node_id = nodetool_info['ID']
+            # FIXME: it will work only with 1 single bucket
             region_name = nodetool_info['Data Center']
             source_path = f's3://{bucket}/backup/sst/cluster/{cluster_id}/dc/{region_name}/node/{node_id}/keyspace/'
             download_cmd = f'aws s3 cp {source_path} {local} --recursive'
@@ -134,17 +144,21 @@ class MgmtCliTest(ClusterTester):
             node.remoter.run('sudo systemctl restart scylla-manager-agent')
 
     def create_ks_and_tables(self, num_ks, num_table):
+        table_name = []
         for keyspace in range(num_ks):
             self.create_keyspace(f'ks00{keyspace}', 1)
             for table in range(num_table):
                 self.create_table(f'table00{table}', keyspace_name=f'ks00{keyspace}')
+                table_name.append(f'ks00{keyspace}.table00{table}')
                 # FIXME: improve the structure + data insertion
                 # can use this function to populate tables better?
                 # self.populate_data_parallel()
+        return table_name
 
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, bucket, cluster_id, keyspace_name='keyspace1', table_name='standard1',
                               local='/tmp/backup', truncate=True):
+        # FIXME: it will only work with 1 single bucket
         self.download_file_from_backup_repo(local=local, bucket=bucket, cluster_id=cluster_id)
         node = self.db_cluster.nodes[0]
         path_to_tmp = f'{local}/{keyspace_name}/table/{table_name}'
@@ -179,11 +193,46 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self.create_ks_and_tables(10, 100)
+        tables = self.create_ks_and_tables(10, 100)
+        self.log.debug(f'tables list = {tables}')
+        # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
         self.log.info('finishing test_backup_multiple_ks_tables')
+
+    def test_backup_location_with_path(self):
+        # TODO: add this test to the test_backup
+        self.log.info('starting test_backup_location_with_path')
+        self.update_cred_file()
+        location_list = ['s3:manager-backup-tests-us/path_testing/']
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_bucket_with_path',
+                                               db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        self._generate_load()
+        try:
+            mgr_cluster.create_backup_task({'location': location_list})
+        except ScyllaManagerError as error:
+            self.log.info(f'Expected to fail - error: {error}')
+        self.log.info('finishing test_backup_location_with_path')
+
+    def test_backup_rate_limit(self):
+        # TODO: add this test to the test_backup
+        self.log.info('starting test_backup_rate_limit')
+        self.update_cred_file()
+        location_list = ['s3:manager-backup-tests-us']
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        self._generate_load()
+        rate_limit = ','.join([f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()])
+        self.log.info(f'rate limit will be {rate_limit}')
+        backup_task = mgr_cluster.create_backup_task({'location': location_list, 'rate-limit': rate_limit})
+        task_status = backup_task.wait_and_get_final_status()
+        self.log.info(f'backup task finished with status {task_status}')
+        self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
+        self.log.info('finishing test_backup_rate_limit')
 
     def test_client_encryption(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
