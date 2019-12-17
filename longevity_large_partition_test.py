@@ -1,4 +1,5 @@
 from longevity_test import LongevityTest
+from test_lib.compaction import CompactionStrategy
 
 
 class LargePartitionLongevityTest(LongevityTest):
@@ -6,17 +7,14 @@ class LargePartitionLongevityTest(LongevityTest):
         super(LargePartitionLongevityTest, self).__init__(*args, **kwargs)
 
     def test_large_partition_longevity(self):
-        self._pre_create_schema()
+        compaction_strategy = self.params.get('compaction_strategy', default=CompactionStrategy.SIZE_TIERED.value)
+        self.pre_create_large_partitions_schema(compaction_strategy=compaction_strategy)
         self.test_custom_time()
 
-    def _pre_create_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
+    def pre_create_large_partitions_schema(self, compaction_strategy=CompactionStrategy.SIZE_TIERED.value):
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
-            session.execute("""
-                    CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
-            """)
-            session.execute("""
+        compaction_strategy_option = "AND compaction = {{'class': '{}'}};".format(compaction_strategy)
+        create_table_query = """
                     CREATE TABLE IF NOT EXISTS scylla_bench.test (
                     pk bigint,
                     ck bigint,
@@ -27,6 +25,7 @@ class LargePartitionLongevityTest(LongevityTest):
                     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
                     AND comment = ''
                     AND compression = {}
+
                     AND crc_check_chance = 1.0
                     AND dclocal_read_repair_chance = 0.0
                     AND default_time_to_live = 0
@@ -35,5 +34,12 @@ class LargePartitionLongevityTest(LongevityTest):
                     AND memtable_flush_period_in_ms = 0
                     AND min_index_interval = 128
                     AND read_repair_chance = 0.0
-                    AND speculative_retry = 'NONE';
-                            """)
+                    AND speculative_retry = 'NONE'
+                    """+compaction_strategy_option
+
+        with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
+            session.execute("""
+                    CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
+            """)
+            session.execute(create_table_query)
