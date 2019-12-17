@@ -665,6 +665,8 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
         self._prepare_test_table(ks=keyspace_truncate)
 
+        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
+        self.target_node.run_nodetool("flush")
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
