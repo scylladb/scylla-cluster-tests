@@ -937,6 +937,10 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         if result.stderr:
             self.tester.fail(result.stderr)
 
+    def disrupt_show_toppartitions(self):
+        self._set_current_disruption("ShowTopPartitions")
+        self.log.warning("Not support by branch 2019.1")
+
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         self._set_current_disruption('NetworkRandomInterruption')
