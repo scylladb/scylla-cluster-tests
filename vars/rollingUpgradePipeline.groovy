@@ -91,8 +91,8 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                                         echo "end test ....."
                                                         """
-                                                    } catch (err) {
-                                                        currentStage.result = 'FAILURE'
+                                                    } catch (error) {
+                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
@@ -135,11 +135,11 @@ def call(Map pipelineParams) {
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
 
                                                         echo "start collect logs ..."
-                                                        ./docker/env/hydra.sh collect-logs --logdir /sct
+                                                        ./docker/env/hydra.sh collect-logs --logdir /sct --backend gce
                                                         echo "end collect logs"
                                                         """
                                                     } catch (error) {
-                                                        currentStage.result = 'FAILURE'
+                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
@@ -155,18 +155,16 @@ def call(Map pipelineParams) {
                                                         set -xe
                                                         env
 
-                                                        export SCT_CLUSTER_BACKEND=gce
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
                                                         echo "start clean resources ..."
-                                                        ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct
+                                                        ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct --backend gce
                                                         echo "end clean resources"
                                                         """
                                                     } catch (error) {
-                                                        echo error
-                                                        sh """false"""
+                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
