@@ -937,109 +937,6 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         if result.stderr:
             self.tester.fail(result.stderr)
 
-    def disrupt_show_toppartitions(self):
-        def _parse_toppartitions_output(output):
-            """parsing output of toppartitions
-
-            input format stored in output parameter:
-            WRITES Sampler:
-              Cardinality: ~10 (15 capacity)
-              Top 10 partitions:
-                Partition     Count       +/-
-                9        11         0
-                0         1         0
-                1         1         0
-
-            READS Sampler:
-              Cardinality: ~10 (256 capacity)
-              Top 3 partitions:
-                Partition     Count       +/-
-                0         3         0
-                1         3         0
-                2         3         0
-                3         2         0
-
-            return Dict:
-            {
-                'READS': {
-                    'toppartitions': '10',
-                    'partitions': OrderedDict('0': {'count': '1', 'margin': '0'},
-                                              '1': {'count': '1', 'margin': '0'},
-                                              '2': {'count': '1', 'margin': '0'}),
-                    'cardinality': '10',
-                    'capacity': '256',
-                },
-                'WRITES': {
-                    'toppartitions': '10',
-                    'partitions': OrderedDict('10': {'count': '1', 'margin': '0'},
-                                              '11': {'count': '1', 'margin': '0'},
-                                              '21': {'count': '1', 'margin': '0'}),
-                    'cardinality': '10',
-                    'capacity': '256',
-                    'sampler': 'WRITES'
-                }
-            }
-
-
-            Arguments:
-                output {str} -- stdout of nodetool topparitions command
-
-            Returns:
-                dict -- result of parsing
-            """
-
-            pattern1 = r"(?P<sampler>[A-Z]+)\sSampler:\W+Cardinality:\s~(?P<cardinality>[0-9]+)\s\((?P<capacity>[0-9]+)\scapacity\)\W+Top\s(?P<toppartitions>[0-9]+)\spartitions:"
-            pattern2 = r"(?P<partition>[\w:]+)\s+(?P<count>[\d]+)\s+(?P<margin>[\d]+)"
-            toppartitions = {}
-            for out in output.split('\n\n'):
-                partition = OrderedDict()
-                sampler_data = re.match(pattern1, out, re.MULTILINE)
-                sampler_data = sampler_data.groupdict()
-                partitions = re.findall(pattern2, out, re.MULTILINE)
-                for val in partitions:
-                    partition.update({val[0]: {'count': val[1], 'margin': val[2]}})
-                sampler_data.update({'partitions': partition})
-                toppartitions[sampler_data.pop('sampler')] = sampler_data
-            return toppartitions
-
-        def generate_random_parameters_values():  # pylint: disable=invalid-name
-            ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
-            try:
-                ks, cf = random.choice(ks_cf_list).split('.')
-            except IndexError as details:
-                self.log.error('User-defined Keyspace and ColumnFamily are not found %s.', ks_cf_list)
-                self.log.debug('Error during choosing keyspace and columnfamily %s', details)
-                raise Exception('User-defined Keyspace and ColumnFamily are not found. \n{}'.format(details))
-            return {
-                'toppartition': str(random.randint(5, 20)),
-                'samplers': random.choice(['writes', 'reads', 'writes,reads']),
-                'capacity': str(random.randint(100, 1024)),
-                'ks': ks,
-                'cf': cf,
-                'duration': str(random.randint(1000, 10000))
-            }
-
-        self._set_current_disruption("ShowTopPartitions")
-        # workaround for issue #4519
-        self.target_node.run_nodetool('cfstats')
-
-        args = generate_random_parameters_values()
-        sub_cmd_args = "{ks} {cf} {duration} -s {capacity} -k {toppartition} -a {samplers}".format(**args)
-
-        result = self.target_node.run_nodetool(sub_cmd='toppartitions', args=sub_cmd_args)
-
-        toppartition_result = _parse_toppartitions_output(result.stdout)
-        for sampler in args['samplers'].split(','):
-            sampler = sampler.upper()
-            self.tester.assertIn(sampler, toppartition_result,
-                                 msg="{} sampler not found in result".format(sampler))
-            self.tester.assertTrue(toppartition_result[sampler]['toppartitions'] == args['toppartition'],
-                                   msg="Wrong expected and actual top partitions number for {} sampler".format(sampler))
-            self.tester.assertTrue(toppartition_result[sampler]['capacity'] == args['capacity'],
-                                   msg="Wrong expected and actual capacity number for {} sampler".format(sampler))
-            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), args['toppartition'],
-                                        msg="Wrong number of requested and expected toppartitions for {} sampler".format(sampler))
-
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         self._set_current_disruption('NetworkRandomInterruption')
@@ -1411,14 +1308,13 @@ class LimitedChaosMonkey(Nemesis):
         #  - HardRebootMonkey
         #  - SoftRebootMonkey
         #  - TruncateMonkey
-        #  - ToppartitionsMonkey
         self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
                                                          'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
                                                          'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
-                                                         'disrupt_truncate', 'disrupt_show_toppartitions'])
+                                                         'disrupt_truncate'])
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
@@ -1633,15 +1529,6 @@ class NodeRestartWithResharding(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_restart_with_resharding()
-
-
-class TopPartitions(Nemesis):
-
-    disruptive = False
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_show_toppartitions()
 
 
 class RandomInterruptionNetworkMonkey(Nemesis):
