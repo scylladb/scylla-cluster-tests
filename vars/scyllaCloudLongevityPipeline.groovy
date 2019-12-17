@@ -183,17 +183,6 @@ def call(Map pipelineParams) {
                                 '''
                             }
                     }
-
-                    if (pipelineParams.params.post_behavior_monitor_nodes == 'destroy') {
-                        dir('siren-tests') {
-                                sh '''
-                                #!/bin/bash
-                                set -xe
-                                source /opt/rh/rh-python35/enable
-                                ~/.local/bin/pipenv run ./runtests.py --untag-cluster=test_results/cluster_id.json
-                                '''
-                            }
-                    }
                 }
             }
         }
