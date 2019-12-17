@@ -208,6 +208,7 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
         tables = self.create_ks_and_tables(10, 100)
+        self._generate_load()
         self.log.debug(f'tables list = {tables}')
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
