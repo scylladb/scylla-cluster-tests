@@ -34,7 +34,10 @@ class ES(elasticsearch.Elasticsearch):
         LOGGER.info('DOC_ID: %s', doc_id)
         LOGGER.info('BODY: %s', body)
         self._create_index(index)
-        self.create(index=index, doc_type=doc_type, id=doc_id, body=body)
+        if self.exists(index=index, doc_type=doc_type, id=doc_id):
+            self.update(index=index, doc_type=doc_type, id=doc_id, body={'doc': body})
+        else:
+            self.create(index=index, doc_type=doc_type, id=doc_id, body=body)
 
     def update_doc(self, index, doc_type, doc_id, body):
         """
