@@ -1819,9 +1819,13 @@ server_encryption_options:
             """.format(self.kernel_version)))
             self.remoter.run(
                 'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
-            for conf in ['io.conf', 'io_properties.yaml']:
+            if '2018.1' in self.scylla_version:
+                io_conf_files = ['2018.1/io.conf']
+            else:
+                io_conf_files = ['io.conf', 'io_properties.yaml']
+            for conf in io_conf_files:
                 self.remoter.send_files(src=os.path.join('./configurations/', conf), dst='/tmp/')
-                self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
+                self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(os.path.basename(conf)))
         else:
             self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
 
