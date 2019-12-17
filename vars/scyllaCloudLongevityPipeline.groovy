@@ -10,7 +10,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-		}
+        }
         parameters {
             string(defaultValue: "${pipelineParams.get('db_instance_type', 'i3.xlarge')}",
                    description: 'any type support by scylla cloud',
@@ -81,29 +81,82 @@ def call(Map pipelineParams) {
             }
             stage('Run SCT Test') {
                 steps {
-                    wrap([$class: 'BuildUser']) {
-                        dir('scylla-cluster-tests') {
-                            sh """
-                            #!/bin/bash
-                            set -xe
-                            env
+                    catchError(stageResult: 'FAILURE') {
+                        wrap([$class: 'BuildUser']) {
+                            dir('scylla-cluster-tests') {
+                                sh """
+                                #!/bin/bash
+                                set -xe
+                                env
 
-                            export SCT_CLUSTER_BACKEND=aws-siren
-                            export SCT_INTRA_NODE_COMM_PUBLIC=true
-                            export SCT_REGION_NAME=eu-west-1
-                            export SCT_CONFIG_FILES="['${pipelineParams.test_config}', '`realpath ../siren-tests/test_results/scylla_cloud.yaml`']"
+                                export SCT_CLUSTER_BACKEND=aws-siren
+                                export SCT_INTRA_NODE_COMM_PUBLIC=true
+                                export SCT_REGION_NAME=eu-west-1
+                                export SCT_CONFIG_FILES="['${pipelineParams.test_config}', '`realpath ../siren-tests/test_results/scylla_cloud.yaml`']"
 
-                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                            export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
-                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
+                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
-                            echo "start test ......."
-                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend aws-siren --logdir /sct
-                            echo "end test ....."
-                           """
+                                echo "start test ......."
+                                ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend aws-siren --logdir /sct
+                                echo "end test ....."
+                               """
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Send email with result') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def email_recipients = groovy.json.JsonOutput.toJson(pipelineParams.get('email_recipients', 'qa@scylladb.com'))
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    echo "Start send email ..."
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                    echo "Email sent"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Collect log data') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    export SCT_CLUSTER_BACKEND=aws-siren
+                                    export SCT_CONFIG_FILES=${test_config}
+
+                                    echo "start collect logs ..."
+                                    ./docker/env/hydra.sh collect-logs --logdir /sct
+                                    echo "end collect logs"
+                                    """
+                                }
+                            }
                         }
                     }
                 }
@@ -120,7 +173,18 @@ def call(Map pipelineParams) {
                          }
                     }
 
-                    if (pipelineParams.params.post_behavior == 'destroy') {
+                    if (pipelineParams.params.post_behavior_db_nodes == 'destroy') {
+                        dir('siren-tests') {
+                                sh '''
+                                #!/bin/bash
+                                set -xe
+                                source /opt/rh/rh-python35/enable
+                                ~/.local/bin/pipenv run ./runtests.py --untag-cluster=test_results/cluster_id.json
+                                '''
+                            }
+                    }
+
+                    if (pipelineParams.params.post_behavior_monitor_nodes == 'destroy') {
                         dir('siren-tests') {
                                 sh '''
                                 #!/bin/bash
