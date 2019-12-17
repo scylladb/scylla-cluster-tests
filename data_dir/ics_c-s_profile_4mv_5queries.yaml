@@ -1,0 +1,75 @@
+keyspace: mview
+
+keyspace_definition: |
+
+  CREATE KEYSPACE IF NOT EXISTS mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+table: users
+
+table_definition: |
+
+  CREATE TABLE IF NOT EXISTS users (
+    userid bigint,
+    initials int,
+    first_name text,
+    last_name text,
+    password text,
+    email text,
+    address text,
+    userdata blob,
+    last_access timeuuid,
+    PRIMARY KEY(userid)
+  ) WITH compaction = {'class': 'IncrementalCompactionStrategy'};
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW mview.users_by_first_name AS SELECT userid, first_name, email FROM mview.users WHERE first_name IS NOT NULL and userid IS NOT NULL PRIMARY KEY (first_name, userid);
+  - CREATE MATERIALIZED VIEW mview.users_by_last_name AS SELECT userid, last_name, email FROM mview.users WHERE last_name IS NOT NULL and userid IS NOT NULL PRIMARY KEY (last_name, userid);
+  - CREATE MATERIALIZED VIEW mview.users_by_email AS SELECT userid, email FROM mview.users WHERE email IS NOT NULL and userid IS NOT NULL PRIMARY KEY (email, userid);
+  - CREATE MATERIALIZED VIEW mview.users_by_password AS SELECT userid, password FROM mview.users WHERE password IS NOT NULL and userid IS NOT NULL PRIMARY KEY (password, userid);
+
+columnspec:
+  - name: userid
+    population: exp(1..10000000)
+
+  - name: initials
+    size: fixed(2)
+    population: gaussian(1..20000)
+
+  - name: first_name
+    size: fixed(5)
+
+  - name: last_name
+    size: fixed(5)
+
+  - name: password
+    size: fixed(80) # sha-512
+
+  - name: email
+    size: uniform(16..50)
+
+  - name: address
+    size: uniform(16..50)
+
+  - name: userdata
+    size: fixed(10240)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from mview.users where userid = ?
+    fields: samerow
+  read2:
+    cql: select * from mview.users_by_first_name where first_name = ?
+    fields: samerow
+  read3:
+    cql: select * from mview.users_by_last_name where last_name = ?
+    fields: samerow
+  read4:
+    cql: select * from mview.users_by_email where email = ?
+    fields: samerow
+  read5:
+    cql: select * from mview.users_by_password where password = ?
+    fields: samerow
