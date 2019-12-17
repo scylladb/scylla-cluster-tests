@@ -16,6 +16,7 @@
 import os
 import time
 from random import randint
+from invoke import exceptions
 
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
@@ -79,12 +80,12 @@ class MgmtCliTest(ClusterTester):
         return [[node, getattr(node, ip_addr_attr)] for node in self.db_cluster.nodes]
 
     def get_all_dcs_names(self):
-        regions_names = set()
+        dcs_names = set()
         for node in self.db_cluster.nodes:
             data_center = self.db_cluster.get_nodetool_info(node)['Data Center']
-            regions_names.add(data_center)
+            dcs_names.add(data_center)
             node.region = data_center
-        return regions_names
+        return dcs_names
 
     def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):
         self.log.info("creating keyspace {}".format(keyspace_name))
@@ -96,19 +97,30 @@ class MgmtCliTest(ClusterTester):
 
         self.create_table(table_name, keyspace_name=keyspace_name)
 
+    def run_cmd_with_retry(self, cmd, node, retries=10):
+        for _ in range(retries):
+            try:
+                node.remoter.run(cmd)
+            except exceptions.UnexpectedExit as ex:
+                self.log.debug(f'cmd {cmd} failed with error {ex}, will retry')
+            else:
+                break
+
     def download_file_from_backup_repo(self, local, bucket, cluster_id):
         self.log.info('Will download files for each db machine')
-        cmd = f'''sudo yum install -y python-pip
+        cmd = f'''sudo yum install -y epel-release
+                  sudo yum install -y python-pip
+                  sudo yum remove -y epel-release
                   sudo pip install awscli
                   sudo pip install boto3
                   mkdir -p {local}'''
         for node in self.db_cluster.nodes:
-            node.remoter.run(f'bash -cxe "{cmd}"')
+            self.run_cmd_with_retry(cmd=cmd, node=node)
             nodetool_info = self.db_cluster.get_nodetool_info(node)
             node_id = nodetool_info['ID']
             # FIXME: it will work only with 1 single bucket
-            region_name = nodetool_info['Data Center']
-            source_path = f's3://{bucket}/backup/sst/cluster/{cluster_id}/dc/{region_name}/node/{node_id}/keyspace/'
+            datacenter_name = nodetool_info['Data Center']
+            source_path = f's3://{bucket}/backup/sst/cluster/{cluster_id}/dc/{datacenter_name}/node/{node_id}/keyspace/'
             download_cmd = f'aws s3 cp {source_path} {local} --recursive'
             node.remoter.run(download_cmd)
 
@@ -128,8 +140,6 @@ class MgmtCliTest(ClusterTester):
         self.test_client_encryption()
 
     def test_backup_feature(self):
-        with self.subTest('Basic Backup Test'):
-            self.test_basic_backup()
         with self.subTest('Backup Multiple KS\' and Tables'):
             self.test_backup_multiple_ks_tables()
         with self.subTest('Backup to Location with path'):
