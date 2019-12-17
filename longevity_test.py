@@ -352,10 +352,11 @@ class LongevityTest(ClusterTester):
             # add few stress threads with tables that weren't pre-created
             customer_profiles = self.params.get('cs_user_profiles', default=[])
             for cs_profile in customer_profiles:
-                num_of_newly_created_table = 4
+                # for now we'll leave to just one fresh table, to kick schema update
+                num_of_newly_created_tables = 1
                 self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
-                                                       batch_end=extra_tables_idx+(num_of_newly_created_table-1))
-                for i in range(num_of_newly_created_table):
+                                                       batch_end=extra_tables_idx+num_of_newly_created_tables)
+                for i in range(num_of_newly_created_tables):
                     batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)
 
             for params in batch:
