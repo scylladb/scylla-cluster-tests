@@ -1449,7 +1449,6 @@ def download_encrypt_keys():
     """
     from sdcm.keystore import KeyStore
     ks = KeyStore()
-    if not os.path.exists('./data_dir/encrypt_conf/CA.pem'):
-        ks.download_file('CA.pem', './data_dir/encrypt_conf/CA.pem')
-    if not os.path.exists('./data_dir/encrypt_conf/SCYLLADB.pem'):
-        ks.download_file('SCYLLADB.pem', './data_dir/encrypt_conf/SCYLLADB.pem')
+    for pem_file in ['CA.pem', 'SCYLLADB.pem', 'hytrust-kmip-cacert.pem', 'hytrust-kmip-scylla.pem']:
+        if not os.path.exists('./data_dir/encrypt_conf/%s' % pem_file):
+            ks.download_file(pem_file, './data_dir/encrypt_conf/%s' % pem_file)
