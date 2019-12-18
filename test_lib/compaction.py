@@ -45,6 +45,7 @@ def get_compaction_strategy(node, keyspace, table):
     return compaction
 
 
+# pylint: disable=invalid-name
 def get_compaction_random_additional_params():
     """
 
