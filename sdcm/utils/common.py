@@ -39,7 +39,9 @@ import libcloud.storage.types
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+
 LOGGER = logging.getLogger('utils')
+DEFAULT_AWS_REGION = "eu-west-1"
 
 
 def _remote_get_hash(remoter, file_path):
@@ -321,7 +323,7 @@ def list_logs_by_test_id(test_id):
 
 
 def all_aws_regions():
-    client = boto3.client('ec2')
+    client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
     return [region['RegionName'] for region in client.describe_regions()['Regions']]
 
 
@@ -737,7 +739,7 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
         return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
-    s3_client = boto3.client('s3')
+    s3_client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
     bucket = 'downloads.scylladb.com'
 
     if dist_type == 'centos':
@@ -1110,7 +1112,7 @@ def s3_download_dir(bucket, path, target):
     :param target: the local directory to download the files to.
     """
 
-    client = boto3.client('s3')
+    client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
 
     # Handle missing / at end of prefix
     if not path.endswith('/'):
