@@ -11,6 +11,7 @@ class LargePartitionLongevityTest(LongevityTest):
         self.pre_create_large_partitions_schema(compaction_strategy=compaction_strategy)
         self.test_custom_time()
 
+    # pylint: disable=invalid-name
     def pre_create_large_partitions_schema(self, compaction_strategy=CompactionStrategy.SIZE_TIERED.value):
         node = self.db_cluster.nodes[0]
         compaction_strategy_option = "AND compaction = {{'class': '{}'}};".format(compaction_strategy)

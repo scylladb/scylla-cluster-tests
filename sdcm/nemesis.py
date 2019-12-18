@@ -27,7 +27,6 @@ import threading
 import os
 import re
 import traceback
-from collections import OrderedDict
 
 from invoke import UnexpectedExit
 
@@ -669,7 +668,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
-    def _modify_table_property(self, name, val, filter_out_table_with_counter=False, modify_all_tables=False):
+    def _modify_table_property(self, name, val, filter_out_table_with_counter=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
