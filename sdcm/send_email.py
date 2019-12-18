@@ -2,6 +2,7 @@ import smtplib
 import os.path
 import logging
 import tempfile
+import json
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,6 +10,7 @@ from email.mime.text import MIMEText
 import jinja2
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.common import list_instances_gce, list_instances_aws
 
 LOGGER = logging.getLogger(__name__)
 
@@ -140,7 +142,7 @@ class LongevityEmailReporter(BaseEmailReporter):
               'build_url', 'scylla_version', 'scylla_ami_id',
               'scylla_instance_type', 'number_of_db_nodes',
               'nemesis_name', 'nemesis_details', 'test_id',
-              'username']
+              'username', 'nodes']
 
     def build_report(self, email_data):
         report_file = os.path.join(self.logdir, 'email_report.html')
@@ -159,7 +161,8 @@ class GeminiEmailReporter(BaseEmailReporter):
               'oracle_db_version', 'oracle_ami_id', 'oracle_instance_type',
               "results", "status", 'test_name', 'test_id', 'test_status',
               'start_time', 'end_time', 'username',
-              'build_url', 'nemesis_name', 'nemesis_details', 'test_id']
+              'build_url', 'nemesis_name', 'nemesis_details',
+              'test_id', 'nodes']
 
     def build_report(self, email_data):
         self.log.info('Prepare result to send in email')
@@ -183,3 +186,74 @@ def build_reporter(tester):
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
+
+
+def get_running_instances_for_email_report(test_id):
+    """Get running instances left after testrun
+
+    Get all running instances leff after testrun is done
+    :param test_id: testrun test id
+    :type test_id: str
+    :returns: list of instances left running after test run
+    in format:
+    [
+        ["name", "public ip addrs", "state", "cloud", "region"]
+    ]
+    :rtype: {list}
+    """
+    nodes = []
+
+    instances = list_instances_aws(tags_dict={'TestId': test_id}, group_as_region=True, running=True)
+    for region in instances:
+        for instance in instances[region]:
+            name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
+            nodes.append([name[0],
+                          instance.get('PublicIpAddress', 'N/A'),
+                          instance['State']['Name'],
+                          "aws",
+                          region])
+    instances = list_instances_gce(tags_dict={"TestId": test_id}, running=True)
+    for instance in instances:
+        nodes.append([instance.name,
+                      ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A",
+                      instance.state,
+                      "gce",
+                      instance.extra["zone"].name])
+    return nodes
+
+
+def read_email_data_from_file(filename):
+    """read email data from file
+
+    During teardown ClusterTester wrote email data
+    to file email_data.json
+    :param filename: absolute path to email_data.json file
+    :type filename: str
+    :returns: dict read from json data
+    :rtype: {dict}
+    """
+    email_data = None
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r") as fp:  # pylint: disable=invalid-name
+                email_data = json.load(fp)  # pylint: disable=invalid-name
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.warning("Error during read email data file %s: %s", filename, details)
+    return email_data
+
+
+def save_email_data_to_file(email_data, filepath):
+    """Save email data to file
+
+    Collecte email data save to json file
+    :param email_data: dict collected by ClusterTester.get_email_data
+    :type email_data: dict
+    :param filepath: absolute path to file where data will be written
+    :type filepath: str
+    """
+    try:
+        if email_data:
+            with open(filepath, "w") as json_file:
+                json.dump(email_data, json_file)
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.warning("Error during collecting data for email %s", details)

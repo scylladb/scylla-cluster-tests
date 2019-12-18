@@ -20,7 +20,6 @@ import logging
 import time
 import random
 import unittest
-import json
 import warnings
 from uuid import uuid4
 from functools import wraps
@@ -62,7 +61,7 @@ from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
-from sdcm.send_email import build_reporter
+from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, save_email_data_to_file
 
 
 configure_logging()
@@ -1229,9 +1228,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             self.stop_resources()
         finally:
-            self.send_email()
+            self.save_email_data()
             self.collect_logs()
             self.clean_resources()
+            self.send_email()
 
     def stop_resources(self):
         self.log.debug('Stopping all resources')
@@ -1308,7 +1308,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for loader nodes')
                 cluster.Setup.keep_cluster(node_type='loader_nodes', val='keep')
-                self.db_cluster.set_keep_tag_on_failure()
+                self.loaders.set_keep_tag_on_failure()
 
         if self.monitors is not None:
             self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
@@ -1319,7 +1319,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for monitor nodes')
                 cluster.Setup.keep_cluster(node_type='monitor_nodes', val='keep')
-                self.db_cluster.set_keep_tag_on_failure()
+                self.monitors.set_keep_tag_on_failure()
 
         if self.credentials is not None:
             for credential in self.credentials:
@@ -1610,6 +1610,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 failure['end'] = format_timestamp(float(failure['end']))
         return nemesis_stats
 
+    def save_email_data(self):
+        email_data = self.get_email_data()
+        json_file_path = os.path.join(self.logdir, "email_data.json")
+
+        if email_data:
+            email_data["reporter"] = self.email_reporter.__class__.__name__
+            self.log.debug('Save email data to file %s', json_file_path)
+            save_email_data_to_file(email_data, json_file_path)
+
     def send_email(self):
         """Send email with test results on teardown
 
@@ -1619,18 +1628,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             email_template, email_subject
         """
         send_email = self.params.get('send_email', default=False)
-        email_data = self.get_email_data()
-        if email_data:
-            email_data["reporter"] = self.email_reporter.__class__.__name__
-            json_file_path = os.path.join(self.logdir, "email_data.json")
-            with open(json_file_path, "w") as json_file:
-                json.dump(email_data, json_file)
+        email_results_file = os.path.join(self.logdir, "email_data.json")
+        email_data = read_email_data_from_file(email_results_file)
 
         if cluster.get_username() == "jenkins":
             self.log.info("Email will be sent by pipeline stage")
             return
 
         if send_email and email_data:
+            email_data["reporter"] = self.email_reporter.__class__.__name__
+            email_data['nodes'] = get_running_instances_for_email_report(self.test_id)
             try:
                 if self.email_reporter:
                     self.email_reporter.send_report(email_data)

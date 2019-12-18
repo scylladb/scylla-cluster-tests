@@ -3,7 +3,6 @@ import os
 import sys
 import unittest
 import logging
-import json
 
 import pytest
 import click
@@ -453,17 +452,17 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, email_recipients=None, logdir=None):
-    from sdcm.send_email import GeminiEmailReporter, LongevityEmailReporter
+    from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter,
+                                 get_running_instances_for_email_report,
+                                 read_email_data_from_file)
 
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
 
     email_results_file = os.path.join(testrun_dir, "email_data.json")
-    if os.path.exists(email_results_file):
-        with open(email_results_file, "r") as fp:  # pylint: disable=invalid-name
-            test_results = json.load(fp)  # pylint: disable=invalid-name
-    else:
+    test_results = read_email_data_from_file(email_results_file)
+    if not test_results:
         LOGGER.warning("File with email results data not found")
         return
 
@@ -472,6 +471,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     if not reporter:
         LOGGER.warning("No reporter found")
     else:
+        test_results['nodes'] = get_running_instances_for_email_report(test_id)
         if "Gemini" in reporter:
             reporter = GeminiEmailReporter(email_recipients, logdir=testrun_dir)
             reporter.send_report(test_results)
