@@ -505,6 +505,7 @@ class LongevityTest(ClusterTester):
             'nemesis_name': self.params.get('nemesis_class_name'),
             'nemesis_details': self.get_nemesises_stats(),
             'test_id': self.test_id,
+            "nodes": []
         }
 
     def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name

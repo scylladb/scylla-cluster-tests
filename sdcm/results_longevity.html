@@ -115,6 +115,33 @@
             <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
         </ul>
     </div>
+
+    <h3>Running instances</h3>
+    {% if nodes %}
+    <div>
+        <table class='longevity_result_table'>
+            <tr>
+                <th>Name</th>
+                <th>Ip address</th>
+                <th>Current State</th>
+                <th>Cloud</th>
+                <th>Region</th>
+            </tr>
+            {% for node in nodes %}
+            <tr>
+                <td>{{ node[0] }}</td>
+                <td>{{ node[1] }}</td>
+                <td>{{ node[2] }}</td>
+                <td>{{ node[3] }}</td>
+                <td>{{ node[4] }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    {% else %}
+        No instances
+    {% endif %}
+    </div>
+
     <h3>Links:</h3>
     <ul>
         {% if grafana_screenshots %}
