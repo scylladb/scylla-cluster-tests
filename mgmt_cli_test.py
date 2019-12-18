@@ -212,7 +212,7 @@ class MgmtCliTest(ClusterTester):
         self.log.debug(f'tables list = {tables}')
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
-        backup_task.wait_for_status(list_status=[TaskStatus.DONE])
+        backup_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=10800)
         self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
         self.log.info('finishing test_backup_multiple_ks_tables')
 
