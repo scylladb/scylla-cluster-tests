@@ -533,6 +533,9 @@ class SCTConfiguration(dict):
         dict(name="pre_create_schema", env="SCT_PRE_CREATE_SCHEMA", type=boolean,
              help=""),
 
+        dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
+             help="Choose a specific compaction strategy to pre-create schema with."),
+
         dict(name="validate_partitions", env="SCT_VALIDATE_PARTITIONS", type=boolean,
              help="when true, log of the partitions before and after the nemesis run is compacted"),
         dict(name="table_name", env="SCT_TABLE_NAME", type=str,
