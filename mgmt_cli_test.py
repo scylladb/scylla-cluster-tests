@@ -20,7 +20,7 @@ from invoke import exceptions
 
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
-from sdcm.nemesis import MgmtRepair
+from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.tester import ClusterTester
 from sdcm.cluster import Setup
 
@@ -28,7 +28,6 @@ from sdcm.cluster import Setup
 class MgmtCliTest(ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
-
     :avocado: enable
     """
     CLUSTER_NAME = "mgr_cluster1"
@@ -37,7 +36,6 @@ class MgmtCliTest(ClusterTester):
 
     def test_mgmt_repair_nemesis(self):
         """
-
             Test steps:
             1) Run cassandra stress on cluster.
             2) Add cluster to Manager and run full repair via Nemesis
@@ -49,27 +47,25 @@ class MgmtCliTest(ClusterTester):
 
     def test_mgmt_cluster_crud(self):
         """
-
         Test steps:
         1) add a cluster to manager.
         2) update the cluster attributes in manager: name/host/ssh-user
         3) delete the cluster from manager and re-add again.
         """
-
+        self.log.info('starting test_mgmt_cluster_crud')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
         cluster_name = 'mgr_cluster_crud'
         mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
                                                auth_token=self.monitors.mgmt_auth_token)
-
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
-
         mgr_cluster.delete()
         manager_tool.add_cluster(name=cluster_name, host=selected_host, auth_token=self.monitors.mgmt_auth_token)
+        self.log.info('finishing test_mgmt_cluster_crud')
 
     def _get_cluster_hosts_ip(self):
         return [node_data[1] for node_data in self._get_cluster_hosts_with_ips()]
@@ -91,10 +87,8 @@ class MgmtCliTest(ClusterTester):
         self.log.info("creating keyspace {}".format(keyspace_name))
         keyspace_existence = self.create_keyspace(keyspace_name, 1, strategy)
         assert keyspace_existence, "keyspace creation failed"
-
         # Keyspaces without tables won't appear in the repair, so the must have one
-        self.log.info("createing the table {} in the keyspace {}".format(table_name, keyspace_name))
-
+        self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
         self.create_table(table_name, keyspace_name=keyspace_name)
 
     def run_cmd_with_retry(self, cmd, node, retries=10):
@@ -194,7 +188,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self._generate_load()
+        self.log.info(f'load={self._generate_load()}')
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
@@ -244,10 +238,12 @@ class MgmtCliTest(ClusterTester):
         backup_task = mgr_cluster.create_backup_task({'location': location_list, 'rate-limit': rate_limit})
         task_status = backup_task.wait_and_get_final_status()
         self.log.info(f'backup task finished with status {task_status}')
+        # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
         self.log.info('finishing test_backup_rate_limit')
 
     def test_client_encryption(self):
+        self.log.info('starting test_client_encryption')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -256,22 +252,26 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
-        self.db_cluster.enable_client_encrypt()
+        with DbEventsFilter(type='DATABASE_ERROR', line="failed to do checksum for"), \
+                DbEventsFilter(type='RUNTIME_ERROR', line="failed to do checksum for"), \
+                DbEventsFilter(type='DATABASE_ERROR', line="Reactor stalled"), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='get_repair_meta: repair_meta_id'):
+            self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
         repair_task.start(use_continue=True)
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
-
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+        self.log.info('finishing test_client_encryption')
 
     def test_mgmt_cluster_healthcheck(self):
-
+        self.log.info('starting test_mgmt_cluster_healthcheck')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self._get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
@@ -279,33 +279,30 @@ class MgmtCliTest(ClusterTester):
             name=cluster_name, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
         other_host, other_host_ip = [
             host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
-
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
-
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
             assert host_health.rest_status == HostRestStatus.UP, "Not all hosts REST status is 'UP'"
-
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
         self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
         self.log.debug('Sleep {} seconds, waiting for health-check task to run after node down'.format(sleep))
         time.sleep(sleep)
-
         dict_host_health = mgr_cluster.get_hosts_health()
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(
             other_host_ip)
         assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(
             other_host_ip)
-
         other_host.start_scylla_server()
+        self.log.info('finishing test_mgmt_cluster_healthcheck')
 
     def test_ssh_setup_script(self):
+        self.log.info('starting test_ssh_setup_script')
         new_user = "qa_user"
         new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
@@ -331,6 +328,7 @@ class MgmtCliTest(ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             self.log.debug("host_health is: {}".format(host_health))
+        self.log.info('finishing test_ssh_setup_script')
 
     def test_manager_upgrade(self):
         """
@@ -338,6 +336,7 @@ class MgmtCliTest(ClusterTester):
         1) Run the repair test.
         2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_repo').
         """
+        self.log.info('starting test_manager_upgrade')
         scylla_mgmt_upgrade_to_repo = self.params.get('scylla_mgmt_upgrade_to_repo')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
@@ -362,6 +361,7 @@ class MgmtCliTest(ClusterTester):
         self.log.info('Running a new repair task after upgrade')
         repair_task = mgr_cluster.create_repair_task()
         self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
+        self.log.info('finishing test_manager_upgrade')
 
     def test_manager_rollback_upgrade(self):
         """
@@ -369,6 +369,7 @@ class MgmtCliTest(ClusterTester):
         1) Run Upgrade test: scylla_mgmt_repo --> scylla_mgmt_upgrade_to_repo
         2) Run manager downgrade to pre-upgrade version as in yaml: 'scylla_mgmt_repo'.
         """
+        self.log.info('starting test_manager_rollback_upgrade')
         self.test_manager_upgrade()
         scylla_mgmt_repo = self.params.get('scylla_mgmt_repo')
         manager_node = self.monitors.nodes[0]
@@ -376,15 +377,18 @@ class MgmtCliTest(ClusterTester):
         manager_from_version = manager_tool.version
         manager_tool.rollback_upgrade(scylla_mgmt_repo=scylla_mgmt_repo)
         assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
+        self.log.info('finishing test_manager_rollback_upgrade')
 
     def _generate_load(self):
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('stress_cmd')
-        self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
+        return stress_thread
 
     def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
+        self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         hosts = self._get_cluster_hosts_ip()
         selected_host = hosts[0]
@@ -393,7 +397,6 @@ class MgmtCliTest(ClusterTester):
                                         auth_token=self.monitors.mgmt_auth_token)
         self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy")
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
-
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
@@ -418,7 +421,8 @@ class MgmtCliTest(ClusterTester):
             repair_task, repair_progress_table, self.LOCALSTRATEGY_KEYSPACE_NAME)
         assert localstrategy_keyspace_percentage is None, \
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
-        self.log.info("the sctool repair commend was completed successfully")
+        self.log.info("the sctool repair command was completed successfully")
+        self.log.info('finishing test_repair_multiple_keyspace_types')
 
     @staticmethod
     def _keyspace_value_in_progress_table(repair_task, repair_progress_table, keyspace_name):
