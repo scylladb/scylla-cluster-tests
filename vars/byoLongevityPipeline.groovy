@@ -59,6 +59,10 @@ def call() {
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
+
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+                   description: 'email recipients of email report',
+                   name: 'email_recipients')
         }
         options {
             timestamps()
@@ -91,6 +95,7 @@ def call() {
                                 // handle params which can be a json list
                                 def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                 def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
 
                                 sh """
                                 #!/bin/bash
@@ -121,6 +126,7 @@ def call() {
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                 export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
+                                export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                 echo "start test ......."
                                 ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir /sct
                                 echo "end test ....."
