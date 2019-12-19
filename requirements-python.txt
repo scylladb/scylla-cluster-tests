@@ -26,3 +26,4 @@ https://github.com/iuscommunity/repodataParser/archive/master.zip
 backports.datetime-timestamp==1.2
 pytest==4.6.4
 tcconfig==0.23.0
+urllib3==1.24.3
