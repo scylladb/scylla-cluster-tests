@@ -76,13 +76,13 @@ def provision(**kwargs):
 @click.option('--user', type=str, help='user name to filter instances by')
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.option('--logdir', type=str, help='directory with test run')
-@click.option('--config-file', type=str, help='config test file path')
+@click.option('--config-file', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
 @click.option('--backend', type=str, help="")
 @click.pass_context
 def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint: disable=too-many-arguments,too-many-branches
     params = dict()
 
-    if config_file:
+    if config_file or logdir:
 
         if not logdir:
             logdir = os.path.expandvars("$HOME/sct-results")
@@ -90,7 +90,7 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
         if logdir and not test_id:
             test_id = (search_test_id_in_latest(logdir), )
 
-        if not logdir or not test_id:
+        if not logdir or not all(test_id):
             click.echo(clean_resources.get_help(ctx))
             return
 
@@ -100,7 +100,8 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
         if not os.environ.get('SCT_CLUSTER_BACKEND', None):
             os.environ['SCT_CLUSTER_BACKEND'] = backend
 
-        os.environ['SCT_CONFIG_FILES'] = config_file
+        if config_file:
+            os.environ['SCT_CONFIG_FILES'] = str(list(config_file))
 
         config = SCTConfiguration()
 
