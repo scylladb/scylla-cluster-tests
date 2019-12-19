@@ -187,6 +187,7 @@ def call(Map pipelineParams) {
                                     set -xe
                                     env
 
+                                    export SCT_CONFIG_FILES=${test_config}
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
@@ -194,7 +195,7 @@ def call(Map pipelineParams) {
                                     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
                                     echo "start clean resources ..."
-                                    ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct
+                                    ./docker/env/hydra.sh clean-resources --logdir /sct
                                     echo "end clean resources"
                                     """
                                 }
