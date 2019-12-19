@@ -47,6 +47,11 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
             string(defaultValue: '', description: 'If empty - the default manager version will be taken', name: 'scylla_mgmt_repo')
+
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+                   description: 'email recipients of email report',
+                   name: 'email_recipients')
+
         }
         options {
             timestamps()
@@ -114,6 +119,7 @@ def call(Map pipelineParams) {
                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                     fi
 
+
                                     echo "start test ......."
                                     ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                     echo "end test ....."
@@ -130,7 +136,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def email_recipients = groovy.json.JsonOutput.toJson(pipelineParams.get('email_recipients', 'qa@scylladb.com'))
+                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
 
                                     sh """
                                     #!/bin/bash
