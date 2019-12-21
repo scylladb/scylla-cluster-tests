@@ -3845,16 +3845,20 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         if not test_start_time:
             self.log.error("No start time for test")
             return {}
-
+        date_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         for node in self.nodes:
+            screenshot_links = []
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time)
-            screenshots = screenshot_collector.collect(node, self.logdir)
-            screenshots = [S3Storage().upload_file(screenshot, Setup.test_id()) for screenshot in screenshots]
+            screenshot_files = screenshot_collector.collect(node, self.logdir)
+            for screenshot in screenshot_files:
+                s3_path = "{test_id}/{date}".format(test_id=Setup.test_id(), date=date_time)
+                screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
+
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
                                                   test_start_time=test_start_time)
             snapshots = snapshots_collector.collect(node, self.logdir)
-        return {'screenshots': screenshots, 'snapshots': snapshots['links']}
+        return {'screenshots': screenshot_links, 'snapshots': snapshots['links']}
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
