@@ -305,14 +305,18 @@ def list_logs_by_test_id(test_id):
         return results
 
     def convert_to_date(date_str):
-        try:
-            t = datetime.datetime.strptime(date_str, "%Y%m%d_%H%M%S")  # pylint: disable=invalid-name
-        except ValueError:
+        time_formats = [
+            "%Y%m%d_%H%M%S",
+            "%Y_%m_%d_%H_%M_%S",
+        ]
+        for time_format in time_formats:
             try:
-                t = datetime.datetime.strptime(date_str, "%Y_%m_%d_%H_%M_%S")  # pylint: disable=invalid-name
+                return datetime.datetime.strptime(date_str, time_format)
             except ValueError:
-                t = datetime.datetime(1999, 1, 1, 1, 1, 1)  # pylint: disable=invalid-name
-        return t   # pylint: disable=invalid-name
+                continue
+        # for old data collected or uploaded without datetime,
+        # return the old date to display them earlier
+        return datetime.datetime(2019, 1, 1, 1, 1, 1)
 
     log_files = S3Storage().search_by_path(path=test_id)
     for log_file in log_files:
