@@ -462,10 +462,15 @@ class AWSNode(cluster.BaseNode):
 
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
-        result = self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name), ignore_status=True)
+        # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
+        result = self.remoter.run(f"sudo hostnamectl set-hostname --static {self.name}", ignore_status=True)
         if result.ok:
-            self.log.debug('Hostname has been changed. Restarting systemd-journald')
-            self.remoter.run('sudo systemctl restart systemd-journald', ignore_status=True)
+            self.log.debug('Hostname has been changed succesfully. Apply')
+            apply_hostname_change_script = dedent(f"""
+                systemctl restart rsyslog
+                echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
+            """)
+            self.remoter.run(f"sudo bash -cxe '{apply_hostname_change_script}'")
             self.log.debug('Continue node %s set up', self.name)
         else:
             self.log.warning('Hostname has not been changed. Error: %s.\n Continue with old name', result.stderr)

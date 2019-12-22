@@ -366,7 +366,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         self.termination_event = threading.Event()
         self._running_nemesis = None
-        self.set_hostname()
+        if not Setup.REUSE_CLUSTER:
+            self.set_hostname()
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
