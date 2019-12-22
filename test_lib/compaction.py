@@ -41,7 +41,7 @@ def get_compaction_strategy(node, keyspace, table):
             compaction = CompactionStrategy.from_str(output_str=dict_compaction_values['class'])
             break
 
-    LOGGER.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction.value))
+    LOGGER.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction))
     return compaction
 
 
