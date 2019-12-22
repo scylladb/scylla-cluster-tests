@@ -19,9 +19,9 @@ AVAIL_SIZE_METRIC_OLD = 'node_filesystem_avail'
 
 class IcsSpaceAmplificationTest(LongevityTest):
 
-    def _pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None,  # pylint: disable=too-many-arguments
-                                           compaction=CompactionStrategy.INCREMENTAL.value, compression=None,
-                                           create_all_keyspaces_table=True):
+    def pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None,  # pylint: disable=too-many-arguments
+                                          compaction=CompactionStrategy.INCREMENTAL.value, compression=None,
+                                          create_all_keyspaces_table=True):
         """
         This method enables creating specific configuration for a table. for example, define specific compaction parameters.
         """
@@ -181,7 +181,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         (2) over-writing existing data.
         (3) running a major compaction.
         """
-        self._pre_create_schema_with_compaction()
+        self.pre_create_schema_with_compaction()
         stress_queue = list()
         write_queue = list()
         verify_queue = list()
