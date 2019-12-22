@@ -223,8 +223,6 @@ class Setup:
                        '''.format(*cls.RSYSLOG_ADDRESS))  # pylint: disable=not-an-iterable
 
         post_boot_script += dedent(r'''
-               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-               sudo systemctl restart sshd
                sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
                /etc/security/limits.d/20-nproc.conf
                echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
