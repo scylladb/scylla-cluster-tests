@@ -60,7 +60,7 @@ def call() {
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
 
-            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+            string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
         }
