@@ -1491,17 +1491,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    # Wait for up to 40 mins that there are no running compactions
-    @retrying(n=40, sleep_time=60, allowed_exceptions=(AssertionError,))
+    # Wait for up to 80 mins that there are no running compactions
+    @retrying(n=80, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_no_compactions_running(self):
-        query = "sum(scylla_compaction_manager_compactions{})"
+        compaction_query = "sum(scylla_compaction_manager_compactions{})"
         now = time.time()
-        results = self.prometheus_db.query(query=query, start=now - 60, end=now)
-        self.log.debug("scylla_hints_manager_sent: %s", results)
-        assert results, "No results from Prometheus"
+        results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
+        self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
+        assert results or results == [], "No results from Prometheus"
         # if all are zeros the result will be False, otherwise there are still compactions
-        assert any([float(v[1]) for v in results[0]["values"]]) is False, \
-            "Waiting until all compactions settle down"
+        if results:
+            assert any([float(v[1]) for v in results[0]["values"]]) is False, \
+                "Waiting until all compactions settle down"
 
     def run_fstrim_on_all_db_nodes(self):
         """
