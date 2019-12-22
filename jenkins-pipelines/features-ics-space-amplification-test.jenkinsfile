@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    backend: 'aws',
+    aws_region: 'eu-west-1',
+    test_name: 'ics_space_amplification_test.IcsSpaceAmplificationTest.test_ics_space_amplification',
+    test_config: 'test-cases/features/ics_space_amplification_test.yaml',
+
+    timeout: [time: 330, unit: 'MINUTES'],
+)

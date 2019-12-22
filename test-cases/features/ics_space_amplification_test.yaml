@@ -1,0 +1,19 @@
+test_duration: 300
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_loader: 'c4.large'
+
+nemesis_class_name: 'NoOpMonkey'
+user_prefix: 'ics_space_amplification'
+server_encrypt: false
+client_encrypt: false
+
+
+use_mgmt: false
+nemesis_during_prepare: false
