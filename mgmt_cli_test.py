@@ -25,6 +25,7 @@ from sdcm.tester import ClusterTester
 from sdcm.cluster import Setup
 
 
+# pylint: disable=too-many-public-methods
 class MgmtCliTest(ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
@@ -163,6 +164,11 @@ class MgmtCliTest(ClusterTester):
                 # self.populate_data_parallel()
         return table_name
 
+    def generate_load_and_wait_for_results(self):
+        load_thread = self._generate_load()
+        load_results = load_thread.get_results()
+        self.log.info(f'load={load_results}')
+
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, bucket, cluster_id, keyspace_name='keyspace1', table_name='standard1',
                               local='/tmp/backup', truncate=True):
@@ -188,7 +194,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self.log.info(f'load={self._generate_load()}')
+        self.generate_load_and_wait_for_results()
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(bucket=location_list[0].split(':')[1], cluster_id=backup_task.cluster_id)
@@ -202,7 +208,7 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
         tables = self.create_ks_and_tables(10, 100)
-        self._generate_load()
+        self.generate_load_and_wait_for_results()
         self.log.debug(f'tables list = {tables}')
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task({'location': location_list})
@@ -218,7 +224,7 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_bucket_with_path',
                                                db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self._generate_load()
+        self.generate_load_and_wait_for_results()
         try:
             mgr_cluster.create_backup_task({'location': location_list})
         except ScyllaManagerError as error:
@@ -232,7 +238,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self._generate_load()
+        self.generate_load_and_wait_for_results()
         rate_limit = ','.join([f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()])
         self.log.info(f'rate limit will be {rate_limit}')
         backup_task = mgr_cluster.create_backup_task({'location': location_list, 'rate-limit': rate_limit})
