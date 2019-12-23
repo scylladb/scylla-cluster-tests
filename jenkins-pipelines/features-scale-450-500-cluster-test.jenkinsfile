@@ -8,6 +8,7 @@ longevityPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
+    post_behavior_db_nodes: 'destroy',
     test_name: 'grow_cluster_test.GrowClusterTest.test_grow_x_to_y',
     test_config: '''["test-cases/features/scale-cluster.yaml", "configurations/scale-450-500.yaml"]''',
 
