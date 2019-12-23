@@ -92,30 +92,8 @@ def call(Map pipelineParams) {
                                                         echo "end test ....."
                                                         """
                                                     } catch (error) {
+                                                        echo "FAILED"
                                                         sh """echo ${error}"""
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        stage("Send email for Upgrade from ${base_version}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    def email_recipients = groovy.json.JsonOutput.toJson(pipelineParams.get('email_recipients', 'qa@scylladb.com'))
-                                                    try {
-                                                        sh """
-                                                        #!/bin/bash
-
-                                                        set -xe
-                                                        env
-
-                                                        echo "Start send email ..."
-                                                        ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
-                                                        echo "Email sent"
-                                                        """
-                                                    } catch (error) {
-                                                        sh """
-                                                            false
-                                                        """
                                                     }
                                                 }
                                             }
@@ -144,7 +122,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                        stage("Clear resources for Upgrade from ${base_version}") {
+                                        stage("Clean resources for Upgrade from ${base_version}") {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
@@ -160,8 +138,28 @@ def call(Map pipelineParams) {
                                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
                                                         echo "start clean resources ..."
-                                                        ./docker/env/hydra.sh clean-resources --config-file "${test_config}" --logdir /sct --backend gce
+                                                        ./docker/env/hydra.sh clean-resources --logdir /sct --backend gce
                                                         echo "end clean resources"
+                                                        """
+                                                    } catch (error) {
+                                                        sh """echo ${error}"""
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Send email for Upgrade from ${base_version}") {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    try {
+                                                        sh """
+                                                        #!/bin/bash
+
+                                                        set -xe
+                                                        env
+
+                                                        echo "Start send email ..."
+                                                        ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                                        echo "Email sent"
                                                         """
                                                     } catch (error) {
                                                         sh """echo ${error}"""

@@ -24,7 +24,7 @@ def call(Map pipelineParams) {
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
 
-            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
             string(defaultValue: "${pipelineParams.get('post_behavior_loader_nodes', 'destroy')}",
@@ -33,6 +33,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
+
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+                   description: 'email recipients of email report',
+                   name: 'email_recipients')
 
 
         }
@@ -110,30 +114,6 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Send email with result') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    def email_recipients = groovy.json.JsonOutput.toJson(pipelineParams.get('email_recipients', 'qa@scylladb.com'))
-
-                                    sh """
-                                    #!/bin/bash
-
-                                    set -xe
-                                    env
-
-                                    echo "Start send email ..."
-                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
-                                    echo "Email sent"
-                                    """
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -148,12 +128,66 @@ def call(Map pipelineParams) {
                                     set -xe
                                     env
 
-                                    export SCT_CLUSTER_BACKEND=aws-siren
                                     export SCT_CONFIG_FILES=${test_config}
 
                                     echo "start collect logs ..."
-                                    ./docker/env/hydra.sh collect-logs --logdir /sct
+                                    ./docker/env/hydra.sh collect-logs --logdir /sct --backend aws
                                     echo "end collect logs"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Clean resources') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    export SCT_CONFIG_FILES=${test_config}
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+
+                                    echo "start clean resources ..."
+                                    ./docker/env/hydra.sh clean-resources --logdir /sct --backend aws
+                                    echo "end clean resources"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Send email with result') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    echo "Start send email ..."
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                    echo "Email sent"
                                     """
                                 }
                             }
