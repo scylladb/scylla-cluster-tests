@@ -472,7 +472,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     if not reporter:
         LOGGER.warning("No reporter found")
     else:
-        test_results['nodes'] = get_running_instances_for_email_report(test_id)
+        test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
         if "Gemini" in reporter:
             reporter = GeminiEmailReporter(email_recipients, logdir=testrun_dir)
             reporter.send_report(test_results)
