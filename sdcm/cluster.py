@@ -223,8 +223,6 @@ class Setup:
                        '''.format(*cls.RSYSLOG_ADDRESS))  # pylint: disable=not-an-iterable
 
         post_boot_script += dedent(r'''
-               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-               sudo systemctl restart sshd
                sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
                /etc/security/limits.d/20-nproc.conf
                echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
@@ -368,7 +366,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         self.termination_event = threading.Event()
         self._running_nemesis = None
-        self.set_hostname()
+        if not Setup.REUSE_CLUSTER:
+            self.set_hostname()
         self.start_task_threads()
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should

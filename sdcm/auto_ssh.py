@@ -53,8 +53,9 @@ def stop_auto_ssh(docker_name, node):
     # pylint: disable=protected-access
 
     host_name = node._ssh_login_info['hostname']
-
-    LOGGER.debug("killing {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name))
+    container_name = f"{docker_name}-{host_name}-autossh"
     local_runner = LocalCmdRunner()
-    local_runner.run(
-        "docker rm -f {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name), ignore_status=True)
+    LOGGER.debug("Saving autossh container logs")
+    local_runner.run(f"docker logs {container_name} &> {node.logdir}/autossh.log", ignore_status=True)
+    LOGGER.debug(f"Killing {container_name}")
+    local_runner.run(f"docker rm -f {container_name}", ignore_status=True)
