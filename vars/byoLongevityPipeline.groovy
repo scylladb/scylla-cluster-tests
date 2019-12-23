@@ -143,7 +143,7 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
 
                                     sh """
                                     #!/bin/bash
@@ -172,7 +172,7 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
 
                                     sh """
                                     #!/bin/bash
