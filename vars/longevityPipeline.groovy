@@ -130,30 +130,6 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Send email with result') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-
-                                    sh """
-                                    #!/bin/bash
-
-                                    set -xe
-                                    env
-
-                                    echo "Start send email ..."
-                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
-                                    echo "Email sent"
-                                    """
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -208,6 +184,30 @@ def call(Map pipelineParams) {
                                     echo "start clean resources ..."
                                     ./docker/env/hydra.sh clean-resources --logdir /sct
                                     echo "end clean resources"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Send email with result') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    echo "Start send email ..."
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                    echo "Email sent"
                                     """
                                 }
                             }

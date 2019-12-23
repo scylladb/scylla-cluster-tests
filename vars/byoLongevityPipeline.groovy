@@ -60,7 +60,7 @@ def call() {
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
 
-            string(defaultValue: "qa@scylladb.com",
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
         }
@@ -88,49 +88,133 @@ def call() {
             }
             stage('Run SCT Test') {
                 steps {
-                    script {
-                        wrap([$class: 'BuildUser']) {
-                            dir('scylla-cluster-tests') {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
 
-                                // handle params which can be a json list
-                                def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-                                def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                    // handle params which can be a json list
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
 
-                                sh """
-                                #!/bin/bash
-                                set -xe
-                                env
+                                    sh """
+                                    #!/bin/bash
+                                    set -xe
+                                    env
 
-                                export SCT_CLUSTER_BACKEND="${params.backend}"
-                                export SCT_REGION_NAME=${aws_region}
-                                export SCT_CONFIG_FILES="${test_config}"
+                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_CONFIG_FILES="${test_config}"
 
-                                if [[ ! -z "${params.scylla_ami_id}" ]] ; then
-                                    export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                elif [[ ! -z "${params.scylla_version}" ]] ; then
-                                    export SCT_SCYLLA_VERSION="${params.scylla_version}"
-                                elif [[ ! -z "${params.scylla_repo}" ]] ; then
-                                    export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                else
-                                    echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
-                                    exit 1
-                                fi
-                                if [[ ! -z "${params.update_db_packages}" ]]; then
-                                    export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
-                                fi
-                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+                                    if [[ ! -z "${params.scylla_ami_id}" ]] ; then
+                                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                                    elif [[ ! -z "${params.scylla_version}" ]] ; then
+                                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                    elif [[ ! -z "${params.scylla_repo}" ]] ; then
+                                        export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                    else
+                                        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                        exit 1
+                                    fi
+                                    if [[ ! -z "${params.update_db_packages}" ]]; then
+                                        export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
+                                    fi
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                    export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
-                                export SCT_EMAIL_RECIPIENTS="${email_recipients}"
-                                echo "start test ......."
-                                ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir /sct
-                                echo "end test ....."
-                                """
+                                    echo "start test ......."
+                                    ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir /sct
+                                    echo "end test ....."
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Collect log data') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_CONFIG_FILES=${test_config}
+
+                                    echo "start collect logs ..."
+                                    ./docker/env/hydra.sh collect-logs --logdir /sct
+                                    echo "end collect logs"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Clean resources') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+
+                                    echo "start clean resources ..."
+                                    ./docker/env/hydra.sh clean-resources --logdir /sct
+                                    echo "end clean resources"
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Send email with result') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+
+                                    sh """
+                                    #!/bin/bash
+
+                                    set -xe
+                                    env
+
+                                    echo "Start send email ..."
+                                    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                    echo "Email sent"
+                                    """
+                                }
                             }
                         }
                     }
