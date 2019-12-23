@@ -81,11 +81,8 @@ class GrowClusterTest(ClusterTester):
     def grow_cluster(self, cluster_target_size, stress_cmd):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
-        # 60 minutes should be long enough for adding each node
-        nodes_to_add = cluster_target_size - self._cluster_starting_size
-
-        # 240 min - run nemesis with load in parallel after the cluster was expanded
-        duration = (60 * nodes_to_add) + 240
+        # default=1440 min (one day) if test_duration is not defined
+        duration = self.params.get('test_duration', default=1440)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
                                                 duration=duration)
 
