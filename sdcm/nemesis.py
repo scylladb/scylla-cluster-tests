@@ -818,6 +818,13 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                     column_type.forget_variant(added_columns_info['column_types'])
                     del added_columns_info['column_names'][column_name]
 
+    def _add_drop_column_run_in_cycle(self):
+        start_time = time.time()
+        end_time = start_time + 600
+        while time.time() < end_time:
+            self._add_drop_column()
+            time.sleep(1)
+
     def disrupt_add_remove_column(self):
         """
         It searches for table that allow add/drop columns (non compact storage table) and create it if no such table.
@@ -829,22 +836,18 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.log.debug("AddDropColumnMonkey: Started")
         self._add_drop_column_target_table = self._add_drop_column_get_target_table(
             self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is not None:
-            if self._add_drop_column_target_table != ['add_drop_column_ks', 'add_drop_column_table']:
-                self._set_current_disruption(f'AddDropColumnMonkey Singular {self.target_node}')
-                self._add_drop_column()
-                return
+        if self._add_drop_column_target_table is not None and \
+                self._add_drop_column_target_table != ['add_drop_column_ks', 'add_drop_column_table']:
+            self._set_current_disruption(f'AddDropColumnMonkey Singular {self.target_node}')
+            self._add_drop_column_run_in_cycle()
+            return
         self._set_current_disruption(f'AddDropColumnMonkey Self-stress {self.target_node}')
         self._add_drop_column_create_table()
         stress_cmd = "cassandra-stress user profile=/tmp/cs_profile_add_remove_column.yaml " \
                      "duration=3m no-warmup 'ops(insert=3,read1=1)' cl=ALL -rate threads=4"
         cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd,
                                                   keyspace_name=self._add_drop_column_target_table[0])
-        start_time = time.time()
-        end_time = start_time + 600
-        while time.time() < end_time:
-            self._add_drop_column()
-            time.sleep(1)
+        self._add_drop_column_run_in_cycle()
         cs_thread.kill()
 
     def modify_table_comment(self):
@@ -1781,6 +1784,8 @@ class ModifyTableMonkey(Nemesis):
 class AddDropColumnMonkey(Nemesis):
 
     disruptive = False
+    run_with_gemini = False
+    networking = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
