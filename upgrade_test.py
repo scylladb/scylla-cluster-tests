@@ -404,7 +404,6 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Run some Queries to verify data %s', note)
         self.verify_db_data()
         if rewrite_data:
-            self.clean_db_data()
             self.log.info('Re-Populate DB with many types of tables and data')
             self.fill_db_data()
 
@@ -431,6 +430,8 @@ class UpgradeTest(FillDatabaseData):
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
+        # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
+        self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
