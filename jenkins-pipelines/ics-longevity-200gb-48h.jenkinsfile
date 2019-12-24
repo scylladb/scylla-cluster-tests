@@ -11,5 +11,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml", "test-cases/enterprise-features/ics/longevity/ics-longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml"]''',
 
-    timeout: [time: 2940, unit: 'MINUTES']
+    timeout: [time: 3060, unit: 'MINUTES']
 )
