@@ -43,6 +43,7 @@ from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
+from cassandra import ConsistencyLevel
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -90,6 +91,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_max_column_name_size = 10
         self._add_drop_column_columns_info = {}
         self._add_drop_column_target_table = []
+        self._add_drop_column_default_target_table = [
+            'add_drop_column_' + generate_random_string(10), 'standard1'
+        ]
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -169,7 +173,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         for operation in self.operation_log:
             self.log.info(operation)
 
-    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None, networking=None):  # pylint: disable=invalid-name
+    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None,
+                                                           networking=None):  # pylint: disable=invalid-name
         if disruptive is not None:
             return self._get_subclasses_disrupt_methods(disruptive=disruptive)
         if run_with_gemini is not None:
@@ -253,7 +258,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         num_of_reboots = random.randint(2, 10)
         for i in range(num_of_reboots):
             self._set_current_disruption('MultipleHardRebootNode %s' % self.target_node)
-            self.log.debug("Rebooting {} out of {} times".format(i+1, num_of_reboots))
+            self.log.debug("Rebooting {} out of {} times".format(i + 1, num_of_reboots))
             self.target_node.reboot(hard=True)
             if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
@@ -262,7 +267,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 self.log.info('Waiting JMX services to start after node reboot')
                 self.target_node.wait_jmx_up()
             sleep_time = random.randint(0, 100)
-            self.log.info('Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
+            self.log.info(
+                'Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
             time.sleep(sleep_time)
 
     def disrupt_soft_reboot_node(self):
@@ -286,7 +292,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.target_node.wait_jmx_up()
 
         # Wait 5 minutes our before return back the default value
-        self.log.debug('Wait 5 minutes our before return murmur3_partitioner_ignore_msb_bits back the default value (12)')
+        self.log.debug(
+            'Wait 5 minutes our before return murmur3_partitioner_ignore_msb_bits back the default value (12)')
         time.sleep(360)
         self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
         self.target_node.restart_node_with_resharding()
@@ -301,8 +308,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         files = self.target_node.remoter.run("sudo sh -c 'find /var/lib/scylla/data/%s-* -type f'" % ks_cf_for_destroy,
                                              verbose=False)
         if files.stderr:
-            raise NoFilesFoundToDestroy('Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
-                                                                                                       files.stderr))
+            raise NoFilesFoundToDestroy(
+                'Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
+                                                                               files.stderr))
 
         for one_file in files.stdout.split():
             if not one_file or '/' not in one_file:
@@ -428,6 +436,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error(str(details))
                 return None
+
         self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.ip_address
         self.target_node.run_nodetool("decommission")
@@ -743,13 +752,24 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         return column_name
 
     def _add_drop_column_create_table(self):
-        self.target_node.run_cqlsh(
-            "CREATE KEYSPACE IF NOT EXISTS add_drop_column_ks WITH replication = "
-            "{'class': 'SimpleStrategy', 'replication_factor': 3};")
-        self.target_node.run_cqlsh(
-            "CREATE TABLE IF NOT EXISTS add_drop_column_ks.add_drop_column_table "
-            "( col1 bigint, PRIMARY KEY(col1) );")
-        self._add_drop_column_target_table = ['add_drop_column_ks', 'add_drop_column_table']
+        self._add_drop_column_target_table = self._add_drop_column_default_target_table
+        self._add_drop_column_columns_info = {}
+        try:
+            with self.tester.cql_connection_patient(self.target_node) as session:
+                session.default_consistency_level = ConsistencyLevel.ALL
+                cmd = f"DROP KEYSPACE IF EXISTS {self._add_drop_column_target_table[0]};"
+                session.execute(cmd)
+                cmd = f"CREATE KEYSPACE IF NOT EXISTS {self._add_drop_column_target_table[0]} WITH replication = " \
+                      "{'class': 'SimpleStrategy', 'replication_factor': 3};"
+                session.execute(cmd)
+                cmd = f"CREATE TABLE IF NOT EXISTS "\
+                      f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]} " \
+                      "( col1 bigint, PRIMARY KEY(col1) );"
+                session.execute(cmd)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
+            return False
+        return True
 
     def _add_drop_column_generate_columns_to_drop(self, added_columns_info):  # pylint: disable=too-many-branches
         drop = []
@@ -762,9 +782,10 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 drop.append(column_name)
         return drop
 
-    def _add_drop_column_run_cql_query(self, cmd, ks):  # pylint: disable=too-many-branches
+    def _add_drop_column_run_cql_query(self, cmd, ks, consistency_level=ConsistencyLevel.ALL):  # pylint: disable=too-many-branches
         try:
             with self.tester.cql_connection_patient(self.target_node, keyspace=ks) as session:
+                session.default_consistency_level = consistency_level
                 session.execute(cmd)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
@@ -803,13 +824,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         if not add and not drop:
             return
         # TBD: Scylla does not support DROP and ADD in the same statement
-        if add:
-            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
-            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
-                for column_name, column_type in add:
-                    added_columns_info['column_names'][column_name] = column_type
-                    column_type.remember_variant(added_columns_info['column_types'])
         if drop:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} DROP ( {', '.join(drop)} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
@@ -817,6 +831,13 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                     column_type = added_columns_info['column_names'][column_name]
                     column_type.forget_variant(added_columns_info['column_types'])
                     del added_columns_info['column_names'][column_name]
+        if add:
+            cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
+                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+            if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
+                for column_name, column_type in add:
+                    added_columns_info['column_names'][column_name] = column_type
+                    column_type.remember_variant(added_columns_info['column_types'])
 
     def _add_drop_column_run_in_cycle(self):
         start_time = time.time()
@@ -825,7 +846,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             self._add_drop_column()
             time.sleep(1)
 
-    def disrupt_add_remove_column(self):
+    def disrupt_add_drop_column(self):
         """
         It searches for table that allow add/drop columns (non compact storage table) and create it if no such table.
         If table is not self-created, add and/or drop columns from that table and quit.
@@ -837,16 +858,26 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_target_table = self._add_drop_column_get_target_table(
             self._add_drop_column_target_table)
         if self._add_drop_column_target_table is not None and \
-                self._add_drop_column_target_table != ['add_drop_column_ks', 'add_drop_column_table']:
+                self._add_drop_column_target_table != self._add_drop_column_default_target_table:
             self._set_current_disruption(f'AddDropColumnMonkey Singular {self.target_node}')
             self._add_drop_column_run_in_cycle()
             return
         self._set_current_disruption(f'AddDropColumnMonkey Self-stress {self.target_node}')
-        self._add_drop_column_create_table()
-        stress_cmd = "cassandra-stress user profile=/tmp/cs_profile_add_remove_column.yaml " \
-                     "duration=3m no-warmup 'ops(insert=3,read1=1)' cl=ALL -rate threads=4"
+        if not self._add_drop_column_create_table():
+            return
+        stress_cmd = "cassandra-stress mixed cl=ALL duration=9m -schema 'replication(factor=3) "\
+                     f"keyspace={self._add_drop_column_target_table[0]}' -port jmx=6868 -mode cql3 native "\
+                     "-rate threads=4 -pop seq=1..4000000 -log interval=60"
         cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd,
                                                   keyspace_name=self._add_drop_column_target_table[0])
+        # When target table is being edited while cassandra-stress is launching you can end up with following error:
+        #   java.io.IOException: Operation x10 on key(s) [88777]: Error executing: (NoHostAvailableException):
+        #   All host(s) tried for query failed (tried:  (com.datastax.driver.core.exceptions.DriverException:
+        #   Error preparing query, got ERROR INVALID: Unknown identifier dnhimytiy5), <ip>
+        #   (com.datastax.driver.core.exceptions.DriverException:
+        # In order to avoid that we have to wait till c-s passed certain initialization steps
+        # Currently we achieve that via time.sleep, which is not exactly right way to do that
+        time.sleep(10)  # TBD: Wait till stress thread produce certain message
         self._add_drop_column_run_in_cycle()
         cs_thread.kill()
 
@@ -1094,11 +1125,11 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                       text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception", node=self.target_node), \
+        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
+                            node=self.target_node), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
-
             self.target_node.remoter.run(
                 'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)
@@ -1240,8 +1271,10 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                                    msg="Wrong expected and actual top partitions number for {} sampler".format(sampler))
             self.tester.assertTrue(toppartition_result[sampler]['capacity'] == args['capacity'],
                                    msg="Wrong expected and actual capacity number for {} sampler".format(sampler))
-            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()), int(args['toppartition']),
-                                        msg="Wrong number of requested and expected toppartitions for {} sampler".format(sampler))
+            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()),
+                                        int(args['toppartition']),
+                                        msg="Wrong number of requested and expected toppartitions for {} sampler".format(
+                                            sampler))
 
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
@@ -1279,12 +1312,13 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         # random packet delay - between 1s - 30s
         delay_in_secs = random.randrange(1, 30)
 
-        list_of_tc_options = [("NetworkRandomInterruption_{}%-loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
-                              ("NetworkRandomInterruption_{}%-corrupt".format(corrupt_percentage),
-                               "--corrupt {}%".format(corrupt_percentage)),
-                              ("NetworkRandomInterruption_{}sec-delay".format(delay_in_secs),
-                               "--delay {}s --delay-distro 500ms".format(delay_in_secs)),
-                              ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit))]
+        list_of_tc_options = [
+            ("NetworkRandomInterruption_{}%-loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
+            ("NetworkRandomInterruption_{}%-corrupt".format(corrupt_percentage),
+             "--corrupt {}%".format(corrupt_percentage)),
+            ("NetworkRandomInterruption_{}sec-delay".format(delay_in_secs),
+             "--delay {}s --delay-distro 500ms".format(delay_in_secs)),
+            ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit))]
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
         option_name, selected_option = random.choice(list_of_tc_options)
@@ -1416,6 +1450,7 @@ def log_time_elapsed_and_status(method):
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                   (num_nodes_before, num_nodes_after))
         return result
+
     return wrapper
 
 
@@ -1427,7 +1462,6 @@ class NoOpMonkey(Nemesis):
 
 
 class StopWaitStartMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1436,7 +1470,6 @@ class StopWaitStartMonkey(Nemesis):
 
 
 class StopStartMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1445,7 +1478,6 @@ class StopStartMonkey(Nemesis):
 
 
 class RestartThenRepairNodeMonkey(NotSpotNemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1454,7 +1486,6 @@ class RestartThenRepairNodeMonkey(NotSpotNemesis):
 
 
 class MultipleHardRebootNodeMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1463,7 +1494,6 @@ class MultipleHardRebootNodeMonkey(Nemesis):
 
 
 class HardRebootNodeMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1472,7 +1502,6 @@ class HardRebootNodeMonkey(Nemesis):
 
 
 class SoftRebootNodeMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1481,7 +1510,6 @@ class SoftRebootNodeMonkey(Nemesis):
 
 
 class DrainerMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1490,7 +1518,6 @@ class DrainerMonkey(Nemesis):
 
 
 class CorruptThenRepairMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1499,7 +1526,6 @@ class CorruptThenRepairMonkey(Nemesis):
 
 
 class CorruptThenRebuildMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1508,7 +1534,6 @@ class CorruptThenRebuildMonkey(Nemesis):
 
 
 class DecommissionMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1517,7 +1542,6 @@ class DecommissionMonkey(Nemesis):
 
 
 class NoCorruptRepairMonkey(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1526,7 +1550,6 @@ class NoCorruptRepairMonkey(Nemesis):
 
 
 class MajorCompactionMonkey(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1535,7 +1558,6 @@ class MajorCompactionMonkey(Nemesis):
 
 
 class RefreshMonkey(Nemesis):
-
     disruptive = False
     run_with_gemini = False
 
@@ -1545,7 +1567,6 @@ class RefreshMonkey(Nemesis):
 
 
 class RefreshBigMonkey(Nemesis):
-
     disruptive = False
     run_with_gemini = False
 
@@ -1555,7 +1576,6 @@ class RefreshBigMonkey(Nemesis):
 
 
 class EnospcMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1564,7 +1584,6 @@ class EnospcMonkey(Nemesis):
 
 
 class EnospcAllNodesMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1573,7 +1592,6 @@ class EnospcAllNodesMonkey(Nemesis):
 
 
 class NodeToolCleanupMonkey(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1582,7 +1600,6 @@ class NodeToolCleanupMonkey(Nemesis):
 
 
 class TruncateMonkey(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1650,7 +1667,8 @@ class MdcChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method(
-            disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair', 'disrupt_nodetool_decommission'])
+            disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair',
+                             'disrupt_nodetool_decommission'])
 
 
 class UpgradeNemesis(Nemesis):
@@ -1773,7 +1791,6 @@ class RollbackNemesis(Nemesis):
 
 
 class ModifyTableMonkey(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1782,14 +1799,13 @@ class ModifyTableMonkey(Nemesis):
 
 
 class AddDropColumnMonkey(Nemesis):
-
     disruptive = False
     run_with_gemini = False
     networking = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_add_remove_column()
+        self.disrupt_add_drop_column()
 
 
 class ToggleTableIcsMonkey(Nemesis):
@@ -1800,7 +1816,6 @@ class ToggleTableIcsMonkey(Nemesis):
 
 
 class MgmtRepair(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1812,7 +1827,6 @@ class MgmtRepair(Nemesis):
 
 
 class AbortRepairMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1821,7 +1835,6 @@ class AbortRepairMonkey(Nemesis):
 
 
 class NodeTerminateAndReplace(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1830,7 +1843,6 @@ class NodeTerminateAndReplace(Nemesis):
 
 
 class ValidateHintedHandoffShortDowntime(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1839,7 +1851,6 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
 
 
 class SnapshotOperations(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1848,7 +1859,6 @@ class SnapshotOperations(Nemesis):
 
 
 class NodeRestartWithResharding(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status
@@ -1857,7 +1867,6 @@ class NodeRestartWithResharding(Nemesis):
 
 
 class TopPartitions(Nemesis):
-
     disruptive = False
 
     @log_time_elapsed_and_status
@@ -1897,20 +1906,20 @@ class StopStartInterfacesNetworkMonkey(Nemesis):
 
 class DisruptiveMonkey(Nemesis):
     # Limit the nemesis scope:
-        #  - ValidateHintedHandoffShortDowntime
-        #  - CorruptThenRepairMonkey
-        #  - CorruptThenRebuildMonkey
-        #  - RestartThenRepairNodeMonkey
-        #  - StopStartMonkey
-        #  - MultipleHardRebootNodeMonkey
-        #  - HardRebootNodeMonkey
-        #  - SoftRebootNodeMonkey
-        #  - StopWaitStartMonkey
-        #  - NodeTerminateAndReplace
-        #  - EnospcMonkey
-        #  - DecommissionMonkey
-        #  - NodeRestartWithResharding
-        #  - DrainerMonkey
+    #  - ValidateHintedHandoffShortDowntime
+    #  - CorruptThenRepairMonkey
+    #  - CorruptThenRebuildMonkey
+    #  - RestartThenRepairNodeMonkey
+    #  - StopStartMonkey
+    #  - MultipleHardRebootNodeMonkey
+    #  - HardRebootNodeMonkey
+    #  - SoftRebootNodeMonkey
+    #  - StopWaitStartMonkey
+    #  - NodeTerminateAndReplace
+    #  - EnospcMonkey
+    #  - DecommissionMonkey
+    #  - NodeRestartWithResharding
+    #  - DrainerMonkey
 
     def __init__(self, *args, **kwargs):
         super(DisruptiveMonkey, self).__init__(*args, **kwargs)
@@ -1922,13 +1931,13 @@ class DisruptiveMonkey(Nemesis):
 
 
 class NonDisruptiveMonkey(Nemesis):
-        # Limit the nemesis scope:
-        #  - NodeToolCleanupMonkey
-        #  - SnapshotOperations
-        #  - RefreshMonkey
-        #  - RefreshBigMonkey -
-        #  - NoCorruptRepairMonkey
-        #  - MgmtRepair
+    # Limit the nemesis scope:
+    #  - NodeToolCleanupMonkey
+    #  - SnapshotOperations
+    #  - RefreshMonkey
+    #  - RefreshBigMonkey -
+    #  - NoCorruptRepairMonkey
+    #  - MgmtRepair
 
     def __init__(self, *args, **kwargs):
         super(NonDisruptiveMonkey, self).__init__(*args, **kwargs)
@@ -1955,8 +1964,8 @@ class NetworkMonkey(Nemesis):
 
 class GeminiChaosMonkey(Nemesis):
     # Limit the nemesis scope to use with gemini
-        # - StopStartMonkey
-        # - RestartThenRepairNodeMonkey
+    # - StopStartMonkey
+    # - RestartThenRepairNodeMonkey
     def __init__(self, *args, **kwargs):
         super(GeminiChaosMonkey, self).__init__(*args, **kwargs)
         self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True)

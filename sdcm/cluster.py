@@ -2249,11 +2249,10 @@ server_encryption_options:
                                         error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex,
                                                                                                          node=self.name))
 
-    def validate_gossip_nodes_info(self):
-        result = self.run_nodetool('gossipinfo', verbose=False)
+    def validate_gossip_nodes_info(self, gossip_info):
         gossip_node_schemas = {}
         schema, ip, status = '', '', ''
-        for line in result.stdout.split():
+        for line in gossip_info.stdout.split():
             if line.startswith('SCHEMA:'):
                 schema = line.replace('SCHEMA:', '')
             elif line.startswith('RPC_ADDRESS:'):
@@ -2307,16 +2306,17 @@ server_encryption_options:
         errors = []
         peers_details = ''
         try:
-            gossip_node_schemas = self.validate_gossip_nodes_info()
+            gossip_info = self.run_nodetool('gossipinfo', verbose=False)
+            peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
+                                           'rpc_address, schema_version, supported_features from system.peers',
+                                           split=True, verbose=False)
+            gossip_node_schemas = self.validate_gossip_nodes_info(gossip_info)
             status = gossip_node_schemas[self.ip_address]['status']
             if status != 'NORMAL':
                 self.log.debug('Node status is {status}. Schema version can\'t be validated'. format(status=status))
                 return
 
             # Search for nulls in system.peers
-            peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
-                                           'rpc_address, schema_version, supported_features from system.peers',
-                                           split=True, verbose=False)
 
             for line in peers_details[3:-2]:
                 line_splitted = line.split('|')
