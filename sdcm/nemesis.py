@@ -1033,7 +1033,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                    "'%sms'" % random.randint(1, 1000))
         self._modify_table_property(name="speculative_retry", val=random.choice(options))
 
-    def disrupt_toggle_table_ics(self):
+    def private_disrupt_toggle_table_ics(self):
         self._set_current_disruption('ToggleTableICS')
         self.toggle_table_ics()
 
@@ -1796,7 +1796,8 @@ class ToggleTableIcsMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_toggle_table_ics()
+        self.call_random_disrupt_method(
+            disrupt_methods=['private_disrupt_toggle_table_ics', 'disrupt_hard_reboot_node'])
 
 
 class MgmtRepair(Nemesis):
