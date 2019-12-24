@@ -904,7 +904,7 @@ class FillDatabaseData(ClusterTester):
                                                                               gender varchar,
                                                                               birth_year bigint)"""
                               ],
-            'truncates': ['TRUNCATE no_range_ghost_test'],
+            'truncates': ['TRUNCATE no_range_ghost_test', 'TRUNCATE ks_no_range_ghost_test.users'],
             'inserts': ["INSERT INTO no_range_ghost_test (k, v) VALUES (%d, 0)" % k for k in range(0, 5)],
             'queries': ["#SORTED SELECT k FROM no_range_ghost_test",
                         "DELETE FROM no_range_ghost_test WHERE k = 2",
@@ -2894,6 +2894,13 @@ class FillDatabaseData(ClusterTester):
         for truncate in truncates:
             session.execute(truncate)
 
+    def truncate_tables(self, session):
+        # Run through the list of items and create all tables
+        for item in self.all_verification_items:
+            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                for truncate in item['truncates']:
+                    session.execute(truncate)
+
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         # pylint: disable=too-many-nested-blocks
         for item in self.all_verification_items:
@@ -2957,6 +2964,22 @@ class FillDatabaseData(ClusterTester):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
+        node = self.db_cluster.nodes[0]
+        with self.cql_connection_patient(node) as session:
+            # pylint: disable=no-member
+            # override driver consistency level
+            session.default_consistency_level = ConsistencyLevel.QUORUM
+            session.set_keyspace("keyspace_fill_db_data")
+            # clean original test data by truncate
+            self.truncate_tables(session)
+
+            # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
+            self.cql_insert_data_to_tables(session, session.default_fetch_size)
+
+    def prepare_keyspaces_and_tables(self):
+        """
+        Prepare keyspaces and tables
+        """
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node) as session:
@@ -2972,9 +2995,6 @@ class FillDatabaseData(ClusterTester):
             # Create all tables according the above list
             self.cql_create_tables(session)
 
-            # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
-            self.cql_insert_data_to_tables(session, session.default_fetch_size)
-
     def verify_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
@@ -2982,10 +3002,3 @@ class FillDatabaseData(ClusterTester):
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             self.run_db_queries(session, session.default_fetch_size)
-
-    def clean_db_data(self):
-        # Prepare connection
-        node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
-            session.execute("DROP KEYSPACE keyspace_fill_db_data;")
-            session.execute("DROP KEYSPACE ks_no_range_ghost_test;")
