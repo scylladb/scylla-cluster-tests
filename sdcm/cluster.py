@@ -36,7 +36,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
-from sdcm.prometheus import start_metrics_server
+from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
 from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, SSHConnectTimeoutError
@@ -351,6 +351,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.db_init_finished = False
 
         self._short_hostname = None
+        self._alert_manager = None
 
         self._database_log_errors_index = []
         self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
@@ -877,6 +878,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._db_log_reader_thread.daemon = True
         self._db_log_reader_thread.start()
 
+    def start_alert_manager_thread(self):
+        self._alert_manager = PrometheusAlertManagerListener(self.external_address)
+        self._alert_manager.start()
+
     def __str__(self):
         return 'Node %s [%s | %s%s] (seed: %s)' % (self.name,
                                                    self.public_ip_address,
@@ -925,8 +930,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.start_journal_thread()
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
-        if 'monitor' in self.name and Setup.BACKTRACE_DECODING:
-            self.start_decode_on_monitor_node_thread()
+        elif 'monitor' in self.name:
+            self.start_alert_manager_thread()
+            if Setup.BACKTRACE_DECODING:
+                self.start_decode_on_monitor_node_thread()
 
     @log_run_info
     def stop_task_threads(self, timeout=10):
@@ -937,6 +944,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self._backtrace_thread.join(timeout)
         if self._db_log_reader_thread:
             self._db_log_reader_thread.join(timeout)
+        if self._alert_manager:
+            self._alert_manager.stop(timeout)
         if self._journal_thread:
             self.remoter.run(cmd='sudo pkill -f "journalctl.*scylla"', ignore_status=True)
             self._journal_thread.join(timeout)

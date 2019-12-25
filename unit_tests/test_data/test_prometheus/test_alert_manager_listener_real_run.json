@@ -1,0 +1,44 @@
+[
+        {
+            "annotations": {
+                "description": "[10.0.201.178] has been down for more than 30 seconds.",
+                "summary": "Instance [10.0.201.178] down"},
+            "endsAt": "2019-12-26T06:21:09.591Z",
+            "startsAt": "2019-12-24T17:00:09.591Z",
+            "updatedAt": "2019-12-26T06:18:09.593Z",
+            "generatorURL": "http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+            "labels": {
+                "alertname": "InstanceDown", "instance": "[10.0.201.178]", "job": "scylla",
+                "monitor": "scylla-monitor", "severity": "2"}
+        }, {
+            "annotations": {
+                "description": "10.0.225.211 has been down for more than 30 seconds.",
+                "summary": "Instance 10.0.225.211 down"},
+            "endsAt": "2019-12-26T06:21:09.591Z",
+            "startsAt": "2019-12-24T17:00:09.591Z", "updatedAt": "2019-12-26T06:18:09.593Z",
+            "generatorURL": "http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+            "labels": {
+                "alertname": "InstanceDown", "instance": "10.0.225.211", "job": "scylla",
+                       "monitor": "scylla-monitor", "severity": "2"}
+        }, {
+            "annotations": {
+                "description": "10.0.221.210 has been down for more than 30 seconds.",
+                "summary": "Instance 10.0.221.210 down"},
+            "endsAt": "2019-12-26T06:21:09.591Z",
+            "startsAt": "2019-12-24T17:00:09.591Z",
+            "updatedAt": "2019-12-26T06:18:09.593Z",
+            "generatorURL": "http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+            "labels": {
+                "alertname": "InstanceDown", "instance": "10.0.221.210", "job": "scylla",
+                "monitor": "scylla-monitor", "severity": "2"}
+        }, {
+            "annotations": {
+                "description": "10.0.221.209 instance is shutting down.", "summary": "Instance 10.0.221.209 down"},
+            "endsAt": "2019-12-26T06:20:09.591Z", "startsAt": "2019-12-24T16:59:09.591Z",
+            "updatedAt": "2019-12-26T06:17:09.593Z",
+            "generatorURL": "http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=absent%28scylla_transport_requests_served%7Bjob%3D%22scylla%22%2Cshard%3D%220%22%7D%29&g0.tab=1",
+            "labels": {
+                "alertname": "InstanceDown", "instance": "10.0.221.209", "job": "scylla", "monitor": "scylla-monitor",
+                "severity": "2", "shard": "0"}
+        }
+]

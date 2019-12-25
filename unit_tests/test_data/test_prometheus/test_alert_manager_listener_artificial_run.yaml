@@ -1,0 +1,446 @@
+{
+   "post":[
+      {
+         "annotations":{
+            "description":"10.0.146.154 has been down for more than 30 seconds.",
+            "summary":"Instance 10.0.146.154 down"
+         },
+         "endsAt":"2019-12-26T06:21:09.591Z",
+         "fingerprint":"0d7641d94a835f29",
+         "receivers":[
+            {
+               "name":"team-X-mails"
+            }
+         ],
+         "startsAt":"2019-12-24T17:00:09.591Z",
+         "status":{
+            "inhibitedBy":[
+
+            ],
+            "silencedBy":[
+
+            ],
+            "state":"active"
+         },
+         "updatedAt":"2019-12-26T06:18:09.593Z",
+         "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+         "labels":{
+            "alertname":"InstanceDown",
+            "instance":"10.0.146.154",
+            "job":"scylla",
+            "monitor":"scylla-monitor",
+            "severity":"2"
+         }
+      },
+      {
+         "annotations":{
+            "description":"10.0.225.211 has been down for more than 30 seconds.",
+            "summary":"Instance 10.0.225.211 down"
+         },
+         "endsAt":"2019-12-26T06:21:09.591Z",
+         "fingerprint":"8a600881c9a6c0f1",
+         "receivers":[
+            {
+               "name":"team-X-mails"
+            }
+         ],
+         "startsAt":"2019-12-24T17:00:09.591Z",
+         "status":{
+            "inhibitedBy":[
+
+            ],
+            "silencedBy":[
+
+            ],
+            "state":"active"
+         },
+         "updatedAt":"2019-12-26T06:18:09.593Z",
+         "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+         "labels":{
+            "alertname":"InstanceDown",
+            "instance":"10.0.225.211",
+            "job":"scylla",
+            "monitor":"scylla-monitor",
+            "severity":"2"
+         }
+      },
+      {
+         "annotations":{
+            "description":"10.0.221.210 has been down for more than 30 seconds.",
+            "summary":"Instance 10.0.221.210 down"
+         },
+         "endsAt":"2019-12-26T06:21:09.591Z",
+         "fingerprint":"db202688a7562b70",
+         "receivers":[
+            {
+               "name":"team-X-mails"
+            }
+         ],
+         "startsAt":"2019-12-24T17:00:09.591Z",
+         "status":{
+            "inhibitedBy":[
+
+            ],
+            "silencedBy":[
+
+            ],
+            "state":"active"
+         },
+         "updatedAt":"2019-12-26T06:18:09.593Z",
+         "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+         "labels":{
+            "alertname":"InstanceDown",
+            "instance":"10.0.221.210",
+            "job":"scylla",
+            "monitor":"scylla-monitor",
+            "severity":"2"
+         }
+      },
+      {
+         "annotations":{
+            "description":" instance is shutting down.",
+            "summary":"Instance  down"
+         },
+         "endsAt":"2019-12-26T06:20:09.591Z",
+         "fingerprint":"de7f6df6a703fbee",
+         "receivers":[
+            {
+               "name":"team-X-mails"
+            }
+         ],
+         "startsAt":"2019-12-24T16:59:09.591Z",
+         "status":{
+            "inhibitedBy":[
+
+            ],
+            "silencedBy":[
+
+            ],
+            "state":"active"
+         },
+         "updatedAt":"2019-12-26T06:17:09.593Z",
+         "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=absent%28scylla_transport_requests_served%7Bjob%3D%22scylla%22%2Cshard%3D%220%22%7D%29&g0.tab=1",
+         "labels":{
+            "alertname":"InstanceDown",
+            "job":"scylla",
+            "monitor":"scylla-monitor",
+            "severity":"2",
+            "shard":"0"
+         }
+      }
+   ],
+   "expected":{
+      "_publish_end_of_alerts":[
+         {
+
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+            "0d7641d94a835f29":{
+               "annotations":{
+                  "description":"10.0.146.154 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.146.154 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"0d7641d94a835f29",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.146.154",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "8a600881c9a6c0f1":{
+               "annotations":{
+                  "description":"10.0.225.211 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.225.211 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"8a600881c9a6c0f1",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.225.211",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "db202688a7562b70":{
+               "annotations":{
+                  "description":"10.0.221.210 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.221.210 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"db202688a7562b70",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.221.210",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "de7f6df6a703fbee":{
+               "annotations":{
+                  "description":" instance is shutting down.",
+                  "summary":"Instance  down"
+               },
+               "endsAt":"2019-12-26T06:20:09.591Z",
+               "fingerprint":"de7f6df6a703fbee",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T16:59:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:17:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=absent%28scylla_transport_requests_served%7Bjob%3D%22scylla%22%2Cshard%3D%220%22%7D%29&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2",
+                  "shard":"0"
+               }
+            }
+         },
+         {
+
+         }
+      ],
+      "_publish_new_alerts":[
+         {
+
+         },
+         {
+            "0d7641d94a835f29":{
+               "annotations":{
+                  "description":"10.0.146.154 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.146.154 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"0d7641d94a835f29",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.146.154",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "8a600881c9a6c0f1":{
+               "annotations":{
+                  "description":"10.0.225.211 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.225.211 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"8a600881c9a6c0f1",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.225.211",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "db202688a7562b70":{
+               "annotations":{
+                  "description":"10.0.221.210 has been down for more than 30 seconds.",
+                  "summary":"Instance 10.0.221.210 down"
+               },
+               "endsAt":"2019-12-26T06:21:09.591Z",
+               "fingerprint":"db202688a7562b70",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T17:00:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:18:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=up%7Bjob%3D%22scylla%22%7D+%3D%3D+0&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "instance":"10.0.221.210",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2"
+               }
+            }
+         },
+         {
+            "de7f6df6a703fbee":{
+               "annotations":{
+                  "description":" instance is shutting down.",
+                  "summary":"Instance  down"
+               },
+               "endsAt":"2019-12-26T06:20:09.591Z",
+               "fingerprint":"de7f6df6a703fbee",
+               "receivers":[
+                  {
+                     "name":"team-X-mails"
+                  }
+               ],
+               "startsAt":"2019-12-24T16:59:09.591Z",
+               "status":{
+                  "inhibitedBy":[
+
+                  ],
+                  "silencedBy":[
+
+                  ],
+                  "state":"active"
+               },
+               "updatedAt":"2019-12-26T06:17:09.593Z",
+               "generatorURL":"http://ip-10-0-23-159.eu-west-1.compute.internal:9090/graph?g0.expr=absent%28scylla_transport_requests_served%7Bjob%3D%22scylla%22%2Cshard%3D%220%22%7D%29&g0.tab=1",
+               "labels":{
+                  "alertname":"InstanceDown",
+                  "job":"scylla",
+                  "monitor":"scylla-monitor",
+                  "severity":"2",
+                  "shard":"0"
+               }
+            }
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+
+         },
+         {
+
+         }
+      ]
+   }
+}

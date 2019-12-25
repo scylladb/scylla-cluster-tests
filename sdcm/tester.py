@@ -64,7 +64,6 @@ from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, save_email_data_to_file
 
-
 configure_logging()
 
 try:
