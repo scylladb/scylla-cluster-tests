@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import threading
 import os
 import re
 import logging
@@ -17,7 +16,7 @@ import zmq
 import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs
-from sdcm.prometheus import nemesis_metrics_obj
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -488,6 +487,87 @@ class SpotTerminationEvent(SctEvent):
             super(SpotTerminationEvent, self).__str__(), self)
 
 
+class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+    _from_str_regexp = re.compile(
+        "[^:]+: alert_name=(?P<alert_name>[^ ]+) type=(?P<type>[^ ]+) start=(?P<start>[^ ]+) "
+        f"end=(?P<end>[^ ]+) description=(?P<description>[^ ]+) updated=(?P<updated>[^ ]+) state=(?P<state>[^ ]+) "
+        f"fingerprint=(?P<fingerprint>[^ ]+) labels=(?P<labels>[^ ]+)")
+
+    def __init__(self,  # pylint: disable=too-many-arguments
+                 raw_alert=None, event_str=None, sct_event_str=None, event_type: str = None, severity=Severity.WARNING):
+        super().__init__()
+        self.severity = severity
+        self.type = event_type
+        if raw_alert:
+            self._load_from_raw_alert(**raw_alert)
+        elif event_str:
+            self._load_from_event_str(event_str)
+        elif sct_event_str:
+            self._load_from_sctevent_str(sct_event_str)
+
+    def __str__(self):
+        return f"{super().__str__()}: alert_name={self.alert_name} type={self.type} start={self.start} "\
+               f"end={self.end} description={self.description} updated={self.updated} state={self.state} "\
+               f"fingerprint={self.fingerprint} labels={self.labels}"
+
+    def _load_from_sctevent_str(self, data: str):
+        result = self._from_str_regexp.match(data)
+        if not result:
+            return False
+        tmp = result.groupdict()
+        if not tmp:
+            return False
+        tmp['labels'] = json.loads(tmp['labels'])
+        for name, value in tmp:
+            setattr(self, name, value)
+        return True
+
+    def _load_from_event_str(self, data: str):
+        try:
+            tmp = json.loads(data)
+        except Exception:  # pylint: disable=broad-except
+            return None
+        for name, value in tmp.items():
+            if name not in ['annotations', 'description', 'start', 'end', 'updated', 'fingerprint', 'status', 'labels',
+                            'state', 'alert_name', 'severity', 'type', 'timestamp', 'severity']:
+                return False
+            setattr(self, name, value)
+        if isinstance(self.severity, str):
+            self.severity = getattr(Severity, self.severity)
+        return True
+
+    def _load_from_raw_alert(self,  # pylint: disable=too-many-arguments,invalid-name,unused-argument
+                             annotations: dict = None, startsAt=None, endsAt=None, updatedAt=None, fingerprint=None,
+                             status=None, labels=None, **kwargs):
+        self.annotations = annotations
+        if self.annotations:
+            self.description = self.annotations.get('description', self.annotations.get('summary', ''))
+        else:
+            self.description = ''
+        self.start = startsAt
+        self.end = endsAt
+        self.updated = updatedAt
+        self.fingerprint = fingerprint
+        self.status = status
+        self.labels = labels
+        if self.status:
+            self.state = self.status.get('state', '')
+        else:
+            self.state = ''
+        if self.labels:
+            self.alert_name = self.labels.get('alertname', '')
+        else:
+            self.alert_name = ''
+
+    def __eq__(self, other):
+        for name in ['alert_name', 'type', 'start', 'end', 'description', 'updated', 'state', 'fingerprint', 'labels']:
+            other_value = getattr(other, name, None)
+            value = getattr(self, name, None)
+            if value != other_value:
+                return False
+        return True
+
+
 class TestKiller(Process):
     def __init__(self, timeout_before_kill=2, test_callback=None):
         super(TestKiller, self).__init__()
@@ -534,30 +614,6 @@ class EventsFileLogger(Process):
                 LOGGER.info(msg)
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Failed to write event to event.log")
-
-# This is an example of how we'll send info into Prometheus,
-# Currently it's not in use, since the data we want to show, doesn't fit Prometheus model,
-# we are using the GrafanaAnnotator
-
-
-class PrometheusDumper(threading.Thread):
-    def __init__(self):
-        self.stop_event = threading.Event()
-        super(PrometheusDumper, self).__init__()
-
-    def run(self):
-        events_gauge = nemesis_metrics_obj().create_gauge('sct_events_gauge',
-                                                          'Gauge for sct events',
-                                                          ['event_type', 'type', 'severity', 'node'])
-
-        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
-            events_gauge.labels(event_type,  # pylint: disable=no-member
-                                getattr(message_data, 'type', ''),
-                                message_data.severity,
-                                getattr(message_data, 'node', '')).set(message_data.timestamp)
-
-    def terminate(self):
-        self.stop_event.set()
 
 
 EVENTS_PROCESSES = dict()
