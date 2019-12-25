@@ -26,6 +26,7 @@ authenticator_password: 'cassandra'
 
 authorization_in_upgrade: 'CassandraAuthorizer'
 remove_authorization_in_rollback: true
+recover_system_tables: true
 
 # those are needed to be give by the job, via environment variable
 # for the base version
