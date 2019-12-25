@@ -2919,6 +2919,10 @@ class FillDatabaseData(ClusterTester):
                     except Exception as ex:
                         LOGGER.exception("failed to insert: %s", insert)
                         raise ex
+                    # Add delay on client side for inserts of list to avoid list order issue
+                    # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
+                    if 'list<' in item['create_tables']:
+                        time.sleep(1)
 
     def run_db_queries(self, session, default_fetch_size):
         # pylint: disable=too-many-branches,too-many-nested-blocks
