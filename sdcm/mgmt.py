@@ -357,8 +357,10 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Deleted the task '{}' successfully!". format(task_id))
 
     def delete_automatic_repair_task(self):
-        repair_task = self.repair_task_list[0]
-        self.delete_task(repair_task.id)
+        repair_tasks_list = self.repair_task_list
+        if repair_tasks_list:
+            automatic_repair_task = repair_tasks_list[0]
+            self.delete_task(automatic_repair_task.id)
 
     @property
     def _cluster_list(self):
