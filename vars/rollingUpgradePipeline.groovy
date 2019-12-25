@@ -59,10 +59,10 @@ def call(Map pipelineParams) {
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
 
                                         stage("Upgrade from ${base_version}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    checkout scm
-                                                    try {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        checkout scm
                                                         sh """
                                                         #!/bin/bash
                                                         set -xe
@@ -91,18 +91,15 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                                         echo "end test ....."
                                                         """
-                                                    } catch (error) {
-                                                        echo "FAILED"
-                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
                                         }
                                         stage("Collect logs for Upgrade from ${base_version}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                    try {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
 
@@ -116,17 +113,15 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh collect-logs --logdir /sct --backend gce
                                                         echo "end collect logs"
                                                         """
-                                                    } catch (error) {
-                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
                                         }
                                         stage("Clean resources for Upgrade from ${base_version}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                    try {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
 
@@ -141,16 +136,14 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh clean-resources --logdir /sct --backend gce
                                                         echo "end clean resources"
                                                         """
-                                                    } catch (error) {
-                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
                                         }
                                         stage("Send email for Upgrade from ${base_version}") {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    try {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
                                                         sh """
                                                         #!/bin/bash
 
@@ -161,8 +154,6 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
                                                         echo "Email sent"
                                                         """
-                                                    } catch (error) {
-                                                        sh """echo ${error}"""
                                                     }
                                                 }
                                             }
