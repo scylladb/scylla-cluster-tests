@@ -456,7 +456,10 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter,
                                  get_running_instances_for_email_report,
                                  read_email_data_from_file)
-
+    if not email_recipients:
+        LOGGER.warning("No email recipients. Email will not be sent")
+        return
+    LOGGER.info('Email will be sent to next recipients: %s', email_recipients)
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
