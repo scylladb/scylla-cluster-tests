@@ -609,7 +609,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         """
         ssh_cmd = _make_ssh_command(user=self.user, port=self.port,
                                     hosts_file=self.known_hosts_file,
-                                    key_file=self.key_file,
+                                    key_file=self.key_file, connect_timeout=600,
                                     extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'))
 
         if delete_dst:
@@ -620,7 +620,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=300 --rsh='%s' -az %s %s"
+        command = "rsync %s %s --timeout=600 --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
 

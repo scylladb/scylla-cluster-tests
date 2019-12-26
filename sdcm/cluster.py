@@ -1296,8 +1296,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             event = None
             obj = None
             try:
-                obj = Setup.DECODING_QUEUE.get(timeout=5)
+                obj = Setup.DECODING_QUEUE.get(timeout=5) if Setup.DECODING_QUEUE else None
                 if obj is None:
+                    break
                     Setup.DECODING_QUEUE.task_done()
                     break
                 event = obj["event"]
