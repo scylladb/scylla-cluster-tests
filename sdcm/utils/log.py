@@ -63,11 +63,6 @@ class MultilineMessagesFormatter(logging.Formatter):
         return output
 
 
-class MakeFileHandler(logging.FileHandler):
-    def __init__(self, filename, mode='a', encoding=None, delay=0):
-        logging.FileHandler.__init__(self, filename, mode, encoding, delay)
-
-
 class FilterRemote(logging.Filter):  # pylint: disable=too-few-public-methods
     def filter(self, record):
         return not record.name == 'sdcm.remote'
@@ -102,9 +97,9 @@ def configure_logging():
             },
             'outfile': {
                 'level': 'DEBUG',
-                '()': MakeFileHandler,
+                'class': 'logging.FileHandler',
                 'filename': '{}/sct.log'.format(Setup.logdir()),
-                'mode': 'w',
+                'mode': 'a',
                 'formatter': 'default',
             }
         },
