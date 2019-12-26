@@ -2921,7 +2921,7 @@ class FillDatabaseData(ClusterTester):
                         raise ex
                     # Add delay on client side for inserts of list to avoid list order issue
                     # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
-                    if 'list<' in item['create_tables']:
+                    if 'list<' in item['create_tables'][0]:
                         time.sleep(1)
 
     def run_db_queries(self, session, default_fetch_size):
