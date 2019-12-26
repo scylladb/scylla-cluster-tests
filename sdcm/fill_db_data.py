@@ -1139,48 +1139,45 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip': ''},
         # list_test
-        # list_test fails in upgrade test, there is a known scylla issue:
-        # - https://github.com/scylladb/scylla/issues/5446
-        # disabled the list_test.
-        # {
-        #     'create_tables': ["""CREATE TABLE list_test (
-        #                     fn text,
-        #                     ln text,
-        #                     tags list<text>,
-        #                     PRIMARY KEY (fn, ln)
-        #                 )"""],
-        #     'truncates': ["TRUNCATE list_test"],
-        #     'inserts': ["UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
-        #                 "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'bar' ]",
-        #                 "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
-        #                 "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foobar' ]"],
-        #     'queries': ["SELECT tags FROM list_test",
-        #                 "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'a', 'c', 'b', 'c' ]",
-        #                 "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-        #                 "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'm', 'n' ] + tags",
-        #                 "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-        #                 "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags[2] = 'foo', tags[4] = 'bar'",
-        #                 "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-        #                 "DELETE tags[2] FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-        #                 "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-        #                 "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = tags - [ 'bar' ]",
-        #                 "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'"
-        #                 ],
-        #     'results': [[[[u'foo', u'bar', u'foo', u'foobar']]],
-        #                 [],
-        #                 [[[u'a', u'c', u'b', u'c']]],
-        #                 [],
-        #                 [[[u'm', u'n', u'a', u'c', u'b', u'c']]],
-        #                 [],
-        #                 [[[u'm', u'n', u'foo', u'c', u'bar', u'c']]],
-        #                 [],
-        #                 [[[u'm', u'n', u'c', u'bar', u'c']]],
-        #                 [],
-        #                 [[[u'm', u'n', u'c', u'c']]]
-        #                 ],
-        #     'min_version': '',
-        #     'max_version': '',
-        #     'skip': ''},
+        {
+            'create_tables': ["""CREATE TABLE list_test (
+                            fn text,
+                            ln text,
+                            tags list<text>,
+                            PRIMARY KEY (fn, ln)
+                        )"""],
+            'truncates': ["TRUNCATE list_test"],
+            'inserts': ["UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
+                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'bar' ]",
+                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
+                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foobar' ]"],
+            'queries': ["SELECT tags FROM list_test",
+                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'a', 'c', 'b', 'c' ]",
+                        "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
+                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'm', 'n' ] + tags",
+                        "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
+                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags[2] = 'foo', tags[4] = 'bar'",
+                        "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
+                        "DELETE tags[2] FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
+                        "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
+                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = tags - [ 'bar' ]",
+                        "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'"
+                        ],
+            'results': [[[[u'foo', u'bar', u'foo', u'foobar']]],
+                        [],
+                        [[[u'a', u'c', u'b', u'c']]],
+                        [],
+                        [[[u'm', u'n', u'a', u'c', u'b', u'c']]],
+                        [],
+                        [[[u'm', u'n', u'foo', u'c', u'bar', u'c']]],
+                        [],
+                        [[[u'm', u'n', u'c', u'bar', u'c']]],
+                        [],
+                        [[[u'm', u'n', u'c', u'c']]]
+                        ],
+            'min_version': '',
+            'max_version': '',
+            'skip': ''},
         # multi_collection_test
         {
             'create_tables': ["""CREATE TABLE multi_collection_test(
