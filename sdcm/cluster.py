@@ -922,7 +922,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.start_journal_thread()
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
-        if 'monitor' in self.name:
+        if 'monitor' in self.name and Setup.DECODING_QUEUE:
             self.start_decode_on_monitor_node_thread()
 
     @log_run_info
@@ -939,7 +939,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self._journal_thread.join(timeout)
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
-        if self._decoding_backtraces_thread:
+        if self._decoding_backtraces_thread and Setup.DECODING_QUEUE:
             Setup.DECODING_QUEUE.put(None)
             Setup.DECODING_QUEUE.join()
             self._decoding_backtraces_thread.join(timeout)
@@ -1275,7 +1275,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 backtraces = list(filter(filter_backtraces, backtraces))
 
             for backtrace in backtraces:
-                if Setup.BACKTRACE_DECODING:
+                if Setup.BACKTRACE_DECODING and Setup.DECODING_QUEUE:
                     if backtrace['event'].raw_backtrace:
                         scylla_debug_info = self.get_scylla_debuginfo_file()
                         self.log.debug('Debug info file %s', scylla_debug_info)
