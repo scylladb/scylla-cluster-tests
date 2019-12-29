@@ -922,7 +922,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.start_journal_thread()
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
-        if 'monitor' in self.name:
+        if 'monitor' in self.name and Setup.BACKTRACE_DECODING:
             self.start_decode_on_monitor_node_thread()
 
     @log_run_info
