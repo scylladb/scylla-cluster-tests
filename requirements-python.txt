@@ -1,4 +1,5 @@
 PyYAML==5.1
+paramiko==2.7.1
 fabric==2.5.0
 invoke==1.3.0
 boto3==1.9.200
