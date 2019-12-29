@@ -100,7 +100,7 @@ class CommandRunner:
         self.user = user
         self.password = password
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
-        self.connection = None
+        self.connection = self._create_connection()
 
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
@@ -109,9 +109,8 @@ class CommandRunner:
             connect_timeout=300, verbose=True, log_file=None, retry=0):
         raise NotImplementedError("Should be implemented in subclasses")
 
-    def _create_connection(self, *args, **kwargs):
-        if not self.connection:
-            self.connection = Connection(*args, **kwargs)
+    def _create_connection(self):
+        raise NotImplementedError("_create_connection should be implemented")
 
     def _print_command_results(self, result, verbose, ignore_status):
         """When verbose=True and ignore_status=True that means nothing will be printed in any case"""
@@ -137,7 +136,9 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
         hostname = socket.gethostname()
         user = getpass.getuser()
         super(LocalCmdRunner, self).__init__(hostname, user=user, password=password)
-        self._create_connection(hostname, user=user)
+
+    def _create_connection(self):
+        return Connection(host=self.hostname, user=self.user)
 
     def run(self, cmd, timeout=300, ignore_status=False,  # pylint: disable=too-many-arguments
             connect_timeout=300, verbose=True, log_file=None, retry=0):
@@ -172,8 +173,6 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
     def __init__(self, hostname, user="root", port=22, connect_timeout=60, password="",  # pylint: disable=too-many-arguments
                  key_file=None, extra_ssh_options=""):
 
-        super(RemoteCmdRunner, self).__init__(hostname, user, password)
-
         self.key_file = key_file
         self.port = port
         self.extra_ssh_options = extra_ssh_options
@@ -189,24 +188,30 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                  'ServerAliveInterval': 300,
                                  'StrictHostKeyChecking': 'no'})
         self.connect_config = {'key_filename': os.path.expanduser(self.key_file)}
-        self._create_connection(self.hostname,
-                                user=self.user,
-                                port=self.port,
-                                config=self.ssh_config,
-                                connect_timeout=self.connect_timeout,
-                                connect_kwargs=self.connect_config)
+        super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
 
     def __del__(self):
         self.stop_ssh_up_thread()
 
+    def _create_connection(self):
+        return Connection(host=self.hostname,
+                          user=self.user,
+                          port=self.port,
+                          config=self.ssh_config,
+                          connect_timeout=self.connect_timeout,
+                          connect_kwargs=self.connect_config)
+
     @retrying(n=5, sleep_time=1, allowed_exceptions=(Exception, ), message="Reconnecting")
     def reconnect(self):
-        self.log.debug('Reconnecting to host ...')
-        self.stop_ssh_up_thread()
+        """
+            Use with caution!!! This method forcefully disconnects the SSH session so the commands may stay
+            running on the remote
+        """
+        self.log.debug("Reconnecting to '%s'", self.hostname)
         self.connection.close()
         self.connection.open()
-        self.start_ssh_up_thread()
+        self.log.debug("Connected!")
 
     def ssh_debug_cmd(self):
         if self.key_file:
@@ -258,10 +263,13 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
     def is_up(self, timeout=30):
         return self._ssh_is_up.wait(float(timeout))
 
-    def _ssh_ping(self, timeout=30):
+    def _ssh_ping(self):
         try:
-            result = self.connection.run("true", timeout=timeout, warn=False, encoding='utf-8', hide=True)
-            return result.ok
+            # creating new connection each time in order not to interfere the main connection to decrease probability
+            # of the EOF bug https://github.com/paramiko/paramiko/issues/1584
+            with self._create_connection() as connection:
+                result = connection.run("true", timeout=30, warn=False, encoding='utf-8', hide=True)
+                return result.ok
         except Exception as details:  # pylint: disable=broad-except
             self.log.debug(details)
             return False
