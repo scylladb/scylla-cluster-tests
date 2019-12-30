@@ -92,6 +92,13 @@ class TaskStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
+def update_config_file(node, config_file='/etc/scylla-manager-agent/scylla-manager-agent.yaml',
+                       region='us-east-1'):
+    node.remoter.run(f'sudo chmod o+w {config_file}')
+    node.remoter.run(f"sudo echo -e \"s3:\n   region: {region}\" >> {config_file}")
+    node.remoter.run('sudo systemctl restart scylla-manager-agent')
+
+
 class ScyllaManagerBase():  # pylint: disable=too-few-public-methods
 
     def __init__(self, id, manager_node):  # pylint: disable=redefined-builtin
