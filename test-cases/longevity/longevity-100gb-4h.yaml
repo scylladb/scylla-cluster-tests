@@ -17,3 +17,7 @@ nemesis_interval: 5
 
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
+
+aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+use_mgmt: true
+mgmt_port: 10090
