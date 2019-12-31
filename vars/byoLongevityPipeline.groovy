@@ -104,7 +104,7 @@ def call() {
 
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
-                                    export SCT_CONFIG_FILES="${test_config}"
+                                    export SCT_CONFIG_FILES=${test_config}
 
                                     if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
