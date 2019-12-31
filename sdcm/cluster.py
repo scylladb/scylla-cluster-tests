@@ -756,7 +756,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on uploading coredump")
     def _upload_coredump(self, coredump):
-        return "https://scylladb.com", "See university"
         try:  # pylint: disable=unreachable
             if self.is_debian() or self.is_ubuntu():
                 self.remoter.run('sudo apt-get install -y pigz')
