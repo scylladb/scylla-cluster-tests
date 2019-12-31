@@ -26,7 +26,6 @@
 ### with Avocado
 ```bash
 # with avocado directly
-export SCT_NEW_CONFIG=yes
 
 export SCT_CLUSTER_BACKEND=aws
 export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'
@@ -37,7 +36,6 @@ avocado --show test run longevity_test.py:LongevityTest.test_custom_time
 ### with hydra
 ```bash
 # with hydra
-export SCT_NEW_CONFIG=yes
 
 export SCT_CLUSTER_BACKEND=aws
 export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'

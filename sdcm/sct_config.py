@@ -1029,7 +1029,7 @@ class SCTConfiguration(dict):
 
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {opt['env'] for opt in self.config_options}
-        env_keys = {o for o in os.environ.keys() if o.startswith('SCT_') and o != 'SCT_NEW_CONFIG'}
+        env_keys = {o for o in os.environ.keys() if o.startswith('SCT_')}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
             output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]

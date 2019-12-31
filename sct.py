@@ -64,7 +64,6 @@ def provision(**kwargs):
     logging.basicConfig(level=logging.INFO)
     # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
     # TODO: find a better way for ctrl+c to kill this process
-    os.environ['SCT_NEW_CONFIG'] = 'yes'
     test = ClusterTester(methodName='setUp')
     test._setup_environment_variables()
     test.setUp()

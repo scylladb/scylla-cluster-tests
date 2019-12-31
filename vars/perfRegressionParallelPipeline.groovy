@@ -68,7 +68,6 @@ def call(Map pipelineParams) {
                                             #!/bin/bash
                                             set -xe
                                             env
-                                            export SCT_NEW_CONFIG=yes
                                             export SCT_CLUSTER_BACKEND=${params.backend}
                                             export SCT_REGION_NAME=${pipelineParams.aws_region}
                                             export SCT_CONFIG_FILES=${pipelineParams.test_config}
