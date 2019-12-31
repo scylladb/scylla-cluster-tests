@@ -1,4 +1,4 @@
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines, too-many-public-methods
 
 import re
 import logging
@@ -297,16 +297,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
             IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
 
-            for param in IPV6_AUTOCONF IPV6_DEFROUTE
-            do
-                res=`sudo grep "$param" /etc/sysconfig/network-scripts/ifcfg-eth0`
-                if [[ "${res}x" == "x" ]]
-                then
-                    sudo sh -c  "echo \"$param=yes\" >> /etc/sysconfig/network-scripts/ifcfg-eth0"
-                fi
-            done
-
-            sudo ip r a $IPv6_CIDR dev eth0
+            sudo ip route add $IPv6_CIDR dev eth0
         """)
 
     @staticmethod
@@ -384,6 +375,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                        enumerate(instances, start=self._node_index + 1)]
         for node in added_nodes:
             node.enable_auto_bootstrap = enable_auto_bootstrap
+            node.config_ipv6_as_persistent()
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
@@ -577,6 +569,20 @@ class AWSNode(cluster.BaseNode):
         if self._instance.public_ip_address is None:
             raise PublicIpNotReady(self._instance)
         LOGGER.debug("[{0._instance}] Got public ip: {0._instance.public_ip_address}".format(self))
+
+    def config_ipv6_as_persistent(self):
+        cidr = dedent("""
+                        BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
+                        MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
+                        curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks
+                    """)
+        output = self.remoter.run(f"sudo bash -cxe '{cidr}'")
+        ipv6_cidr = output.stdout.strip()
+        self.remoter.run(
+            f"sudo sh -c  \"echo 'sudo ip route add {ipv6_cidr} dev eth0' >> /etc/sysconfig/network-scripts/init.ipv6-global\"")
+
+        res = self.remoter.run(f"grep '{ipv6_cidr}' /etc/sysconfig/network-scripts/init.ipv6-global")
+        LOGGER.debug('init.ipv6-global was {}updated'.format('' if res.stdout.strip else 'NOT '))
 
     def restart(self):
         # We differenciate between "Restart" and "Reboot".
