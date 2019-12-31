@@ -24,4 +24,3 @@ tenacity==5.0.4
 https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==4.6.4
 tcconfig==0.23.0
-urllib3==1.24.3

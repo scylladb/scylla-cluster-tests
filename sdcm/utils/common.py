@@ -1483,3 +1483,10 @@ def download_encrypt_keys():
     for pem_file in ['CA.pem', 'SCYLLADB.pem', 'hytrust-kmip-cacert.pem', 'hytrust-kmip-scylla.pem']:
         if not os.path.exists('./data_dir/encrypt_conf/%s' % pem_file):
             ks.download_file(pem_file, './data_dir/encrypt_conf/%s' % pem_file)
+
+
+def normalize_ipv6_url(ip_address):
+    """adds square brackets on the IPv6 address in the URL"""
+    if ":" in ip_address:  # IPv6
+        return "[%s]" % ip_address
+    return ip_address

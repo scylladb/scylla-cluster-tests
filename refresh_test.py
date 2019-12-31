@@ -19,7 +19,7 @@ import json
 import subprocess
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import remote_get_file
+from sdcm.utils.common import remote_get_file, normalize_ipv6_url
 
 
 class RefreshTest(ClusterTester):
@@ -76,12 +76,15 @@ class RefreshTest(ClusterTester):
             time.sleep(int(self.params.get('flush_period', default=60)))
             node.run_nodetool("flush")
 
-    def check_timeout(self):
+    def check_timeout(self):  # pylint: disable=too-many-locals
         assert self.monitors.nodes, 'Monitor node should be set, we will try to get metrics from Prometheus server'
-        cmd = 'curl http://[%s]:9090/api/v1/query_range?query=scylla_storage_proxy_coordinator_read_timeouts&start=%s&end=%s&step=60s' % (
-            self.monitors.nodes[0].external_address, self.start, self.end)
+        base_url = "http://%s:9090/api/v1/query_range" % normalize_ipv6_url(self.monitors.nodes[0].external_address)
+        range_str = "&start={0.start}&end={0.end}".format(self)
+        cmd = ["curl",
+               "{}?query=scylla_storage_proxy_coordinator_read_timeouts{}&step=60s".format(base_url, range_str)
+               ]
         self.log.debug('Get read timeout per minute by Prometheus API, cmd: %s', cmd)
-        result = subprocess.check_output(cmd.split(), shell=True)
+        result = subprocess.check_output(cmd, shell=True)
 
         orig_data = json.loads(result)
         read_timeout_msg = 'Read timeout of whole datacenter per minute should be less than 5000'
