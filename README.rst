@@ -106,15 +106,15 @@ To run SCT tests locally run following::
 Run a test
 ----------
 
-Example running test using Hydra using `sample.yaml` configuration file
+Example running test using Hydra using `test-cases/PR-provision-test.yaml` configuration file
 
 on AWS::
 
-    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config tests/sample.yaml"
+    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
 
 on GCE::
 
-    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend gce --config tests/sample.yaml"
+    hydra "run-test longevity_test.LongevityTest.test_custom_time --backend gce --config test-cases/PR-provision-test.yaml"
 
 
 You can also enter the containerized SCT environment using::
@@ -138,15 +138,15 @@ List resources being used::
 Configuring test run configuration YAML
 ---------------------------------------
 
-Take a look at the ``data_dir/scylla.yaml`` file. It contains a number of
+Take a look at the ``test-cases/PR-provision-test.yaml`` file. It contains a number of
 configurable test parameters, such as DB cluster instance types and AMI IDs.
-In this example, we're assuming that you have copied ``data_dir/scylla.yaml``
-to ``data_dir/your_config.yaml``.
+In this example, we're assuming that you have copied ``test-cases/PR-provision-test.yaml``
+to ``test-cases/your_config.yaml``.
 
-All the test run configurations are stored in ``tests`` directory.
+All the test run configurations are stored in ``test-cases`` directory.
 
 Important: Some tests use custom hardcoded operations due to their nature,
-so those tests won't honor what is set in ``data_dir/your_config.yaml``.
+so those tests won't honor what is set in ``test-cases/your_config.yaml``.
 
 Run the tests
 =============
@@ -157,7 +157,7 @@ AWS - Amazon Web Services
 Change your current working directory to this test suite base directory,
 then run test. Example command line::
 
-    hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config data_dir/your_config.yaml
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/your_config.yaml
 
 This command line is to run the test method ``test_custom_time``, in
 the class ``Longevitytest``, that lies inside the file ``longevity_test.py``,
@@ -192,7 +192,7 @@ In order to run tests using the GCE backend, you'll need:
 
 With that said and done, you can run your test using the command line::
 
-    hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config data_dir/scylla-lmr.yaml
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config test-cases/scylla-lmr.yaml
 
 
 (Optional) Follow what the test is doing
