@@ -631,6 +631,9 @@ class SCTConfiguration(dict):
         dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
              help="Choose a specific compaction strategy to pre-create schema with."),
 
+        dict(name="cluster_health_check", env="SCT_CLUSTER_HEALTH_CHECK", type=boolean,
+             help="When true, start cluster health checker for all nodes"),
+
         dict(name="validate_partitions", env="SCT_VALIDATE_PARTITIONS", type=boolean,
              help="when true, log of the partitions before and after the nemesis run is compacted"),
         dict(name="table_name", env="SCT_TABLE_NAME", type=str,

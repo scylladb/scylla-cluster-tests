@@ -2201,6 +2201,11 @@ server_encryption_options:
         return result
 
     def check_node_health(self):
+        # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
+        # Disable it
+        if not self.parent_cluster.params.get('cluster_health_check'):
+            return
+
         self.check_nodes_status()
         self.check_schema_version()
 
@@ -2861,6 +2866,12 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         return status
 
     def check_cluster_health(self):
+        # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
+        # Disable it
+        if not self.params.get('cluster_health_check'):  # pylint: disable=no-member
+            self.log.debug('Cluster health check disabled')  # pylint: disable=no-member
+            return
+
         for node in self.nodes:  # pylint: disable=no-member
             node.check_node_health()
 
