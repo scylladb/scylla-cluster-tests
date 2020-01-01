@@ -27,7 +27,7 @@ from cassandra import AlreadyExists, InvalidRequest
 from sdcm.tester import ClusterTester
 from sdcm.cluster import get_username
 from sdcm.utils.alternator import create_table as alternator_create_table
-from sdcm.utils.common import format_timestamp
+from sdcm.utils.common import format_timestamp, normalize_ipv6_url
 
 
 class LongevityTest(ClusterTester):
@@ -117,7 +117,8 @@ class LongevityTest(ClusterTester):
 
         alternator_port = self.params.get('alternator_port', default=None)
         if alternator_port:
-            endpoint_url = 'http://[{}]:{}'.format(self.db_cluster.nodes[0].external_address, alternator_port)
+            endpoint_url = 'http://{}:{}'.format(normalize_ipv6_url(self.db_cluster.nodes[0].external_address),
+                                                 alternator_port)
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type', default='HASH')
             alternator_create_table(endpoint_url, dynamodb_primarykey_type)
 
