@@ -14,8 +14,7 @@ import yaml
 import requests
 
 from sdcm.es import ES
-from sdcm.utils.common import get_job_name, retrying, remove_comments
-
+from sdcm.utils.common import get_job_name, retrying, remove_comments, normalize_ipv6_url
 
 LOGGER = logging.getLogger(__name__)
 
@@ -130,7 +129,7 @@ class PrometheusDBStats():
     def __init__(self, host, port=9090):
         self.host = host
         self.port = port
-        self.range_query_url = "http://[{0.host}]:{0.port}/api/v1/query_range?query=".format(self)
+        self.range_query_url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(host), port)
         self.config = self.get_configuration()
 
     @property
@@ -155,7 +154,7 @@ class PrometheusDBStats():
         return None
 
     def get_configuration(self):
-        result = self.request(url="http://[{0.host}]:{0.port}/api/v1/status/config".format(self))
+        result = self.request(url="http://{}:{}/api/v1/status/config".format(normalize_ipv6_url(self.host), self.port))
         configs = yaml.safe_load(result["data"]["yaml"])
         LOGGER.debug("Parsed Prometheus configs: %s", configs)
         new_scrape_configs = {}
@@ -175,7 +174,7 @@ class PrometheusDBStats():
                   values: [[linux_timestamp1, value1], [linux_timestamp2, value2]...[linux_timestampN, valueN]]
                  }
         """
-        url = "http://[{0.host}]:{0.port}/api/v1/query_range?query=".format(self)
+        url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(self.host), self.port)
         step = self.scylla_scrape_interval
         _query = "{url}{query}&start={start}&end={end}&step={step}".format(
             url=url, query=query, start=start, end=end, step=step)
@@ -280,7 +279,7 @@ class PrometheusDBStats():
         return self.get_latency(start_time, end_time, latency_type="write")
 
     def create_snapshot(self):
-        url = "http://[{0.host}]:{0.port}/api/v1/admin/tsdb/snapshot".format(self)
+        url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
         result = self.request(url, True)
         LOGGER.debug('Request result: {}'.format(result))
         return result
