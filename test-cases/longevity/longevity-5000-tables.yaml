@@ -16,6 +16,8 @@ instance_type_db: 'i3.4xlarge'
 instance_type_loader: 'c5.2xlarge'
 user_prefix: 'longevity-5000-tables'
 
+cluster_health_check: false
+
 nemesis_class_name: NoOpMonkey
 nemesis_interval: 30
 

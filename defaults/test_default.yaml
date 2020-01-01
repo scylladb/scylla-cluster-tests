@@ -23,6 +23,8 @@ store_results_in_elasticsearch: true
 
 space_node_threshold: 0
 
+cluster_health_check: true
+
 reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
