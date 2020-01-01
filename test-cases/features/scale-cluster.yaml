@@ -15,3 +15,5 @@ user_prefix: 'cluster-scale-test'
 
 nemesis_interval: 5
 nemesis_class_name: 'ChaosMonkey'
+
+cluster_health_check: false
