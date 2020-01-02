@@ -53,6 +53,16 @@ def truncate_entries(func):
     return inner
 
 
+def reload_systemd_config(node):
+    reload_conf = False
+    for i in ['scylla-server', 'scylla-jmx']:
+        result = node.remoter.run('systemctl status %s' % i, ignore_status=True)
+        if ".service changed on disk. Run 'systemctl daemon-reload' to reload units" in result.stderr:
+            reload_conf = True
+    if not node.is_ubuntu14() and reload_conf:
+        node.remoter.run('sudo systemctl daemon-reload')
+
+
 class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
@@ -191,6 +201,7 @@ class UpgradeTest(FillDatabaseData):
         if authorization_in_upgrade:
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
                              authorization_in_upgrade)
+        reload_systemd_config(node)
         node.start_scylla_server()
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
@@ -241,8 +252,6 @@ class UpgradeTest(FillDatabaseData):
                     r'sudo apt-get install %s -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated' % node.scylla_pkg())
                 node.remoter.run(
                     r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                if not node.is_ubuntu14():
-                    node.remoter.run('sudo systemctl daemon-reload')
         elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run(r'sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
         else:
@@ -257,8 +266,6 @@ class UpgradeTest(FillDatabaseData):
             else:
                 node.remoter.run(
                     r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                if not node.is_ubuntu14():
-                    node.remoter.run('sudo systemctl daemon-reload')
 
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
@@ -275,6 +282,7 @@ class UpgradeTest(FillDatabaseData):
                 r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
         if self.params.get('remove_authorization_in_rollback', default=None):
             node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
+        reload_systemd_config(node)
         node.start_scylla_server()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
