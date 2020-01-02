@@ -15,10 +15,27 @@ from sdcm.utils.common import list_instances_gce, list_instances_aws
 LOGGER = logging.getLogger(__name__)
 
 
+class AttachementSizeExceeded(Exception):
+    def __init__(self, current_size, limit):
+        self.current_size = current_size
+        self.limit = limit
+        super().__init__()
+
+
+class BodySizeExceeded(Exception):
+    def __init__(self, current_size, limit):
+        self.current_size = current_size
+        self.limit = limit
+        super().__init__()
+
+
 class Email():
+    #  pylint: disable=too-many-instance-attributes
     """
     Responsible for sending emails
     """
+    _attachments_size_limit = 10485760  # 10Mb = 20 * 1024 * 1024
+    _body_size_limit = 26214400  # 25Mb = 20 * 1024 * 1024
 
     def __init__(self):
         self.sender = "qa@scylladb.com"
@@ -42,15 +59,7 @@ class Email():
         self.conn.starttls()
         self.conn.login(user=self._user, password=self._password)
 
-    def send(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
-        """
-        :param subject: text
-        :param content: text/html
-        :param recipients: iterable, list of recipients
-        :param html: True/False
-        :param files: paths of the files that will be attached to the email
-        :return:
-        """
+    def prepare_email(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
         msg = MIMEMultipart()
         msg['subject'] = subject
         msg['from'] = self.sender
@@ -60,7 +69,9 @@ class Email():
         else:
             text_part = MIMEText(content, "plain")
         msg.attach(text_part)
+        attachment_size = 0
         for path in files:
+            attachment_size += os.path.getsize(path)
             with open(path, "rb") as fil:
                 part = MIMEApplication(
                     fil.read(),
@@ -68,15 +79,34 @@ class Email():
                 )
             part['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(path)
             msg.attach(part)
+        if attachment_size >= self._attachments_size_limit:
+            raise AttachementSizeExceeded(current_size=attachment_size, limit=self._attachments_size_limit)
+        email = msg.as_string()
+        if len(email) >= self._body_size_limit:
+            raise BodySizeExceeded(current_size=len(email), limit=self._body_size_limit)
+        return email
 
-        self.conn.sendmail(self.sender, recipients, msg.as_string())
+    def send(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
+        """
+        :param subject: text
+        :param content: text/html
+        :param recipients: iterable, list of recipients
+        :param html: True/False
+        :param files: paths of the files that will be attached to the email
+        :return:
+        """
+        email = self.prepare_email(subject, content, recipients, html, files)
+        self.send_email(recipients, email)
+
+    def send_email(self, recipients, email):
+        self.conn.sendmail(self.sender, recipients, email)
 
     def __del__(self):
         self.conn.quit()
 
 
 class BaseEmailReporter():
-
+    #  pylint: disable=unused-argument, no-self-use
     fields = []
     email_template_file = 'results_base.html'
 
@@ -86,26 +116,33 @@ class BaseEmailReporter():
         self.log = logger if logger else LOGGER
         self.logdir = logdir if logdir else tempfile.mkdtemp()
 
-    def build_data_for_render(self, results):
+    def build_data_for_report(self, results):
         return {key: results.get(key, "N/A") for key in self.fields}
 
-    def render_to_html(self, results):
+    def build_data_for_attachments(self, results):
+        return {key: results.get(key, "N/A") for key in self.fields}
+
+    def render_to_html(self, results, template_str=None):
         """
         Render analysis results to html template
         :param results: results dictionary
+        :param template_str: template string
         :return: html string
         """
         self.log.info("Rendering results to html using '%s' template...", self.email_template_fp)
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
-        template = env.get_template(self.email_template_fp)
+        if template_str is None:
+            template = env.get_template(self.email_template_fp)
+        else:
+            template = env.from_string(template_str)
         html = template.render(results)
         self.log.info("Results has been rendered to html")
         return html
 
-    def save_html_to_file(self, results, html_file_path=""):
+    def save_html_to_file(self, results, html_file_path="", template_str=None):
         if html_file_path:
-            html = self.render_to_html(results)
+            html = self.render_to_html(results, template_str=template_str)
             with open(html_file_path, "wb") as html_file:
                 html_file.write(html.encode('utf-8'))
             self.log.info("HTML report saved to '%s'.", html_file_path)
@@ -122,16 +159,62 @@ class BaseEmailReporter():
                              self.send_email, self.email_recipients)
 
     def send_report(self, results):
+        report_data = self.build_data_for_report(results)
+        attachments_data = self.build_data_for_attachments(results)
+        smtp = Email()
+        # Generating email
+        email = None
+        for _ in range(4):
+            try:
+                report = self._generate_report(report_data)
+                attachments = self._generate_report_attachments(attachments_data)
+                email = smtp.prepare_email(
+                    subject=report_data['subject'],
+                    recipients=self.email_recipients,
+                    content=report,
+                    files=attachments)
+                break
+            except (AttachementSizeExceeded, BodySizeExceeded) as exc:
+                report_data, attachments_data = self.cut_report_data(report_data, attachments_data, reason=exc)
+        # Sending prepared email
+        if email is None:
+            self.log.error("Failed to prepare email", exc_info=True)
+            return
         try:
-            email_data = self.build_data_for_render(results)
-            self.log.info('Send email with results to {}'.format(self.email_recipients))
-            html, attached_files = self.build_report(email_data)
-            self.send_email(subject=email_data['subject'], content=html, files=attached_files)
+            smtp.send_email(recipients=self.email_recipients, email=email)
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error during sending email: %s", details, exc_info=True)
+        self.log.info(f'Send email with results to {self.email_recipients}')
 
-    def build_report(self, email_data):
-        return self.render_to_html(email_data), ()
+    def _generate_report_attachments(self, attachments_data):
+        if attachments_data is None:
+            self.save_html_to_file(
+                {},
+                'attachment_excluded.html',
+                template_str='<html><body>Attachment was excluded due to the size limitation</body></html>')
+            return ('attachment_excluded.html',)
+        elif attachments_data:
+            return self.build_report_attachments(attachments_data)
+        else:
+            return tuple()
+
+    def _generate_report(self, report_data):
+        if report_data is None:
+            return self.render_to_html(
+                {},
+                '<html><body>Report was not sent due to the size limitation</body></html>')
+        return self.build_report(report_data)
+
+    def build_report(self, report_data, template_str=None):
+        return self.render_to_html(report_data, template_str=None)
+
+    def build_report_attachments(self, attachments_data, template_str=None):
+        return ()
+
+    def cut_report_data(self, report_data, attachments_data, reason):
+        if attachments_data is not None:
+            return report_data, None
+        return None, None
 
 
 class LongevityEmailReporter(BaseEmailReporter):
@@ -144,12 +227,26 @@ class LongevityEmailReporter(BaseEmailReporter):
               'nemesis_name', 'nemesis_details', 'test_id',
               'username', 'nodes']
 
-    def build_report(self, email_data):
+    def cut_report_data(self, report_data, attachments_data, reason):
+        if ['test_status'] in attachments_data and len(attachments_data['test_status']) > 2 and len(
+                attachments_data['test_status'][1]) > 101:
+            #  Reduce number of records in test_status[1] to 100
+            attachments_data['test_status'][1] = attachments_data['test_status'][1][:100]
+            attachments_data['test_status'][1].append('List of events has been cut due to the email size limit')
+            return report_data, attachments_data
+        if attachments_data is not None:
+            return report_data, None
+        return None, None
+
+    def build_report(self, report_data, template_str=None):
+        report_data['short_report'] = True
+        return self.render_to_html(report_data, template_str)
+
+    def build_report_attachments(self, attachments_data, template_str=None):
         report_file = os.path.join(self.logdir, 'email_report.html')
-        self.save_html_to_file(email_data, report_file)
-        email_data['short_report'] = True
-        html = self.render_to_html(email_data)
-        return html, (report_file, )
+        self.save_html_to_file(attachments_data, report_file, template_str=template_str)
+        attachments = (report_file, )
+        return attachments
 
 
 class GeminiEmailReporter(BaseEmailReporter):
@@ -164,10 +261,10 @@ class GeminiEmailReporter(BaseEmailReporter):
               'build_url', 'nemesis_name', 'nemesis_details',
               'test_id', 'nodes']
 
-    def build_report(self, email_data):
+    def build_report(self, report_data, template_str=None):
         self.log.info('Prepare result to send in email')
-        html = self.render_to_html(email_data)
-        return html, ()
+        html = self.render_to_html(report_data, template_str)
+        return html
 
 
 def build_reporter(tester):
