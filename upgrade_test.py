@@ -53,6 +53,14 @@ def truncate_entries(func):
     return inner
 
 
+def check_reload_systemd_config(node):
+    reload_conf = False
+    for i in ['scylla-server', 'scylla-jmx']:
+        result = node.remoter.run('systemctl status %s' % i, ignore_status=True)
+        if ".service changed on disk. Run 'systemctl daemon-reload' to reload units" in result.stderr:
+            raise Exception("Systemd config is changed, but not reload automatically")
+
+
 class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
@@ -191,6 +199,7 @@ class UpgradeTest(FillDatabaseData):
         if authorization_in_upgrade:
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
                              authorization_in_upgrade)
+        check_reload_systemd_config(node)
         node.start_scylla_server()
         node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
