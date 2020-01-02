@@ -354,6 +354,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         self._database_log_errors_index = []
         self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
+                                       DatabaseLogEvent(type='UNKNOWN_VERB',
+                                                        regex='unknown verb exception',
+                                                        severity=Severity.ERROR),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
                                        DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
@@ -1242,6 +1245,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                             cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             matches.append((index, line))
+                            break  # Stop iterating patterns to avoid creating two events for one line of the log
 
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
