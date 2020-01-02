@@ -34,6 +34,9 @@ class MgmtCliTest(ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
     SIMPLESTRATEGY_KEYSPACE_NAME = "simplestrategy_keyspace"
+    is_cred_file_configured = False
+    region = None
+    bucket_name = None
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -146,9 +149,11 @@ class MgmtCliTest(ClusterTester):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
         # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
         config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
-        region = 'us-east-1'
+        self.region = self.params.get('region_name').split()
+        self.bucket_name = self.params.get('backup_bucket_location').split()[0]
         for node in self.db_cluster.nodes:
-            mgmt.update_config_file(node=node, config_file=config_file, region=region)
+            mgmt.update_config_file(node=node, region=self.region[0], config_file=config_file)
+        self.is_cred_file_configured = True
 
     def create_ks_and_tables(self, num_ks, num_table):
         table_name = []
@@ -187,8 +192,9 @@ class MgmtCliTest(ClusterTester):
 
     def test_basic_backup(self):
         self.log.info('starting test_basic_backup')
-        self.update_config_file()
-        location_list = ['s3:manager-backup-tests-us']
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [f's3:{self.bucket_name}']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -200,8 +206,9 @@ class MgmtCliTest(ClusterTester):
 
     def test_backup_multiple_ks_tables(self):
         self.log.info('starting test_backup_multiple_ks_tables')
-        self.update_config_file()
-        location_list = ['s3:manager-backup-tests-us']
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [f's3:{self.bucket_name}']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -216,8 +223,9 @@ class MgmtCliTest(ClusterTester):
 
     def test_backup_location_with_path(self):
         self.log.info('starting test_backup_location_with_path')
-        self.update_config_file()
-        location_list = ['s3:manager-backup-tests-us/path_testing/']
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [f's3:{self.bucket_name}/path_testing/']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_bucket_with_path',
                                                db_cluster=self.db_cluster,
@@ -231,8 +239,9 @@ class MgmtCliTest(ClusterTester):
 
     def test_backup_rate_limit(self):
         self.log.info('starting test_backup_rate_limit')
-        self.update_config_file()
-        location_list = ['s3:manager-backup-tests-us']
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [f's3:{self.bucket_name}']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
