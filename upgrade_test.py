@@ -464,7 +464,8 @@ class UpgradeTest(FillDatabaseData):
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
              DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-             DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'):
+             DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
+             DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
 
             with self.subTest('Step1 - Upgrade First Node '):
                 # upgrade first node
@@ -522,15 +523,19 @@ class UpgradeTest(FillDatabaseData):
         with self.subTest('Step4 - Verify data during mixed cluster mode '):
             self.fill_and_verify_db_data('after rollback the second node')
 
-        # TODO: We may need to filter here some errors as well, but for now limit filtering as much as possible
-        with self.subTest('Step5 - Upgrade rest of the Nodes '):
-            for i in indexes[1:]:
-                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-                self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
-                self.upgrade_node(self.db_cluster.node_to_upgrade)
-                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-                self.db_cluster.node_to_upgrade.check_node_health()
-                self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
+        with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
+             DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
+             DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
+             DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+
+            with self.subTest('Step5 - Upgrade rest of the Nodes '):
+                for i in indexes[1:]:
+                    self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+                    self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+                    self.upgrade_node(self.db_cluster.node_to_upgrade)
+                    self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+                    self.db_cluster.node_to_upgrade.check_node_health()
+                    self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
 
         with self.subTest('Step6 - Verify stress results after upgrade '):
             self.log.info('Waiting for stress threads to complete after upgrade')
