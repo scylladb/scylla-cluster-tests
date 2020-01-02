@@ -1060,30 +1060,30 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._set_current_disruption('ManagementBackup')
         if not self.cluster.params.get('use_mgmt', default=None):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
+        if not self.cluster.params.get('backup_bucket_location'):
+            raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
         manager_node = self.monitoring_set.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
+        self.log.debug("sctool version is : {}".format(manager_tool.version))
 
         cluster_name = self.cluster.name
         mgr_cluster = manager_tool.get_cluster(cluster_name)
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
-            ip_addr_attr = 'public_ip_address' if self.cluster.params.get('cluster_backend') != 'gce' and \
-                Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
-            targets = [getattr(n, ip_addr_attr) for n in self.cluster.nodes]
-            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0], disable_automatic_repair=True,
+            targets = [[n, n.ip_address] for n in self.cluster.nodes]
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0][1], disable_automatic_repair=True,
                                                    auth_token=self.monitoring_set.mgmt_auth_token)
-        temp_bucket_location = 'manager-backup-tests-eu-west-1'
+        bucket_location_name = self.cluster.params.get('backup_bucket_location').split()
+        region = self.cluster.params.get('region_name').split()
         for node in self.cluster.nodes:
-            update_config_file(node=node, region='eu-west-1')
-        mgr_task = mgr_cluster.create_backup_task({'location': ['s3:{}'.format(temp_bucket_location)]})
-        mgr_task.wait_for_status([TaskStatus.DONE], timeout=86400)  # timeout is 24 hours
+            update_config_file(node=node, region=region[0])
+        mgr_task = mgr_cluster.create_backup_task({'location': ['s3:{}'.format(bucket_location_name[0])]})
+        mgr_task.wait_for_status([TaskStatus.DONE], timeout=43200)  # timeout is 12 hours
         task_final_status = mgr_task.wait_and_get_final_status()
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
             mgr_task.id, str(mgr_task.status))
         self.log.info('Task: {} is done.'.format(mgr_task.id))
-
-        self.log.debug("sctool version is : {}".format(manager_tool.version))
 
     def disrupt_mgmt_repair_cli(self):
         self._set_current_disruption('ManagementRepair')
