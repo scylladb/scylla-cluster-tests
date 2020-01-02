@@ -3924,9 +3924,14 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     def install_scylla_manager(self, node, auth_token):
         if self.params.get('use_mgmt', default=None):
-            node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
-                              scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
-                              segments_per_repair=self.params.get('mgmt_segments_per_repair'))
+            node.install_scylla(scylla_repo=self.params.get('scylla_repo_m'))
+            package_path = self.params.get('scylla_mgmt_pkg', None)
+            if package_path:
+                node.remoter.run('mkdir -p {}'.format(package_path))
+                node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
+            node.install_mgmt(scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
+                              segments_per_repair=self.params.get('mgmt_segments_per_repair'),
+                              package_url=package_path)
             wait.wait_for(func=self.is_manager_up, step=20, text='Waiting until the manager client is up',
                           timeout=300, throw_exc=True)
 

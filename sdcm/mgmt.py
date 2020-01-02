@@ -8,6 +8,7 @@ import time
 import datetime
 from enum import Enum
 from textwrap import dedent
+import yaml
 
 from invoke.exceptions import UnexpectedExit, Failure
 import requests
@@ -92,10 +93,18 @@ class TaskStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
-def update_config_file(node, config_file='/etc/scylla-manager-agent/scylla-manager-agent.yaml',
-                       region='us-east-1'):
+def update_config_file(node, region, config_file='/etc/scylla-manager-agent/scylla-manager-agent.yaml'):
+    # FIXME: if the bucket and the node are in the same region, no need to update config file
+    # the problem is that with multi DC is that i get 2 regions and 2 buckets:
+    # 'us-east-1 us-west-2' and 'manager-backup-tests-us-east-1 manager-backup-tests-eu-west-2'
+
     node.remoter.run(f'sudo chmod o+w {config_file}')
-    node.remoter.run(f"sudo echo -e \"s3:\n   region: {region}\" >> {config_file}")
+    configuration = yaml.load(node.remoter.run(f'cat {config_file}').stdout)
+    if 's3' not in configuration:
+        configuration['s3'] = {}
+    configuration['s3']['region'] = region
+    new_configuration = yaml.dump(configuration, default_flow_style=False)
+    node.remoter.run(f'sudo echo -e \"{new_configuration}\" > {config_file}')
     node.remoter.run('sudo systemctl restart scylla-manager-agent')
 
 
@@ -671,6 +680,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         LOGGER.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
+        # FIXME: if cluster already added, print a warning, but not fail
         cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
             host, name, auth_token)
         # Adding client-encryption parameters if required

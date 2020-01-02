@@ -443,6 +443,10 @@ class SCTConfiguration(dict):
         dict(name="aws_instance_profile_name", env="SCT_AWS_INSTANCE_PROFILE_NAME", type=str,
              help="This is the name of the instance profile to set on all instances"),
 
+        dict(name="backup_bucket_location", env="SCT_BACKUP_BUCKET_LOCATION", type=str_or_list,
+             help="""This is the bucket name to be used for backup with its region
+             (e.g. backup_bucket_location: 'manager-backup-tests')"""),
+
         dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
              help="If True, would tag the ami with the test final result"),
 
