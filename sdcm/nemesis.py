@@ -27,6 +27,7 @@ import os
 import re
 import traceback
 
+from typing import List
 from collections import OrderedDict
 from invoke import UnexpectedExit
 
@@ -788,7 +789,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 cmd = f"CREATE KEYSPACE IF NOT EXISTS {self._add_drop_column_target_table[0]} WITH replication = " \
                       "{'class': 'SimpleStrategy', 'replication_factor': 3};"
                 session.execute(cmd)
-                cmd = f"CREATE TABLE IF NOT EXISTS "\
+                cmd = f"CREATE TABLE IF NOT EXISTS " \
                       f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]} " \
                       "( col1 bigint, PRIMARY KEY(col1) );"
                 session.execute(cmd)
@@ -1375,6 +1376,157 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         finally:
             self.target_node.traffic_control(None)
 
+    def disrupt_network_reject_inter_node_communication(self):
+        """
+        Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
+        """
+        name = 'RejectInterNodeNetwork'
+        textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
+        textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
+        wait_time = random.choice([10, 60, 120, 300, 500])
+        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+                                     'inter node communication connections (port=7000 and 7001) will be'
+                                     f' {textual_pkt_action} for {wait_time}s')
+        return self._run_commands_wait_and_cleanup(
+            self.target_node,
+            name=name,
+            start_commands=[
+                f'sudo iptables -t filter -A INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                f'sudo iptables -t filter -A INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+            ],
+            cleanup_commands=[
+                f'sudo iptables -t filter -D INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                f'sudo iptables -t filter -D INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+            ],
+            wait_time=wait_time
+        )
+
+    def disrupt_network_reject_node_exporter(self):
+        """
+        Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
+        """
+        name = 'RejectNodeExporterNetwork'
+        textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
+        textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
+        wait_time = random.choice([10, 60, 120, 300, 500])
+        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+                                     f'node-exporter(port=9100) connections will be {textual_pkt_action} for {wait_time}s')
+        return self._run_commands_wait_and_cleanup(
+            self.target_node,
+            name=name,
+            start_commands=[f'sudo iptables -t filter -A INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
+            cleanup_commands=[f'sudo iptables -t filter -D INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
+            wait_time=wait_time
+        )
+
+    def disrupt_network_reject_thrift(self):
+        """
+        Generates random firewall rule to drop/reject packets for thrift connections, port 9100
+        """
+        name = 'RejectThriftNetwork'
+        textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
+        textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
+        wait_time = random.choice([10, 60, 120, 300, 500])
+        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+                                     f'Thrift(port=9160) connections will be {textual_pkt_action} for {wait_time}s')
+        return self._run_commands_wait_and_cleanup(
+            self.target_node,
+            name=name,
+            start_commands=[f'sudo iptables -t filter -A INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
+            cleanup_commands=[f'sudo iptables -t filter -D INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
+            wait_time=wait_time
+        )
+
+    @staticmethod
+    def _iptables_randomly_get_random_matching_rule():
+        """
+        Randomly generates iptables matching rule to match packets in random manner
+        """
+        match_type = random.choice(
+            ['statistic', 'statistic', 'statistic', 'limit', 'limit', 'limit', '']
+            #  Make no matching rule less probable
+        )
+
+        if match_type == 'statistic':
+            mode = random.choice(['random', 'nth'])
+            if match_type == 'random':
+                probability = random.choice(['0.0001', '0.001', '0.01', '0.1', '0.3', '0.6', '0.8', '0.9'])
+                return f'randomly chosen packet with {probability} probability', \
+                    f'-m statistic --mode {mode} --probability {probability}'
+            elif match_type == 'nth':
+                every = random.choice(['2', '4', '8', '16', '32', '64', '128'])
+                return f'every {every} packet', \
+                    f'-m statistic --mode {mode} --every {every} --packet 0'
+        elif match_type == 'limit':
+            period = random.choice(['second', 'minute'])
+            pkts_per_period = random.choice({
+                'second': [1, 5, 10],
+                'minute': [2, 10, 40, 80]
+            }.get(period))
+            return f'string of {pkts_per_period} very first packets every {period}', \
+                f'-m limit --limit {pkts_per_period}/{period}'
+        elif match_type == 'connbytes':
+            bytes_from = random.choice(['100', '200', '400', '800', '1600', '3200', '6400', '12800', '1280000'])
+            return f'every packet from connection that total byte counter exceeds {bytes_from}', \
+                f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
+        return 'every packet', ''
+
+    @staticmethod
+    def _iptables_randomly_get_disrupting_target():
+        """
+        Randomly generates iptables target that can cause disruption
+        """
+        target_type = random.choice(['REJECT', 'DROP'])
+        if target_type == 'REJECT':
+            reject_with = random.choice([
+                'icmp-net-unreachable',
+                'icmp-host-unreachable',
+                'icmp-port-unreachable',
+                'icmp-proto-unreachable',
+                'icmp-net-prohibited',
+                'icmp-host-prohibited',
+                'icmp-admin-prohibited'
+            ])
+            return f'rejected with {reject_with}',\
+                f'{target_type} --reject-with {reject_with}'
+        return f'dropped', \
+            f'{target_type}'
+
+    def _run_commands_wait_and_cleanup(  # pylint: disable=too-many-arguments
+            self, node, name: str, start_commands: List[str],
+            cleanup_commands: List[str] = None, wait_time: int = 0):
+        """
+        Runs command/commands on target node wait and run cleanup commands
+            :param node: target node
+            :param name: Name of Nemesis for logging
+            :param start_commands: commands to run on start
+            :param cleanup_commands: commands to run to cleanup
+            :param wait_time: waiting time
+        """
+        cmd_executed = {}
+        if cleanup_commands is None:
+            cleanup_commands = []
+        for cmd_num, cmd in enumerate(start_commands):
+            try:
+                node.remoter.run(cmd)
+                self.log.debug(f"{name}: executed: {cmd}")
+                cmd_executed[cmd_num] = True
+                if wait_time:
+                    time.sleep(wait_time)
+            except Exception as exc:  # pylint: disable=broad-except
+                cmd_executed[cmd_num] = False
+                self.log.error(
+                    f"{name}: failed to execute start command "
+                    f"{cmd} on node {node} due to the following error: {str(exc)}")
+        if not cmd_executed:
+            return
+        for cmd_num, cmd in enumerate(cleanup_commands):
+            try:
+                node.remoter.run(cmd)
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.debug(f"{name}: failed to execute cleanup command "
+                               f"{cmd} on node {node} due to the following error: {str(exc)}")
+
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         self._set_current_disruption('StopStartNetworkInterfaces')
         if not self.cluster.aws_extra_network_interface:
@@ -1918,6 +2070,36 @@ class BlockNetworkMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_network_block()
+
+
+class RejectInterNodeNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_reject_inter_node_communication()
+
+
+class RejectNodeExporterNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_reject_node_exporter()
+
+
+class RejectThriftNetworkMonkey(Nemesis):
+    disruptive = False
+    networking = True
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_reject_thrift()
 
 
 class StopStartInterfacesNetworkMonkey(Nemesis):
