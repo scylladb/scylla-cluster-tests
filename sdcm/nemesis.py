@@ -965,13 +965,15 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def modify_table_compression(self):
         """
-            The compression algorithm. Valid values are LZ4Compressor), SnappyCompressor, and DeflateCompressor
+            The compression algorithm. Valid values are LZ4Compressor, SnappyCompressor, DeflateCompressor and
+            ZstdCompressor
             default: compression = {}
         """
         algos = ("",  # no compression
                  "LZ4Compressor",
                  "SnappyCompressor",
-                 "DeflateCompressor")
+                 "DeflateCompressor",
+                 "ZstdCompressor")
         algo = random.choice(algos)
         prop_val = {"sstable_compression": algo}
         if algo:
