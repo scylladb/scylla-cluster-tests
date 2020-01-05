@@ -305,8 +305,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         ks_cf_for_destroy = random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
 
         ks_cf_for_destroy = ks_cf_for_destroy.replace('.', '/')
-        files = self.target_node.remoter.run("sudo sh -c 'find /var/lib/scylla/data/%s-* -type f'" % ks_cf_for_destroy,
-                                             verbose=False)
+        files = self.target_node.remoter.run("sudo sh -c 'find /var/lib/scylla/data/%s-* -maxdepth 1 -type f'"
+                                             % ks_cf_for_destroy, verbose=False)
         if files.stderr:
             raise NoFilesFoundToDestroy(
                 'Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
