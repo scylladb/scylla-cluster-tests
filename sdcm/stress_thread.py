@@ -146,9 +146,9 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
         tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
 
         if self.stress_num > 1:
-            node_cmd = f'taskset -c {cpu_idx} bash -c "STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}"'
+            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}'
         else:
-            node_cmd = f'bash -c "STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd};" '
+            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
 
         node_cmd = f'echo {tag}; {node_cmd}'
 
