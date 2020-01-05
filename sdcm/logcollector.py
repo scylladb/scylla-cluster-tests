@@ -689,7 +689,7 @@ class ScyllaLogCollector(LogCollector):
         cluster_log_type {str} -- cluster type name
     """
     log_entities = [FileLog(name='database.log',
-                            command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
+                            command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
                             search_locally=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
