@@ -3,10 +3,7 @@ import time
 
 from longevity_test import LongevityTest
 from sdcm.cluster import SCYLLA_DIR
-from test_lib.compaction import CompactionStrategy
 
-DICT_KEYSPACES_COMPRESSION = {'keyspace_lz4': 'LZ4', 'keyspace_deflate': 'Deflate', 'keyspace_snappy': 'Snappy'}
-DICT_DEFAULT_BLOB_COLUMNS = {'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'}
 KB_SIZE = 2 ** 10
 MB_SIZE = KB_SIZE * 1024
 GB_SIZE = MB_SIZE * 1024
@@ -18,30 +15,6 @@ AVAIL_SIZE_METRIC_OLD = 'node_filesystem_avail'
 
 
 class IcsSpaceAmplificationTest(LongevityTest):
-
-    def pre_create_schema_with_compaction(self, keyspace_num=1, scylla_encryption_options=None,  # pylint: disable=too-many-arguments,invalid-name
-                                          compaction=CompactionStrategy.INCREMENTAL.value, compression=None,
-                                          create_all_keyspaces_table=True):
-        """
-        This method enables creating specific configuration for a table. for example, define specific compaction parameters.
-        """
-        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
-        for i in range(1, keyspace_num + 1):
-            keyspace_name = 'keyspace{}'.format(i)
-            self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-            self.log.debug('{} Created'.format(keyspace_name))
-            self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
-                              compact_storage=True,
-                              columns=DICT_DEFAULT_BLOB_COLUMNS, compaction=compaction, compression=compression,
-                              scylla_encryption_options=scylla_encryption_options)
-        if create_all_keyspaces_table:
-            for keyspace_name, keyspace_compression in DICT_KEYSPACES_COMPRESSION.items():
-                self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-                self.log.debug('{} Created'.format(keyspace_name))
-                self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
-                                  compact_storage=True, columns=DICT_DEFAULT_BLOB_COLUMNS,
-                                  compaction=compaction, compression=keyspace_compression,
-                                  scylla_encryption_options=scylla_encryption_options)
 
     def _get_used_capacity_gb(self, node):  # pylint: disable=too-many-locals
         # example: node_filesystem_size_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
@@ -181,7 +154,6 @@ class IcsSpaceAmplificationTest(LongevityTest):
         (2) over-writing existing data.
         (3) running a major compaction.
         """
-        self.pre_create_schema_with_compaction()
         stress_queue = list()  # pylint: disable=unused-variable
         write_queue = list()
         verify_queue = list()  # pylint: disable=unused-variable
@@ -197,7 +169,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
 
         self.log.debug('Test Space-amplification on writing new data')
         prepare_write_cmd = "cassandra-stress write cl=ALL n={ops_num}  -schema 'replication(factor=3)" \
-                            " compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native" \
+                            " compaction(strategy=IncrementalCompactionStrategy)' -port jmx=6868 -mode cql3 native" \
                             " -rate threads=1000 -col 'size=FIXED({column_size}) n=FIXED({num_of_columns})'" \
                             " -pop seq=1..{ops_num} -log interval=15".format(**dict(locals(), **globals()))
         dict_nodes_initial_capacity = self._get_nodes_used_capacity()
@@ -216,7 +188,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         verify_nodes_space_amplification(dict_nodes_space_amplification=dict_nodes_space_amplification)
 
         self.log.debug('Test Space-amplification on over-write data')
-        prepare_overwrite_cmd = "cassandra-stress write cl=ALL  n={overwrite_ops_num} -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native" \
+        prepare_overwrite_cmd = "cassandra-stress write cl=ALL  n={overwrite_ops_num} -schema 'replication(factor=3) compaction(strategy=IncrementalCompactionStrategy)' -port jmx=6868 -mode cql3 native" \
                                 " -rate threads=1000 -col 'size=FIXED({column_size}) n=FIXED({num_of_columns})' -pop 'dist=uniform(1..{overwrite_ops_num})' ".format(
                                     **dict(locals(), **globals()))
 
