@@ -414,6 +414,13 @@ FAQ
     # downloading a specific rpms built on master in job 888
     export SCT_UPDATE_DB_PACKAGES=s3://downloads.scylladb.com/rpm/unstable/centos/master/888/scylla/7/x86_64/
 
+**Q:** How do I update the configuration docs ?
+
+**A:** Like that ::
+
+    SCT_CLUSTER_BACKEND=aws hydra conf-docs -o markdown > docs/configuration_options.md
+
+
 TODO
 ====
 

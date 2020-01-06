@@ -294,6 +294,8 @@ def conf(config_file, backend):
 @cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
 @click.option('-o', '--output-format', type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output")
 def conf_docs(output_format):
+    config_logger = logging.getLogger('sdcm.sct_config')
+    config_logger.setLevel(logging.ERROR)
     if output_format == 'markdown':
         click.secho(SCTConfiguration().dump_help_config_markdown())
     elif output_format == 'yaml':
