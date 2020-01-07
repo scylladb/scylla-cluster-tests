@@ -3,9 +3,8 @@ ARG SOURCE_IMAGE
 FROM ${SOURCE_IMAGE}
 
 # Install sshd, sudo and collectd:
-RUN yum -y update && \
-   yum -y install openssh-server openssh-clients passwd initscripts sudo collectd && \
-   yum clean all
+RUN yum -y install openssh-server openssh-clients passwd initscripts sudo collectd net-tools rsync openssl file && \
+    yum clean all
 
 # configure ssh
 RUN mkdir /var/run/sshd
@@ -29,6 +28,8 @@ EXPOSE 22
 ADD etc/sshd.conf /etc/supervisord.conf.d/sshd.conf
 ADD etc/collectd.conf /etc/supervisord.conf.d/collectd.conf
 ADD etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
+RUN echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf
+RUN echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
 
 # replacement of systemctl, since inside docker there is no D-Bus connection available
 RUN curl https://raw.githubusercontent.com/gdraheim/docker-systemctl-replacement/master/files/docker/systemctl.py --output /usr/bin/systemctl

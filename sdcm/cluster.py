@@ -26,6 +26,7 @@ import uuid
 import itertools
 from textwrap import dedent
 from datetime import datetime
+import subprocess
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
@@ -347,6 +348,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.log.debug(self.remoter.ssh_debug_cmd())
 
         self._journal_thread = None
+        self._docker_log_process = None
         self.n_coredumps = 0
         self.last_line_no = 1
         self.last_log_position = 0
@@ -736,6 +738,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     def start_journal_thread(self):
         logs_transport = self.parent_cluster.params.get("logs_transport")
+        cluster_backend = self.parent_cluster.params.get("cluster_backend")
+
+        if cluster_backend == "docker":
+            self._docker_log_process = subprocess.Popen(
+                ['/bin/sh', '-c', f"docker logs -f  {self.name}  > {self.database_log} 2>&1"])
+            return
+
         if logs_transport == "rsyslog":
             self.log.info("Using rsyslog as log transport")
         elif logs_transport == "ssh":
@@ -843,6 +852,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if self.is_ubuntu14():
             # fixme: ubuntu14 doesn't has coredumpctl, skip it.
             return
+
         new_n_coredumps = self._get_n_coredumps()
         if new_n_coredumps is not None:
             if (new_n_coredumps - self.n_coredumps) == 1:
@@ -858,7 +868,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         while not self.termination_event.isSet():
             self.termination_event.wait(15)
-            self.get_backtraces()
+            try:
+                self.get_backtraces()
+            except NETWORK_EXCEPTIONS:
+                pass
 
     @raise_event_on_failure
     def db_log_reader_thread(self):
@@ -954,6 +967,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             Setup.DECODING_QUEUE.join()
             self._decoding_backtraces_thread.join(timeout)
             self._decoding_backtraces_thread = None
+        if self._docker_log_process:
+            self._docker_log_process.kill()
 
     def get_cpumodel(self):
         """Get cpu model from /proc/cpuinfo
@@ -1071,7 +1086,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             pcap_file = os.path.join(self.logdir, pcap_name)
             self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s > /dev/null 2>&1' %
                              pcap_tmp_file, ignore_status=True)
-            self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)
+            self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)  # pylint: disable=not-callable
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
@@ -1128,8 +1143,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if uuid_result.exit_status == 0 and mark_result.exit_status != 0:
             result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
             self.remoter.run(cmd % result.stdout.strip(), ignore_status=True)
-            self.remoter.run('sudo -u scylla touch %s' % mark_path,
-                             verbose=verbose)
+
+            if self.is_docker():  # in docker we don't have scylla user and run as root
+                self.remoter.run('sudo touch %s' % mark_path,
+                                 verbose=verbose)
+            else:
+                self.remoter.run('sudo -u scylla touch %s' % mark_path,
+                                 verbose=verbose)
 
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
@@ -1343,7 +1363,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         res = self.remoter.run(
             "test -f {}".format(os.path.join("/tmp", os.path.basename(scylla_debug_file))), ignore_status=True, verbose=False)
         if res.exited != 0:
-            self.remoter.send_files(os.path.join(node.logdir, os.path.basename(scylla_debug_file)), "/tmp")
+            self.remoter.send_files(os.path.join(node.logdir, os.path.basename(  # pylint: disable=not-callable
+                scylla_debug_file)), "/tmp")
         LOGGER.debug("File on monitor node %s: %s", self,
                      os.path.join("/tmp", os.path.basename(scylla_debug_file)))
         return os.path.join("/tmp", os.path.basename(scylla_debug_file))
@@ -1368,6 +1389,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         :return the path to the scylla debug information
         :rtype str
         """
+        build_id = None
+
         # first try default location
         scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
         results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
@@ -1380,14 +1403,19 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             return results.stdout.strip()
 
         # then look it up base on the build id
-        results = self.remoter.run('file /usr/bin/scylla')
-        build_id_regex = re.compile(r'BuildID\[.*\]=(.*),')
-        build_id = build_id_regex.search(results.stdout).group(1)
+        for scylla_executable in ['/usr/bin/scylla', '/opt/scylladb/libexec/scylla']:
+            try:
+                results = self.remoter.run(f'file {scylla_executable}')
+                build_id_regex = re.compile(r'BuildID\[.*\]=(.*),')
+                build_id = build_id_regex.search(results.stdout).group(1)
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.warning(f'{scylla_executable} did had BuildID in it')
 
-        scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-        if results.exit_status == 0:
-            return scylla_debug_info
+        if build_id:
+            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
+            results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+            if results.exit_status == 0:
+                return scylla_debug_info
 
         raise Exception("Couldn't find scylla debug information")
 
@@ -1580,7 +1608,7 @@ server_encryption_options:
 
         # system_key must be pre-created, kmip keys will be used for kmip server auth
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
-            self.remoter.send_files(src='./data_dir/encrypt_conf',
+            self.remoter.send_files(src='./data_dir/encrypt_conf',  # pylint: disable=not-callable
                                     dst='/tmp/')
             self.remoter.run('sudo mv /tmp/encrypt_conf /etc/')
             self.remoter.run('sudo mkdir /etc/encrypt_conf/system_key_dir/')
@@ -1616,7 +1644,7 @@ server_encryption_options:
             self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
 
     def config_client_encrypt(self):
-        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
         setup_script = dedent("""
             mkdir -p ~/.cassandra/
             cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
@@ -1852,7 +1880,8 @@ server_encryption_options:
             self.remoter.run(
                 'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
             for conf in ['io.conf', 'io_properties.yaml']:
-                self.remoter.send_files(src=os.path.join('./configurations/', conf), dst='/tmp/')
+                self.remoter.send_files(src=os.path.join('./configurations/', conf),  # pylint: disable=not-callable
+                                        dst='/tmp/')
                 self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
         else:
             self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
@@ -1947,7 +1976,7 @@ server_encryption_options:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
 
         self.log.debug("Copying TLS files from data_dir to node")
-        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
 
         self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
@@ -1968,7 +1997,7 @@ server_encryption_options:
                 self.log.warning(ex)
         else:
             self.remoter.run('echo yes| sudo scyllamgr_setup')
-        self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)
+        self.remoter.send_files(src=self._ssh_login_info['key_file'], dst=rsa_id_dst)  # pylint: disable=not-callable
         ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
                 chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
@@ -2056,7 +2085,7 @@ server_encryption_options:
         (_, conf_file) = tempfile.mkstemp(dir='/tmp')
         with open(conf_file, 'w') as fd:
             yaml.dump(mgmt_conf, fd, default_flow_style=False)
-        self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)
+        self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)  # pylint: disable=not-callable
         self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
         if self.is_docker():
             self.remoter.run('sudo supervisorctl start scylla-manager')
@@ -2388,7 +2417,7 @@ server_encryption_options:
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp_file:
             tmp_file.write(Setup.get_startup_script())
             tmp_file.flush()
-            self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)
+            self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)  # pylint: disable=not-callable
 
         cmds = dedent("""
                 chmod +x {0}
@@ -2973,7 +3002,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         if not all(up_statuses):
             raise ClusterNodesNotReady("Not all nodes joined the cluster")
 
-    @retrying(n=30, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady,),
+    @retrying(n=30, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
               message="Waiting for nodes to join the cluster")
     def wait_for_nodes_up_and_normal(self, nodes):
         self.check_nodes_up_and_normal(nodes=nodes)
