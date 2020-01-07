@@ -157,7 +157,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
             for res in results:
                 stats['results'].append(res)
                 for err_type in ['write_errors', 'read_errors', 'errors']:
-                    if err_type in res.keys() and res[err_type]:
+                    if res.get(err_type, None):
                         LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
                         stats['status'] = 'FAILED'
                         stats['errors'][err_type] = res[err_type]

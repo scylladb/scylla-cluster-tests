@@ -100,6 +100,7 @@ class EventsDevice(Process):
                         yield obj.__class__.__name__, obj
         except (KeyboardInterrupt, SystemExit) as ex:
             LOGGER.debug("%s - subscribe_events was halted by %s", current_process().name, ex.__class__.__name__)
+        socket.close()
 
     def publish_event(self, event):
         context = zmq.Context()
@@ -110,6 +111,7 @@ class EventsDevice(Process):
         socket.send_pyobj(event)
         with open(self.raw_events_filename, 'a+') as log_file:
             log_file.write(event.to_json() + '\n')
+        socket.close()
 
 
 # monkey patch JSONEncoder make enums jsonable

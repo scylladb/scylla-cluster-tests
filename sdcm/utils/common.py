@@ -826,7 +826,7 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
                 if not line or not line.endswith('\n'):
                     time.sleep(0.1)
                     continue
-
+                poller.unregister(input_file)
                 yield line
                 line = ''
             yield line
