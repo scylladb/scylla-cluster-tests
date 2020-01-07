@@ -463,9 +463,9 @@ class UpgradeTest(FillDatabaseData):
             time.sleep(60)
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-             DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-             DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-             DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
 
             with self.subTest('Step1 - Upgrade First Node '):
                 # upgrade first node
@@ -524,9 +524,9 @@ class UpgradeTest(FillDatabaseData):
             self.fill_and_verify_db_data('after rollback the second node')
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-             DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-             DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-             DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
 
             with self.subTest('Step5 - Upgrade rest of the Nodes '):
                 for i in indexes[1:]:
@@ -549,13 +549,13 @@ class UpgradeTest(FillDatabaseData):
             self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
 
             # run 'nodetool upgradesstables' on all nodes and check/wait for all file to be upgraded
-            upgradesstables_available = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+            upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
 
             # only check sstable format version if all nodes had 'nodetool upgradesstables' available
-            if all(upgradesstables_available):
+            if all(upgradesstables):
                 self.log.info('Upgrading sstables if new version is available')
                 tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
-                assert all(tables_upgraded), "Some nodes failed to upgrade the sstable format {}".format(tables_upgraded)
+                assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
             # Verify sstabledump
             self.log.info('Starting sstabledump to verify correctness of sstables')
