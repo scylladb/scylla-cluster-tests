@@ -367,7 +367,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                        enumerate(instances, start=self._node_index + 1)]
         for node in added_nodes:
             node.enable_auto_bootstrap = enable_auto_bootstrap
-            node.config_ipv6_as_persistent()
+            if self.params.get('ip_ssh_connections') == 'ipv6':
+                node.config_ipv6_as_persistent()
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()
