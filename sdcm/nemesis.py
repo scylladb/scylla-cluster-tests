@@ -91,6 +91,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_max_column_name_size = 10
         self._add_drop_column_columns_info = {}
         self._add_drop_column_target_table = []
+        self._add_drop_column_tables_to_ignore = {
+            'scylla_bench': '*'  # Ignore scylla-bench tables
+        }
         self._add_drop_column_default_target_table = [
             'add_drop_column_' + generate_random_string(10), 'standard1'
         ]
@@ -703,22 +706,45 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         with self.tester.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
 
-    def _get_all_tables_with_no_compact_storage(self):
+    def _get_all_tables_with_no_compact_storage(self, tables_to_skip=None):
+        """
+        Return all tables with no "COMPACT STORAGE" in table code
+        :param tables_to_skip: Dict of keyspaces/tables to be excluded from results.
+            Examples:
+                {'ks': 'table'} - will skip ks.table
+                {'ks': '*'} - will skip any tables from keyspace "ks"
+                {'*': 'table1,table2'} - will skip table1 and table2 from any keyspace
+        :return: Dict of with keyspaces as key and list of table names as value
+        """
         keyspaces = []
         output = {}
+        if tables_to_skip is None:
+            tables_to_skip = {}
+        to_be_skipped_default = tables_to_skip.get('*', '').split(',')
         with self.tester.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
                 keyspaces.extend([row.lower() for row in result_rows if not row.lower().startswith("system")])
             for ks in keyspaces:
+                to_be_skipped = tables_to_skip.get(ks, None)
+                if to_be_skipped is None:
+                    to_be_skipped = to_be_skipped_default
+                elif to_be_skipped == '*':
+                    continue
+                elif to_be_skipped == '':
+                    to_be_skipped = []
+                else:
+                    to_be_skipped = to_be_skipped.split(',') + to_be_skipped_default
                 tables = get_db_tables(session, ks, with_compact_storage=False)
+                if not to_be_skipped:
+                    tables = [table for table in tables if table not in to_be_skipped]
                 if not tables:
                     continue
                 output[ks] = tables
         return output
 
     def _add_drop_column_get_target_table(self, stored_target_table: list):
-        current_tables = self._get_all_tables_with_no_compact_storage()
+        current_tables = self._get_all_tables_with_no_compact_storage(self._add_drop_column_tables_to_ignore)
         if stored_target_table:
             if stored_target_table[1] in current_tables.get(stored_target_table[0], []):
                 return stored_target_table
@@ -801,7 +827,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             new_column_name = self._random_column_name(added_columns_info['column_names'].keys(),
                                                        self._add_drop_column_max_column_name_size)
             new_column_type = CQLTypeBuilder.get_random(added_columns_info['column_types'], allow_levels=10,
-                                                        avoid_types=['counter'])
+                                                        avoid_types=['counter'], forget_on_exhaust=True)
             if new_column_type is None:
                 continue
             add.append([new_column_name, new_column_type])
@@ -829,7 +855,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name in drop:
                     column_type = added_columns_info['column_names'][column_name]
-                    column_type.forget_variant(added_columns_info['column_types'])
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
@@ -844,7 +869,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         end_time = start_time + 600
         while time.time() < end_time:
             self._add_drop_column()
-            time.sleep(1)
 
     def disrupt_add_drop_column(self):
         """

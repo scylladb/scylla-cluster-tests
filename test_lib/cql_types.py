@@ -33,9 +33,14 @@ class CQLTypeBuilder:
         return target_class(self_type, *args, **kwargs)
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None, allow_levels: int = 1,
-                   allowed_types: list = None) -> 'CQLColumnType':
-        return CQLColumnType.get_random(already_created_info, avoid_types, allow_levels, allowed_types)
+    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
+                   allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False) -> 'CQLColumnType':
+        return CQLColumnType.get_random(
+            already_created_info,
+            avoid_types,
+            allow_levels,
+            allowed_types,
+            forget_on_exhaust=forget_on_exhaust)
 
 
 class CQLColumnType:
@@ -67,8 +72,8 @@ class CQLColumnType:
         return [e for e in allowed_types if e not in excluded_types]
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None, allow_levels: int = 1,
-                   allowed_types: list = None):
+    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
+                   allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False):
         """
         Randomly generates CQLColumnType instance
         Arguments:
@@ -77,22 +82,27 @@ class CQLColumnType:
             avoid_types {list} - List of types to avoid across all levels
             max_level {int} - Maximum level of embedding, i.e. list<int> has 1 level, list<frozen<list<int>>>, has 2
             allowed_types {list} - List of types to allow across all levels
+            forget_on_exhaust {bool} - If True it will drop all remembered variants and start over
         return:
             Will return randomly generated instance of CQLColumnType
         """
         # pylint: disable=protected-access
-        calculated_available_types = cls._get_available_variants(already_created_info, avoid_types, allowed_types,
-                                                                 allow_levels)
-        while calculated_available_types:
-            self_type = random.choice(calculated_available_types)
-            self_bucket = already_created_info.get(self_type, {})
-            instance = CQLTypeBuilder._create_instance(self_type)
-            if instance._get_random_embedded(self_bucket, avoid_types, allow_levels,  # pylint: disable=protected-access
-                                             allowed_types):
-                return instance
-            #  It could reach this point only if collection type ran out of choice for subtypes
-            #  Remove current collection type from types choice
-            calculated_available_types.remove(self_type)
+        while True:
+            calculated_available_types = cls._get_available_variants(already_created_info, avoid_types, allowed_types,
+                                                                     allow_levels)
+            while calculated_available_types:
+                self_type = random.choice(calculated_available_types)
+                self_bucket = already_created_info.get(self_type, {})
+                instance = CQLTypeBuilder._create_instance(self_type)
+                if instance._get_random_embedded(self_bucket, avoid_types, allow_levels,  # pylint: disable=protected-access
+                                                 allowed_types):
+                    return instance
+                #  It could reach this point only if collection type ran out of choice for subtypes
+                #  Remove current collection type from types choice
+                calculated_available_types.remove(self_type)
+            if not forget_on_exhaust:
+                return None
+            already_created_info.clear()
 
     def _get_random_embedded(self,  # pylint: disable=no-self-use
                              already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):  # pylint: disable=unused-argument
