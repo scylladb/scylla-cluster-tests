@@ -1090,6 +1090,10 @@ class SCTConfiguration(dict):
         assert seeds_num <= num_of_db_nodes, 'Seeds number ({}) should be not more then nodes number ({})'. \
             format(seeds_num, num_of_db_nodes)
 
+        # in docker default to ssh, since stream via `docker logs` anyhow, no need for rsyslod docker to start
+        if self.get('cluster_backend') == 'docker':
+            self['logs_transport'] = "ssh"
+
     def dump_config(self):
         """
         Dump current configuration to string

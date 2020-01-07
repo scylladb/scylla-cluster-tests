@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 yum install -y epel-release
 yum -y update
+yum install -y wget unzip
 
 # Python dependencies
 yum install -y python-devel python-pip

@@ -596,6 +596,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             docker_image=self.params.get('docker_image', None),
+            docker_image_tag=self.params.get('scylla_version', None),
             n_nodes=[self.params.get('n_db_nodes')],
             user_prefix=self.params.get('user_prefix', None),
             credentials=self.credentials,
@@ -607,8 +608,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.loaders = docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
-        self.log.warning("Scylla monitoring is currently not supported on Docker")
-        self.monitors = NoMonitorSet()
+        params['targets'] = dict(db_cluster=self.db_cluster, loaders=self.loaders)
+        self.monitors = docker.MonitorSetDocker(**params)
 
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
