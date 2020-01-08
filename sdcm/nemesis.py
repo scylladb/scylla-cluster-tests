@@ -28,8 +28,10 @@ import re
 import traceback
 
 from typing import List
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+
 from invoke import UnexpectedExit
+from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
@@ -44,7 +46,6 @@ from sdcm.sct_events import DisruptionEvent, DbEventsFilter
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
-from cassandra import ConsistencyLevel
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -60,6 +61,10 @@ class FilesNotCorrupted(Exception):
 
 
 class UnsupportedNemesis(Exception):
+    """ raised from within a nemesis execution to skip this nemesis"""
+
+
+class NoMandatoryParameter(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
 
 
@@ -847,6 +852,160 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         end_time = start_time + 600
         while time.time() < end_time:
             self._add_drop_column()
+
+    def verify_initial_inputs_for_delete_nemesis(self):
+        test_keyspaces = self.cluster.get_test_keyspaces()
+
+        if 'scylla_bench' not in test_keyspaces:
+            raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
+
+        max_partitions_in_test_table = self.cluster.params.get('max_partitions_in_test_table')
+
+        if not max_partitions_in_test_table:
+            raise NoMandatoryParameter('This nemesis expects "max_partitions_in_test_table" to be set')
+
+    def choose_partitions_for_delete(self, partitions_amount, ks_cf, with_clustering_key_data=False,
+                                     exclude_partitions=None):
+        """
+        :type partitions_amount: int
+        :type ks_cf: str
+        :type with_clustering_key_data: bool
+        :type exclude_partitions: list
+        :return: defaultdict
+        """
+        if not exclude_partitions:
+            exclude_partitions = []
+
+        max_partitions_in_test_table = self.cluster.params.get('max_partitions_in_test_table')
+        partition_range_with_data_validation = self.cluster.params.get('partition_range_with_data_validation')
+
+        if partition_range_with_data_validation and '-' in partition_range_with_data_validation:
+            partition_range_splitted = partition_range_with_data_validation.split('-')
+            exclude_partitions.extend(
+                [i for i in range(int(partition_range_splitted[0]), int(partition_range_splitted[1]))])  # pylint: disable=unnecessary-comprehension
+
+        partitions_for_delete = defaultdict(list)
+        with self.tester.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            session.default_consistency_level = ConsistencyLevel.ONE
+
+            for partition_key in [i*2+50 for i in range(max_partitions_in_test_table)]:
+                if len(partitions_for_delete) == partitions_amount:
+                    break
+
+                if exclude_partitions and partition_key in exclude_partitions:
+                    continue
+
+                # The scylla_bench.test table is created WITH CLUSTERING ORDER BY (ck DESC).
+                # So first returned value is max cl value in the partition
+                cmd = f"select ck from {ks_cf} where pk={partition_key} limit 1"
+                try:
+                    result = session.execute(cmd, timeout=300)
+                except Exception as exc:  # pylint: disable=broad-except
+                    self.log.error(str(exc))
+                    continue
+
+                if not result:
+                    continue
+
+                if not with_clustering_key_data:
+                    partitions_for_delete[partition_key] = []
+                    continue
+
+                # Suppose that min ck value is 0 in the partition
+                partitions_for_delete[partition_key].extend([0, result[0].ck])
+
+                if None in partitions_for_delete[partition_key]:
+                    partitions_for_delete.pop(partition_key)
+
+        self.log.debug(f'Partitions for delete: {partitions_for_delete}')
+        return partitions_for_delete
+
+    def run_deletions(self, queries, ks_cf):
+        for cmd in queries:
+            self.log.debug(f'delete query: {cmd}')
+            with self.tester.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+                session.execute(cmd, timeout=3600)
+
+        self.target_node.run_nodetool('flush', args=ks_cf.replace('.', ' '))
+
+    def delete_half_partition(self, ks_cf):
+        self.log.debug('Delete by range - half of partition')
+
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True)
+        if not partitions_for_delete:
+            self.log.error('Not found partitions for delete')
+            return partitions_for_delete
+
+        queries = []
+        for pkey, ckey in partitions_for_delete.items():
+            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1]/2)}")
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+
+        return partitions_for_delete
+
+    def delete_range_in_few_partitions(self, ks_cf, partitions_for_exclude_dict):
+        self.log.debug('Delete same range in the few partitions')
+
+        partitions_for_exclude = list(partitions_for_exclude_dict.keys())
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True,
+                                                                  exclude_partitions=partitions_for_exclude)
+        if not partitions_for_delete:
+            self.log.error('Not found partitions for delete')
+            return []
+
+        # Choose same "ck" values that exists for all partitions
+        # min_clustering_key - the biggest from min(ck) value for all selected partitions
+        # max_clustering_key - the smallest from max(ck) value for all selected partitions
+        min_clustering_key = max([v[0] for v in partitions_for_delete.values()])
+        max_clustering_key = min([v[1] for v in partitions_for_delete.values()])
+        clustering_keys = []
+        if max_clustering_key > min_clustering_key:
+            third_ck = int((max_clustering_key - min_clustering_key) / 3)
+            clustering_keys = range(min_clustering_key+third_ck, max_clustering_key-third_ck)
+
+        if not clustering_keys:
+            clustering_keys = range(min_clustering_key, max_clustering_key)
+
+        queries = []
+        for pkey in partitions_for_delete.keys():
+            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck >= {clustering_keys[0]} "
+                           f"and ck <= {clustering_keys[-1]}")
+
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+
+        return list(partitions_for_delete.keys()) + partitions_for_exclude
+
+    def disrupt_delete_10_full_partitions(self):
+        """
+        Delete few partitions in the table with large partitions
+        """
+        self.verify_initial_inputs_for_delete_nemesis()
+        self._set_current_disruption('DeleteByPartitionsMonkey {}'.format(self.target_node))
+
+        ks_cf = 'scylla_bench.test'
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf)
+
+        if not partitions_for_delete:
+            self.log.error('Not found partitions for delete')
+            return
+
+        queries = []
+        for partition_key in partitions_for_delete.keys():
+            queries.append(f"delete from {ks_cf} where pk = {partition_key}")
+
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+
+    def disrupt_delete_by_rows_range(self):
+        """
+        Delete few partitions in the table with large partitions
+        """
+        self.verify_initial_inputs_for_delete_nemesis()
+        self._set_current_disruption('DeleteByRowsRangeMonkey {}'.format(self.target_node))
+
+        ks_cf = 'scylla_bench.test'
+        partitions_for_exclude = self.delete_half_partition(ks_cf)
+
+        self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
 
     def disrupt_add_drop_column(self):
         """
@@ -1753,6 +1912,22 @@ class TruncateMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_truncate()
+
+
+class DeleteByPartitionsMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_delete_10_full_partitions()
+
+
+class DeleteByRowsRangeMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_delete_by_rows_range()
 
 
 class ChaosMonkey(Nemesis):
