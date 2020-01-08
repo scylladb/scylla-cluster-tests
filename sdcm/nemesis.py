@@ -1150,6 +1150,21 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.target_node.stop_scylla()
         time.sleep(10)
         self.target_node.start_scylla()
+
+        # Wait until all other nodes see the target node as UN
+        # Only then we can expect that hint sending started on all nodes
+        def target_node_reported_un_by_others():
+            for node in self.cluster.nodes:
+                if node is not self.target_node:
+                    self.cluster.check_nodes_up_and_normal(nodes=[self.target_node], verification_node=node)
+            return True
+
+        wait.wait_for(func=target_node_reported_un_by_others,
+                      timeout=300,
+                      step=5,
+                      throw_exc=True,
+                      text='Wait for target_node to be seen as UN by others')
+
         time.sleep(120)  # Wait to complete hints sending
         assert self.tester.hints_sending_in_progress() is False, "Hints are sent too slow"
         self.tester.verify_no_drops_and_errors(starting_from=start_time)
