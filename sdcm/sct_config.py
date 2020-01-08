@@ -585,6 +585,16 @@ class SCTConfiguration(dict):
              help="Url to the repo of scylla manager version to upgrade to for management tests"),
 
         # PerformanceRegressionTest
+        dict(name="partition_range_with_data_validation", env="SCT_PARTITION_RANGE_WITH_DATA_VALIDATION", type=str,
+             help="""Relevant for scylla-bench. Hold range (min - max) of PKs values for partitions that data was
+                     written with validate data and will be validate during the read.
+                     Example: 0-250.
+                     Optional parameter for DeleteByPartitionsMonkey and DeleteByRowsRangeMonkey"""),
+
+        dict(name="max_partitions_in_test_table", env="SCT_MAX_PARTITIONS_IN_TEST_TABLE", type=int,
+             help="""Relevant for scylla-bench. MAX partition keys (partition-count) in the scylla_bench.test table.
+                    Mandatory parameter for DeleteByPartitionsMonkey and DeleteByRowsRangeMonkey"""),
+
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W", type=str_or_list,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
@@ -1094,7 +1104,7 @@ class SCTConfiguration(dict):
                             raise ValueError(f"Stress command parameter '{param_name}' contains profile "
                                              f"'{profile_path}' that does not exists under data_dir/")
 
-    def verify_configuration(self):
+    def verify_configuration(self):  # pylint: disable=too-many-statements
         """
         Check that all required values are set, and validated each value to be of correct type or value
         also check required options per backend
@@ -1165,6 +1175,23 @@ class SCTConfiguration(dict):
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
         assert seeds_num <= num_of_db_nodes, 'Seeds number ({}) should be not more then nodes number ({})'. \
             format(seeds_num, num_of_db_nodes)
+
+        partition_range_with_data_validation = self.get('partition_range_with_data_validation')
+        if partition_range_with_data_validation:
+            error_message_template = "Expected format of 'partition_range_with_data_validation' parameter is: " \
+                                     "<min PK value>-<max PK value>. {}Example: 0-250. " \
+                                     "Got value: %s" % partition_range_with_data_validation
+
+            if '-' not in partition_range_with_data_validation:
+                raise ValueError(error_message_template.format(''))
+
+            partition_range_splitted = partition_range_with_data_validation.split('-')
+
+            if not (partition_range_splitted[0].isdigit() and partition_range_splitted[0].isdigit()):
+                raise ValueError(error_message_template.format('PK values should be integer. '))
+
+            if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
+                raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
         # in docker default to ssh, since stream via `docker logs` anyhow, no need for rsyslod docker to start
         if self.get('cluster_backend') == 'docker':

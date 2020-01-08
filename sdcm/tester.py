@@ -925,9 +925,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_auth_provider(user, password):
         return PlainTextAuthProvider(username=user, password=password)
 
-    def _create_session(self, node, keyspace, user, password, compression,  # pylint: disable=too-many-arguments
+    def _create_session(self, node, keyspace, user, password, compression,  # pylint: disable=too-many-arguments, too-many-locals
                         protocol_version, load_balancing_policy=None,
-                        port=None, ssl_opts=None, node_ips=None):
+                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None):
         if not port:
             port = node.CQL_PORT
 
@@ -954,7 +954,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                        load_balancing_policy=load_balancing_policy,
                                        default_retry_policy=FlakyRetryPolicy(),
                                        port=port, ssl_options=ssl_opts,
-                                       connect_timeout=100)
+                                       connect_timeout=connect_timeout)
         session = cluster_driver.connect()
 
         # temporarily increase client-side timeout to 1m to determine
@@ -971,29 +971,31 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
-                       port=None, ssl_opts=None):
+                       port=None, ssl_opts=None, connect_timeout=100):
         # TODO: ask Bentsi why it was reverted (PR #1236)
         node_ips = self.db_cluster.get_node_external_ips()
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts, node_ips=node_ips)
+                                    port=port, ssl_opts=ssl_opts, node_ips=node_ips,
+                                    connect_timeout=connect_timeout)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
-                                 ssl_opts=None):
+                                 ssl_opts=None, connect_timeout=100):
 
         wlrr = WhiteListRoundRobinPolicy([node.external_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts, node_ips=[node.external_address])
+                                    port=port, ssl_opts=ssl_opts, node_ips=[node.external_address],
+                                    connect_timeout=connect_timeout)
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
                                user=None, password=None,
                                compression=True, protocol_version=None,
-                               port=None, ssl_opts=None):
+                               port=None, ssl_opts=None, connect_timeout=100):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
@@ -1009,7 +1011,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                          user=None, password=None, timeout=30,
                                          compression=True,
                                          protocol_version=None,
-                                         port=None, ssl_opts=None):
+                                         port=None, ssl_opts=None, connect_timeout=100):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
