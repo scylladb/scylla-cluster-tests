@@ -184,11 +184,7 @@ class PrometheusSnapshots(BaseLogEntity):
     def setup_monitor_data_dir(self, node):
         if self.monitoring_data_dir:
             return
-        result = node.remoter.run('echo $HOME', ignore_status=True)
-        if result.exited == 0 and result.stderr:
-            base_dir = result.stdout.strip()
-        else:
-            base_dir = "/home/centos"
+        base_dir = node.parent_cluster.monitor_install_path_base
 
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
@@ -220,13 +216,7 @@ class MonitoringStack(BaseLogEntity):
 
     @staticmethod
     def get_monitoring_base_dir(node):
-        result = node.remoter.run('echo $HOME', ignore_status=True, verbose=False)
-        if result.exited == 0 and not result.stderr:
-            base_dir = result.stdout.strip()
-        else:
-            base_dir = "/home/centos"
-
-        return base_dir
+        return node.parent_cluster.monitor_install_path_base
 
     def get_monitoring_data_stack(self, node, local_dist):
         monitor_base_dir = self.get_monitoring_base_dir(node)
