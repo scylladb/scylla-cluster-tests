@@ -600,7 +600,8 @@ class AWSNode(cluster.BaseNode):
             event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
                 DbEventsFilter(type="SCHEMA_FAILURE", node=self), \
                 DbEventsFilter(type="NO_SPACE_ERROR", node=self), \
-                DbEventsFilter(type="FILESYSTEM_ERROR", node=self)
+                DbEventsFilter(type="FILESYSTEM_ERROR", node=self), \
+                DbEventsFilter(type="RUNTIME_ERROR", node=self)
 
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
