@@ -332,16 +332,24 @@ class TestStatsMixin(Stats):
     STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
     @staticmethod
-    def _create_test_id():
-        """return unified test-id
+    def _create_test_id(doc_id_with_timestamp=False):
+        """Return doc_id equal unified test-id
 
-        Returns:
-            str -- generated test-id for whole run.
+        Generate doc_id for ES document as unified global test-id
+        if doc_id_with_timestamp is true, create ES
+        document with global test_id + timestamp
+
+        :param doc_id_with_timestamp: add timestamp to test_id , defaults to False
+        :type doc_id_with_timestamp: bool, optional
+        :returns: doc_id for document in ES
+        :rtype: {str}
         """
         # avoid cyclic-decencies between cluster and db_stats
         from sdcm.cluster import Setup
-
-        return Setup.test_id()
+        doc_id = Setup.test_id()
+        if doc_id_with_timestamp:
+            doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+        return doc_id
 
     def _init_stats(self):
         return {k: {} for k in self.KEYS}
@@ -419,11 +427,12 @@ class TestStatsMixin(Stats):
         return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None):
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None, doc_id_with_timestamp=False):
+
         if not self.create_stats:
             return
         self._test_index = self.__class__.__name__.lower()
-        self._test_id = self._create_test_id()
+        self._test_id = self._create_test_id(doc_id_with_timestamp)
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()
