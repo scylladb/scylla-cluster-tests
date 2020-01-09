@@ -483,7 +483,8 @@ class LongevityTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info('Prepare data for email')
-        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time)
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
+            self.start_time) if self.monitors else dict()
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join([os.path.splitext(os.path.basename(f))[0] for f in self.params['config_files']])
         job_name = os.environ.get('JOB_NAME')
@@ -499,7 +500,7 @@ class LongevityTest(ClusterTester):
             'start_time': start_time,
             'end_time': format_timestamp(time.time()),
             'build_url': os.environ.get('BUILD_URL', None),
-            'scylla_version': self.db_cluster.nodes[0].scylla_version,
+            'scylla_version': self.db_cluster.nodes[0].scylla_version if self.db_cluster else 'N/A',
             'scylla_ami_id': self.params.get('ami_id_db_scylla', '-'),
             "scylla_instance_type": self.params.get('instance_type_db'),
             "number_of_db_nodes": self.params.get('n_db_nodes'),
