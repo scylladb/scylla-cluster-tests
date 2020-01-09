@@ -556,12 +556,12 @@ class AWSNode(cluster.BaseNode):
                         MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
                         curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks
                     """)
-        output = self.remoter.run(f"sudo bash -cxe '{cidr}'")
+        output = self.remoter.run("sudo bash -cxe '{}'".format(cidr))
         ipv6_cidr = output.stdout.strip()
         self.remoter.run(
-            f"sudo sh -c  \"echo 'sudo ip route add {ipv6_cidr} dev eth0' >> /etc/sysconfig/network-scripts/init.ipv6-global\"")
+            "sudo sh -c  \"echo 'sudo ip route add {} dev eth0' >> /etc/sysconfig/network-scripts/init.ipv6-global\"".format(ipv6_cidr))
 
-        res = self.remoter.run(f"grep '{ipv6_cidr}' /etc/sysconfig/network-scripts/init.ipv6-global")
+        res = self.remoter.run("grep '{}' /etc/sysconfig/network-scripts/init.ipv6-global".format(ipv6_cidr))
         LOGGER.debug('init.ipv6-global was {}updated'.format('' if res.stdout.strip else 'NOT '))
 
     def restart(self):
