@@ -178,9 +178,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cluster.Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or cluster.Setup.MULTI_REGION)
 
-        version_tag = self.params.get('ami_id_db_scylla_desc')
-        if version_tag:
-            cluster.Setup.tags('version', version_tag)
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
