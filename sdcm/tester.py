@@ -268,7 +268,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if self.params.get("use_mgmt", default=None):
                 mgmt_auth_token = str(uuid4())
                 for node in self.db_cluster.nodes:
-                    node.install_manager_agent(mgmt_auth_token, self.params.get("scylla_mgmt_repo"))
+                    repo = self.params.get("scylla_mgmt_agent_repo")
+                    if not repo:
+                        repo = self.params.get("scylla_mgmt_repo")
+                    node.install_manager_agent(mgmt_auth_token, repo)
                 self.monitors.wait_for_init(auth_token=mgmt_auth_token)
             else:
                 self.monitors.wait_for_init()

@@ -2088,6 +2088,7 @@ server_encryption_options:
         else:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c', retry=3)
 
         self.log.debug("Copying TLS files from data_dir to node")
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
@@ -2110,7 +2111,7 @@ server_encryption_options:
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
         else:
-            self.remoter.run('echo yes| sudo scyllamgr_setup')
+            self.remoter.run('sudo scyllamgr_setup -y')
         self.remoter.send_files(src=self.ssh_login_info['key_file'], dst=rsa_id_dst)  # pylint: disable=not-callable
         ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
@@ -3867,10 +3868,16 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
                 sudo apt-get update
                 sudo apt-get install -y docker docker.io
-                apt-get install python36
+                apt-get install -y software-properties-common
+                add-apt-repository -y ppa:deadsnakes/ppa
+                apt-get update
+                apt-get install -y python3.6 python3.6-dev
                 apt-get install -y python-setuptools unzip wget
+                update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 1
+                apt install -y python3-pip
                 python3 -m pip install --upgrade pip
                 python3 -m pip install pyyaml
+                pip3 install -I -U psutil
                 systemctl start docker
             """)
         elif node.is_debian8():
