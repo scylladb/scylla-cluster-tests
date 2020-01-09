@@ -61,6 +61,12 @@ BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 # export all AWS_* env vars into the docker run
 AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
+group_args=()
+for gid in $(id -G); do
+    group_args+=(--group-add "$gid")
+done
+
+
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \
@@ -71,12 +77,15 @@ docker run --rm ${TTY_STDIN} --privileged \
     -v ${HOME}:${HOME} \
     -v /etc/passwd:/etc/passwd:ro \
     -v /etc/group:/etc/group:ro \
+    -v /etc/sudoers:/etc/sudoers:ro \
+    -v /etc/shadow:/etc/shadow:ro \
     -w ${WORK_DIR} \
     -e JOB_NAME=${JOB_NAME} \
     -e BUILD_URL=${BUILD_URL} \
     -e _SCT_BASE_DIR=${SCT_DIR} \
     -e GIT_USER_EMAIL \
-    -u $(id -u ${USER}):$(grep "docker:" /etc/group|cut -d: -f3) \
+    -u $(id -u ${USER}) \
+    ${group_args[@]} \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
     ${AWS_OPTIONS} \
