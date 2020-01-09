@@ -55,7 +55,8 @@ from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
+    TestFrameworkEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
@@ -248,40 +249,47 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         append_scylla_yaml = self.params.get('append_scylla_yaml')
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             download_encrypt_keys()
+        try:
+            self.init_resources()
 
-        self.init_resources()
+            self.init_nodes(db_cluster=self.db_cluster)
 
-        self.init_nodes(db_cluster=self.db_cluster)
+            # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
+            if self.cs_db_cluster:
+                self.init_nodes(db_cluster=self.cs_db_cluster)
 
-        # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
-        if self.cs_db_cluster:
-            self.init_nodes(db_cluster=self.cs_db_cluster)
+            if self.create_stats:
+                self.create_test_stats()
+                # sync test_start_time with ES
+                self.start_time = self.get_test_start_time()
 
-        if self.create_stats:
-            self.create_test_stats()
-            # sync test_start_time with ES
-            self.start_time = self.get_test_start_time()
+            self.set_system_auth_rf()
 
-        self.set_system_auth_rf()
+            db_node_address = self.db_cluster.nodes[0].ip_address
+            self.loaders.wait_for_init(db_node_address=db_node_address)
 
-        db_node_address = self.db_cluster.nodes[0].ip_address
-        self.loaders.wait_for_init(db_node_address=db_node_address)
+            if self.params.get("use_mgmt", default=None):
+                mgmt_auth_token = str(uuid4())
+                for node in self.db_cluster.nodes:
+                    node.install_manager_agent(mgmt_auth_token, self.params.get("scylla_mgmt_repo"))
+                self.monitors.wait_for_init(auth_token=mgmt_auth_token)
+            else:
+                self.monitors.wait_for_init()
 
-        if self.params.get("use_mgmt", default=None):
-            mgmt_auth_token = str(uuid4())
-            for node in self.db_cluster.nodes:
-                node.install_manager_agent(mgmt_auth_token, self.params.get("scylla_mgmt_repo"))
-            self.monitors.wait_for_init(auth_token=mgmt_auth_token)
-        else:
-            self.monitors.wait_for_init()
+            # cancel reuse cluster - for new nodes added during the test
+            cluster.Setup.reuse_cluster(False)
+            if self.monitors.nodes:
+                self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+            self.start_time = time.time()
 
-        # cancel reuse cluster - for new nodes added during the test
-        cluster.Setup.reuse_cluster(False)
-        if self.monitors.nodes:
-            self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
-        self.start_time = time.time()
-
-        self.db_cluster.validate_seeds_on_all_nodes()
+            self.db_cluster.validate_seeds_on_all_nodes()
+        except Exception as exc:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method='SetUp',
+                exception=exc
+            ).publish()
+            raise
 
     def set_system_auth_rf(self):
         # change RF of system_auth

@@ -162,6 +162,30 @@ class SystemEvent(SctEvent):
     pass
 
 
+class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+    def __init__(self, source, source_method,  # pylint: disable=redefined-builtin,too-many-arguments
+                 exception=None, message=None, args=None, kwargs=None, severity=None):
+        super().__init__()
+        if severity is None:
+            self.severity = Severity.CRITICAL
+        else:
+            self.severity = severity
+        self.source = source
+        self.source_method = source_method
+        self.exception = exception
+        self.message = message
+        self.args = args
+        self.kwargs = kwargs
+
+    def __str__(self):
+        message = f'message={self.message}' if self.message else ''
+        message = f' got {self.exception}({message})={self.exception}' if self.exception else f' {message}'
+        args = f' args={self.args}' if self.args else ''
+        kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
+        params = ','.join([args, kwargs])
+        return f"{super().__str__()}, source={self.source}.{self.source_method}({params}){message}"
+
+
 class DbEventsFilter(SystemEvent):
     def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
         super(DbEventsFilter, self).__init__()
