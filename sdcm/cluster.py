@@ -268,12 +268,19 @@ def get_username():
 
 def create_common_tags():
     build_tag = os.environ.get('BUILD_TAG', None)
+    job_name = os.environ.get('JOB_NAME', None)
     tags = dict(RunByUser=get_username(),
                 TestName=str(Setup.test_name()),
                 TestId=str(Setup.test_id()))
 
     if build_tag:
         tags["JenkinsJobTag"] = build_tag
+
+    # In order to calculate costs by version in AWS, we will use the root dir of the job in jenkins as the version.
+    if job_name:
+        tags["version"] = job_name.split('/')[0]
+    else:
+        tags["version"] = "unknown"
 
     tags.update(Setup.TAGS)
     return tags
