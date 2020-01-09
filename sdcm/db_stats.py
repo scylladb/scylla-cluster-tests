@@ -333,7 +333,7 @@ class TestStatsMixin(Stats):
     STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
     @staticmethod
-    def _create_test_id():
+    def _create_test_id(add_timestampid=False):
         """return unified test-id
 
         Returns:
@@ -341,8 +341,10 @@ class TestStatsMixin(Stats):
         """
         # avoid cyclic-decencies between cluster and db_stats
         from sdcm.cluster import Setup
-
-        return Setup.test_id()
+        doc_id = Setup.test_id()
+        if add_timestampid:
+            doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+        return doc_id
 
     def _init_stats(self):
         return {k: {} for k in self.KEYS}
@@ -420,11 +422,11 @@ class TestStatsMixin(Stats):
         return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
-    def create_test_stats(self, sub_type=None):
+    def create_test_stats(self, sub_type=None, add_timestampid=False):
         if not self.create_stats:
             return
         self._test_index = self.__class__.__name__.lower()
-        self._test_id = self._create_test_id()
+        self._test_id = self._create_test_id(add_timestampid)
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()

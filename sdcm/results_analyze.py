@@ -58,6 +58,46 @@ class QueryFilter(object):
         return None
 
 
+class PerformanceQueryFilter(QueryFilter):
+    MAIN_JOB_FOLDERS = ["Perf-Regression",
+                        "scylla-master"]
+
+    def filter_test_details(self):
+        test_details = self.build_filter_job_name()
+        test_details += self.test_cmd_details()
+        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
+
+        test_details += ' AND {}'.format(self.build_filter_test_name())
+        return test_details
+
+    def build_filter_job_name(self):
+        job_name = self.test_doc['_source']['test_details']['job_name'].split("/")
+        if job_name[0] in self.MAIN_JOB_FOLDERS:
+            base_job_name = job_name[1]
+        else:
+            base_job_name = job_name[0]
+
+        job_filter_query = r'(test_details.job_name.keyword: {}\/{}\/* OR'.format(job_name[0],
+                                                                                  base_job_name)
+        job_filter_query += r' test_details.job_name.keyword: {}\/*) '.format(base_job_name)
+        return job_filter_query
+
+    def build_filter_test_name(self):
+        new_test_name = ""
+        avocado_test_name = ""
+        if ".py:" in self.test_name:
+            new_test_name = self.test_name.replace(".py:", ".")
+            avocado_test_name = self.test_name.replace(":", r"\:")
+        else:
+            avocado_test_name = self.test_name.replace(".", r".py\:", 1)
+            new_test_name = self.test_name
+
+        return " (test_details.test_name: {} OR test_details.test_name: {})".format(new_test_name, avocado_test_name)
+
+    def test_cmd_details(self):
+        raise NotImplementedError('Derived classes must implement this method.')
+
+
 class QueryFilterCS(QueryFilter):
 
     _CMD = ('cassandra-stress', )
@@ -89,6 +129,10 @@ class QueryFilterCS(QueryFilter):
         return test_details
 
 
+class PerformanceFilterCS(QueryFilterCS, PerformanceQueryFilter):
+    pass
+
+
 class QueryFilterScyllaBench(QueryFilter):
 
     _CMD = ('scylla-bench', )
@@ -101,6 +145,10 @@ class QueryFilterScyllaBench(QueryFilter):
             for param in self._PARAMS for cmd in self._CMD]
 
         return ' '.join(test_details)
+
+
+class PerformanceFilterScyllaBench(QueryFilterScyllaBench, PerformanceQueryFilter):
+    pass
 
 
 class BaseResultsAnalyzer(object):  # pylint: disable=too-many-instance-attributes
@@ -265,8 +313,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     @staticmethod
     def _query_filter(test_doc, is_gce):
-        return QueryFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
-            else QueryFilterCS(test_doc, is_gce)()
+        return PerformanceFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
+            else PerformanceFilterCS(test_doc, is_gce)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -396,7 +444,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         test_version_info = self._test_version(doc)
         test_version = test_version_info['version']
         for version in group_by_version:
-            if version == test_version and group_by_version[test_version]['tests']:
+            if version == test_version and not group_by_version[test_version]['tests']:
                 self.log.info('No previous tests in the current version {} to compare'.format(test_version))
                 continue
             cmp_res = self.cmp(test_stats,

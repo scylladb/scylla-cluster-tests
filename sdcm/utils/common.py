@@ -235,7 +235,6 @@ class S3Storage(object):
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
             LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
-            print "Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url)
             self._bucket.upload_file(Filename=file_path,
                                      Key=s3_obj,
                                      Config=self.transfer_config)
