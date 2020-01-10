@@ -18,6 +18,8 @@ nemesis_interval: 1
 user_prefix: 'PR-provision-test'
 instance_provision: 'spot_low_price'
 
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+
 use_mgmt: true
 
 scylla_version: 3.2.rc1
