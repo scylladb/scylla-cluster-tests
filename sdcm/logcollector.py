@@ -7,17 +7,20 @@ import tempfile
 import time
 import zipfile
 import fnmatch
-import re
-from textwrap import dedent
 
 import requests
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                retrying, ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                makedirs, filter_gce_instances_by_type, get_sct_root_path)
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.remote import LocalCmdRunner, RemoteCmdRunner
+from sdcm.remote import RemoteCmdRunner
+from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer, RemoteBrowser
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +30,7 @@ class CollectingNode():  # pylint: disable=too-few-public-methods
     def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None):
         self.name = name
         self.remoter = RemoteCmdRunner(**ssh_login_info) if ssh_login_info else None
+        self.ssh_login_info = ssh_login_info
         self._instance = instance
         self.external_address = global_ip
 
@@ -53,9 +57,9 @@ class BaseLogEntity():  # pylint: disable=too-few-public-methods
 
 
 class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
-    """LogEntity to save output result to file on remote host
+    """Command to get log and save output result to file on remote host
 
-    LogEntity which allow to save the output (usually log output)
+    CommandLog which allow to save the output (usually log output)
     to file. The log output should be produced by the command
 
     Extends:
@@ -303,7 +307,7 @@ class MonitoringStack(BaseLogEntity):
         return local_archive
 
 
-class GrafanaEntity(BaseLogEntity):
+class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """Base Gragana log entity
 
     Base class to support various Grafana log entity
@@ -331,7 +335,6 @@ class GrafanaEntity(BaseLogEntity):
     ]
     grafana_port = 3000
     grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
-    phantomjs_base = "phantomjs-2.1.1-linux-x86_64"
     sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
@@ -341,42 +344,6 @@ class GrafanaEntity(BaseLogEntity):
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
         super(GrafanaEntity, self).__init__(*args, **kwargs)
-        self.phantomjs_dir = None
-        self.install_phantom_js()
-
-    @property
-    def phantomjs_installed(self):
-        if os.path.exists(os.path.join("/", self.phantomjs_base)):
-            self.phantomjs_dir = os.path.join("/", self.phantomjs_base)
-            return True
-        elif os.path.exists(os.path.join(self.sct_base_path, self.phantomjs_base)):
-            self.phantomjs_dir = os.path.join(self.sct_base_path, self.phantomjs_base)
-            return True
-        else:
-            return False
-
-    def install_phantom_js(self):
-        """Install phantom_js to sct root dir
-
-        If sct runs outside the docker container,
-        sct will install the phantomjs to
-        sct root dir
-        """
-        localrunner = LocalCmdRunner()
-        if not self.phantomjs_installed:
-            LOGGER.debug("Installing phantomjs to sct root dir")
-            # pylint: disable=unused-variable
-            phantomjs_tar = "{0.phantomjs_base}.tar.bz2".format(self)
-            phantomjs_url = "https://bitbucket.org/ariya/phantomjs/downloads/{phantomjs_tar}".format(
-                **locals())
-            install_phantom_js_script = dedent("""
-                curl {phantomjs_url} -o {phantomjs_tar} -L
-                tar xvfj {phantomjs_tar}
-            """.format(**locals()))
-            localrunner.run("bash -ce '%s'" % install_phantom_js_script)
-            self.phantomjs_dir = os.path.join(self.sct_base_path, self.phantomjs_base)
-        else:
-            LOGGER.debug("PhantomJS is already installed!")
 
 
 class GrafanaScreenShot(GrafanaEntity):
@@ -388,20 +355,19 @@ class GrafanaScreenShot(GrafanaEntity):
         GrafanaEntity
     """
 
-    def _get_screenshot_link(self, grafana_url, screenshot_path, resolution="1920x1280"):
-        LocalCmdRunner().run("cd {0.phantomjs_dir} && bin/phantomjs {0.sct_base_path}/data_dir/make_screenshot.js \"{1}\" \"{2}\" {3}".format(
-            self, grafana_url, screenshot_path, resolution), ignore_status=True)
-
     def get_grafana_screenshot(self, node, local_dst):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
+        version = monitoring_version.replace('.', '-')
+        webdriver_container = RemoteWebDriverContainer(node)
         try:
             screenshots = []
-
+            if not webdriver_container.is_running():
+                webdriver_container.run()
+            remote_browser = RemoteBrowser(webdriver_container)
             for screenshot in self.grafana_entity_names:
-                version = monitoring_version.replace('.', '-')
                 dashboard_exists = MonitoringStack.dashboard_exists(node,
                                                                     uid="-".join([screenshot['name'],
                                                                                   version])
@@ -417,21 +383,26 @@ class GrafanaScreenShot(GrafanaEntity):
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
-                datetime_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                if not os.path.exists(local_dst):
+                    os.makedirs(local_dst, exist_ok=True)
                 screenshot_path = os.path.join(local_dst,
-                                               "%s-%s-%s-%s.png" % (self.name, screenshot['name'],
-                                                                    datetime_now, node.name))
-                self._get_screenshot_link(grafana_url, screenshot_path, screenshot['resolution'])
+                                               "%s-%s-%s-%s.png" % (self.name,
+                                                                    screenshot['name'],
+                                                                    datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+                                                                    node.name))
+                LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
+                remote_browser.get_screenshot(grafana_url, screenshot_path, screenshot['resolution'])
                 screenshots.append(screenshot_path)
 
             return screenshots
 
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error('Error taking monitor snapshot: %s',
+            LOGGER.error('Error taking monitor screenshot: %s',
                          str(details))
             return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        node.logdir = local_dst
         return self.get_grafana_screenshot(node, local_dst)
 
 
@@ -444,29 +415,51 @@ class GrafanaSnapshot(GrafanaEntity):
         GrafanaEntity
     """
 
-    def _get_shared_snapshot_link(self, grafana_url):
-        result = LocalCmdRunner().run(
-            "cd {0.phantomjs_dir} && bin/phantomjs {0.sct_base_path}/data_dir/share_snapshot.js \"{1}\"".format(
-                self, grafana_url),
-            ignore_status=True)
-        # since there is only one monitoring node returning here
-        output = result.stdout.strip()
-        if "Error" in output:
-            LOGGER.error(output)
-            return ""
-        else:
-            matched = re.search(r"https://snapshot.raintank.io/dashboard/snapshot/\w+", output)
-            LOGGER.info("Shared grafana snapshot: {}".format(matched.group()))
+    snapshot_locators_sequence = [
+        (By.XPATH, """//button[contains(@class, "navbar-button--share")]"""),
+        (By.LINK_TEXT, """Snapshot"""),
+        (By.XPATH, """//a[contains(text(), "Snapshot") and contains(@class, "gf-tabs-link")]"""),
+        (By.XPATH, """//button[contains(text(), "Publish to snapshot.raintank.io") and contains(@class, "gf-form-btn")]"""),
+        (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
+    ]
 
-            return matched.group()
+    def _get_shared_snapshot_link(self, remote_browser, grafana_url):
+        """Get link from page to remote snapshot on https://snapshot.raintank.io
+
+        using selenium remote web driver remote_browser find sequentially web_element by locators
+        in self.snapshot_locators_sequence run actiom WebElement.click() and
+        get value from result link found by latest element in snapshot_locators_sequence
+
+        :param remote_browser: remote webdirver instance
+        :type remote_browser: selenium.webdriver.Remote
+        :param grafana_url: url to load and get snapshot
+        :type grafana_url: str
+        :returns: return value of link to remote snapshot on https://snapshot.raintank.io
+        :rtype: {str}
+        """
+        remote_browser.get(grafana_url)
+
+        for element in self.snapshot_locators_sequence[:-1]:
+            WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(element))
+            found_element = remote_browser.find_element(*element)
+            found_element.click()
+        snapshot_link_locator = self.snapshot_locators_sequence[-1]
+        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(snapshot_link_locator))
+        snapshot_link_element = remote_browser.find_element(*snapshot_link_locator)
+
+        LOGGER.debug(snapshot_link_element.text)
+        return snapshot_link_element.text
 
     def get_grafana_snapshot(self, node):
         """
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
+        webdriver_container = RemoteWebDriverContainer(node)
         try:
-
+            if not webdriver_container.is_running():
+                webdriver_container.run()
+            remote_browser = RemoteBrowser(webdriver_container)
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
@@ -485,7 +478,8 @@ class GrafanaSnapshot(GrafanaEntity):
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
-                snapshots.append(self._get_shared_snapshot_link(grafana_url))
+                LOGGER.info("Get snapshot link for url %s", grafana_url)
+                snapshots.append(self._get_shared_snapshot_link(remote_browser.browser, grafana_url))
 
             return snapshots
 
@@ -494,6 +488,9 @@ class GrafanaSnapshot(GrafanaEntity):
         return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        node.logdir = local_dst
+        if not os.path.exists(local_dst):
+            os.makedirs(local_dst, exist_ok=True)
         snapshots = self.get_grafana_snapshot(node)
         snapshots_file = os.path.join(local_dst, "grafana_snapshots")
         with open(snapshots_file, "w") as f:  # pylint: disable=invalid-name
