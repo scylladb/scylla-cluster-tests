@@ -691,7 +691,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cs_thread = CassandraStressThread(loader_set=self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
-                                          output_dir=cluster.Setup.logdir(),
                                           stress_num=stress_num,
                                           keyspace_num=keyspace_num,
                                           profile=profile,
@@ -712,7 +711,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                            cluster.Setup.logdir(),
                                                             node_list=self.db_cluster.nodes)
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
@@ -733,7 +731,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return YcsbStressThread(loader_set=self.loaders,
                                 stress_cmd=stress_cmd,
                                 timeout=timeout,
-                                output_dir=cluster.Setup.logdir(),
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
                                 round_robin=round_robin, params=self.params).run()
