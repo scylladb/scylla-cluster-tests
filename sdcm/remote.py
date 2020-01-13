@@ -27,7 +27,7 @@ from shlex import quote
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
-from paramiko import SSHException
+from paramiko import SSHException, RSAKey
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
@@ -187,7 +187,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                  'UserKnownHostsFile': self.known_hosts_file,
                                  'ServerAliveInterval': 300,
                                  'StrictHostKeyChecking': 'no'})
-        self.connect_config = {'key_filename': os.path.expanduser(self.key_file)}
+        self.connect_config = {'pkey': RSAKey(filename=os.path.expanduser(self.key_file))}
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
 
