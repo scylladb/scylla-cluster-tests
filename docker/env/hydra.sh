@@ -33,7 +33,7 @@ else
     cd ${DOCKER_ENV_DIR}
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     cp -f ${SCT_DIR}/${CENTOS_PREREQS_FILE} .
-    docker build -t scylladb/hydra:${VERSION} .
+    docker build --network=host -t scylladb/hydra:${VERSION} .
     rm -f ${PY_PREREQS_FILE} ${CENTOS_PREREQS_FILE}
     cd -
 fi
