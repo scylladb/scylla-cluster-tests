@@ -3501,7 +3501,7 @@ class BaseLoaderSet():
 
         return ret
 
-    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=None):
+    def run_stress_thread_bench(self, stress_cmd, timeout, node_list=None):
         _queue = {TASK_QUEUE: queue.Queue(), RES_QUEUE: queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
@@ -3509,10 +3509,9 @@ class BaseLoaderSet():
 
             CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
-            logdir = os.path.join(output_dir, self.name)  # pylint: disable=no-member
-            makedirs(logdir)
+            makedirs(node.logdir)
 
-            log_file_name = os.path.join(logdir,
+            log_file_name = os.path.join(node.logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
             ips = ",".join([n.private_ip_address for n in node_list])
