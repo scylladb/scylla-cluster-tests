@@ -476,15 +476,15 @@ class GeminiLogEvent(DatabaseLogEvent):
 
 
 class SpotTerminationEvent(SctEvent):
-    def __init__(self, node, aws_message):
+    def __init__(self, node, message):
         super(SpotTerminationEvent, self).__init__()
         self.severity = Severity.CRITICAL
         self.node = str(node)
-        self.aws_message = aws_message
+        self.message = message
         self.publish()
 
     def __str__(self):
-        return "{0}: node={1.node} aws_message={1.aws_message}".format(
+        return "{0}: node={1.node} message={1.message}".format(
             super(SpotTerminationEvent, self).__str__(), self)
 
 

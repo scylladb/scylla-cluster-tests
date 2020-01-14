@@ -234,7 +234,7 @@ class SctEventsTests(unittest.TestCase):
 
     @staticmethod
     def test_spot_termination():
-        str(SpotTerminationEvent(node='test', aws_message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
+        str(SpotTerminationEvent(node='test', message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
 
     def test_default_filters(self):
         log_content_before = self.get_event_logs()

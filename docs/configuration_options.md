@@ -35,6 +35,7 @@
 | **<a name="sct_public_ip">sct_public_ip</a>**  | Override the default hostname address of the sct test runner,<br>for the monitoring of the Nemesis.<br>can only work out of the box in AWS | N/A | SCT_SCT_PUBLIC_IP
 | **<a name="sct_ngrok_name">sct_ngrok_name</a>**  | Override the default hostname address of the sct test runner,<br>using ngrok server, see readme for more instructions | N/A | SCT_NGROK_NAME
 | **<a name="backtrace_decoding">backtrace_decoding</a>**  | If True, all backtraces found in db nodes would be decoded automatically | N/A | SCT_BACKTRACE_DECODING
+| **<a name="instance_provision">instance_provision</a>**  | instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration | spot_low_price | SCT_INSTANCE_PROVISION
 | **<a name="reuse_cluster">reuse_cluster</a>**  | If reuse_cluster is set it should hold test_id of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71` | N/A | SCT_REUSE_CLUSTER
 | **<a name="test_id">test_id</a>**  | test id to filter by | N/A | SCT_TEST_ID
 | **<a name="seeds_selector">seeds_selector</a>**  | How to select the seeds. Expected values: reflector/random/first | first | SCT_SEEDS_SELECTOR
@@ -88,7 +89,6 @@
 | **<a name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
 | **<a name="ami_db_cassandra_user">ami_db_cassandra_user</a>**  |  | N/A | SCT_AMI_DB_CASSANDRA_USER
-| **<a name="instance_provision">instance_provision</a>**  | aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration | spot_low_price | SCT_INSTANCE_PROVISION
 | **<a name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | 0.6 | SCT_SPOT_MAX_PRICE
 | **<a name="aws_extra_network_interface">aws_extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_AWS_EXTRA_NETWORK_INTERFACE
 | **<a name="aws_instance_profile_name">aws_instance_profile_name</a>**  | This is the name of the instance profile to set on all instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME
