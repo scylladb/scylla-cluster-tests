@@ -170,19 +170,19 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
             self.severity = Severity.CRITICAL
         else:
             self.severity = severity
-        self.source = source
-        self.source_method = source_method
-        self.exception = exception
-        self.message = message
+        self.source = str(source)
+        self.source_method = str(source_method)
+        self.exception = str(exception)
+        self.message = str(message)
         self.args = args
         self.kwargs = kwargs
 
     def __str__(self):
         message = f'message={self.message}' if self.message else ''
-        message = f' got {self.exception}({message})={self.exception}' if self.exception else f' {message}'
+        message += f'\nexception={self.exception}' if self.exception else ''
         args = f' args={self.args}' if self.args else ''
         kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
-        params = ','.join([args, kwargs])
+        params = ','.join([args, kwargs]) if kwargs or args else ''
         return f"{super().__str__()}, source={self.source}.{self.source_method}({params}){message}"
 
 

@@ -23,6 +23,7 @@ import unittest
 import warnings
 from uuid import uuid4
 from functools import wraps
+import traceback
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -280,11 +281,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.start_time = time.time()
 
             self.db_cluster.validate_seeds_on_all_nodes()
-        except Exception as exc:
+        except Exception:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 source_method='SetUp',
-                exception=exc
+                exception=traceback.format_exc()
             ).publish()
             raise
 
