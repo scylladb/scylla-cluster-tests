@@ -276,7 +276,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         node_list = node_list if node_list else self.nodes
         for node in node_list:
             node.wait_for_status_running()
-        self.wait_for_nodes_up_and_normal(node_list)
+        self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     def get_scylla_args(self):
         # pylint: disable=no-member
