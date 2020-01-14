@@ -9,7 +9,6 @@ import tempfile
 import json
 import base64
 from textwrap import dedent
-from threading import Thread
 from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 
@@ -19,6 +18,7 @@ import boto3
 
 from sdcm import cluster
 from sdcm import ec2_client
+from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.utils.common import retrying, list_instances_aws, get_ami_tags
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
@@ -26,12 +26,12 @@ from sdcm.remote import LocalCmdRunner
 
 LOGGER = logging.getLogger(__name__)
 
-INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
 INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
+SPOT_TERMINATION_CHECK_OVERHEAD = 15
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 # pylint: disable=too-many-lines
@@ -82,7 +82,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._ec2_block_device_mappings = ec2_block_device_mappings
         self._ec2_user_data = ec2_user_data
         self.region_names = region_names
-        self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
         self.aws_extra_network_interface = aws_extra_network_interface
         self.params = params
 
@@ -411,7 +410,6 @@ class AWSNode(cluster.BaseNode):
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
-        self._spot_aws_termination_task = None
         if len(self._instance.network_interfaces) == 2:
             # first we need to configure the both networks so we'll have public ip
             self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx)
@@ -477,6 +475,27 @@ class AWSNode(cluster.BaseNode):
     @property
     def is_spot(self):
         return bool(self._instance.instance_lifecycle and 'spot' in self._instance.instance_lifecycle.lower())
+
+    def check_spot_termination(self):
+        try:
+            result = self.remoter.run(
+                'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
+            status = result.stdout.strip()
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.warning('Error during getting spot termination notification %s', details)
+            return 0
+
+        if '404 - Not Found' in status:
+            return 0
+
+        self.log.warning('Got spot termination notification from AWS %s', status)
+        terminate_action = json.loads(status)
+        terminate_action_timestamp = time.mktime(datetime.strptime(
+            terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
+        next_check_delay = terminate_action['time-left'] = terminate_action_timestamp - time.time()
+        SpotTerminationEvent(node=self, message=terminate_action)
+
+        return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
     @property
     def external_address(self):
@@ -663,58 +682,6 @@ class AWSNode(cluster.BaseNode):
             response = client.release_address(AllocationId=self.eip_allocation_id)
             self.log.debug("release elastic ip . Result: %s\n", response)
         self.log.info('Destroyed')
-
-    def start_task_threads(self):
-        if self._instance.spot_instance_request_id and 'spot' in self._instance.instance_lifecycle.lower():
-            self.start_aws_termination_monitoring()
-        super(AWSNode, self).start_task_threads()
-
-    def stop_task_threads(self, timeout=10):
-        if self._spot_aws_termination_task and not self.termination_event.isSet():
-            self.log.info('Set termination_event')
-            self.termination_event.set()
-            self._spot_aws_termination_task.join(timeout)
-        super(AWSNode, self).stop_task_threads(timeout)
-
-    def get_aws_termination_notification(self):  # pylint: disable=invalid-name
-        try:
-            result = self.remoter.run(
-                'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
-            status = result.stdout.strip()
-            if '404 - Not Found' not in status:
-                return status
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Error during getting aws termination notification %s' % details)
-        return None
-
-    def monitor_aws_termination_thread(self):  # pylint: disable=invalid-name
-        while True:
-            duration = 5
-            if self.termination_event.isSet():
-                break
-            try:
-                self.wait_ssh_up(verbose=False)
-            except Exception as ex:  # pylint: disable=broad-except
-                LOGGER.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
-                               "Error details: '%s'", self.name, ex)
-                continue
-            aws_message = self.get_aws_termination_notification()
-            if aws_message:
-                self.log.warning('Got spot termination notification from AWS %s' % aws_message)
-                terminate_action = json.loads(aws_message)
-                terminate_action_timestamp = time.mktime(datetime.strptime(
-                    terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
-                duration = terminate_action_timestamp - time.time() - 15
-                if duration <= 0:
-                    duration = 5
-                terminate_action['time-left'] = terminate_action_timestamp - time.time()
-                SpotTerminationEvent(node=self, aws_message=terminate_action)
-            time.sleep(duration)
-
-    def start_aws_termination_monitoring(self):  # pylint: disable=invalid-name
-        self._spot_aws_termination_task = Thread(target=self.monitor_aws_termination_thread)
-        self._spot_aws_termination_task.daemon = True
-        self._spot_aws_termination_task.start()
 
     def get_console_output(self):
         """Get instance console Output

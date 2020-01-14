@@ -226,6 +226,8 @@ class SCTConfiguration(dict):
         dict(name="backtrace_decoding", env="SCT_BACKTRACE_DECODING", type=boolean,
              help="""If True, all backtraces found in db nodes would be decoded automatically"""),
 
+        dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", type=str,
+             help="instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
 
         dict(name="reuse_cluster", env="SCT_REUSE_CLUSTER", type=str,
              help="""
@@ -415,9 +417,6 @@ class SCTConfiguration(dict):
 
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
              help=""),
-
-        dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", type=str,
-             help=" aws instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
 
         dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
              help="The max percentage of the on demand price we set for spot/fleet instances"),

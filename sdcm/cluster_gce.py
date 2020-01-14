@@ -1,10 +1,15 @@
 import os
 import time
 
-from libcloud.common.google import ResourceNotFoundError
+from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 
 from sdcm import cluster
+from sdcm.sct_events import SpotTerminationEvent
+
+
+SPOT_TERMINATION_CHECK_DELAY = 1
+SPOT_TERMINATION_METADATA_CHECK_TIMEOUT = 15
 
 
 class CreateGCENodeError(Exception):
@@ -39,6 +44,7 @@ class GCENode(cluster.BaseNode):
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
+        self._preempted_last_state = False
         super(GCENode, self).__init__(name=name,
                                       parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
@@ -103,6 +109,35 @@ class GCENode(cluster.BaseNode):
 
     def set_hostname(self):
         self.log.debug("Hostname for node %s left as is", self.name)
+
+    @property
+    def is_spot(self):
+        return self._instance.extra['scheduling']['preemptible']
+
+    def check_spot_termination(self):
+        """Check if a spot instance termination was initiated by the cloud.
+
+        There are few different methods how to detect this event in GCE:
+
+            https://cloud.google.com/compute/docs/instances/create-start-preemptible-instance#detecting_if_an_instance_was_preempted
+
+        but we use internal metadata because the getting of zone operations is not implemented in Apache Libcloud yet.
+        """
+        try:
+            result = self.remoter.run(
+                'curl "http://metadata.google.internal/computeMetadata/v1/instance/preempted'
+                '?wait_for_change=true&timeout_sec=%d" -H "Metadata-Flavor: Google"'
+                % SPOT_TERMINATION_METADATA_CHECK_TIMEOUT, verbose=False)
+            status = result.stdout.strip()
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.warning('Error during getting spot termination notification %s', details)
+            return 0
+        preempted = status.lower() == 'true'
+        if preempted and not self._preempted_last_state:
+            self.log.warning('Got spot termination notification from GCE')
+            SpotTerminationEvent(node=self, message='Instance was preempted.')
+        self._preempted_last_state = preempted
+        return SPOT_TERMINATION_CHECK_DELAY
 
     def restart(self):
         # When using local_ssd disks in GCE, there is no option to Stop and Start an instance.
@@ -227,7 +262,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 },
                 "autoDelete": True}
 
-    def _create_instance(self, node_index, dc_idx):
+    def _create_instance(self, node_index, dc_idx, spot=False):
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
 
@@ -254,26 +289,35 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
-        instance = self._gce_services[dc_idx].create_node(name=name,
-                                                          size=self._gce_instance_type,
-                                                          image=self._gce_image,
-                                                          ex_network=self._gce_network,
-                                                          ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=gce_create_metadata(
-                                                              {'Name': name,
-                                                               'NodeIndex': node_index,
-                                                               'NodeType': self.node_type})
-                                                          )
-        self.log.info('Created instance %s', instance)
+        create_node_params = dict(name=name,
+                                  size=self._gce_instance_type,
+                                  image=self._gce_image,
+                                  ex_network=self._gce_network,
+                                  ex_disks_gce_struct=gce_disk_struct,
+                                  ex_metadata=gce_create_metadata(
+                                      {'Name': name,
+                                       'NodeIndex': node_index,
+                                       'NodeType': self.node_type}),
+                                  ex_preemptible=spot)
+        try:
+            instance = self._gce_services[dc_idx].create_node(**create_node_params)
+        except GoogleBaseError as details:
+            if not spot:
+                raise
+            self.log.warning('Unable to create a spot instance, try to create an on-demand one: %s', details)
+            create_node_params['ex_preemptible'] = spot = False
+            instance = self._gce_services[dc_idx].create_node(**create_node_params)
+        self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout
         return instance
 
     def _create_instances(self, count, dc_idx=0):
+        spot = 'spot' in self.instance_provision
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(self._create_instance(node_index, dc_idx))
+            instances.append(self._create_instance(node_index, dc_idx, spot))
         return instances
 
     def _get_instances_by_prefix(self, dc_idx=0):

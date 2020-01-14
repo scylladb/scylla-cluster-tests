@@ -73,6 +73,8 @@ SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
+INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
+SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
@@ -348,6 +350,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         self.log.debug(self.remoter.ssh_debug_cmd())
 
+        self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
         self.n_coredumps = 0
@@ -688,6 +691,31 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     def is_spot(self):
         return False
 
+    def check_spot_termination(self):
+        """Check if a spot instance termination was initiated by the cloud.
+
+        :return: a delay to a next check if the instance termination was started, otherwise 0
+        """
+        raise NotImplementedError('Derived classes must implement check_spot_termination')
+
+    def spot_monitoring_thread(self):
+        while True:
+            if self.termination_event.isSet():
+                break
+            try:
+                self.wait_ssh_up(verbose=False)
+            except Exception as ex:  # pylint: disable=broad-except
+                self.log.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
+                                 "Error details: '%s'", self.name, ex)
+                continue
+            next_check_delay = self.check_spot_termination() or SPOT_TERMINATION_CHECK_DELAY
+            time.sleep(next_check_delay)
+
+    def start_spot_monitoring_thread(self):
+        self._spot_monitoring_thread = threading.Thread(target=self.spot_monitoring_thread)
+        self._spot_monitoring_thread.daemon = True
+        self._spot_monitoring_thread.start()
+
     @property
     def init_system(self):
         if self._init_system is None:
@@ -947,6 +975,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     @log_run_info
     def start_task_threads(self):
+        if self.is_spot:
+            self.start_spot_monitoring_thread()
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
             self.start_journal_thread()
             self.start_backtrace_thread()
@@ -962,6 +992,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             return
         self.log.info('Set termination_event')
         self.termination_event.set()
+        if self._spot_monitoring_thread:
+            self._spot_monitoring_thread.join(timeout)
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
         if self._db_log_reader_thread:
@@ -2490,6 +2522,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
+        self.instance_provision = params.get('instance_provision')
         self.params = params
         self.datacenter = region_names or []
         if Setup.REUSE_CLUSTER:
