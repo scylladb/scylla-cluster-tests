@@ -77,7 +77,9 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
     def test_coredump_event():
         str(CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
                           node="node xy",
-                          download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 ."))
+                          download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 .",
+                          timestamp="Tue 2020-01-14 10:40:25 UTC"
+                          ))
 
     def test_thread_failed_event(self):  # pylint: disable=no-self-use
         try:

@@ -248,13 +248,16 @@ class ThreadFailedEvent(SctEvent):
 
 
 class CoreDumpEvent(SctEvent):
-    def __init__(self, corefile_url, download_instructions, backtrace, node):
+    def __init__(self, corefile_url, download_instructions,  # pylint: disable=too-many-arguments
+                 backtrace, node, timestamp=None):
         super(CoreDumpEvent, self).__init__()
         self.corefile_url = corefile_url
         self.download_instructions = download_instructions
         self.backtrace = backtrace
         self.severity = Severity.CRITICAL
         self.node = str(node)
+        if timestamp is not None:
+            self.timestamp = timestamp
         self.publish()
 
     def __str__(self):
