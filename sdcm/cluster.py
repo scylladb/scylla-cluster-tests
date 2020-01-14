@@ -2878,11 +2878,11 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=Severity.NORMAL,
                                     message='Cluster health check finished')
 
-    def check_nodes_up_and_normal(self, nodes=None):
+    def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
-            nodes = self.nodes  # pylint: disable=no-member
-        status = self.get_nodetool_status()
+            nodes = self.nodes
+        status = self.get_nodetool_status(verification_node=verification_node)
         up_statuses = []
         for node in nodes:
             for dc_status in status.values():
@@ -2896,8 +2896,8 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
 
     @retrying(n=30, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady,),
               message="Waiting for nodes to join the cluster")
-    def wait_for_nodes_up_and_normal(self, nodes):
-        self.check_nodes_up_and_normal(nodes=nodes)
+    def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
+        self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     def get_scylla_version(self):
         if not self.nodes[0].scylla_version:  # pylint: disable=no-member
