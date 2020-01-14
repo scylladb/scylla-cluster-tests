@@ -228,7 +228,7 @@ class ScyllaDockerCluster(DockerCluster, cluster.BaseScyllaCluster):  # pylint: 
         node_list = node_list if node_list else self.nodes
         for node in node_list:
             node.wait_for_status_running()
-        return self.check_nodes_up_and_normal(node_list)
+        return self.check_nodes_up_and_normal(nodes=node_list)
 
 
 class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
