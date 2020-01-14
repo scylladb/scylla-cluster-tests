@@ -540,6 +540,9 @@ class TestStatsMixin(Stats):
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
         if self.create_stats:
             update_data = {}
+            if 'test_details' not in self._stats.keys():
+                self._stats['test_details'] = dict()
+                self._stats['setup_details'] = dict()
             self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             if self.monitors and self.monitors.nodes:
                 test_start_time = self._stats['test_details']['start_time']
@@ -576,7 +579,7 @@ class TestStatsMixin(Stats):
             self.update(update_data)
 
     def get_doc_data(self, key):
-        if self.create_stats:
+        if self.create_stats and self._test_index and self.get_doc_id():
             result = self.elasticsearch.get_doc(self._test_index, self.get_doc_id(), doc_type=self._es_doc_type)
 
             return result['_source'].get(key, None)

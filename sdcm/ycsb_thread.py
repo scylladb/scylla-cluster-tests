@@ -17,12 +17,11 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
     METRICS = dict()
     collectible_ops = ['read', 'update', 'cleanup', 'read-failed', 'update-failed']
 
-    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, node_list=None, round_robin=False,  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None, round_robin=False,  # pylint: disable=too-many-arguments
                  params=None):
         self.loader_set = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
-        self.output_dir = output_dir
         self.stress_num = stress_num
         self.node_list = node_list if node_list else []
         self.round_robin = round_robin
@@ -112,10 +111,10 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
 
         self.copy_template(loader)
 
-        log_dir = os.path.join(self.output_dir, self.loader_set.name)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, 'cassandra-stress-l%s-c%s-%s.log' % (loader_idx, cpu_idx, uuid.uuid4()))
+        if not os.path.exists(loader.logdir):
+            os.makedirs(loader.logdir)
+        log_file_name = os.path.join(loader.logdir, 'cassandra-stress-l%s-c%s-%s.log' %
+                                     (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
         def set_metric(operation, name, value):

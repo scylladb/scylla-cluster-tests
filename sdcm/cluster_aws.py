@@ -151,7 +151,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             # pass common reservationid
             spot_params['user_data'] += (' --customreservation %s' % str(uuid.uuid4())[:18])
             self.log.debug("User_data to spot instances: '%s'", spot_params['user_data'])
-            request_cnt = count / limit
+            request_cnt = count // limit
             spot_params['count'] = limit
             tail_cnt = count % limit
             if tail_cnt:

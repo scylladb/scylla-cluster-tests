@@ -195,6 +195,17 @@ With that said and done, you can run your test using the command line::
     hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config test-cases/scylla-lmr.yaml
 
 
+Docker
+------
+**NOTE:** for docker run work with monitoring stack, user should be part of sudo group,
+and setup with passwordless access, see https://unix.stackexchange.com/a/468417 for example on how to setup
+
+We can also enable running with scylla formal docker images::
+
+    # example of running specific docker version
+    export SCT_SCYLLA_VERSION=3.2.rc1
+    hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
+
 (Optional) Follow what the test is doing
 ========================================
 
@@ -374,7 +385,7 @@ FAQ
     export SCT_NGROK_NAME=`whoami`
 
     # run you test
-    hydra.sh run ....
+    hydra run-test ....
 
     # while test running your metrics api would be exposed for example:
     # http://fruch.ngrok.io

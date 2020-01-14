@@ -121,13 +121,13 @@ class BaseSCTEventsTest(unittest.TestCase):
 
 @unittest.skip("manual tests")
 class TestStressThread(BaseSCTEventsTest):
-    def test_01(self):
+    def test_01(self):  # pylint: disable=no-self-use
         start_metrics_server()
-        cstress = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()], stress_num=1,
+        cstress = CassandraStressThread(LoaderSetDummy(), timeout=60, node_list=[DbNode()], stress_num=1,
                                         stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
                                         " -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
 
-        cstress1 = CassandraStressThread(LoaderSetDummy(), output_dir=self.temp_dir, timeout=60, node_list=[DbNode()],
+        cstress1 = CassandraStressThread(LoaderSetDummy(), timeout=60, node_list=[DbNode()],
                                          stress_num=1,
                                          stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
                                          " -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
@@ -170,12 +170,12 @@ class TestYcsbStressThread(BaseSCTEventsTest):
         loader_set = LoaderSetDummy()
         thread1 = YcsbStressThread(loader_set,
                                    'bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p recordcount=50000000 -p fieldcount=10 -p fieldlength=1024 -s', 70, 'None', node_list=[DbNode()],
-                                   stress_num=1, params=params)
+                                   params=params)
 
         thread2 = YcsbStressThread(loader_set,
                                    'bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=50000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=10000 -s',
                                    70, 'None', node_list=[DbNode()],
-                                   stress_num=1, params=params)
+                                   params=params)
 
         try:
             thread1.run()

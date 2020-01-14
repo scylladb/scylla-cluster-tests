@@ -58,14 +58,13 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
 
 class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
-    def __init__(self, loader_set, stress_cmd, timeout, output_dir, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False):
         if not node_list:
             node_list = []
         self.loader_set = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
-        self.output_dir = output_dir
         self.stress_num = stress_num
         self.keyspace_num = keyspace_num
         self.keyspace_name = keyspace_name
@@ -133,10 +132,9 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
-        log_dir = os.path.join(self.output_dir, self.loader_set.name)
-        if not os.path.exists(log_dir):
-            makedirs(log_dir)
-        log_file_name = os.path.join(log_dir,
+        if not os.path.exists(node.logdir):
+            makedirs(node.logdir)
+        log_file_name = os.path.join(node.logdir,
                                      f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)

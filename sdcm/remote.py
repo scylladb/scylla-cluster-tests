@@ -27,7 +27,7 @@ from shlex import quote
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
-from paramiko import SSHException
+from paramiko import SSHException, RSAKey
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
@@ -144,6 +144,8 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
             connect_timeout=300, verbose=True, log_file=None, retry=0):
 
         watchers = []
+        if verbose:
+            watchers.append(OutputWatcher(self.log))
         start_time = time.time()
         if verbose:
             self.log.debug('Running command "{}"...'.format(cmd))
@@ -187,7 +189,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                  'UserKnownHostsFile': self.known_hosts_file,
                                  'ServerAliveInterval': 300,
                                  'StrictHostKeyChecking': 'no'})
-        self.connect_config = {'key_filename': os.path.expanduser(self.key_file)}
+        self.connect_config = {'pkey': RSAKey(filename=os.path.expanduser(self.key_file))}
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
 

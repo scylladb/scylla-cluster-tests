@@ -23,6 +23,7 @@ import unittest
 import warnings
 from uuid import uuid4
 from functools import wraps
+import traceback
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -55,14 +56,14 @@ from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity
+from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
+    TestFrameworkEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, save_email_data_to_file
-
 
 configure_logging()
 
@@ -177,9 +178,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cluster.Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or cluster.Setup.MULTI_REGION)
 
-        version_tag = self.params.get('ami_id_db_scylla_desc')
-        if version_tag:
-            cluster.Setup.tags('version', version_tag)
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
@@ -248,40 +246,47 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         append_scylla_yaml = self.params.get('append_scylla_yaml')
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             download_encrypt_keys()
+        try:
+            self.init_resources()
 
-        self.init_resources()
+            self.init_nodes(db_cluster=self.db_cluster)
 
-        self.init_nodes(db_cluster=self.db_cluster)
+            # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
+            if self.cs_db_cluster:
+                self.init_nodes(db_cluster=self.cs_db_cluster)
 
-        # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
-        if self.cs_db_cluster:
-            self.init_nodes(db_cluster=self.cs_db_cluster)
+            if self.create_stats:
+                self.create_test_stats()
+                # sync test_start_time with ES
+                self.start_time = self.get_test_start_time()
 
-        if self.create_stats:
-            self.create_test_stats()
-            # sync test_start_time with ES
-            self.start_time = self.get_test_start_time()
+            self.set_system_auth_rf()
 
-        self.set_system_auth_rf()
+            db_node_address = self.db_cluster.nodes[0].ip_address
+            self.loaders.wait_for_init(db_node_address=db_node_address)
 
-        db_node_address = self.db_cluster.nodes[0].ip_address
-        self.loaders.wait_for_init(db_node_address=db_node_address)
+            if self.params.get("use_mgmt", default=None):
+                mgmt_auth_token = str(uuid4())
+                for node in self.db_cluster.nodes:
+                    node.install_manager_agent(mgmt_auth_token, self.params.get("scylla_mgmt_repo"))
+                self.monitors.wait_for_init(auth_token=mgmt_auth_token)
+            else:
+                self.monitors.wait_for_init()
 
-        if self.params.get("use_mgmt", default=None):
-            mgmt_auth_token = str(uuid4())
-            for node in self.db_cluster.nodes:
-                node.install_manager_agent(mgmt_auth_token, self.params.get("scylla_mgmt_repo"))
-            self.monitors.wait_for_init(auth_token=mgmt_auth_token)
-        else:
-            self.monitors.wait_for_init()
+            # cancel reuse cluster - for new nodes added during the test
+            cluster.Setup.reuse_cluster(False)
+            if self.monitors.nodes:
+                self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+            self.start_time = time.time()
 
-        # cancel reuse cluster - for new nodes added during the test
-        cluster.Setup.reuse_cluster(False)
-        if self.monitors.nodes:
-            self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
-        self.start_time = time.time()
-
-        self.db_cluster.validate_seeds_on_all_nodes()
+            self.db_cluster.validate_seeds_on_all_nodes()
+        except Exception:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method='SetUp',
+                exception=traceback.format_exc()
+            ).publish()
+            raise
 
     def set_system_auth_rf(self):
         # change RF of system_auth
@@ -591,6 +596,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             docker_image=self.params.get('docker_image', None),
+            docker_image_tag=self.params.get('scylla_version', None),
             n_nodes=[self.params.get('n_db_nodes')],
             user_prefix=self.params.get('user_prefix', None),
             credentials=self.credentials,
@@ -602,8 +608,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.loaders = docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
-        self.log.warning("Scylla monitoring is currently not supported on Docker")
-        self.monitors = NoMonitorSet()
+        params['targets'] = dict(db_cluster=self.db_cluster, loaders=self.loaders)
+        self.monitors = docker.MonitorSetDocker(**params)
 
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
@@ -686,7 +692,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cs_thread = CassandraStressThread(loader_set=self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
-                                          output_dir=cluster.Setup.logdir(),
                                           stress_num=stress_num,
                                           keyspace_num=keyspace_num,
                                           profile=profile,
@@ -707,7 +712,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
-                                                            cluster.Setup.logdir(),
                                                             node_list=self.db_cluster.nodes)
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
@@ -728,7 +732,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return YcsbStressThread(loader_set=self.loaders,
                                 stress_cmd=stress_cmd,
                                 timeout=timeout,
-                                output_dir=cluster.Setup.logdir(),
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
                                 round_robin=round_robin, params=self.params).run()

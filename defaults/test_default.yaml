@@ -18,7 +18,7 @@ scylla_linux_distro_loader: 'centos'
 
 system_auth_rf: 3
 
-monitor_branch: 'branch-3.0'
+monitor_branch: 'branch-3.1'
 store_results_in_elasticsearch: true
 
 space_node_threshold: 0
@@ -45,7 +45,7 @@ post_behavior_monitor_nodes: "keep-on-failure"
 
 cloud_credentials_path: '~/.ssh/support'
 
-backtrace_decoding: false
+backtrace_decoding: true
 
 logs_transport: "rsyslog"
 

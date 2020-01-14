@@ -11,14 +11,14 @@ import datetime
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
                              InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             KillTestEvent, Severity, ThreadFailedEvent)
+                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent)
 
 LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
 
-class SctEventsTests(unittest.TestCase):
+class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
     def get_event_logs(self):
         log_file = os.path.join(self.temp_dir, 'events_log', 'events.log')
@@ -112,6 +112,15 @@ class SctEventsTests(unittest.TestCase):
                             node='test'))
 
         print(str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test')))
+
+    def test_test_framework_event(self):  # pylint: disable=no-self-use
+        try:
+            1 / 0
+        except ZeroDivisionError:
+            _full_traceback = traceback.format_exc()
+        event = TestFrameworkEvent(source="Tester", source_method="setUp", exception=_full_traceback)
+        print(str(event))
+        event.publish()
 
     def test_filter(self):
         log_content_before = self.get_event_logs()

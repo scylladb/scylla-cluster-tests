@@ -28,7 +28,7 @@ class GCENode(cluster.BaseNode):
     def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
-        name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
+        name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
         self._instance = gce_instance
         self._gce_service = gce_service
         self._wait_public_ip()
@@ -237,7 +237,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout * 3
             self.log.info("Job complete timeout is set to %ss" %
                           self._gce_services[dc_idx].connection.timeout)
-        name = "%s-%s-%s" % (self.node_prefix, dc_idx, node_index)
+        name = f"{self.node_prefix}-{dc_idx}-{node_index}".lower()
         gce_disk_struct = list()
         gce_disk_struct.append(self._get_root_disk_struct(name=name,
                                                           disk_type=self._gce_image_type,

@@ -2,7 +2,6 @@ stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(str
 
 instance_type_db: 'i3.large'
 instance_type_loader: 'c4.large'
-instance_type_monitor: 't3.small'
 
 region_name: 'us-east-1 us-west-2'
 n_db_nodes: '2 1'
