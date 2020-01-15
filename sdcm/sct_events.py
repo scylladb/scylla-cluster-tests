@@ -9,6 +9,8 @@ import time
 from multiprocessing import Process, Value, Event, current_process
 import atexit
 import datetime
+import collections
+from pathlib import Path
 
 import enum
 from enum import Enum
@@ -590,29 +592,49 @@ class TestKiller(Process):
                     safe_kill(self._test_pid, signal.SIGKILL)
 
 
-class EventsFileLogger(Process):
+class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
     def __init__(self, log_dir):
         super(EventsFileLogger, self).__init__()
         self._test_pid = os.getpid()
-        self.event_log_base_dir = os.path.join(log_dir, 'events_log')
-        self.events_filename = os.path.join(self.event_log_base_dir, 'events.log')
-        self.critical_events_filename = os.path.join(self.event_log_base_dir, 'critical.log')
-        with open(self.critical_events_filename, 'a'):
-            pass
+        self.event_log_base_dir = Path(log_dir, 'events_log')
+        self.events_filename = Path(self.event_log_base_dir, 'events.log')
+        self.critical_events_filename = Path(self.event_log_base_dir, 'critical.log')
+        self.error_events_filename = Path(self.event_log_base_dir, 'error.log')
+        self.warning_events_filename = Path(self.event_log_base_dir, 'warning.log')
+        self.normal_events_filename = Path(self.event_log_base_dir, 'normal.log')
+        self.events_summary_filename = Path(self.event_log_base_dir, 'summary.log')
+
+        for log_file in [self.critical_events_filename, self.error_events_filename,
+                         self.warning_events_filename, self.normal_events_filename,
+                         self.events_summary_filename]:
+            log_file.touch()
+
+        self.level_to_file_mapping = {
+            Severity.CRITICAL: self.critical_events_filename,
+            Severity.ERROR: self.error_events_filename,
+            Severity.WARNING: self.warning_events_filename,
+            Severity.NORMAL: self.warning_events_filename,
+        }
+        self.level_summary = collections.defaultdict(int)
 
     def run(self):
         LOGGER.info("writing to %s", self.events_filename)
 
-        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
+        for _, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
             try:
                 msg = "{}: {}".format(message_data.formatted_timestamp, str(message_data).strip())
                 with open(self.events_filename, 'a+') as log_file:
                     log_file.write(msg + '\n')
 
-                if (message_data.severity == Severity.CRITICAL or message_data.severity == Severity.ERROR) \
-                        and not event_type == 'ClusterHealthValidatorEvent':
-                    with open(self.critical_events_filename, 'a+') as critical_file:
-                        critical_file.write(msg + '\n')
+                # update each level log file
+                events_filename = self.level_to_file_mapping[message_data.severity]
+                with open(events_filename, 'a+') as events_level_file:
+                    events_level_file.write(msg + '\n')
+
+                # update the summary file
+                self.level_summary[str(Severity(message_data.severity))] += 1
+                with open(self.events_summary_filename, 'w') as summary_file:
+                    json.dump(dict(self.level_summary), summary_file, indent=4)
 
                 LOGGER.info(msg)
             except Exception:  # pylint: disable=broad-except
@@ -659,6 +681,10 @@ def stop_events_device():
 
 def set_grafana_url(url):
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].set_grafana_url(url)
+
+
+def get_logger_event_summary():
+    return json.load(open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].events_summary_filename))
 
 
 atexit.register(stop_events_device)

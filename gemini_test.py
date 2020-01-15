@@ -20,6 +20,7 @@ import os
 from sdcm.tester import ClusterTester
 from sdcm.cluster import get_username
 from sdcm.utils.common import format_timestamp
+from sdcm.sct_events import get_logger_event_summary
 
 
 class GeminiTest(ClusterTester):
@@ -101,5 +102,6 @@ class GeminiTest(ClusterTester):
             'nemesis_name': self.params.get('nemesis_class_name'),
             'nemesis_details': self.get_nemesises_stats(),
             'test_status': ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
-            'nodes': []
+            'nodes': [],
+            'events_summary': get_logger_event_summary(),
         }
