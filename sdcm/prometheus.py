@@ -12,6 +12,7 @@ except ImportError:
     from socketserver import ThreadingMixIn
 
 import prometheus_client
+from sdcm.utils.common import retrying, log_run_info
 from sdcm.sct_events import PrometheusAlertManagerEvent, EVENTS_PROCESSES
 
 
@@ -65,7 +66,7 @@ def nemesis_metrics_obj():
     return NM_OBJ
 
 
-class NemesisMetrics():
+class NemesisMetrics:
 
     DISRUPT_COUNTER = 'nemesis_disruptions_counter'
     DISRUPT_GAUGE = 'nemesis_disruptions_gauge'
@@ -110,56 +111,48 @@ class NemesisMetrics():
             LOGGER.exception('Cannot stop metrics event: %s', ex)
 
 
-class PrometheusAlertManagerListener:
-    _max_get_alert_attempts = 10
+class PrometheusAlertManagerListener(threading.Thread):
 
-    def __init__(self, ip, port=9093, interval=10, wait_till_up=7200):
+    def __init__(self, ip, port=9093, interval=10, stop_flag: threading.Event = None):
+        super(PrometheusAlertManagerListener, self).__init__(name=self.__class__.__name__, daemon=True)
         self._alert_manager_url = f"http://{ip}:{port}/api/v2"
-        self._stop_flag = threading.Event()
+        self._stop_flag = stop_flag if stop_flag else threading.Event()
         self._interval = interval
-        self._wait_till_up = wait_till_up
-        self._thread = threading.Thread(
-            target=self._listen_alert_manager,
-            kwargs={'stop_flag': self._stop_flag},
-            daemon=True)
+        self._timeout = 600
 
+    @property
     def is_alert_manager_up(self):
         try:
             return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()['cluster']['status'] == 'ready'
         except Exception:  # pylint: disable=broad-except
             return False
 
-    def wait_till_alert_manager_up(self, timeout=900):
-        end_time = time.time() + timeout
-        while time.time() < end_time:
-            if self.is_alert_manager_up():
+    @log_run_info
+    def wait_till_alert_manager_up(self):
+        end_time = time.time() + self._timeout
+        while time.time() < end_time and not self._stop_flag.is_set():
+            if self.is_alert_manager_up:
                 return
-            time.sleep(1)
-        raise TimeoutError(f"Prometheus Alert Manager({self._alert_manager_url}) did not get up for {timeout} seconds")
+            time.sleep(30)
+        if self._stop_flag.is_set():
+            LOGGER.warning("Prometheus Alert Manager was asked to stop.")
+        else:
+            raise TimeoutError(f"Prometheus Alert Manager({self._alert_manager_url}) "
+                               f"did not get up for {self._timeout}s")
 
-    def start(self):
-        self._stop_flag.clear()
-        self._thread.start()
-
+    @log_run_info
     def stop(self, timeout=None):
         self._stop_flag.set()
-        self._thread.join(timeout)
+        self.join(timeout)
 
-    def _get_alerts(self, active=None, max_attempts=10):
-        i = 0
-        while i < max_attempts:
-            try:
-                if active is None:
-                    response = requests.get(f"{self._alert_manager_url}/alerts", timeout=3)
-                else:
-                    response = requests.get(f"{self._alert_manager_url}/alerts?active={int(active)}", timeout=3)
-                if response.status_code != 200:
-                    return None
-                return response.json()
-            except Exception:  # pylint: disable=broad-except
-                pass
-            time.sleep(1)
-            i += 1
+    @retrying(n=10)
+    def _get_alerts(self, active=False):
+        if active:
+            response = requests.get(f"{self._alert_manager_url}/alerts?active={int(active)}", timeout=3)
+        else:
+            response = requests.get(f"{self._alert_manager_url}/alerts", timeout=3)
+        if response.status_code == 200:
+            return response.json()
         return None
 
     def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
@@ -167,7 +160,7 @@ class PrometheusAlertManagerListener:
             PrometheusAlertManagerEvent(raw_alert=alert, event_type='start').publish()
 
     def _publish_end_of_alerts(self, alerts: dict):
-        all_alerts = self._get_alerts(max_attempts=self._max_get_alert_attempts)
+        all_alerts = self._get_alerts()
         updated_dict = {}
         if all_alerts:
             for alert in all_alerts:
@@ -181,15 +174,15 @@ class PrometheusAlertManagerListener:
             alert = updated_dict.get(alert['fingerprint'], alert)
             PrometheusAlertManagerEvent(raw_alert=alert, event_type='end').publish()
 
-    def _listen_alert_manager(self, stop_flag: threading.Event):
-        self.wait_till_alert_manager_up(self._wait_till_up)
+    def run(self):
+        self.wait_till_alert_manager_up()
         existed = {}
-        while not stop_flag.is_set():
+        while not self._stop_flag.is_set():
             start_time = time.time()
             just_left = existed.copy()
             existing = {}
             new_ones = {}
-            alerts = self._get_alerts(active=True, max_attempts=self._max_get_alert_attempts)
+            alerts = self._get_alerts(active=True)
             if alerts is not None:
                 for alert in alerts:
                     fingerprint = alert.get('fingerprint', None)
