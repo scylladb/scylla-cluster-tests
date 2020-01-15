@@ -125,18 +125,18 @@ pipeline {
 // 				}
 // 			}
 // 		}
-		stage("lint test-cases") {
-			steps {
-				script {
-					try {
-						sh ''' ./utils/lint_test_cases1.sh '''
-						pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
-					} catch(Exception ex) {
-						pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
-					}
-				}
-			}
-		}
+// 		stage("lint test-cases") {
+// 			steps {
+// 				script {
+// 					try {
+// 						sh ''' ./utils/lint_test_cases1.sh '''
+// 						pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
+// 					} catch(Exception ex) {
+// 						pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
+// 					}
+// 				}
+// 			}
+// 		}
 		stage("provision test") {
 			when {
 				expression {
