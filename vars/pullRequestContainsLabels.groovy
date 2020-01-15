@@ -9,6 +9,7 @@ def call(String labels){
 	def result = false
 	pullRequest.labels.each {
 		if (tmp.contains(it)){
+		    print "PullRequestContainsLabels(${lables}) tmp contains ${it}"
 			result = true
 		}
 	}
