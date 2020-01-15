@@ -928,7 +928,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._db_log_reader_thread.start()
 
     def start_alert_manager_thread(self):
-        self._alert_manager = PrometheusAlertManagerListener(self.external_address)
+        self._alert_manager = PrometheusAlertManagerListener(self.external_address, stop_flag=self.termination_event)
         self._alert_manager.start()
 
     def __str__(self):
@@ -982,7 +982,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
         elif 'monitor' in self.name:
-            self.start_alert_manager_thread()
+            # TODO: start alert manager thread here when start_task_threads will be run after node setup
+            # self.start_alert_manager_thread()
             if Setup.BACKTRACE_DECODING:
                 self.start_decode_on_monitor_node_thread()
 
@@ -3711,6 +3712,9 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # be captured.
         self.grafana_start_time = time.time()
         set_grafana_url("http://{}:{}".format(normalize_ipv6_url(node.external_address), self.grafana_port))
+        # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
+        # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
+        node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
         if node.is_rhel_like():
             node.remoter.run('sudo yum install screen -y')
         else:

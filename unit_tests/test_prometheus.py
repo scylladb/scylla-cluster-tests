@@ -19,7 +19,7 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         self._iter = -1
         self._results = {'_publish_end_of_alerts': [], '_publish_new_alerts': []}
 
-    def _get_alerts(self, active=True, max_attempts=10):
+    def _get_alerts(self, active=True):
         self._iter += 1
         if self._iter < len(self._artificial_alerts):
             return self._artificial_alerts[0:self._iter]
@@ -37,11 +37,7 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
     def get_result(self):
         return self._results
 
-    def start(self):
-        super().start()
-        self._thread.join()
-
-    def wait_till_alert_manager_up(self, timeout=60):
+    def wait_till_alert_manager_up(self):
         pass
 
 
