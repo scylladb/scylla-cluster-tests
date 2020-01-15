@@ -134,6 +134,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         self._node_img_tag = 'scylla-sct-img'
         self._context_path = os.path.join(os.path.dirname(__file__), '../docker/scylla-sct')
         self._create_node_image()
+        self.extra_docker_flags = kwargs.get('extra_docker_flags', "")
         super(DockerCluster, self).__init__(node_prefix=self._node_prefix,
                                             n_nodes=kwargs.get('n_nodes'),
                                             params=kwargs.get('params'),
@@ -142,7 +143,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
     def _create_node_image(self):
         self._update_image()
         _cmd(f'build --build-arg SOURCE_IMAGE={self._image}:{self._version_tag} -t {self._node_img_tag} {self._context_path}',
-             timeout=300)
+             timeout=600)
 
     @staticmethod
     def _clean_old_images():
@@ -157,7 +158,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def _create_container(self, node_name, is_seed=False, seed_ip=None):
         labels = f"--label 'test_id={cluster.Setup.test_id()}'"
-        cmd = f'run --cpus="1" --name {node_name} {labels} -d {self._node_img_tag}'
+        cmd = f'run --cpus="1" --name {node_name} {labels} {self.extra_docker_flags} -d {self._node_img_tag}'
         if not is_seed and seed_ip:
             cmd = f'{cmd} --seeds="{seed_ip}"'
         _cmd(cmd, timeout=30)
@@ -306,7 +307,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
 def send_receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False):  # pylint: disable=too-many-arguments,unused-argument
     if src != dst:
-        self.remoter.run(f'cp {src} {dst}')
+        self.remoter.run(f'cp -a {src} {dst}')
 
 
 class DummyMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
@@ -339,6 +340,9 @@ class DummyMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method,
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
     def __init__(self, **kwargs):
+        base_dir = os.environ.get("_SCT_BASE_DIR", None) or cluster.Setup.logdir()
+        extra_docker_flags = f" -v /var/run/docker.sock:/run/docker.sock -v {base_dir}:{base_dir} -v /usr/bin/docker:/usr/bin/docker"
+
         user_prefix = kwargs.get('user_prefix')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
@@ -349,8 +353,10 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         DockerCluster.__init__(self,
                                node_prefix=node_prefix,
                                cluster_prefix=cluster_prefix,
+                               extra_docker_flags=extra_docker_flags,
                                **kwargs)
 
+    '''
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         return self._create_nodes(count, dc_idx, enable_auto_bootstrap)
 
@@ -368,7 +374,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
             self.nodes.append(new_node)
             new_nodes.append(new_node)
         return new_nodes
-
+    '''
     @staticmethod
     def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
         # since running local, don't install anything, just the monitor
@@ -379,12 +385,13 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         if not self._monitor_install_path_base:
             self._monitor_install_path_base = self.nodes[0].logdir
         return self._monitor_install_path_base
-
+    '''
     def _create_node(self, node_name):
         return DummyMonitoringNode(name=node_name,
                                    parent_cluster=self,
                                    base_logdir=self.logdir,
                                    node_prefix=self.node_prefix)
+    '''
 
     def get_backtraces(self):
         pass

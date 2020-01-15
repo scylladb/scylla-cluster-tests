@@ -1700,9 +1700,14 @@ server_encryption_options:
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#https/https/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
-            systemctl restart scylla-manager-agent
         """.format(auth_token))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
+
+        if not self.is_docker():
+            self.remoter.run('sudo systemctl restart scylla-manager-agent')
+        else:
+            self.remoter.run('systemctl stop scylla-manager-agent', ignore_status=True)
+            self.remoter.run('supervisorctl start scylla-manager-agent')
 
     def clean_scylla(self):
         """
