@@ -241,8 +241,9 @@ class UpgradeTest(FillDatabaseData):
                     r'sudo apt-get install %s -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated' % node.scylla_pkg())
                 node.remoter.run(
                     r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                if not node.is_ubuntu14():
-                    node.remoter.run('sudo systemctl daemon-reload')
+
+            node.remoter.run('sudo systemctl daemon-reload')
+
         elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run(r'sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
         else:
@@ -257,8 +258,8 @@ class UpgradeTest(FillDatabaseData):
             else:
                 node.remoter.run(
                     r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
-                if not node.is_ubuntu14():
-                    node.remoter.run('sudo systemctl daemon-reload')
+
+            node.remoter.run('sudo systemctl daemon-reload')
 
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
