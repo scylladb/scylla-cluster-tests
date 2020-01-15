@@ -2481,7 +2481,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.info('Init nodes')
         self.nodes = []
-        self.instance_provision = params.get('instance_provision', default=INSTANCE_PROVISION_ON_DEMAND)
+        self.instance_provision = params.get('instance_provision')
         self.params = params
         self.datacenter = region_names or []
         if Setup.REUSE_CLUSTER:
