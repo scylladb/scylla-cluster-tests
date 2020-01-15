@@ -118,6 +118,17 @@
         {% endfor %}
     </table>
 
+    <h3>
+        <span>Events summary</span>
+    </h3>
+    <div>
+        <ul>
+            {% for k,v in events_summary.items() %}
+                <li>{{k}} : {{v}}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
     <h3>Running instances</h3>
     {% if nodes %}
     <div>

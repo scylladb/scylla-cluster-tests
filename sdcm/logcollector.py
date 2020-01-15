@@ -753,7 +753,15 @@ class SCTLogCollector(LogCollector):
         FileLog(name='output.log',
                 search_locally=True),
         FileLog(name='critical.log',
-                search_locally=True)
+                search_locally=True),
+        FileLog(name='warning.log',
+                search_locally=True),
+        FileLog(name='error.log',
+                search_locally=True),
+        FileLog(name='normal.log',
+                search_locally=True),
+        FileLog(name='summary.log',
+                search_locally=True),
     ]
     cluster_log_type = 'sct-runner'
 

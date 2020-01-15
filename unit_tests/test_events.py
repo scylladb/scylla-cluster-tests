@@ -11,7 +11,7 @@ import datetime
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
                              InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent)
+                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -121,6 +121,17 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
         event = TestFrameworkEvent(source="Tester", source_method="setUp", exception=_full_traceback)
         print(str(event))
         event.publish()
+
+    def test_get_logger_event_summary(self):
+        event = TestFrameworkEvent(severity=Severity.ERROR, source="Tester", source_method="setUp")
+        event.publish()
+
+        event = TestFrameworkEvent(severity=Severity.WARNING, source="Tester", source_method="setUp")
+        event.publish()
+
+        summary = get_logger_event_summary()
+        self.assertIn('Severity.ERROR', summary)
+        self.assertGreaterEqual(summary['Severity.ERROR'], 1)
 
     def test_filter(self):
         log_content_before = self.get_event_logs()

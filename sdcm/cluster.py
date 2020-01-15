@@ -2333,7 +2333,7 @@ server_encryption_options:
             self.log.info('Status for %s node %s: %s' % (node_type, self.name, self.run_nodetool('status')))
 
         except Exception as ex:  # pylint: disable=broad-except
-            ClusterHealthValidatorEvent(type='error', name='NodesStatus', status=Severity.CRITICAL,
+            ClusterHealthValidatorEvent(type='error', name='NodesStatus', status=Severity.ERROR,
                                         node=self.name,
                                         error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex,
                                                                                                          node=self.name))
@@ -2382,7 +2382,7 @@ server_encryption_options:
 
         # Validate that same schema on all nodes
         if len(set(node_info['schema'] for node_info in gossip_node_schemas.values())) > 1:
-            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.CRITICAL,
+            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
                                         node=self.name,
                                         error='Schema version is not same on all nodes in gossip info: {}'
                                         .format('\n'.join('{}: {}'.format(ip, schema_version['schema'])
@@ -2425,7 +2425,7 @@ server_encryption_options:
                           .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(ex)))
 
         if errors:
-            ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.CRITICAL,
+            ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.ERROR,
                                         node=self.name, error='\n'.join(errors))
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
