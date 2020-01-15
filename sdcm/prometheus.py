@@ -163,12 +163,10 @@ class PrometheusAlertManagerListener:
         return None
 
     def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
-        print(f"_publish_new_alerts({str(alerts)})")
         for alert in alerts.values():
             PrometheusAlertManagerEvent(raw_alert=alert, event_type='start').publish()
 
     def _publish_end_of_alerts(self, alerts: dict):
-        print(f"_publish_end_of_alerts({str(alerts)})")
         all_alerts = self._get_alerts(max_attempts=self._max_get_alert_attempts)
         updated_dict = {}
         if all_alerts:
