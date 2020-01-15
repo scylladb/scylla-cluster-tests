@@ -23,3 +23,7 @@ gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/globa
 use_mgmt: true
 
 scylla_version: 3.2.rc1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
