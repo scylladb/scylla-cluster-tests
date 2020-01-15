@@ -21,10 +21,6 @@ def runSctProvisionTest(String backend){
 	env
 	export SCT_CLUSTER_BACKEND="${backend}"
 	export SCT_COLLECT_LOGS=false
-	export SCT_POST_BEHAVIOR_DB_NODES="destroy"
-	export SCT_POST_BEHAVIOR_LOADER_NODES="destroy"
-	export SCT_POST_BEHAVIOR_MONITOR_NODES="destroy"
-	export SCT_INSTANCE_PROVISION="on_demand"
     export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
     export BUILD_USER_ID="\${CHANGE_AUTHOR}"
 	$distro_cmd
@@ -75,9 +71,6 @@ def runCleanupResource(String backend){
     export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
     export SCT_CLUSTER_BACKEND="${backend}"
     export SCT_REGION_NAME="aws-eu-west-1"
-    export SCT_POST_BEHAVIOR_DB_NODES="destroy"
-    export SCT_POST_BEHAVIOR_LOADER_NODES="destroy"
-    export SCT_POST_BEHAVIOR_MONITOR_NODES="destroy"
 
     echo "start clean resources ..."
     ./docker/env/hydra.sh clean-resources --logdir /sct
