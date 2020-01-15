@@ -453,6 +453,7 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
 
+    @retrying(n=10, sleep_time=5, allowed_exceptions=cluster.NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
@@ -461,7 +462,8 @@ class AWSNode(cluster.BaseNode):
             self.log.debug('Hostname has been changed succesfully. Apply')
             apply_hostname_change_script = dedent(f"""
                 systemctl restart rsyslog
-                echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
+                sed -ri 's/127.0.0.1[ \t]+localhost[^\n]*$/127.0.0.1\tlocalhost\t{self.name}/' /etc/hosts
+                grep 'preserve_hostname: true' /etc/cloud/cloud.cfg 1>/dev/null 2>&1 || echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
             """)
             self.remoter.run(f"sudo bash -cxe '{apply_hostname_change_script}'")
             self.log.debug('Continue node %s set up', self.name)
