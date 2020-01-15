@@ -101,42 +101,42 @@ pipeline {
 		buildDiscarder(logRotator(numToKeepStr: '10'))
 	}
 	stages {
-		stage("precommit") {
-			steps {
-				script {
-					try {
-						sh './docker/env/hydra.sh bash -c "cd /sct; pre-commit run -a"'
-						pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
-					} catch(Exception ex) {
-						pullRequestSetResult('failure', 'jenkins/precommit', 'Precommit failed')
-					}
-				}
-			}
-		}
-		stage("unittest") {
-			steps {
-				script {
-					try {
-						sh './docker/env/hydra.sh unit-tests'
-						pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
-					} catch(Exception ex) {
-						pullRequestSetResult('failure', 'jenkins/unittests', 'Some unit tests failed')
-					}
-				}
-			}
-		}
-		stage("lint test-cases") {
-			steps {
-				script {
-					try {
-						sh ''' ./utils/lint_test_cases.sh '''
-						pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
-					} catch(Exception ex) {
-						pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
-					}
-				}
-			}
-		}
+// 		stage("precommit") {
+// 			steps {
+// 				script {
+// 					try {
+// 						sh './docker/env/hydra.sh bash -c "cd /sct; pre-commit run -a"'
+// 						pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
+// 					} catch(Exception ex) {
+// 						pullRequestSetResult('failure', 'jenkins/precommit', 'Precommit failed')
+// 					}
+// 				}
+// 			}
+// 		}
+// 		stage("unittest") {
+// 			steps {
+// 				script {
+// 					try {
+// 						sh './docker/env/hydra.sh unit-tests'
+// 						pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
+// 					} catch(Exception ex) {
+// 						pullRequestSetResult('failure', 'jenkins/unittests', 'Some unit tests failed')
+// 					}
+// 				}
+// 			}
+// 		}
+// 		stage("lint test-cases") {
+// 			steps {
+// 				script {
+// 					try {
+// 						sh ''' ./utils/lint_test_cases.sh '''
+// 						pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
+// 					} catch(Exception ex) {
+// 						pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
+// 					}
+// 				}
+// 			}
+// 		}
 		stage("provision test") {
 			when {
 				expression {
