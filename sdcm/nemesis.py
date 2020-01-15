@@ -95,9 +95,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_tables_to_ignore = {
             'scylla_bench': '*'  # Ignore scylla-bench tables
         }
-        self._add_drop_column_default_target_table = [
-            'add_drop_column_' + generate_random_string(10), 'standard1'
-        ]
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -778,26 +775,6 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 break
         return column_name
 
-    def _add_drop_column_create_table(self):
-        self._add_drop_column_target_table = self._add_drop_column_default_target_table
-        self._add_drop_column_columns_info = {}
-        try:
-            with self.tester.cql_connection_patient(self.target_node) as session:
-                session.default_consistency_level = ConsistencyLevel.ALL
-                cmd = f"DROP KEYSPACE IF EXISTS {self._add_drop_column_target_table[0]};"
-                session.execute(cmd)
-                cmd = f"CREATE KEYSPACE IF NOT EXISTS {self._add_drop_column_target_table[0]} WITH replication = " \
-                      "{'class': 'SimpleStrategy', 'replication_factor': 3};"
-                session.execute(cmd)
-                cmd = f"CREATE TABLE IF NOT EXISTS " \
-                      f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]} " \
-                      "( col1 bigint, PRIMARY KEY(col1) );"
-                session.execute(cmd)
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
-            return False
-        return True
-
     def _add_drop_column_generate_columns_to_drop(self, added_columns_info):  # pylint: disable=too-many-branches
         drop = []
         for num in range(random.randrange(1, min(  # pylint: disable=unused-variable
@@ -873,38 +850,16 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def disrupt_add_drop_column(self):
         """
-        It searches for table that allow add/drop columns (non compact storage table) and create it if no such table.
-        If table is not self-created, add and/or drop columns from that table and quit.
-        If table is self-created, run cassandra-stress for 3 minutes on it and,
-            in the same time run cycle of adding and/or dropping columns.
+        It searches for a table that allow add/drop columns (non compact storage table)
+        If there is no such table it draw an error and quit
         It keeps tracking what columns where added and never drops column that were added by someone else.
         """
         self.log.debug("AddDropColumnMonkey: Started")
         self._add_drop_column_target_table = self._add_drop_column_get_target_table(
             self._add_drop_column_target_table)
-        if self._add_drop_column_target_table is not None and \
-                self._add_drop_column_target_table != self._add_drop_column_default_target_table:
-            self._set_current_disruption(f'AddDropColumnMonkey Singular {self.target_node}')
-            self._add_drop_column_run_in_cycle()
-            return
-        self._set_current_disruption(f'AddDropColumnMonkey Self-stress {self.target_node}')
-        if not self._add_drop_column_create_table():
-            return
-        stress_cmd = "cassandra-stress mixed cl=ALL duration=9m -schema 'replication(factor=3) "\
-                     f"keyspace={self._add_drop_column_target_table[0]}' -port jmx=6868 -mode cql3 native "\
-                     "-rate threads=4 -pop seq=1..4000000 -log interval=60"
-        cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd,
-                                                  keyspace_name=self._add_drop_column_target_table[0])
-        # When target table is being edited while cassandra-stress is launching you can end up with following error:
-        #   java.io.IOException: Operation x10 on key(s) [88777]: Error executing: (NoHostAvailableException):
-        #   All host(s) tried for query failed (tried:  (com.datastax.driver.core.exceptions.DriverException:
-        #   Error preparing query, got ERROR INVALID: Unknown identifier dnhimytiy5), <ip>
-        #   (com.datastax.driver.core.exceptions.DriverException:
-        # In order to avoid that we have to wait till c-s passed certain initialization steps
-        # Currently we achieve that via time.sleep, which is not exactly right way to do that
-        time.sleep(10)  # TBD: Wait till stress thread produce certain message
+        if self._add_drop_column_target_table is None:
+            raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
         self._add_drop_column_run_in_cycle()
-        cs_thread.kill()
 
     def modify_table_comment(self):
         # default: comment = ''
