@@ -416,13 +416,12 @@ class UpgradeTest(FillDatabaseData):
         well, upgrade all nodes to new version in the end.
         """
 
-        filter_errors = [{'line': 'Failed to load schema', 'type': 'DATABASE_ERROR'},
-                         {'line': 'Failed to load schema', 'type': 'SCHEMA_FAILURE'},
-                         {'line': 'Failed to pull schema', 'type': 'DATABASE_ERROR'},
-                         {'line': 'Backtrace:', 'type': 'BACKTRACE'}]
-
-        for error in filter_errors:
-            DbEventsFilter(type=error['type'], line=error['line'])
+        # pylint: disable=expression-not-assigned
+        DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'), \
+            DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
+            DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
+            DbEventsFilter(type='DATABASE_ERROR',
+                           line='Failed to pull schema')
 
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
