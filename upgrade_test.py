@@ -330,8 +330,8 @@ class UpgradeTest(FillDatabaseData):
                     1) for f in all_sstable_files if sstable_version_regex.search(f)}
 
                 assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(sstable_versions)
-                assert sstable_versions[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
-                    self.expected_sstable_format_version, sstable_versions[0])
+                assert list(sstable_versions)[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
+                    self.expected_sstable_format_version, list(sstable_versions)[0])
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
                 return False
