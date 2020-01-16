@@ -20,13 +20,14 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class Node:  # pylint: disable=no-init,too-few-public-methods
-    ssh_login_info = {'hostname': '34.253.205.91',
-                      'user': 'centos',
-                      'key_file': '~/.ssh/scylla-qa-ec2'}
+    def __init__(self):
+        self.ssh_login_info = {'hostname': '34.253.205.91',
+                               'user': 'centos',
+                               'key_file': '~/.ssh/scylla-qa-ec2'}
 
-    remoter = RemoteCmdRunner(**ssh_login_info)
-    ip_address = '34.253.205.91'
-    cassandra_stress_version = '3.11'
+        self.remoter = RemoteCmdRunner(**self.ssh_login_info)
+        self.ip_address = '34.253.205.91'
+        self.cassandra_stress_version = '3.11'
 
 
 class DbNode:  # pylint: disable=no-init,too-few-public-methods

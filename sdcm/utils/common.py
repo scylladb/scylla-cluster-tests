@@ -26,9 +26,10 @@ import select
 import shutil
 import copy
 import string
+import sys
 from urllib.parse import urlparse
 
-from functools import wraps
+from functools import wraps, partial
 from enum import Enum
 from collections import defaultdict
 import concurrent.futures
@@ -77,16 +78,25 @@ class retrying():  # pylint: disable=invalid-name,too-few-public-methods
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    def __init__(self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message=""):
-        assert n > 0, "Number of retries parameter should be greater then 0 (current: %s)" % n
-        self.n = n  # number of times to retry  # pylint: disable=invalid-name
+    def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
+                 allowed_exceptions=(Exception,), message="", timeout=0):  # pylint: disable=redefined-outer-name
+        if n:
+            self.n = n  # number of times to retry  # pylint: disable=invalid-name
+        else:
+            self.n = sys.maxsize * 2 + 1
         self.sleep_time = sleep_time  # number seconds to sleep between retries
         self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
         self.message = message  # string that will be printed between retries
+        self.timeout = timeout  # if timeout is defined it will raise error
+        #   if it is reached even when maximum retries not reached yet
 
     def __call__(self, func):
         @wraps(func)
         def inner(*args, **kwargs):
+            if self.timeout:
+                end_time = time.time() + self.timeout
+            else:
+                end_time = 0
             if self.n == 1:
                 # there is no need to retry
                 return func(*args, **kwargs)
@@ -98,9 +108,10 @@ class retrying():  # pylint: disable=invalid-name,too-few-public-methods
                 except self.allowed_exceptions as ex:
                     LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
                     time.sleep(self.sleep_time)
-                    if i == self.n - 1:
-                        LOGGER.error("'%s': Number of retries exceeded!", func.__name__)
+                    if i == self.n - 1 or (end_time and time.time() > end_time):
+                        LOGGER.error(f"'{func.__name__}': Number of retries exceeded!")
                         raise
+
         return inner
 
 
@@ -146,6 +157,9 @@ def log_run_info(arg):
         return _inner(arg, arg.__name__)
     else:
         return lambda f: _inner(f, arg)
+
+
+timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
 
 
 class Distro(Enum):
@@ -352,7 +366,8 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
         Run function in with supplied args in parallel using thread.
     """
 
-    def __init__(self, objects, timeout=6, num_workers=None, disable_logging=False):
+    def __init__(self, objects, timeout=6, num_workers=None,  # pylint: disable=redefined-outer-name
+                 disable_logging=False):
         """Constructor for ParallelObject
 
         Build instances of Parallel object. Item of objects is used as parameter for

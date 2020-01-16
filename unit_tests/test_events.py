@@ -1,17 +1,20 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import os
 import time
 import traceback
 import unittest
 import tempfile
 import logging
 import datetime
+from pathlib import Path
+from multiprocessing import Event
 
+from sdcm.utils.common import timeout
 from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
-                             InfoEvent, CassandraStressEvent, ScyllaBenchEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary)
+from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
+                             CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
+                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
+                             ScyllaBenchEvent)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,24 +23,31 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
-    def get_event_logs(self):
-        log_file = os.path.join(self.temp_dir, 'events_log', 'events.log')
-
+    @classmethod
+    def get_event_log_file(cls, name):
+        log_file = Path(cls.temp_dir, 'events_log', name)
         data = ""
-        if os.path.exists(log_file):
-            data = open(log_file, 'r').read()
+        if log_file.exists():
+            with open(log_file, 'r') as file:
+                data = file.read()
         return data
 
-    def wait_for_event_log_change(self, log_content_before):
-        for _ in range(10):
-            log_content_after = self.get_event_logs()
-            if log_content_before == log_content_after:
-                logging.debug("logs haven't changed yet")
-                time.sleep(0.05)
-            else:
-                break
-        else:
+    @classmethod
+    def get_event_logs(cls):
+        return cls.get_event_log_file('events.log')
+
+    @classmethod
+    @timeout(timeout=20, sleep_time=0.05)
+    def wait_for_event_log_change(cls, file_name, log_content_before):
+        log_content_after = cls.get_event_log_file(file_name)
+        if log_content_before == log_content_after:
             raise AssertionError("log file wasn't update with new events")
+        return log_content_after
+
+    @classmethod
+    @timeout(timeout=10, sleep_time=0.05)
+    def wait_for_event_summary(cls):
+        return get_logger_event_summary()
 
     @classmethod
     def setUpClass(cls):
@@ -45,7 +55,6 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         start_metrics_server()
         start_events_device(cls.temp_dir, timeout=5)
-        time.sleep(5)
 
         cls.killed = Event()
 
@@ -131,18 +140,21 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
         event.publish()
 
     def test_get_logger_event_summary(self):
+        log_content_before = self.get_event_log_file('events.log')
         event = TestFrameworkEvent(severity=Severity.ERROR, source="Tester", source_method="setUp")
         event.publish()
-
+        log_content_before = self.wait_for_event_log_change('events.log', log_content_before)
+        log_summary_before = self.get_event_log_file('summary.log')
         event = TestFrameworkEvent(severity=Severity.WARNING, source="Tester", source_method="setUp")
         event.publish()
-
-        summary = get_logger_event_summary()
+        self.wait_for_event_log_change('events.log', log_content_before)
+        self.wait_for_event_log_change('summary.log', log_summary_before)
+        summary = self.wait_for_event_summary()
         self.assertIn('Severity.ERROR', summary)
         self.assertGreaterEqual(summary['Severity.ERROR'], 1)
 
     def test_filter(self):
-        log_content_before = self.get_event_logs()
+        log_content_before = self.get_event_log_file('events.log')
 
         enospc_line = "[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  [shard 8] commitlog - Exception in segment reservation: storage_io_error (Storage I/O error: 28: No space left on device)"
         enospc_line_2 = "2019-10-29T12:19:49+00:00  ip-172-30-0-184 !WARNING | scylla: [shard 2] storage_service - " \
@@ -164,20 +176,21 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
 
-        log_content_after = self.get_event_logs()
-
-        self.assertEqual(log_content_before, log_content_after)
+        try:
+            self.wait_for_event_log_change('events.log', log_content_before)
+            self.fail("Log file should not be changed")  # Should not reach this point
+        except AssertionError:
+            pass
 
     def test_filter_repair(self):
 
-        log_content_before = self.get_event_logs()
+        log_content_before = self.get_event_log_file('events.log')
 
         failed_repaired_line = '2019-07-28T10:53:29+00:00  ip-10-0-167-91 !INFO    | scylla.bin: [shard 0] repair - Got error in row level repair: std::runtime_error (repair id 1 is aborted on shard 0)'
 
         with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception"), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='is aborted'):
-
             DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                    line=failed_repaired_line)
             DatabaseLogEvent(type="RUNTIME_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
@@ -185,13 +198,12 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
                                                                                     line="not filtered")
 
-        self.wait_for_event_log_change(log_content_before)
-        log_content_after = self.get_event_logs()
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("repair id 1", log_content_after)
 
     def test_filter_upgrade(self):
-        log_content_before = self.get_event_logs()
+        log_content_before = self.get_event_log_file('events.log')
 
         known_failure_line = '!ERR     | scylla:  [shard 3] storage_proxy - Exception when communicating with 10.142.0.56: std::runtime_error (Failed to load schema version b40e405f-462c-38f2-a90c-6f130ddbf6f3)'
         with DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
@@ -202,34 +214,26 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
                                                                                     line="not filtered")
 
-        self.wait_for_event_log_change(log_content_before)
-        log_content_after = self.get_event_logs()
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("Exception when communicating", log_content_after)
 
     def test_filter_by_node(self):
-
-        log_content_before = self.get_event_logs()
-
+        log_content_before = self.get_event_log_file('events.log')
         with DbEventsFilter(type="NO_SPACE_ERROR", node="A"):
-
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line="this is filtered")
 
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="B", line_number=22,
                                                                                     line="not filtered")
 
-        self.wait_for_event_log_change(log_content_before)
-
-        log_content_after = self.get_event_logs()
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("this is filtered", log_content_after)
 
     def test_filter_expiration(self):
-        log_content_before = self.get_event_logs()
-
+        log_content_before = self.get_event_log_file('events.log')
         line_prefix = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-
         with DbEventsFilter(type="NO_SPACE_ERROR", node="A"):
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
                                                                                     line=line_prefix + " this is filtered")
@@ -243,9 +247,7 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
         print(line_prefix)
         DatabaseLogEvent(type="NO_SPACE_ERROR", regex="A").add_info_and_publish(node="A", line_number=22,
                                                                                 line=line_prefix + " not filtered")
-        self.wait_for_event_log_change(log_content_before)
-
-        log_content_after = self.get_event_logs()
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("this is filtered", log_content_after)
 
@@ -265,7 +267,7 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
         str(SpotTerminationEvent(node='test', message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
 
     def test_default_filters(self):
-        log_content_before = self.get_event_logs()
+        log_content_before = self.get_event_log_file('events.log')
 
         DatabaseLogEvent(type="BACKTRACE",
                          regex="backtrace").add_info_and_publish(node="A",
@@ -280,21 +282,41 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
                                                                  line_number=22,
                                                                  line="other back trace that shouldn't be filtered")
 
-        self.wait_for_event_log_change(log_content_before)
-
-        log_content_after = self.get_event_logs()
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
         self.assertIn('other back trace', log_content_after)
         self.assertNotIn('supressed', log_content_after)
 
     def test_failed_stall_during_filter(self):
-
-        with DbEventsFilter(type="NO_SPACE_ERROR"), DbEventsFilter(type='BACKTRACE', line='No space left on device'):
-
+        with DbEventsFilter(type="NO_SPACE_ERROR"), \
+                DbEventsFilter(type='BACKTRACE', line='No space left on device'):
             event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
             event.add_info_and_publish(node="A", line_number=22,
                                        line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20")
             logging.info(event.severity)
             self.assertTrue(event.severity == Severity.CRITICAL)
+
+    @unittest.skip("for manual use only")
+    def test_measure_speed_of_events_processing(self):  # pylint: disable=no-self-use
+        non_guaranteed_delivery = []
+        for _ in range(5):
+            start_time = time.time()
+            for _ in range(1000):
+                evt = DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B")
+                evt.add_info(node="B", line_number=22, line="not filtered")
+                evt.publish(guaranteed=False)
+            non_guaranteed_delivery.append(time.time() - start_time)
+        guaranteed_delivery = []
+        for _ in range(5):
+            start_time = time.time()
+            for _ in range(1000):
+                evt = DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B")
+                evt.add_info(node="B", line_number=22, line="not filtered")
+                evt.publish(guaranteed=True)
+            guaranteed_delivery.append(time.time() - start_time)
+        non_guaranteed_avg = sum(non_guaranteed_delivery) / len(non_guaranteed_delivery)
+        guaranteed_avg = sum(guaranteed_delivery) / len(guaranteed_delivery)
+        print(
+            f"Rate of publishing 1000 events in guaranteed mode vs non guaranteed mode is {guaranteed_avg}/{non_guaranteed_avg}={(guaranteed_avg/non_guaranteed_avg) * 100}")
 
     @unittest.skip("this test need some more work")
     def test_kill_test_event(self):

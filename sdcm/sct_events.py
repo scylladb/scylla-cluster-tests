@@ -6,7 +6,7 @@ import json
 from json import JSONEncoder
 import signal
 import time
-from multiprocessing import Process, Value, Event, current_process
+from multiprocessing import Process, Value, current_process
 import atexit
 import datetime
 import collections
@@ -17,8 +17,7 @@ from enum import Enum
 import zmq
 import dateutil.parser
 
-from sdcm.utils.common import safe_kill, pid_exists, makedirs
-
+from sdcm.utils.common import safe_kill, pid_exists, makedirs, retrying, timeout
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,13 +26,13 @@ class EventsDevice(Process):
 
     def __init__(self, log_dir):
         super(EventsDevice, self).__init__()
-        self.ready_event = Event()
         self.pub_port = Value('d', 0)
         self.sub_port = Value('d', 0)
 
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
         makedirs(self.event_log_base_dir)
         self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
+        self._client_socket = None
 
     def run(self):
         try:
@@ -50,8 +49,6 @@ class EventsDevice(Process):
 
             backend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
             frontend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
-
-            self.ready_event.set()
             zmq.proxy(frontend, backend)  # pylint: disable=no-member
 
         except Exception:  # pylint: disable=broad-except
@@ -63,16 +60,35 @@ class EventsDevice(Process):
             backend.close()
             context.term()
 
-    def subscribe_events(self, filter_type=b'', stop_event=None):
-        # pylint: disable=too-many-nested-blocks
+    @staticmethod
+    @timeout(timeout=120)
+    def wait_till_event_loop_is_working(number_of_events):
+        """
+        It waits 120 seconds till row of {number_of_events} events is delivered with no loss
+        """
+        for _ in range(number_of_events):
+            try:
+                StartupTestEvent().publish(guaranteed=True)
+            except TimeoutError:
+                raise RuntimeError("Event loop is not working properly")
+
+    def get_client_socket(self, filter_type=b'', reuse_socket=False):
+        if reuse_socket:
+            if self._client_socket is not None:
+                return self._client_socket
         context = zmq.Context()
-        LOGGER.info("subscribe to server with port %d", self.sub_port.value)
         socket = context.socket(zmq.SUB)  # pylint: disable=no-member
         socket.connect("tcp://localhost:%d" % self.sub_port.value)
         socket.setsockopt(zmq.SUBSCRIBE, filter_type)  # pylint: disable=no-member
+        if reuse_socket:
+            self._client_socket = socket
+        return socket
 
+    def subscribe_events(self, filter_type=b'', stop_event=None):
+        # pylint: disable=too-many-nested-blocks,too-many-branches
+        LOGGER.info("subscribe to server with port %d", self.sub_port.value)
+        socket = self.get_client_socket(filter_type)
         filters = dict()
-
         try:
             while stop_event is None or not stop_event.isSet():
                 if socket.poll(timeout=1):
@@ -91,7 +107,11 @@ class EventsDevice(Process):
                         if not obj.clear_filter:
                             filters[obj.id] = obj
                         else:
-                            filters[obj.id].expire_time = obj.expire_time
+                            object_filter = filters.get(obj.id, None)
+                            if object_filter is None:
+                                filters[obj.id] = obj
+                            else:
+                                filters[obj.id].expire_time = obj.expire_time
                             if not obj.expire_time:
                                 del filters[obj.id]
 
@@ -113,6 +133,20 @@ class EventsDevice(Process):
         with open(self.raw_events_filename, 'a+') as log_file:
             log_file.write(event.to_json() + '\n')
         socket.close()
+        return True
+
+    @retrying(n=3, sleep_time=0, allowed_exceptions=TimeoutError)
+    def publish_event_guaranteed(self, event, reuse_socket=True):
+        client_socket = self.get_client_socket(reuse_socket=reuse_socket)
+        self.publish_event(event)
+        if not client_socket.poll(timeout=1):
+            raise TimeoutError()
+        received_event = client_socket.recv_pyobj()
+        if not reuse_socket:
+            client_socket.close()
+        if event == received_event:
+            return True
+        raise TimeoutError()
 
 
 # monkey patch JSONEncoder make enums jsonable
@@ -149,14 +183,27 @@ class SctEvent():
             LOGGER.exception("failed to format timestamp:[%d]", self.timestamp)
             return '<UnknownTimestamp>'
 
-    def publish(self):
-        EVENTS_PROCESSES['MainDevice'].publish_event(self)
+    def publish(self, guaranteed=True):
+        if guaranteed:
+            return EVENTS_PROCESSES['MainDevice'].publish_event_guaranteed(self)
+        return EVENTS_PROCESSES['MainDevice'].publish_event(self)
 
     def __str__(self):
         return "({} {})".format(self.__class__.__name__, self.severity)
 
     def to_json(self):
         return json.dumps(self.__dict__)
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.__dict__ == other.__dict__
+
+
+class StartupTestEvent(SctEvent):
+    def __init__(self):
+        super().__init__()
+        self.severity = Severity.WARNING
 
 
 class SystemEvent(SctEvent):
@@ -197,6 +244,11 @@ class DbEventsFilter(SystemEvent):
         self.clear_filter = False
         self.expire_time = None
         self.publish()
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.id == other.id
 
     def cancel_filter(self):
         self.clear_filter = True
@@ -664,12 +716,11 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
 EVENTS_PROCESSES = dict()
 
 
-def start_events_device(log_dir, timeout=5):
+def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-name
     from sdcm.utils.grafana import GrafanaEventAggragator, GrafanaAnnotator
 
     EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
     EVENTS_PROCESSES['MainDevice'].start()
-    EVENTS_PROCESSES['MainDevice'].ready_event.wait(timeout=timeout)
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
@@ -678,6 +729,12 @@ def start_events_device(log_dir, timeout=5):
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].start()
+
+    try:
+        EVENTS_PROCESSES['MainDevice'].wait_till_event_loop_is_working(number_of_events=20)
+    except RuntimeError:
+        LOGGER.error("EVENTS_PROCESSES['MainDevice'] event loop failed to deliver 20 test events with no loss")
+        raise
 
     # default filters
     EVENTS_PROCESSES['default_filter'] = []
@@ -704,7 +761,9 @@ def set_grafana_url(url):
 
 
 def get_logger_event_summary():
-    return json.load(open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].events_summary_filename))
+    with open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].events_summary_filename) as summary_file:
+        output = json.load(summary_file)
+    return output
 
 
 atexit.register(stop_events_device)
