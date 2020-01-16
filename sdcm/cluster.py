@@ -2890,7 +2890,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
-            nodes = self.nodes
+            nodes = self.nodes  # pylint: disable=no-member
         status = self.get_nodetool_status(verification_node=verification_node)
         up_statuses = []
         for node in nodes:
