@@ -430,7 +430,7 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
         self._database_error_events = [DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
                                        DatabaseLogEvent(type='UNKNOWN_VERB',
                                                         regex='unknown verb exception',
-                                                        severity=Severity.ERROR),
+                                                        severity=Severity.WARNING),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
                                        DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
