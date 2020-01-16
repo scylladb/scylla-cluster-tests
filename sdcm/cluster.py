@@ -1007,7 +1007,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
         if self._decoding_backtraces_thread:
-            Setup.DECODING_QUEUE.join()
             self._decoding_backtraces_thread.join(timeout)
             self._decoding_backtraces_thread = None
         if self._docker_log_process:
