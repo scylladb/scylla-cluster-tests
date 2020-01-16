@@ -641,13 +641,17 @@ def start_events_device(log_dir, timeout=5):
 
 
 def stop_events_device():
+    LOGGER.info("Stopping Events consumers...")
     processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR', 'EVENTS_GRAFANA_AGGRAGATOR', 'MainDevice']
+    LOGGER.debug("Signalling events consumers to terminate...")
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
             EVENTS_PROCESSES[proc_name].terminate()
+    LOGGER.debug("Waiting for Events consumers to finish...")
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
             EVENTS_PROCESSES[proc_name].join(timeout=60)
+    LOGGER.info("All Events consumers stopped.")
 
 
 def set_grafana_url(url):
