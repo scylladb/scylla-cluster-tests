@@ -1,14 +1,13 @@
 #!groovy
 
 def call(String labels){
-	def tmp = labels.split(',')
-	labels_from_request = pullRequest.labels.join(',')
 	if (!changeRequest()){
 		return false
 	}
+	def labels_to_look_for = labels.split(',')
 	def result = false
 	pullRequest.labels.each {
-		if (tmp.contains(it)){
+		if (labels_to_look_for.contains(it)){
 			result = true
 		}
 	}
