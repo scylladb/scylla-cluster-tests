@@ -1226,7 +1226,7 @@ def filter_gce_instances_by_type(instances):
     }
 
     for instance in instances:
-        if 'db-nodes' in instance.name:
+        if 'db-node' in instance.name:
             filtered_instances["db_nodes"].append(instance)
         if 'monitor-node' in instance.name:
             filtered_instances["monitor_nodes"].append(instance)
