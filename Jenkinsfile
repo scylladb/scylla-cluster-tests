@@ -172,7 +172,7 @@ pipeline {
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {
-                                                    runCleanupResource()
+                                                    runCleanupResource(backend)
                                                 }
                                             }
                                         } catch(Exception err) {
