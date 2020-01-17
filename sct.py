@@ -454,7 +454,7 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, email_recipients=None, logdir=None):
-    from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter,
+    from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter, UpgradeEmailReporter,
                                  get_running_instances_for_email_report,
                                  read_email_data_from_file)
     if not email_recipients:
@@ -482,6 +482,9 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
             reporter.send_report(test_results)
         elif "Longevity" in reporter:
             reporter = LongevityEmailReporter(email_recipients, logdir=testrun_dir)
+            reporter.send_report(test_results)
+        elif "Upgrade" in reporter:
+            reporter = UpgradeEmailReporter(email_recipients, logdir=testrun_dir)
             reporter.send_report(test_results)
         else:
             LOGGER.warning("No reporter found")
