@@ -267,6 +267,21 @@ class GeminiEmailReporter(BaseEmailReporter):
         return html
 
 
+class UpgradeEmailReporter(BaseEmailReporter):
+
+    email_template_file = "results_upgrade.html"
+    fields = ['subject', 'scylla_version', 'scylla_ami_id',
+              'scylla_instance_type', 'number_of_db_nodes',
+              "results", "status", 'test_name', 'test_id', 'test_status',
+              'start_time', 'end_time', 'username',
+              'build_url', 'test_id', 'nodes']
+
+    def build_report(self, report_data, template_str=None):
+        self.log.info('Prepare result to send in email')
+        html = self.render_to_html(report_data, template_str)
+        return html
+
+
 def build_reporter(tester):
     """Build reporter
 
@@ -281,6 +296,8 @@ def build_reporter(tester):
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in tester.__class__.__name__:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Upgrade" in tester.__class__.__name__:
+        return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

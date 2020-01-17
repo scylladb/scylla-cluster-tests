@@ -1,0 +1,98 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>Test: {{ test_name }}</h3>
+    <h3>Test-id: {{ test_id }}</h3>
+    <h3>Test details</h3>
+    <div>
+        <ul>
+            <li>Start time: {{ start_time }}</li>
+            <li>End time: {{ end_time }}</li>
+            <li>Build URL: <a href="{{ build_url }}">link</a></li>
+            <li>Test run by User: <b>{{ username }}</b></li>
+        </ul>
+    </div>
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }} ({{ scylla_ami_id }})</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>Test results </span>
+    </h3>
+    <div> {{ test_status[0] }} </div>
+    {% if test_status[1] and short_report %}
+        <div> See attached html report for full details of critical errors </div>
+    {% elif test_status[1] and not short_report %}
+        <div>
+            {% for line in test_status[1] %}
+                <pre>{{ line }}</pre>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <h3>
+        Hydra commands:
+    </h3>
+    <div>
+        <ul>
+            <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
+            <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
+        </ul>
+    </div>
+
+    <h3>Running instances</h3>
+    {% if nodes %}
+    <div>
+        <table class='longevity_result_table'>
+            <tr>
+                <th>Name</th>
+                <th>Ip address</th>
+                <th>Current State</th>
+                <th>Cloud</th>
+                <th>Region</th>
+            </tr>
+            {% for node in nodes %}
+            <tr>
+                <td>{{ node[0] }}</td>
+                <td>{{ node[1] }}</td>
+                <td>{{ node[2] }}</td>
+                <td>{{ node[3] }}</td>
+                <td>{{ node[4] }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    {% else %}
+        No instances
+    {% endif %}
+    </div>
+
+    <h3>Links:</h3>
+    <ul>
+        {% if grafana_screenshots %}
+            {% if grafana_screenshots[0] %}
+                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if grafana_screenshots[1] %}
+                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+            {% endif %}
+        {% endif %}
+        {% if grafana_snapshots %}
+            {% if grafana_snapshots[0] %}
+                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
+        {% endif %}
+    </ul>
+    {% if grafana_screenshots %}
+        <h3>Grafana Screenshot:</h3>
+        {% for screenshot in grafana_screenshots %}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {% endfor %}
+    {% endif %}
+{% endblock %}
