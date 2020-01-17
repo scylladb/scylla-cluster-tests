@@ -462,8 +462,8 @@ class AWSNode(cluster.BaseNode):
             self.log.debug('Hostname has been changed succesfully. Apply')
             apply_hostname_change_script = dedent(f"""
                 systemctl restart rsyslog
-                sed -ri 's/127.0.0.1[ \t]+localhost[^\n]*$/127.0.0.1\tlocalhost\t{self.name}/' /etc/hosts
-                grep 'preserve_hostname: true' /etc/cloud/cloud.cfg 1>/dev/null 2>&1 || echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
+                grep -P "127.0.0.1[^\\\\n]+{self.name}" || sed -ri "s/(127.0.0.1[ \\t]+localhost[^\\n]*)$/\\1\\t{self.name}/" /etc/hosts
+                grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 || echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
             """)
             self.remoter.run(f"sudo bash -cxe '{apply_hostname_change_script}'")
             self.log.debug('Continue node %s set up', self.name)
