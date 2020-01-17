@@ -960,6 +960,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     def stop_task_threads(self, timeout=10):
         if self.termination_event.isSet():
             return
+        self.log.info('Set termination_event')
         self.termination_event.set()
         if self._backtrace_thread:
             self._backtrace_thread.join(timeout)
@@ -973,7 +974,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
         if self._decoding_backtraces_thread:
-            Setup.DECODING_QUEUE.put(None)
             Setup.DECODING_QUEUE.join()
             self._decoding_backtraces_thread.join(timeout)
             self._decoding_backtraces_thread = None
@@ -3096,6 +3096,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
     def stop_nemesis(self, timeout=10):
         if self.termination_event.isSet():
             return
+        self.log.info('Set termination_event')
         self.termination_event.set()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)

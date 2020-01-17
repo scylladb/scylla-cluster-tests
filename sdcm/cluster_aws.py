@@ -671,6 +671,7 @@ class AWSNode(cluster.BaseNode):
 
     def stop_task_threads(self, timeout=10):
         if self._spot_aws_termination_task and not self.termination_event.isSet():
+            self.log.info('Set termination_event')
             self.termination_event.set()
             self._spot_aws_termination_task.join(timeout)
         super(AWSNode, self).stop_task_threads(timeout)
