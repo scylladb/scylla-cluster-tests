@@ -20,6 +20,7 @@ import six
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import measure_time, retrying
+from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
 THOUSAND = 1000
 MILLION = THOUSAND ** 2
@@ -132,32 +133,13 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
     def _pre_create_schema_scylla_bench(self):
         node = self.db_cluster.nodes[0]
+        create_table_query = create_scylla_bench_table_query()
         # pylint: disable=no-member
         with self.cql_connection_patient(node) as session:
             session.execute("""
                     CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
             """)
-            session.execute("""
-                    CREATE TABLE IF NOT EXISTS scylla_bench.test (
-                    pk bigint,
-                    ck bigint,
-                    v blob,
-                    PRIMARY KEY (pk, ck)
-                ) WITH CLUSTERING ORDER BY (ck ASC)
-                    AND bloom_filter_fp_chance = 0.01
-                    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
-                    AND comment = ''
-                    AND compression = {}
-                    AND crc_check_chance = 1.0
-                    AND dclocal_read_repair_chance = 0.0
-                    AND default_time_to_live = 0
-                    AND gc_grace_seconds = 864000
-                    AND max_index_interval = 2048
-                    AND memtable_flush_period_in_ms = 0
-                    AND min_index_interval = 128
-                    AND read_repair_chance = 0.0
-                    AND speculative_retry = 'NONE';
-                            """)
+            session.execute(create_table_query)
 
     def _run_scylla_bench_on_single_node(self, node, stress_cmd):
         self.log.info('Stopping all other nodes before updating {}'.format(node.name))
