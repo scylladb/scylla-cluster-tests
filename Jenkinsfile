@@ -70,7 +70,7 @@ def runCleanupResource(String backend){
 
     export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
     export SCT_CLUSTER_BACKEND="${backend}"
-    export SCT_REGION_NAME="aws-eu-west-1"
+    export SCT_REGION_NAME="eu-west-1"
 
     echo "start clean resources ..."
     ./docker/env/hydra.sh clean-resources --logdir /sct

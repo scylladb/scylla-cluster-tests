@@ -1,7 +1,7 @@
 #!groovy
 
 def call(String labels){
-	if (!changeRequest()){
+	if (!changeRequest() || !env.CHANGE_ID){
 		return false
 	}
 	def labels_to_look_for = labels.split(',')
