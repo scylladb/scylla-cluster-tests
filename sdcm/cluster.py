@@ -3328,6 +3328,7 @@ class BaseLoaderSet():
         self._loader_cycle = None
         self.params = params
         self._gemini_version = None
+        self._gemini_base_path = None
 
     @property
     def gemini_version(self):
@@ -3337,6 +3338,13 @@ class BaseLoaderSet():
             # take only version number - 1.0.1
             self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
         return self._gemini_version
+
+    @property
+    def gemini_base_path(self):
+        if not self._gemini_base_path:
+            result = self.nodes[0].remoter.run("echo $HOME", ignore_status=True)
+            self._gemini_base_path = result.stdout.strip()
+        return self._gemini_base_path
 
     def install_gemini(self, node):
         gemini_version = self.params.get('gemini_version', default='0.9.2')
@@ -3352,7 +3360,7 @@ class BaseLoaderSet():
         else:
             gemini_tar = os.path.basename(gemini_url)  # pylint: disable=unused-variable
             install_gemini_script = dedent(f"""
-                cd $HOME
+                cd {self.gemini_base_path}
                 rm -rf gemini*
                 curl -LO {gemini_url}
                 tar -xvf {gemini_tar}
