@@ -4,8 +4,7 @@ import random
 from unittest import TestCase
 import logging
 
-from sdcm.utils.common import version
-
+from sdcm.utils.common import version, MethodVersionNotFound
 # pylint: disable=function-redefined
 
 
@@ -65,7 +64,6 @@ class TestUtilsVersionDecorator(TestCase):
         self.assertRaises(AttributeError, vclass.setup)
 
     def test_version_not_found(self):
-        from sdcm.utils.common import MethodVersionNotFound
         vclass = VersionedClass("1")
         self.assertRaises(MethodVersionNotFound, vclass.setup)
 

@@ -10,38 +10,15 @@ import json
 import queue
 
 
-from sdcm.cluster import BaseNode, Setup
+from sdcm.cluster import Setup
 from sdcm.sct_events import start_events_device, stop_events_device
 from sdcm.sct_events import EVENTS_PROCESSES
 
 from unit_tests.dummy_remote import DummyRemote
+from unit_tests.test_cluster import DummyNode
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
-    _database_log = None
-
-    @property
-    def private_ip_address(self):
-        return '127.0.0.1'
-
-    @property
-    def public_ip_address(self):
-        return '127.0.0.1'
-
-    def start_task_threads(self):
-        # disable all background threads
-        pass
-
-    def set_hostname(self):
-        pass
-
-    @property
-    def database_log(self):
-        return self._database_log
-
-    @database_log.setter
-    def database_log(self, x):
-        self._database_log = x
+class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
 
     def copy_scylla_debug_info(self, node, scylla_debug_file):
         return "scylla_debug_info_file"
@@ -60,12 +37,12 @@ class TestDecodeBactraces(unittest.TestCase):
         cls.temp_dir = tempfile.mkdtemp()
         start_events_device(cls.temp_dir, timeout=5)
 
-        cls.node = DummyNode(name='test_node', parent_cluster=None,
-                             base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node = DecodeDummyNode(name='test_node', parent_cluster=None,
+                                   base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
         cls.node.remoter = DummyRemote()
 
-        cls.monitor_node = DummyNode(name='test_monitor_node', parent_cluster=None,
-                                     base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.monitor_node = DecodeDummyNode(name='test_monitor_node', parent_cluster=None,
+                                           base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
         cls.monitor_node.remoter = DummyRemote()
 
     @classmethod
