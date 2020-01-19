@@ -463,7 +463,7 @@ class AWSNode(cluster.BaseNode):
                     echo "" >> /etc/rsyslog.conf
                     echo "\\$LocalHostname {self.name}" >> /etc/rsyslog.conf
                 fi
-                grep -P "127.0.0.1[^\\\\n]+{self.name}" || sed -ri "s/(127.0.0.1[ \\t]+localhost[^\\n]*)$/\\1\\t{self.name}/" /etc/hosts
+                grep -P "127.0.0.1[^\\\\n]+{self.name}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+localhost[^\\n]*)$/\\1\\t{self.name}/" /etc/hosts
                 grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 || echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
                 systemctl restart rsyslog
             """)
