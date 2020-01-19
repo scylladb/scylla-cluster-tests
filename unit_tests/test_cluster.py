@@ -17,6 +17,7 @@ from unit_tests.dummy_remote import DummyRemote
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _database_log = None
+
     @property
     def private_ip_address(self):
         return '127.0.0.1'
@@ -36,6 +37,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     @database_log.setter
     def database_log(self, x):
         self._database_log = x
+
+    def set_hostname(self):
+        pass
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
