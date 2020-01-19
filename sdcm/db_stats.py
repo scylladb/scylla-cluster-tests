@@ -419,7 +419,7 @@ class TestStatsMixin(Stats):
         return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
-    def create_test_stats(self, sub_type=None):
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None):
         if not self.create_stats:
             return
         self._test_index = self.__class__.__name__.lower()
@@ -434,6 +434,9 @@ class TestStatsMixin(Stats):
             self._stats['test_details']['test_name'] = self.id()
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
+        if specific_tested_stats:
+            self._stats['results'].update(specific_tested_stats)
+            self.log.info("Creating specific tested stats of: {}".format(specific_tested_stats))
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
@@ -537,7 +540,7 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None):
         if self.create_stats:
             update_data = {}
             if 'test_details' not in self._stats.keys():
@@ -575,7 +578,12 @@ class TestStatsMixin(Stats):
                 update_data.update({'errors': errors})
             if coredumps:
                 update_data.update({'coredumps': coredumps})
-
+            if dict_specific_tested_stats:
+                self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
+                for key, value in dict_specific_tested_stats.items():
+                    self.log.debug("k: {} v: {}".format(key, value))
+                self._stats['results'].update(dict_specific_tested_stats)
+                update_data.update(dict_specific_tested_stats)
             self.update(update_data)
 
     def get_doc_data(self, key):

@@ -176,6 +176,139 @@ class BaseResultsAnalyzer():  # pylint: disable=too-many-instance-attributes
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
 
 
+class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Get specified performance test results from elasticsearch DB and analyze it to find a regression
+    """
+
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):   # pylint: disable=too-many-arguments
+        super(SpecifiedStatsPerformanceAnalyzer, self).__init__(
+            es_index=es_index,
+            es_doc_type=es_doc_type,
+            send_email=send_email,
+            email_recipients=email_recipients,
+            email_template_fp="",
+            logger=logger
+        )
+
+    def _test_stats(self, test_doc):
+        # check if stats exists
+        if 'results' not in test_doc['_source']:
+            self.log.error('Cannot find the field: results for test id: {}!'.format(test_doc['_id']))
+            return None
+        return test_doc['_source']['results']
+
+    def check_regression(self, test_id, dict_specific_tested_stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        """
+        Get test results by id, filter similar results and calculate DB values for each version,
+        then compare with max-allowed in the tested version (and report all the found versions).
+        :param test_id: test id created by performance test
+        :param is_gce: is gce instance
+        """
+        allowed_deviation = 1.20
+        # get test res
+        doc = self.get_test_by_id(test_id)
+        if not doc:
+            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            return False
+
+        test_stats = self._test_stats(doc)
+        if not test_stats:
+            self.log.debug("Could not find test statistics, regression check is skipped")
+            return False
+        es_base_path = 'hits.hits'
+        es_source_path = es_base_path + '._source'
+        filter_path = ['.'.join([es_base_path, '_id']),
+                       '.'.join([es_source_path, 'results', 'throughput']),
+                       '.'.join([es_source_path, 'versions'])]
+
+        for stat in dict_specific_tested_stats.keys():  # Add all requested specific-stats to be retrieved from ES DB.
+            stat_path = '.'.join([es_source_path, stat])
+            filter_path.append(stat_path)
+
+        tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit)
+        self.log.debug("Filtered tests found are: {}".format(tests_filtered))
+
+        if not tests_filtered:
+            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            return False
+        cur_test_version = None
+        tested_params = dict_specific_tested_stats.keys()
+        group_by_version = dict()
+        # repair_runtime result example:
+        # { u'_id': u'20190303-105120-405065',
+        #   u'_index': u'performanceregressionrowlevelrepairtest',
+        #   u'_source': { u'coredumps': { },
+        #                 u'errors': { },
+        #                 u'nemesis': { },
+        #                 u'repair_runtime': 11.847206830978394,
+        #                 u'results': { u'latency_read_99': { },
+        #                               u'latency_write_99': { },
+        #                               u'repair_runtime': -1,
+        #                               u'throughput': { }},
+        #
+        # # Find the average results for each version per tested param (stats)
+        for tag_row in tests_filtered['hits']['hits']:
+            if '_source' not in tag_row:  # non-valid record?
+                self.log.error('Skip non-valid test: %s', tag_row['_id'])
+                continue
+            if not tag_row['_source']['versions'] or 'scylla-server' not in tag_row['_source']['versions']:
+                continue
+            version_info = tag_row['_source']['versions']['scylla-server']
+            version = version_info['version']
+            self.log.debug("version_info={} version={}".format(version_info, version))
+
+            if tag_row['_id'] == test_id:  # save the current test values
+                cur_test_version = version
+                continue
+
+            if not version:
+                continue
+
+            # group_by_version example:
+            #   { '2.3.0':
+            #       { 'repair_runtime': [12.345, 13.031]},
+            #     '3.1.0': { 'repair_runtime': [5.341]}
+            #   }
+            if version not in group_by_version:
+                group_by_version[version] = dict()
+                for param in tested_params:
+                    if param in tag_row['_source']:
+                        group_by_version[version][param] = [tag_row['_source'][param]]
+            else:
+                for param in tested_params:
+                    if param in tag_row['_source']:
+                        if param not in group_by_version[version]:
+                            group_by_version[version][param] = [tag_row['_source'][param]]
+                        else:
+                            group_by_version[version][param].append(tag_row['_source'][param])
+
+            self.log.debug("group_by_version={}".format(group_by_version))
+
+        if not cur_test_version:
+            raise ValueError("Could not retrieve current test details from database")
+        for param in tested_params:
+            if param in group_by_version[cur_test_version]:
+                cur_test_param_result = dict_specific_tested_stats[param]
+                list_param_stats = group_by_version[cur_test_version][param]
+                param_avg = sum(list_param_stats) / float(len(list_param_stats))
+                deviation_limit = param_avg * allowed_deviation
+                self.log.info(
+                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(param,
+                                                                                                           cur_test_param_result,
+                                                                                                           deviation_limit))
+                for version in group_by_version:
+                    if param in group_by_version[version]:
+                        list_param_results = group_by_version[version][param]
+                        version_avg = sum(list_param_results) / float(len(list_param_results))
+                        self.log.info("Performance average of {} results for: {} on version: {} is: {}".format(
+                            len(list_param_results), param, version, version_avg))
+                assert float(
+                    cur_test_param_result) < deviation_limit, "Current test performance for: {} exceeds allowed deviation ({})".format(
+                    param, deviation_limit)
+        return True
+
+
 class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     """
     Get performance test results from elasticsearch DB and analyze it to find a regression
