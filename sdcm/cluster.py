@@ -3714,11 +3714,14 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self.phantomjs_installed = False
         self.grafana_start_time = 0
 
+    @staticmethod
+    def get_monitor_install_path_base(node):
+        return node.remoter.run("echo $HOME").stdout.strip()
+
     @property
     def monitor_install_path_base(self):
         if not self._monitor_install_path_base:
-            self._monitor_install_path_base = self.nodes[0].remoter.run(
-                "echo $HOME").stdout.strip()
+            self._monitor_install_path_base = self.get_monitor_install_path_base(self.nodes[0])
         return self._monitor_install_path_base
 
     @property
