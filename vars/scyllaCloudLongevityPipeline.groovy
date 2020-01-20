@@ -62,24 +62,26 @@ def call(Map pipelineParams) {
             }
             stage('Create Cluster with siren-tests') {
                 steps {
-                        dir('siren-tests') {
-                            sh """
-                            #!/bin/bash
-                            set -xe
+                        wrap([$class: 'BuildUser']) {
+                            dir('siren-tests') {
+                                sh """
+                                #!/bin/bash
+                                set -xe
 
-                            export SIRENADA_BROWSER=chrome-headless
+                                export SIRENADA_BROWSER=chrome-headless
 
-                            source /opt/rh/rh-python35/enable
-                            # update the environment
-                            ~/.local/bin/pipenv --bare install
+                                source /opt/rh/rh-python35/enable
+                                # update the environment
+                                ~/.local/bin/pipenv --bare install
 
-                            export SIRENADA_REGION=eu-west-1
-                            export SIRENADA_NUMBER_OF_NODES=${params.n_db_nodes}
-                            export SIRENADA_CLUSTER_KEEP=true
-                            export SIRENADA_INSTANCE_TYPE=${params.db_instance_type}
+                                export SIRENADA_REGION=eu-west-1
+                                export SIRENADA_NUMBER_OF_NODES=${params.n_db_nodes}
+                                export SIRENADA_CLUSTER_KEEP=50
+                                export SIRENADA_INSTANCE_TYPE=${params.db_instance_type}
 
-                            ~/.local/bin/pipenv run ./runtests.py --sct-conf
-                            """
+                                ~/.local/bin/pipenv run ./runtests.py --sct-conf
+                                """
+                            }
                         }
                 }
             }
