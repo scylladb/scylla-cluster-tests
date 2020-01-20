@@ -49,7 +49,6 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         def tasks = [:]
-                        def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
 
                         for (version in supportedUpgradeFromVersions(env.GIT_BRANCH, pipelineParams.base_versions)) {
                             def base_version = version;
