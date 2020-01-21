@@ -188,7 +188,7 @@ class PrometheusSnapshots(BaseLogEntity):
     def setup_monitor_data_dir(self, node):
         if self.monitoring_data_dir:
             return
-        base_dir = node.parent_cluster.monitor_install_path_base
+        base_dir = MonitoringStack.get_monitoring_base_dir(node)
 
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
@@ -220,7 +220,12 @@ class MonitoringStack(BaseLogEntity):
 
     @staticmethod
     def get_monitoring_base_dir(node):
-        return node.parent_cluster.monitor_install_path_base
+        # Avoid cyclic dependencies
+        from sdcm.cluster import BaseMonitorSet
+        if hasattr(node, "parent_cluster") and node.parent_cluster:
+            return node.parent_cluster.monitor_install_path_base
+        else:
+            return BaseMonitorSet.get_monitor_install_path_base(node)
 
     def get_monitoring_data_stack(self, node, local_dist):
         monitor_base_dir = self.get_monitoring_base_dir(node)
