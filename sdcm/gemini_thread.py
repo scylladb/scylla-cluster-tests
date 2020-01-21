@@ -67,21 +67,28 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         self.oracle_cluster = oracle_cluster
         self.timeout = timeout
         self.result_futures = []
-        self.gemini_log = None
         self.outputdir = outputdir
         self.gemini_commands = []
+        self._gemini_result_file = None
         self.params = params if params else {}
 
-    def _generate_gemini_command(self, loader_idx):
+    @property
+    def gemini_result_file(self):
+        if not self._gemini_result_file:
+            self._gemini_result_file = os.path.join(self.loaders.gemini_base_path,
+                                                    "gemini_result_{}.log".format(uuid.uuid4()))
+        return self._gemini_result_file
+
+    def _generate_gemini_command(self):
         seed = self.params.get('gemini_seed', None)
         if not seed:
             seed = random.randint(1, 100)
         test_node = random.choice(self.test_cluster.nodes)
         oracle_node = random.choice(self.oracle_cluster.nodes) if self.oracle_cluster else None
-        self.gemini_log = '/tmp/gemini-l{}-{}.log'.format(loader_idx, uuid.uuid4())
+
         cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {}".format(self.gemini_cmd.strip(),
                                                                           test_node.ip_address,
-                                                                          self.gemini_log,
+                                                                          self.gemini_result_file,
                                                                           seed)
         if oracle_node:
             cmd += " --oracle-cluster={}".format(oracle_node.ip_address)
@@ -103,7 +110,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         log_file_name = os.path.join(logdir,
                                      'gemini-l%s-%s.log' %
                                      (loader_idx, uuid.uuid4()))
-        gemini_cmd = self._generate_gemini_command(loader_idx)
+        gemini_cmd = self._generate_gemini_command()
 
         GeminiEvent(type='start', cmd=gemini_cmd)
         try:
@@ -124,7 +131,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
                             'stdout': result.stdout,
                             'stderr': result.stderr})
 
-        return node, result, self.gemini_log
+        return node, result, self.gemini_result_file
 
     def get_gemini_results(self):
         results = []

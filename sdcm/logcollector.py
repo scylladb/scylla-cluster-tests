@@ -116,6 +116,12 @@ class FileLog(CommandLog):
 
         return path
 
+    def _is_file_collected(self, local_dst):
+        for collected_file in os.listdir(local_dst):
+            if self.name in collected_file or fnmatch.fnmatch(collected_file, "*{}".format(self.name)):
+                return True
+        return False
+
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         makedirs(local_dst)
         if self.search_locally and local_search_path:
@@ -124,7 +130,7 @@ class FileLog(CommandLog):
             for logfile in local_logfiles:
                 shutil.copy(src=logfile, dst=local_dst)
 
-        if not os.listdir(local_dst) and self.cmd:
+        if self.cmd and not self._is_file_collected(local_dst):
             super(FileLog, self).collect(node, local_dst, remote_dst)
 
         return local_dst
@@ -707,6 +713,10 @@ class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
     log_entities = [
         FileLog(name='*cassandra-stress*.log',
+                search_locally=True),
+        FileLog(name='*gemini-l*.log',
+                search_locally=True),
+        FileLog(name='gemini_result*.log',
                 search_locally=True)
     ]
 
