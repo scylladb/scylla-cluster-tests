@@ -787,7 +787,7 @@ class SCTool():
             raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, ex))
 
         if replace_broken_unicode_values:
-            res.stdout = res.stdout.replace('���', '│')
+            res.stdout = self.replace_broken_unicode_values(res.stdout)
             # Minor band-aid to fix a unique error with the output of some sctool command
             # (So far - specifically cluster status)
 
@@ -800,6 +800,21 @@ class SCTool():
                 return dict_res_tables
         LOGGER.debug('sctool res after parsing: %s', str(res))
         return res
+
+    @staticmethod
+    def replace_chars_with_line_character(string, chars_to_replace_index_range):
+        replaced_string = string[:chars_to_replace_index_range[0]] + '│' + string[chars_to_replace_index_range[1] + 1:]
+        return replaced_string
+
+    def replace_broken_unicode_values(self, string):
+        while string.find("�") != -1:
+            first_broken_char_index = string.find("�")
+            for index in range(first_broken_char_index + 1, len(string)):
+                if string[index] != "�":
+                    break
+            broken_character_index_range = [first_broken_char_index, index - 1]
+            string = self.replace_chars_with_line_character(string, broken_character_index_range)
+        return string
 
     @staticmethod
     def parse_result_table(res):
