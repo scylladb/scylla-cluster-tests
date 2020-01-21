@@ -13,7 +13,7 @@ instance_type_db: 'i3.2xlarge'
 
 nemesis_class_name: 'NetworkMonkey'
 nemesis_interval: 10
-aws_extra_network_interface: true
+extra_network_interface: true
 
 nemesis_during_prepare: false
 

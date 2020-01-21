@@ -60,7 +60,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                  ec2_instance_type='c4.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None, node_type=None, aws_extra_network_interface=False):
+                 node_prefix='node', n_nodes=10, params=None, node_type=None, extra_network_interface=False):
         # pylint: disable=too-many-locals
         region_names = params.get('region_name').split()
         if len(credentials) > 1 or len(region_names) > 1:
@@ -82,7 +82,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._ec2_block_device_mappings = ec2_block_device_mappings
         self._ec2_user_data = ec2_user_data
         self.region_names = region_names
-        self.aws_extra_network_interface = aws_extra_network_interface
         self.params = params
 
         super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
@@ -92,6 +91,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                          params=params,
                                          region_names=self.region_names,
                                          node_type=node_type,
+                                         extra_network_interface=extra_network_interface
                                          )
 
     def __str__(self):
@@ -189,7 +189,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                        'SubnetId': self._ec2_subnet_id[dc_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
-        if self.aws_extra_network_interface:
+        if self.extra_network_interface:
             interfaces = [{'DeviceIndex': 0,
                            'SubnetId': self._ec2_subnet_id[dc_idx],
                            'Groups': self._ec2_security_group_ids[dc_idx]},
@@ -345,7 +345,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
 
         post_boot_script = cluster.Setup.get_startup_script()
-        if self.aws_extra_network_interface:
+        if self.extra_network_interface:
             post_boot_script += self.configure_eth1_script()
 
         if self.params.get('ip_ssh_connections') == 'ipv6':
@@ -768,7 +768,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                n_nodes=n_nodes,
                                                params=params,
                                                node_type=node_type,
-                                               aws_extra_network_interface=params.get('aws_extra_network_interface'))
+                                               extra_network_interface=params.get('extra_network_interface'))
         self.version = '2.1'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
@@ -817,7 +817,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                 broadcast=node.public_ip_address,
             ))
 
-        if self.aws_extra_network_interface:
+        if self.extra_network_interface:
             setup_params.update(dict(
                 seed_address=seed_address,
                 broadcast=node.private_ip_address,

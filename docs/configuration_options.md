@@ -90,7 +90,7 @@
 | **<a name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
 | **<a name="ami_db_cassandra_user">ami_db_cassandra_user</a>**  |  | N/A | SCT_AMI_DB_CASSANDRA_USER
 | **<a name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | 0.6 | SCT_SPOT_MAX_PRICE
-| **<a name="aws_extra_network_interface">aws_extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_AWS_EXTRA_NETWORK_INTERFACE
+| **<a name="extra_network_interface">extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_EXTRA_NETWORK_INTERFACE
 | **<a name="aws_instance_profile_name">aws_instance_profile_name</a>**  | This is the name of the instance profile to set on all instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME
 | **<a name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
 | **<a name="gce_datacenter">gce_datacenter</a>**  |  | N/A | SCT_GCE_DATACENTER

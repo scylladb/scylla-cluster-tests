@@ -1276,8 +1276,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         self._set_current_disruption('NetworkRandomInterruption')
-        if not self.cluster.aws_extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+        if not self.cluster.extra_network_interface:
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
@@ -1332,8 +1332,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def disrupt_network_block(self):
         self._set_current_disruption('BlockNetwork')
-        if not self.cluster.aws_extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+        if not self.cluster.extra_network_interface:
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         selected_option = "--loss 100%"
         list_of_timeout_options = [10, 60, 120, 300, 500]
@@ -1499,8 +1499,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         self._set_current_disruption('StopStartNetworkInterfaces')
-        if not self.cluster.aws_extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `aws_extra_network_interface: True`")
+        if not self.cluster.extra_network_interface:
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = random.choice(list_of_timeout_options)
