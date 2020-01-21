@@ -19,7 +19,7 @@ from sdcm.ycsb_thread import YcsbStressThread
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
 
-class Node():  # pylint: disable=no-init,too-few-public-methods
+class Node:  # pylint: disable=no-init,too-few-public-methods
     ssh_login_info = {'hostname': '34.253.205.91',
                       'user': 'centos',
                       'key_file': '~/.ssh/scylla-qa-ec2'}
@@ -29,18 +29,20 @@ class Node():  # pylint: disable=no-init,too-few-public-methods
     cassandra_stress_version = '3.11'
 
 
-class DbNode():  # pylint: disable=no-init,too-few-public-methods
+class DbNode:  # pylint: disable=no-init,too-few-public-methods
     ip_address = "34.244.157.61"
     dc_idx = 1
 
 
-class LoaderSetDummy():  # pylint: disable=no-init,too-few-public-methods
+class LoaderSetDummy:  # pylint: disable=no-init,too-few-public-methods
+    def __init__(self):
+        self.nodes = [Node()]
+
     @staticmethod
     def get_db_auth():
         return None
 
     name = 'LoaderSetDummy'
-    nodes = [Node()]
 
 
 @unittest.skip("manual tests")
