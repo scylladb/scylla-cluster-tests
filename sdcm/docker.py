@@ -247,7 +247,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
 
-        self.aws_extra_network_interface = False  # TODO: move to Base
         super(ScyllaDockerCluster, self).__init__(node_prefix=node_prefix,
                                                   cluster_prefix=cluster_prefix,
                                                   **kwargs)

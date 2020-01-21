@@ -421,7 +421,7 @@ class SCTConfiguration(dict):
         dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
              help="The max percentage of the on demand price we set for spot/fleet instances"),
 
-        dict(name="aws_extra_network_interface", env="SCT_AWS_EXTRA_NETWORK_INTERFACE", type=boolean,
+        dict(name="extra_network_interface", env="SCT_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
 
         dict(name="aws_instance_profile_name", env="SCT_AWS_INSTANCE_PROFILE_NAME", type=str,
@@ -1078,8 +1078,8 @@ class SCTConfiguration(dict):
             if not all(region_count['region_name'] == x for x in region_count.values()):
                 raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
-        if 'aws_extra_network_interface' in self and len(self.get('region_name').split()) >= 2:
-            raise ValueError("aws_extra_network_interface isn't supported for multi region use cases")
+        if 'extra_network_interface' in self and len(self.get('region_name').split()) >= 2:
+            raise ValueError("extra_network_interface isn't supported for multi region use cases")
 
         # validate seeds number
         seeds_num = self.get('seeds_num')

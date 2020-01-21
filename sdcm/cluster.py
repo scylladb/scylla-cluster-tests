@@ -2570,8 +2570,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self, cluster_uuid=None, cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, params=None, region_names=None, node_type=None):
+    def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
+                 region_names=None, node_type=None, extra_network_interface=False):
+        self.extra_network_interface = extra_network_interface
         if cluster_uuid is None:
             self.uuid = Setup.test_id()
         else:
