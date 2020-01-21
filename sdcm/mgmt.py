@@ -314,8 +314,13 @@ class ManagerCluster(ScyllaManagerBase):
             raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(command))
 
         if res.stderr:
-            LOGGER.debug("Encountered an error on '{}' command response".format(command))
-            raise ScyllaManagerError(res.stderr)
+            # We are ignoring "unable to resolve host" messages as they are being show on every command, because
+            # we had issues changing Ubuntu machines hostname.
+            if res.stderr.count('unable to resolve host'):
+                pass
+            else:
+                LOGGER.debug("Encountered an error on '{}' command response".format(command))
+                raise ScyllaManagerError(res.stderr)
 
         task_id = res.stdout.strip()
         LOGGER.debug("Created task id is: {}".format(task_id))
@@ -540,7 +545,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         LOGGER.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
         time.sleep(sleep)
         LOGGER.debug("Initiating Scylla-Manager, version: {}".format(self.version))
-        list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16]
+        list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16, Distro.UBUNTU18]
         self.default_user = "centos"
         if manager_node.distro not in list_supported_distros:
             raise ScyllaManagerError(

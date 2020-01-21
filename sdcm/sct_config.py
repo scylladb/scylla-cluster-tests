@@ -182,6 +182,10 @@ class SCTConfiguration(dict):
              type=str,
              help="Url to the repo of scylla manager version to install for management tests"),
 
+        dict(name="scylla_mgmt_agent_repo", env="SCT_SCYLLA_MGMT_AGENT_REPO",
+             type=str,
+             help="Url to the repo of scylla manager agent version to install for management tests"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
@@ -821,7 +825,7 @@ class SCTConfiguration(dict):
     }
 
     multi_region_params = [
-        'region_name', 'n_db_nodes', 'security_group_ids', 'subnet_id', 'ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor'
+        'region_name', 'n_db_nodes', 'security_group_ids', 'subnet_id', 'ami_id_db_scylla', 'ami_id_loader'
     ]
 
     def __init__(self):
