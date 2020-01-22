@@ -203,7 +203,6 @@ class UpgradeTest(FillDatabaseData):
                              authorization_in_upgrade)
         check_reload_systemd_config(node)
         node.start_scylla_server()
-        node.wait_db_up(verbose=True)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
