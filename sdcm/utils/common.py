@@ -1148,6 +1148,7 @@ def remove_files(path):
             os.remove(path)
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.error("Error during remove archived logs %s", details)
+        LOGGER.info("Remove temporary data manually: \"%s\"", path)
 
 
 def format_timestamp(timestamp):

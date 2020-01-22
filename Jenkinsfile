@@ -78,6 +78,19 @@ def runCleanupResource(String backend){
     """
 }
 
+def runRestoreMonitoringStack(){
+    sh """
+    #!/bin/bash
+
+    set -xe
+    env
+
+    export MONITOR_STACK_TEST_ID=`cat latest/test_id`
+    echo "Restoring Monitor stack for test-id \$MONITOR_STACK_TEST_ID"
+    ./docker/env/hydra.sh investigate show-monitor \$MONITOR_STACK_TEST_ID --kill true
+    """
+}
+
 pipeline {
     agent {
         label {
@@ -162,15 +175,14 @@ pipeline {
                                             result = 'FAILURE'
                                             pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
                                         }
-                                        if(result == 'FAILURE') {
-                                            try {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        runCollectLogs(backend)
-                                                    }
+                                        try {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    runCollectLogs(backend)
                                                 }
-                                            } catch(Exception err) {
                                             }
+                                        } catch(Exception err) {
+                                            echo "${err}"
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
@@ -179,6 +191,17 @@ pipeline {
                                                 }
                                             }
                                         } catch(Exception err) {
+                                            echo "${err}"
+                                        }
+                                        try {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    runRestoreMonitoringStack()
+                                                }
+                                            }
+                                        } catch(Exception err) {
+                                            echo "${err}"
+                                            currentBuild.result = 'FAILURE'
                                         }
                                         if (result == 'FAILURE'){
                                             currentBuild.result = 'FAILURE'
