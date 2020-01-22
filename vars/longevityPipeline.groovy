@@ -52,6 +52,22 @@ def call(Map pipelineParams) {
                    description: 'email recipients of email report',
                    name: 'email_recipients')
 
+            string(defaultValue: "${pipelineParams.get('ami_id_monitor', '')}",
+                   description: 'AMI ID of monitor node',
+                   name: 'ami_id_monitor')
+
+            string(defaultValue: "${pipelineParams.get('ami_monitor_user', '')}",
+                   description: 'user for monitor node',
+                   name: 'ami_monitor_user')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+                   description: 'manager agent repo',
+                   name: 'scylla_mgmt_agent_repo')
+
+            string(defaultValue: "${pipelineParams.get('scylla_repo_m', '')}",
+                   description: 'backend scylla repo for manager',
+                   name: 'scylla_repo_m')
+
         }
         options {
             timestamps()
