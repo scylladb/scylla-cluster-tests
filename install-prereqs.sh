@@ -36,6 +36,7 @@ if [ "$1" == "docker" ]; then
 else
     pip install -r requirements-python.txt
     pre-commit install
+    pre-commit install --hook-type commit-msg
 
     ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm
     echo "========================================================="
