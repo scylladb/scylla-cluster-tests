@@ -49,6 +49,7 @@ Since we are trying to keep the code neat, please install this git precommit hoo
 
     pip install pre-commit==1.14.4
     pre-commit install
+    pre-commit install --hook-type commit-msg
 
 If you want to remove the hook::
 

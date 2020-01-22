@@ -50,3 +50,9 @@ repos:
             - 'backports.datetime-timestamp==1.2'
             - 'pytest==4.6.4'
             - 'selenium==3.141.0'
+
+- repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+  rev: v2.2.1
+  hooks:
+      - id: commitlint
+        stages: [commit-msg]
