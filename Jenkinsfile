@@ -187,14 +187,6 @@ pipeline {
                         }
                     }
                     parallel sctParallelTests
-                    post {
-                        success {
-                            pullRequestSetResult('success', 'jenkins/provision_test', 'Provision test succeeded')
-                        }
-                        unsuccessful {
-                            pullRequestSetResult('failure', 'jenkins/provision_test', 'Provision test failed')
-                        }
-                    }
                 }
             }
 		}

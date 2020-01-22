@@ -2111,7 +2111,7 @@ server_encryption_options:
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
         else:
-            self.remoter.run('sudo scyllamgr_setup -y')
+            self.remoter.run('echo yes| sudo scyllamgr_setup')
         self.remoter.send_files(src=self.ssh_login_info['key_file'], dst=rsa_id_dst)  # pylint: disable=not-callable
         ssh_config_script = dedent("""
                 chmod 0400 {rsa_id_dst}
