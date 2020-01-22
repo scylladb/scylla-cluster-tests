@@ -1399,6 +1399,9 @@ def clean_aws_instances_according_post_behavior(params, config, logdir):  # pyli
     def apply_action(instances, action):
         if action == 'destroy':
             instances_ids = [instance['InstanceId'] for instance in instances]
+            if not instances_ids:
+                LOGGER.warning("No InstanceId found for termination")
+                return
             LOGGER.info('Clean next instances %s', instances_ids)
             try:
                 client.terminate_instances(InstanceIds=instances_ids)
