@@ -19,7 +19,8 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_clo
                                clean_aws_instances_according_post_behavior,
                                clean_gce_instances_according_post_behavior,
                                search_test_id_in_latest, get_testrun_dir)
-from sdcm.utils.monitorstack import restore_monitor_stack
+from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
+                                     kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 
@@ -333,24 +334,34 @@ def show_log(test_id):
     click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
 
 
-@investigate.command('show-monitor', help="Show link to prometheus data snapshot")
+@investigate.command('show-monitor', help="Run monitoring stack with saved data locally")
 @click.argument('test_id')
-@click.option("--date-time", type=str, required=False, help='Datetime of monitor collecting')
-def show_monitor(test_id, date_time):
-    click.echo('Search monitor stack archive files for test id {} and restoring...'.format(test_id))
+@click.option("--date-time", type=str, required=False, help='Datetime of monitor-set archive is collected')
+@click.option("--kill", type=bool, required=False, help='Kill and remove containers')
+def show_monitor(test_id, date_time, kill):
+    click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
     # if debug_log:
     #     LOGGER.setLevel(logging.DEBUG)
-    status = restore_monitor_stack(test_id, date_time)
-    table = PrettyTable(['Name', 'container', 'Link'])
+    try:
+        status = restore_monitoring_stack(test_id, date_time)
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error("%s", details)
+        status = False
+
+    table = PrettyTable(['Service', 'Container', 'Link'])
     table.align = 'l'
     if status:
         click.echo('Monitoring stack restored')
+        for docker in get_monitoring_stack_services():
+            table.add_row([docker['service'], docker["name"], 'http://localhost:{}'.format(docker["port"])])
+        click.echo(table.get_string(title='Monitoring stack services'))
+        if kill:
+            kill_running_monitoring_stack_services()
 
-        table.add_row(['Prometheus server', 'aprom', 'http://localhost:9090'])
-        table.add_row(['Grafana server', 'agraf', 'http://localhost:3000'])
-        click.echo(table.get_string(title='Grafana monitoring stack'))
     else:
-        click.echo('Docker containers were not started')
+        click.echo('Errors were found when restoring Scylla monitoring stack')
+        kill_running_monitoring_stack_services()
+        sys.exit(1)
 
 
 @investigate.command('search-builder', help='Search builder where test run with test-id located')
