@@ -96,12 +96,12 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
         force_param = '-f' if force else ''
         _cmd('rm {} -v {}'.format(force_param, self.name))
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
         self.remoter.run('supervisorctl start scylla', timeout=timeout)
         if verify_up:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
 
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
