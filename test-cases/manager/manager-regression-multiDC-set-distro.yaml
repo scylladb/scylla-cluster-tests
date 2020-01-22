@@ -20,8 +20,5 @@ use_mgmt: true
 mgmt_port: 10090
 
 scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-2.0/24/scylla-manager.repo'
-scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2019.1-bionic.list'
-#scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-enterprise-2019.1.repo'
-# scylla_mgmt_upgrade_to_repo: 'path to repo for upgrade'
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
