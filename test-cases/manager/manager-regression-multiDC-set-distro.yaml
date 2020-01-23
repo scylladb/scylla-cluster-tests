@@ -19,6 +19,4 @@ ip_ssh_connections: 'public'
 use_mgmt: true
 mgmt_port: 10090
 
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-2.0/24/scylla-manager.repo'
-
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
