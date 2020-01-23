@@ -2207,7 +2207,7 @@ server_encryption_options:
         else:
             self.remoter.run('sudo systemctl restart scylla-manager.service')
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300):
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
         if not self.is_ubuntu14():
@@ -2215,9 +2215,9 @@ server_encryption_options:
         else:
             self.remoter.run('sudo service scylla-server start', timeout=timeout)
         if verify_up:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
 
-    def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300):
+    def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
         if not self.is_ubuntu14():
@@ -2225,7 +2225,7 @@ server_encryption_options:
         else:
             self.remoter.run('sudo service scylla-jmx start', timeout=timeout)
         if verify_up:
-            self.wait_jmx_up(timeout=timeout)
+            self.wait_jmx_up(timeout=verify_up_timeout)
 
     @log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
