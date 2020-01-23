@@ -14,4 +14,4 @@ instance_type_loader: 'c5.2xlarge'
 
 nemesis_during_prepare: false
 
-hinted_handoff_disabled: true
+hinted_handoff: 'disabled'
