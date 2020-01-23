@@ -20,7 +20,7 @@ from unit_tests.test_cluster import DummyNode
 
 class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
 
-    def copy_scylla_debug_info(self, node, scylla_debug_file):
+    def copy_scylla_debug_info(self, node, debug_file):
         return "scylla_debug_info_file"
 
     def get_scylla_debuginfo_file(self):

@@ -1435,6 +1435,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._decoding_backtraces_thread.start()
 
     def decode_backtrace(self):
+        scylla_debug_file = None
         while True:
             event = None
             obj = None
@@ -1444,8 +1445,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                     Setup.DECODING_QUEUE.task_done()
                     break
                 event = obj["event"]
-                debug_path_on_monitor = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
-                output = self.decode_raw_backtrace(debug_path_on_monitor, " ".join(event.raw_backtrace.split('\n')))
+                if not scylla_debug_file:
+                    scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
+                output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
                 event.add_backtrace_info(backtrace=output.stdout)
                 Setup.DECODING_QUEUE.task_done()
             except queue.Empty:
@@ -1459,7 +1461,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             if self.termination_event.isSet() and Setup.DECODING_QUEUE.empty():
                 break
 
-    def copy_scylla_debug_info(self, node, scylla_debug_file):
+    def copy_scylla_debug_info(self, node, debug_file):
         """Copy scylla debug file from db-node to monitor-node
 
         Copy via builder
@@ -1470,16 +1472,22 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         :returns: path on monitor node
         :rtype: {str}
         """
-        if not os.path.exists(os.path.join(node.logdir, os.path.basename(scylla_debug_file))):
-            node.remoter.receive_files(scylla_debug_file, node.logdir)
+        base_scylla_debug_file = os.path.basename(debug_file)
+        transit_scylla_debug_file = os.path.join(node.parent_cluster.logdir,
+                                                 base_scylla_debug_file)
+        final_scylla_debug_file = os.path.join("/tmp", base_scylla_debug_file)
+
+        if not os.path.exists(transit_scylla_debug_file):
+            node.remoter.receive_files(debug_file, transit_scylla_debug_file)
         res = self.remoter.run(
-            "test -f {}".format(os.path.join("/tmp", os.path.basename(scylla_debug_file))), ignore_status=True, verbose=False)
+            "test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
         if res.exited != 0:
-            self.remoter.send_files(os.path.join(node.logdir, os.path.basename(  # pylint: disable=not-callable
-                scylla_debug_file)), "/tmp")
-        LOGGER.debug("File on monitor node %s: %s", self,
-                     os.path.join("/tmp", os.path.basename(scylla_debug_file)))
-        return os.path.join("/tmp", os.path.basename(scylla_debug_file))
+            self.remoter.send_files(transit_scylla_debug_file,  # pylint: disable=not-callable
+                                    final_scylla_debug_file)
+        self.log.info("File on monitor node %s: %s", self, final_scylla_debug_file)
+        self.log.info("Remove transit file: %s", transit_scylla_debug_file)
+        os.remove(transit_scylla_debug_file)
+        return final_scylla_debug_file
 
     def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
         """run decode backtrace on monitor node
