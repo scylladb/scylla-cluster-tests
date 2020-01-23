@@ -202,7 +202,9 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
                              authorization_in_upgrade)
         check_reload_systemd_config(node)
-        node.start_scylla_server()
+        # Current default 300s aren't enough for upgrade test of Debian 9.
+        # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
+        node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
@@ -286,7 +288,9 @@ class UpgradeTest(FillDatabaseData):
                 r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
         if self.params.get('remove_authorization_in_rollback', default=None):
             node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
-        node.start_scylla_server()
+        # Current default 300s aren't enough for upgrade test of Debian 9.
+        # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
+        node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         self.log.info('original scylla-server version is %s, latest: %s', orig_ver, new_ver)
