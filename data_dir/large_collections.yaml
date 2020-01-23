@@ -66,16 +66,16 @@ columnspec:
 # 6476.344648024841
 
   - name: users_name
-    size: fixed(6476)
+    size: fixed(500)
 
   - name: users_desc
-    size: fixed(6476)
+    size: fixed(1000)
 
   - name: users_comment
-    size: fixed(6476)
+    size: fixed(1)
 
   - name: users_task
-    size: fixed(6476)
+    size: fixed(2)
 
 insert:
   partitions: fixed(1)
