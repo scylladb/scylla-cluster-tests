@@ -13,7 +13,6 @@ longevityPipeline(
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
     ami_id_monitor: 'ami-08b314ce48a790a19', // Canonical, Ubuntu, 18.04 LTS, amd64 bionic image build on 2019-07-22
     ami_monitor_user: 'ubuntu',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-2.0/24/scylla-manager.repo',
     scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2019.1-bionic.list',
 
     timeout: [time: 500, unit: 'MINUTES'],
