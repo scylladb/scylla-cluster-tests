@@ -20,7 +20,7 @@ yum install -y git
 
 # Install OpenSSL - needed to update encryption key
 yum install -y openssl
-
+yum install -y iproute
 yum install -y which
 
 # Install Docker
