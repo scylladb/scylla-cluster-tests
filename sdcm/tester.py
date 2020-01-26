@@ -856,14 +856,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return cs_thread
 
-    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True):
+    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True, round_robin=False):  # pylint: disable=too-many-arguments
 
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = self.loaders.run_stress_thread_bench(stress_cmd, timeout,
                                                             cluster.Setup.logdir(),
-                                                            node_list=self.db_cluster.nodes)
+                                                            node_list=self.db_cluster.nodes,
+                                                            round_robin=round_robin)
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
             # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
