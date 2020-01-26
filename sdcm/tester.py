@@ -288,7 +288,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             credentials = self.db_cluster.get_db_auth()
             username, password = credentials if credentials else (None, None)
             with self.cql_connection_patient(node, user=username, password=password) as session:
-                session.execute("ALTER KEYSPACE system_auth WITH replication = "
+                session.execute("ALTER KEYSPACE system_auth WITH replication = "  # pylint: disable=no-member
                                 "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
                                 "'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
