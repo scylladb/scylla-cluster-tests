@@ -958,7 +958,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
 
         # Wait until all other nodes see the target node as UN
         # Only then we can expect that hint sending started on all nodes
-        def target_node_reported_un_by_others():
+        def target_node_reported_un_by_others():  # pylint: disable=invalid-name
             for node in self.cluster.nodes:
                 if node is not self.target_node:
                     self.cluster.check_nodes_up_and_normal(nodes=[self.target_node], verification_node=node)
