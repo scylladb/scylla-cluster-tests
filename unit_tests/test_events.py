@@ -9,7 +9,8 @@ import datetime
 from sdcm.prometheus import start_metrics_server
 
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
-                             InfoEvent, CassandraStressEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
+                             InfoEvent, CassandraStressEvent, ScyllaBenchEvent, CoreDumpEvent, DatabaseLogEvent,
+                             DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity)
 
 LOGGER = logging.getLogger(__name__)
@@ -71,6 +72,12 @@ class SctEventsTests(unittest.TestCase):
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf",
                                  log_file_name="/filename/"))
+
+    @staticmethod
+    def test_scylla_bench():
+        str(ScyllaBenchEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
+        str(ScyllaBenchEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf",
+                             log_file_name="/filename/"))
 
     @staticmethod
     def test_coredump_event():

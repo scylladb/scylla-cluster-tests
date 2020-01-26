@@ -45,8 +45,8 @@ from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, SSHConnectTimeoutError
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url
-from sdcm.sct_events import Severity, CoreDumpEvent, CassandraStressEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent
+from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
+    ClusterHealthValidatorEvent, ScyllaBenchEvent
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
@@ -3426,13 +3426,13 @@ class BaseLoaderSet(object):
 
         return ret
 
-    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=None):
+    def run_stress_thread_bench(self, stress_cmd, timeout, output_dir, node_list=None, round_robin=False):  # pylint: disable=too-many-arguments
         queue = {TASK_QUEUE: Queue.Queue(), RES_QUEUE: Queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
             queue[TASK_QUEUE].put(node)
 
-            CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+            ScyllaBenchEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
             logdir = os.path.join(output_dir, self.name)  # pylint: disable=no-member
             makedirs(logdir)
@@ -3442,20 +3442,27 @@ class BaseLoaderSet(object):
                                          (loader_idx, uuid.uuid4()))
             ips = ",".join([n.private_ip_address for n in node_list])
             bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
-            result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(stress_cmd.strip(), ips, bench_log),
+            result = node.remoter.run(cmd="/$HOME/go/bin/{name} -nodes {ips} |tee {log}".format(name=stress_cmd.strip(),
+                                                                                                ips=ips,
+                                                                                                log=bench_log),
                                       timeout=timeout,
                                       ignore_status=True,
                                       log_file=log_file_name)
 
-            CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+            ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
             queue[RES_QUEUE].put((node, result))
             queue[TASK_QUEUE].task_done()
 
-        for loader_idx, loader in enumerate(self.nodes):  # pylint: disable=no-member
+        if round_robin:
+            loaders = [self.get_loader()]
+        else:
+            loaders = self.nodes  # pylint: disable=no-member
+        LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
+
+        for loader_idx, loader in enumerate(loaders):
             setup_thread = threading.Thread(target=node_run_stress_bench,
-                                            args=(loader, loader_idx,
-                                                  stress_cmd, node_list))
+                                            args=(loader, loader_idx, stress_cmd, node_list))
             setup_thread.daemon = True
             setup_thread.start()
             time.sleep(30)
