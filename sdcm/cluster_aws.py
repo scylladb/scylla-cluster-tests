@@ -455,6 +455,9 @@ class AWSNode(cluster.BaseNode):
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
+        # FIXME: workaround to avoid host rename generating errors on other commands
+        if self.is_debian():
+            return
         result = self.remoter.run(f"sudo hostnamectl set-hostname --static {self.name}", ignore_status=True)
         if result.ok:
             self.log.debug('Hostname has been changed succesfully. Apply')
