@@ -1863,6 +1863,7 @@ server_encryption_options:
         :param scylla_repo: scylla repo file URL
         """
         self.log.info("Installing Scylla...")
+        force = '--force-yes '
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
@@ -1880,6 +1881,7 @@ server_encryption_options:
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
             elif self.is_ubuntu18() or self.is_ubuntu16():
                 install_prereqs = dedent("""
+                    export DEBIAN_FRONTEND=noninteractive
                     apt-get install software-properties-common -y
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
@@ -1909,7 +1911,9 @@ server_encryption_options:
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
             elif self.is_debian9():
+                force = ''
                 install_debian_9_prereqs = dedent("""
+                    export DEBIAN_FRONTEND=noninteractive
                     apt-get update
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
@@ -1921,12 +1925,13 @@ server_encryption_options:
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
 
             self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get {}-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y'.format(force))
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
-                'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}'.format(self.scylla_pkg()))
+                'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" {}'
+                '--allow-unauthenticated {}'.format(force, self.scylla_pkg()))
 
     def install_scylla_debuginfo(self):
         self.log.info("Installing Scylla debug info...")
@@ -2044,52 +2049,6 @@ server_encryption_options:
         mgmt_user = 'scylla-manager'
         if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
             raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
-        if self.is_debian8():
-            self.remoter.run(cmd="sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
-            self.remoter.run(
-                cmd="sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee -a /etc/apt/sources.list.d/backports.list")
-            self.remoter.run(cmd="sudo touch /etc/apt/apt.conf.d/99jessie-backports")
-            self.remoter.run(
-                cmd="sudo echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99jessie-backports")
-            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
-            install_transport_https = dedent(r"""
-                            if [ ! -f /etc/apt/sources.list.d/backports.list ]; then sudo echo 'deb http://archive.debian.org/debian jessie-backports main' | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
-                            sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
-                            echo 'Acquire::Check-Valid-Until false;' > /etc/apt/apt.conf.d/99jessie-backports
-                            sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
-                            apt-get install apt-transport-https
-                            apt-get install gnupg-curl
-                            apt-get update
-                            apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                            apt-get install -t jessie-backports ca-certificates-java -y
-            """)
-            self.remoter.run('sudo bash -cxe "%s"' % install_transport_https)
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-
-            install_transport_backports = dedent("""
-                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                # apt-get install -t jessie-backports ca-certificates-java -y
-                apt-get install ca-certificates-java -y
-            """)
-            self.remoter.run('sudo bash -cxe "%s"' % install_transport_backports)
-
-        if self.is_debian9():
-            install_debian_9_prereqs = dedent("""
-                if [ ! -f /etc/apt/sources.list.d/backports.list ]; then echo 'deb http://http.debian.net/debian jessie-backports main' | tee /etc/apt/sources.list.d/backports.list > /dev/null; fi
-                apt-get install apt-transport-https
-                apt-get update
-                apt-get install dirmngr
-                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-            """)
-            self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
-
-        if self.is_debian():
-            install_open_jdk = dedent("""
-                apt-get install -y openjdk-8-jre-headless -t jessie-backports
-                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
-            """)
-            self.remoter.run('sudo bash -cxe "%s"' % install_open_jdk)
-
         if self.is_rhel_like():
             self.remoter.run('sudo yum install -y epel-release', retry=3)
             self.remoter.run('sudo yum install python36-PyYAML -y', retry=3)
@@ -2101,7 +2060,6 @@ server_encryption_options:
         self.log.debug("Copying TLS files from data_dir to node")
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
 
-        self.download_scylla_repo(scylla_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
@@ -2111,7 +2069,8 @@ server_encryption_options:
             self.remoter.run('sudo yum install -y scylla-manager')
         else:
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            self.remoter.run('sudo apt-get install -y scylla-manager --force-yes')
+            self.remoter.run(
+                'sudo apt-get install -y scylla-manager{}'.format(' --force-yes' if not self.is_debian9() else ''))
 
         if self.is_docker():
             try:
@@ -3824,6 +3783,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     def install_scylla_manager(self, node, auth_token):
         if self.params.get('use_mgmt', default=None):
+            node.install_scylla(scylla_repo=self.params.get('scylla_repo_m'))
             node.install_mgmt(scylla_repo=self.params.get('scylla_repo_m'),
                               scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
                               segments_per_repair=self.params.get('mgmt_segments_per_repair'))
@@ -3904,31 +3864,30 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 pip3 install -I -U psutil
                 systemctl start docker
             """)
-        elif node.is_debian8():
-            node.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F76221572C52609D', retry=3)
-            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            node.remoter.run(cmd="sudo apt-get dist-upgrade -y")
+        elif node.is_debian9():
             node.remoter.run(
-                cmd="sudo echo 'deb https://apt.dockerproject.org/repo debian-jessie main' | sudo tee /etc/apt/sources.list.d/docker.list")
-            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            node.remoter.run(cmd="sudo apt-get install docker-engine -y --force-yes")
-            node.remoter.run(cmd="sudo apt-get install -y curl")
-            node.remoter.run(cmd="sudo apt-get install software-properties-common -y")
-            node.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            node.remoter.run(cmd="apt-get install python36")
-            node.remoter.run(cmd="sudo apt-get install -y python-setuptools wget")
-            node.remoter.run(cmd="sudo apt-get install -y unzip")
+                cmd="sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2")
+            node.remoter.run('curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -', retry=3)
+            node.remoter.run(
+                cmd='sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"')
+            node.remoter.run(cmd="sudo apt update")
+            node.remoter.run(cmd="sudo apt install -y docker-ce")
+            node.remoter.run(cmd="sudo DEBIAN_FRONTEND=noninteractive apt install -y python3")
+            node.remoter.run(cmd="sudo apt install -y python-setuptools wget unzip python3-pip")
             prereqs_script = dedent("""
-                python3 -m pip install --upgrade pip
-                python3 -m pip install pyyaml
-                systemctl start docker
+                cat /etc/debian_version
             """)
         else:
             raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
 
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
         node.remoter.run("sudo usermod -aG docker $USER")
-        node.remoter.reconnect()
+        if node.is_debian9():
+            node.reboot(hard=False)
+        else:
+            node.remoter.reconnect()
+        node.remoter.run(cmd='sudo systemctl restart docker')
+        node.remoter.run(cmd='docker run hello-world', ignore_status=True)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
