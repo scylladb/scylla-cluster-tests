@@ -878,7 +878,14 @@ class SCTConfiguration(dict):
              """,
              choices=("keep", "keep-on-failure", "destroy")),
         dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
-             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend")
+             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend"),
+
+        dict(name="loader_swap_size", env="SCT_LOADER_SWAP_SIZE", type=int,
+             help="Swap file size in bytes calculated by x * 1MB"),
+
+        dict(name="store_perf_results", env="SCT_STORE_PERF_RESULTS", type=bool,
+             help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
+                Intended to be used in performance testing"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']

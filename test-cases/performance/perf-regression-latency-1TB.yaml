@@ -23,5 +23,6 @@ space_node_threshold: 644245094
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 4'
 
+store_perf_results: true
 send_email: true
 email_recipients: ['qa@scylladb.com', 'rnd-internal@scylladb.com']

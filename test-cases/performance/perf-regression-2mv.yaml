@@ -19,5 +19,6 @@ instance_type_monitor: 't3.small'
 
 user_prefix: 'perf-regression-mv'
 
+store_perf_results: true
 send_email: true
 email_recipients: ['roy@scylladb.com', 'bentsi@scylladb.com']
