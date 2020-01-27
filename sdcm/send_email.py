@@ -225,7 +225,7 @@ class LongevityEmailReporter(BaseEmailReporter):
               'build_url', 'scylla_version', 'scylla_ami_id',
               'scylla_instance_type', 'number_of_db_nodes',
               'nemesis_name', 'nemesis_details', 'test_id',
-              'username', 'nodes']
+              'username', 'nodes', 'events_summary']
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if ['test_status'] in attachments_data and len(attachments_data['test_status']) > 2 and len(
@@ -259,7 +259,7 @@ class GeminiEmailReporter(BaseEmailReporter):
               "results", "status", 'test_name', 'test_id', 'test_status',
               'start_time', 'end_time', 'username',
               'build_url', 'nemesis_name', 'nemesis_details',
-              'test_id', 'nodes']
+              'test_id', 'nodes', 'events_summary']
 
     def build_report(self, report_data, template_str=None):
         self.log.info('Prepare result to send in email')
@@ -274,7 +274,7 @@ class UpgradeEmailReporter(BaseEmailReporter):
               'scylla_instance_type', 'number_of_db_nodes',
               "results", "status", 'test_name', 'test_id', 'test_status',
               'start_time', 'end_time', 'username',
-              'build_url', 'test_id', 'nodes']
+              'build_url', 'test_id', 'nodes', 'events_summary']
 
     def build_report(self, report_data, template_str=None):
         self.log.info('Prepare result to send in email')
