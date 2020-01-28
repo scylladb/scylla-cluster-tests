@@ -798,8 +798,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         try:
             backtrace_cmd = f'sudo coredumpctl info --no-pager --no-legend {pid}'
-            return self.remoter.run(backtrace_cmd,
-                                    verbose=False, ignore_status=True)
+            return self.remoter.run(backtrace_cmd, verbose=False, ignore_status=True, new_session=True)
         except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
             raise
         except Exception as details:  # pylint: disable=broad-except
@@ -941,7 +940,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting pid of cores")
     def _get_core_pids(self):
-        result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
+        result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1',
+                                  verbose=False, ignore_status=True, new_session=True)
         if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
             return None
         output = []
