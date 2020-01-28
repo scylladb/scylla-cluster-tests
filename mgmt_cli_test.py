@@ -19,10 +19,9 @@ from random import randint
 from invoke import exceptions
 
 from sdcm import mgmt
-from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError
+from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.tester import ClusterTester
-from sdcm.cluster import Setup
 
 
 # pylint: disable=too-many-public-methods
@@ -58,7 +57,7 @@ class MgmtCliTest(ClusterTester):
         """
         self.log.info('starting test_mgmt_cluster_crud')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        hosts = self._get_cluster_hosts_ip()
+        hosts = self.get_cluster_hosts_ip()
         selected_host = hosts[0]
         cluster_name = 'mgr_cluster_crud'
         mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
@@ -71,13 +70,11 @@ class MgmtCliTest(ClusterTester):
         manager_tool.add_cluster(name=cluster_name, host=selected_host, auth_token=self.monitors.mgmt_auth_token)
         self.log.info('finishing test_mgmt_cluster_crud')
 
-    def _get_cluster_hosts_ip(self):
-        return [node_data[1] for node_data in self._get_cluster_hosts_with_ips()]
+    def get_cluster_hosts_ip(self):
+        return ScyllaManagerTool.get_cluster_hosts_ip(self.db_cluster)
 
-    def _get_cluster_hosts_with_ips(self):
-        ip_addr_attr = 'public_ip_address' if self.params.get('cluster_backend') != 'gce' and \
-            Setup.INTRA_NODE_COMM_PUBLIC else 'private_ip_address'
-        return [[node, getattr(node, ip_addr_attr)] for node in self.db_cluster.nodes]
+    def get_cluster_hosts_with_ips(self):
+        return ScyllaManagerTool.get_cluster_hosts_with_ips(self.db_cluster)
 
     def get_all_dcs_names(self):
         dcs_names = set()
@@ -286,12 +283,12 @@ class MgmtCliTest(ClusterTester):
     def test_mgmt_cluster_healthcheck(self):
         self.log.info('starting test_mgmt_cluster_healthcheck')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        selected_host_ip = self._get_cluster_hosts_ip()[0]
+        selected_host_ip = self.get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
         mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(
             name=cluster_name, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
         other_host, other_host_ip = [
-            host_data for host_data in self._get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
+            host_data for host_data in self.get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
@@ -319,7 +316,7 @@ class MgmtCliTest(ClusterTester):
         new_user = "qa_user"
         new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        selected_host_ip = self._get_cluster_hosts_ip()[0]
+        selected_host_ip = self.get_cluster_hosts_ip()[0]
         res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(
             node_ip=selected_host_ip, single_node=True, create_user=new_user)
         self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
@@ -353,7 +350,7 @@ class MgmtCliTest(ClusterTester):
         scylla_mgmt_upgrade_to_repo = self.params.get('scylla_mgmt_upgrade_to_repo')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
-        selected_host = self._get_cluster_hosts_ip()[0]
+        selected_host = self.get_cluster_hosts_ip()[0]
         cluster_name = 'mgr_cluster1'
         mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or \
             manager_tool.add_cluster(name=cluster_name, host=selected_host,
@@ -403,7 +400,7 @@ class MgmtCliTest(ClusterTester):
     def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        hosts = self._get_cluster_hosts_ip()
+        hosts = self.get_cluster_hosts_ip()
         selected_host = hosts[0]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,

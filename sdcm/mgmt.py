@@ -633,13 +633,13 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
         return res, ssh_identity_file
 
-    def _get_cluster_hosts_ip(self, db_cluster):
-        return [node_data[1] for node_data in self._get_cluster_hosts_with_ips(db_cluster=db_cluster)]
+    @staticmethod
+    def get_cluster_hosts_ip(db_cluster):
+        return [node_data[1] for node_data in ScyllaManagerTool.get_cluster_hosts_with_ips(db_cluster)]
 
     @staticmethod
-    def _get_cluster_hosts_with_ips(db_cluster):
-        ip_addr_attr = 'public_ip_address'
-        return [[n, getattr(n, ip_addr_attr)] for n in db_cluster.nodes]
+    def get_cluster_hosts_with_ips(db_cluster):
+        return [[n, n.ip_address] for n in db_cluster.nodes]
 
     def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=False,  # pylint: disable=too-many-arguments
                     auth_token=None):
@@ -678,7 +678,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
-        host = host or self._get_cluster_hosts_ip(db_cluster=db_cluster)[0]
+        host = host or self.get_cluster_hosts_ip(db_cluster=db_cluster)[0]
         LOGGER.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
         # FIXME: if cluster already added, print a warning, but not fail
         cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
@@ -689,7 +689,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
                 LOGGER.warning("db_cluster is not given. Scylla-Manager connection to cluster may "
                                "fail since not using client-encryption parameters.")
             else:  # check if scylla-node has client-encrypt
-                db_node, _ip = self._get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
+                db_node, _ip = self.get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if client_encrypt or db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
                                                                                     SSL_USER_KEY_FILE)
