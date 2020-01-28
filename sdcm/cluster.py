@@ -3858,7 +3858,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 apt-get update
                 apt-get install -y python3.6 python3.6-dev
                 apt-get install -y python-setuptools unzip wget
-                update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 1
                 apt install -y python3-pip
                 python3 -m pip install --upgrade pip
                 python3 -m pip install pyyaml
@@ -3898,6 +3897,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             unzip {0.monitor_branch}.zip
         """.format(self))
         node.remoter.run("bash -ce '%s'" % install_script)
+        if node.is_ubuntu():
+            node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
