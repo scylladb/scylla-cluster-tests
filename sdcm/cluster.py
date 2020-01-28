@@ -3349,6 +3349,8 @@ class BaseLoaderSet():
             self.log.debug('Gemini version {}'.format(self.gemini_version))
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
+        # pylint: disable=too-many-statements
+
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
         # add swap file
@@ -3439,6 +3441,18 @@ class BaseLoaderSet():
             tar xfvz ycsb-0.15.0.tar.gz
         """)
         node.remoter.run('bash -cxe "%s"' % ycsb_install)
+
+        # install docker
+        docker_install = dedent("""
+            curl -fsSL get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            systemctl enable docker
+            systemctl start docker
+        """)
+        node.remoter.run('bash -cxe "%s"' % docker_install)
+
+        node.remoter.run('sudo usermod -aG docker $USER')
+        node.remoter.reconnect()
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
