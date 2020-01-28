@@ -226,7 +226,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
     def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments,arguments-differ
             connect_timeout=300, verbose=True,
-            log_file=None, retry=1, watchers=None):
+            log_file=None, retry=1, watchers=None, new_session=False):
         self.connection.connect_timeout = connect_timeout
         if not self.is_up(timeout=connect_timeout):
             err_msg = "Unable to run '{}': failed connecting to '{}' during {}s"
@@ -243,12 +243,18 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 if verbose:
                     self.log.debug('Running command "{}"...'.format(cmd))
                 start_time = time.time()
-                _result = self.connection.run(cmd, warn=ignore_status,
-                                              encoding='utf-8', hide=True,
-                                              watchers=watchers, timeout=timeout)
-                setattr(_result, 'duration', time.time() - start_time)
-                setattr(_result, 'exit_status', _result.exited)
-                return _result
+                if new_session:
+                    with self._create_connection() as connection:
+                        result = connection.run(cmd, warn=ignore_status,
+                                                encoding='utf-8', hide=True,
+                                                watchers=watchers, timeout=timeout)
+                else:
+                    result = self.connection.run(cmd, warn=ignore_status,
+                                                 encoding='utf-8', hide=True,
+                                                 watchers=watchers, timeout=timeout)
+                setattr(result, 'duration', time.time() - start_time)
+                setattr(result, 'exit_status', result.exited)
+                return result
             except SSHException as ex:
                 LOGGER.error(ex)
                 self._ssh_is_up.clear()
