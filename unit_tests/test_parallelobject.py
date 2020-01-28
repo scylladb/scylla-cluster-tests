@@ -89,7 +89,7 @@ class ParallelObjectTester(unittest.TestCase):
 
     def test_raised_exception_by_timeout(self):
         with self.assertRaises(concurrent.futures.TimeoutError):
-            parallel_object = ParallelObject(self.rand_timeouts, timeout=10, num_workers=len(self.rand_timeouts))
+            parallel_object = ParallelObject(self.rand_timeouts, timeout=9, num_workers=len(self.rand_timeouts))
             parallel_object.run(dummy_func_return_tuple)
 
     def test_exception_raised_in_thread_by_func(self):
@@ -109,7 +109,7 @@ class ParallelObjectTester(unittest.TestCase):
                 self.assertListEqual(res_obj.result, "done")
 
     def test_ignore_exception_by_timeout(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=10, num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=9, num_workers=len(self.rand_timeouts))
         results = parallel_object.run(dummy_func_return_tuple, ignore_exceptions=True)
         for res_obj in results:
             if res_obj.exc:
