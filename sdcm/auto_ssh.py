@@ -22,6 +22,7 @@ def start_auto_ssh(docker_name, node, local_port, remote_port, ssh_mode="-R"):
     # pylint: disable=protected-access
 
     host_name = node.ssh_login_info['hostname']
+    container_name = set_container_name(host_name=host_name, docker_name=docker_name)
     user_name = node.ssh_login_info['user']
     key_path = node.ssh_login_info['key_file']
 
@@ -37,12 +38,12 @@ def start_auto_ssh(docker_name, node, local_port, remote_port, ssh_mode="-R"):
            -e AUTOSSH_GATETIME=0 \
            -v {key_path}:/id_rsa  \
            --restart always \
-           --name {docker_name}-{host_name}-autossh jnovack/autossh
-       '''.format(host_name=host_name, user_name=user_name, ssh_mode=ssh_mode, local_port=local_port, remote_port=remote_port, key_path=key_path, docker_name=docker_name))
+           --name {container_name}-autossh jnovack/autossh
+       '''.format(container_name=container_name, user_name=user_name, ssh_mode=ssh_mode, local_port=local_port,
+                  remote_port=remote_port, key_path=key_path, host_name=host_name))
 
     atexit.register(stop_auto_ssh, docker_name, node)
-    LOGGER.debug('{docker_name}-{host_name}-autossh {res.stdout}'.format(docker_name=docker_name,
-                                                                         host_name=host_name, res=res))
+    LOGGER.debug('{container_name}-autossh {res.stdout}'.format(container_name=container_name, res=res))
 
 
 def stop_auto_ssh(docker_name, node):
@@ -55,7 +56,7 @@ def stop_auto_ssh(docker_name, node):
     # pylint: disable=protected-access
 
     host_name = node.ssh_login_info['hostname']
-    container_name = f"{docker_name}-{host_name}-autossh"
+    container_name = set_container_name(host_name=host_name, docker_name=docker_name)
     local_runner = LocalCmdRunner()
     LOGGER.debug("Saving autossh container logs")
     local_runner.run(f"docker logs {container_name} &> {node.logdir}/autossh.log", ignore_status=True)
@@ -76,8 +77,14 @@ def is_auto_ssh_running(docker_name, node):
     """
     local_runner = LocalCmdRunner()
     host_name = node.ssh_login_info['hostname']
-    container_name = f"{docker_name}-{host_name}-autossh"
+    container_name = set_container_name(host_name=host_name, docker_name=docker_name)
 
     result = local_runner.run('docker ps', ignore_status=True)
 
     return container_name in result.stdout
+
+
+def set_container_name(host_name, docker_name):
+    host_name = host_name.replace(':', '-')
+    container_name = f"{docker_name}-{host_name}-autossh"
+    return container_name
