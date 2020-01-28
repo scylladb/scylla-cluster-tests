@@ -61,6 +61,7 @@ from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, 
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
+from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, save_email_data_to_file
@@ -748,6 +749,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
                                 round_robin=round_robin, params=self.params).run()
+
+    def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments
+                           round_robin=False, stats_aggregate_cmds=True,
+                           keyspace_num=None, keyspace_name=None, profile=None):   # pylint: disable=unused-argument
+
+        timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ndbench", aggregate=stats_aggregate_cmds)
+
+        return NdBenchStressThread(loader_set=self.loaders,
+                                   stress_cmd=stress_cmd,
+                                   timeout=timeout,
+                                   stress_num=stress_num,
+                                   node_list=self.db_cluster.nodes,
+                                   round_robin=round_robin, params=self.params).run()
 
     def run_gemini(self, cmd, duration=None):
 

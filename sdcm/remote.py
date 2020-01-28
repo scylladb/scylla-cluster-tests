@@ -699,11 +699,12 @@ class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
 
 class FailuresWatcher(Responder):
 
-    def __init__(self, sentinel, callback=None):
+    def __init__(self, sentinel, callback=None, raise_exception=True):
         super(FailuresWatcher, self).__init__(None, None)
         self.sentinel = sentinel
         self.failure_index = 0
         self.callback = callback
+        self.raise_exception = raise_exception
 
     def first_matching_line(self, stream, index):
         new_ = stream[index:]
@@ -724,6 +725,7 @@ class FailuresWatcher(Responder):
             err = 'command failed found {!r} in \n{!r}'.format(self.sentinel, line)
             if callable(self.callback):
                 self.callback(self.sentinel, line)
-            raise OutputCheckError(err)
+            if self.raise_exception:
+                raise OutputCheckError(err)
 
         return []

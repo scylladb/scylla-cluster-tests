@@ -786,6 +786,13 @@
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "I"
+                            },
+                            {
+                                "expr": "collectd_ndbench_write_gauge{type=\"lat_avg\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "G"
                             }
                         ],
                         "thresholds": [],

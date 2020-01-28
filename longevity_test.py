@@ -60,6 +60,10 @@ class LongevityTest(ClusterTester):
                                                                                              default=False)))
             elif stress_cmd.startswith('bin/ycsb'):
                 stress_queue.append(self.run_ycsb_thread(**params))
+
+            elif stress_cmd.startswith('ndbench'):
+                stress_queue.append(self.run_ndbench_thread(**params))
+
             time.sleep(10)
 
             # Remove "user profile" param for the next command
