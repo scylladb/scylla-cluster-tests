@@ -475,11 +475,15 @@ class YcsbStressEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        fmt = "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
-            super(YcsbStressEvent, self).__str__(), self)
+        fmt = f"{super(YcsbStressEvent, self).__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
         if self.errors:
-            return "{0}\nerrors:\n\n{1}".format(fmt, "\n".join(self.errors))
+            errors_str = '\n'.join(self.errors)
+            return f"{fmt}\nerrors:\n\n{errors_str}"
         return fmt
+
+
+class NdbenchStressEvent(YcsbStressEvent):
+    pass
 
 
 class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
