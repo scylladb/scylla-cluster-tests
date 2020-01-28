@@ -366,6 +366,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._init_system = None
         self.db_init_finished = False
 
+        self._distro = None
         self._short_hostname = None
         self._alert_manager = None
 
@@ -402,7 +403,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.scylla_version = ''
         self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
-        self._distro = None
+
         self._kernel_version = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
