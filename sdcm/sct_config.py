@@ -9,6 +9,8 @@ import os
 import ast
 import logging
 import getpass
+import pathlib
+
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
 
 import anyconfig
@@ -1024,6 +1026,42 @@ class SCTConfiguration(dict):
         if choices:
             cur_val = self.get(opt['name'])
             assert cur_val in choices, "failed to validate '{}': {} not in {}".format(opt['name'], cur_val, choices)
+
+    def check_required_files(self):
+        # pylint: disable=too-many-nested-blocks
+        for param_name in ['stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m',
+                           'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile', 'stress_cmd_mv',
+                           'prepare_stress_cmd', 'stress_cmd_1', 'stress_cmd_complex_prepare', 'prepare_write_stress',
+                           'stress_cmd_read_10m', 'stress_cmd_read_cl_one', 'stress_cmd_read_80m',
+                           'stress_cmd_complex_verify_read', 'stress_cmd_complex_verify_more',
+                           'write_stress_during_entire_test', 'verify_data_after_entire_test',
+                           'stress_cmd_read_cl_quorum', 'verify_stress_after_cluster_upgrade',
+                           'stress_cmd_complex_verify_delete']:
+            stress_cmds = self.get(param_name, default=None)
+            if stress_cmds is None:
+                continue
+            if isinstance(stress_cmds, str):
+                stress_cmds = [stress_cmds]
+            for stress_cmd in stress_cmds:
+                if not stress_cmd:
+                    continue
+                stress_cmd = stress_cmd.strip(' ')
+                if stress_cmd.startswith('cassandra-stress'):
+                    for option in stress_cmd.split():
+                        if option.startswith('profile='):
+                            option = option.split('=', 1)
+                            if len(option) < 2:
+                                continue
+                            profile_path = option[1]
+                            if not profile_path.startswith('/tmp'):
+                                raise ValueError(f"Stress command parameter '{param_name}' contains wrong path "
+                                                 f"'{profile_path}' to profile, it should be formed in following "
+                                                 "manner '/tmp/{file_name_from_data_dir}'")
+                            profile_name = profile_path[5:]
+                            if pathlib.Path(sct_abs_path(os.path.join('data_dir', profile_name))).exists():
+                                break  # We are ok here and skipping whole command if file is there
+                            raise ValueError(f"Stress command parameter '{param_name}' contains profile "
+                                             f"'{profile_path}' that does not exists under data_dir/")
 
     def verify_configuration(self):
         """

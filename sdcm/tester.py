@@ -139,6 +139,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.status = "RUNNING"
         self.params = SCTConfiguration()
         self.params.verify_configuration()
+        self.params.check_required_files()
         reuse_cluster_id = self.params.get('reuse_cluster', default=False)
         if reuse_cluster_id:
             cluster.Setup.reuse_cluster(True)

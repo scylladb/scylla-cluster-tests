@@ -283,6 +283,7 @@ def conf(config_file, backend):
     config = SCTConfiguration()
     try:
         config.verify_configuration()
+        config.check_required_files()
     except Exception as ex:  # pylint: disable=broad-except
         click.secho(str(ex), fg='red')
         sys.exit(1)
