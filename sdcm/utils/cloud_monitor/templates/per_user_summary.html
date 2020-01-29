@@ -1,17 +1,21 @@
-    <h3>Per user report</h3>
+    {% for user_type, user_report in report.results.items() %}
+    <h3>Instances used by {{ user_type.upper() }}</h3>
 
     <table id="results_table">
         <tr>
             <th>User</th>
-            <th>Running</th>
-            <th>Stopped</th>
+            {% for cloud_provider in report.cloud_providers %}
+            <th>{{ cloud_provider.upper() }} Running/Stopped</th>
+            {% endfor %}
         </tr>
-        {% for user, stat in report|dictsort %}
+        {% for user, stat in user_report|dictsort %}
         <tr>
             <td>{{ user }}</td>
-            <td>{{ stat.num_running_instances }}</td>
-            <td>{{ stat.num_stopped_instances }}</td>
+            {% for cloud_provider in report.cloud_providers %}
+            <td>{{ stat[cloud_provider].num_running_instances }}/{{ stat[cloud_provider].num_stopped_instances }}</td>
+            {% endfor %}
         </tr>
         {% endfor %}
     </table>
+    {% endfor %}
     <h2>For detailed report download and open attached html</h2>

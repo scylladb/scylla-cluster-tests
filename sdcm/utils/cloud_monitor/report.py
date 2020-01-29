@@ -1,8 +1,9 @@
 import os
-from collections import defaultdict
 import tempfile
-
+from collections import defaultdict
+from copy import deepcopy
 import jinja2
+from sdcm.keystore import KeyStore
 
 
 class BaseReport:
@@ -56,19 +57,25 @@ class CloudResourcesReport(BaseReport):
 class PerUserSummaryReport(BaseReport):
     def __init__(self, cloud_instances):
         super(PerUserSummaryReport, self).__init__(cloud_instances, html_template="per_user_summary.html")
-        self.stats = dict(num_running_instances=0, num_stopped_instances=0)
-        self.report = {}
+        self.report = {"results": {"qa": {}, "others": {}}, "cloud_providers": tuple()}
+        self.qa_users = KeyStore().get_qa_users()
+
+    def user_type(self, user_name: str):
+        return "qa" if user_name in self.qa_users else "others"
 
     def to_html(self):
-        self.report = {}
+        self.report["cloud_providers"] = self.cloud_instances.CLOUD_PROVIDERS
         for cloud in self.cloud_instances.instances:
             for instance in self.cloud_instances[cloud]:
-                if instance.owner not in self.report:
-                    self.report[instance.owner] = dict(self.stats)
+                user_type = self.user_type(instance.owner)
+                results = self.report["results"]
+                if instance.owner not in results[user_type]:
+                    stats = dict(num_running_instances=0, num_stopped_instances=0)
+                    results[user_type][instance.owner] = {cp: deepcopy(stats) for cp in self.report["cloud_providers"]}
                 if instance.state == "running":
-                    self.report[instance.owner]["num_running_instances"] += 1
+                    results[user_type][instance.owner][cloud]["num_running_instances"] += 1
                 if instance.state == "stopped":
-                    self.report[instance.owner]["num_stopped_instances"] += 1
+                    results[user_type][instance.owner][cloud]["num_stopped_instances"] += 1
         return self.render_template()
 
 
