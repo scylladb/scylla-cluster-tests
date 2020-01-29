@@ -21,6 +21,8 @@ def start_auto_ssh(docker_name, node, local_port, remote_port):
     # pylint: disable=protected-access
 
     host_name = node._ssh_login_info['hostname']
+    container_name = set_container_name(host_name=host_name, docker_name=docker_name)
+
     user_name = node._ssh_login_info['user']
     key_path = node._ssh_login_info['key_file']
 
@@ -35,12 +37,12 @@ def start_auto_ssh(docker_name, node, local_port, remote_port):
            -e AUTOSSH_GATETIME=0 \
            -v {key_path}:/id_rsa  \
            --restart always \
-           --name {docker_name}-{host_name}-autossh jnovack/autossh
-       '''.format(host_name=host_name, user_name=user_name, local_port=local_port, remote_port=remote_port, key_path=key_path, docker_name=docker_name))
+           --name {container_name} jnovack/autossh
+       '''.format(host_name=host_name, user_name=user_name, local_port=local_port, remote_port=remote_port,
+                  key_path=key_path, container_name=container_name))
 
     atexit.register(stop_auto_ssh, docker_name, node)
-    LOGGER.debug('{docker_name}-{host_name}-autossh {res.stdout}'.format(docker_name=docker_name,
-                                                                         host_name=host_name, res=res))
+    LOGGER.debug('{container_name} {res.stdout}'.format(container_name=container_name, res=res))
 
 
 def stop_auto_ssh(docker_name, node):
@@ -53,8 +55,15 @@ def stop_auto_ssh(docker_name, node):
     # pylint: disable=protected-access
 
     host_name = node._ssh_login_info['hostname']
+    container_name = set_container_name(host_name=host_name, docker_name=docker_name)
 
-    LOGGER.debug("killing {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name))
+    LOGGER.debug("killing {container_name}".format(container_name=container_name))
     local_runner = LocalCmdRunner()
     local_runner.run(
-        "docker rm -f {docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name), ignore_status=True)
+        "docker rm -f {container_name}".format(container_name=container_name), ignore_status=True)
+
+
+def set_container_name(host_name, docker_name):
+    host_name = host_name.replace(':', '-')
+    container_name = "{docker_name}-{host_name}-autossh".format(docker_name=docker_name, host_name=host_name)
+    return container_name
