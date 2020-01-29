@@ -6,7 +6,6 @@ from sdcm.utils.cloud_monitor.report import GeneralReport, DetailedReport
 
 
 LOGGER = getLogger(__name__)
-CLOUD_PROVIDERS = ("aws", "gce")
 
 
 class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
@@ -22,9 +21,10 @@ class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance
 
 
 class CloudInstances:
+    CLOUD_PROVIDERS = ("aws", "gce")
 
     def __init__(self):
-        self.instances = {prov: [] for prov in CLOUD_PROVIDERS}
+        self.instances = {prov: [] for prov in self.CLOUD_PROVIDERS}
         self.all_instances = []
         self.get_all()
 

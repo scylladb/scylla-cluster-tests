@@ -30,6 +30,9 @@ class KeyStore():
     def get_scylladb_upload_credentials(self):
         return self._get_json("scylladb_upload.json")
 
+    def get_qa_users(self):
+        return self._get_json("qa_users.json")
+
     def get_qa_ssh_keys(self):
         # TODO
         pass
