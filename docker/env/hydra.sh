@@ -76,7 +76,6 @@ for gid in $(id -G); do
     group_args+=(--group-add "$gid")
 done
 
-
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \

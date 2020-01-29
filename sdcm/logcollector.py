@@ -7,6 +7,7 @@ import tempfile
 import time
 import zipfile
 import fnmatch
+import traceback
 
 import requests
 
@@ -261,13 +262,13 @@ class MonitoringStack(BaseLogEntity):
     def get_monitoring_version(node):
         basedir = MonitoringStack.get_monitoring_base_dir(node)
         result = node.remoter.run(
-            'ls {} | grep scylla-monitoring-branch'.format(basedir), ignore_status=True, verbose=False)
-
+            f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
         name = result.stdout.strip()
         if not name:
             LOGGER.error("Dir with scylla monitoring stack was not found")
             return None, None, None
-        result = node.remoter.run("cat {}/{}/monitor_version".format(basedir, name), ignore_status=True, verbose=False)
+        result = node.remoter.run(
+            f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
         try:
             monitor_version, scylla_version = result.stdout.strip().split(':')
         except ValueError:
@@ -409,8 +410,7 @@ class GrafanaScreenShot(GrafanaEntity):
             return screenshots
 
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error('Error taking monitor screenshot: %s',
-                         str(details))
+            LOGGER.error(f'Error taking monitor screenshot: {str(details)}, traceback: {traceback.format_exc()}')
             return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
@@ -496,7 +496,7 @@ class GrafanaSnapshot(GrafanaEntity):
             return snapshots
 
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error('Error taking monitor snapshot: %s', str(details))
+            LOGGER.error(f'Error taking monitor snapshot: {str(details)}, traceback: {traceback.format_exc()}')
         return []
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
@@ -925,11 +925,38 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0]))
 
+    def get_docker_instances_by_testid(self):
+        instances = list_instances_gce({"TestId": self.test_id}, running=True)
+        filtered_instances = filter_gce_instances_by_type(instances)
+        for instance in filtered_instances['db_nodes']:
+            self.db_cluster.append(CollectingNode(name=instance.name,
+                                                  ssh_login_info={
+                                                      "hostname": instance.public_ips[0],
+                                                      "user": 'scylla-test',
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance.public_ips[0]))
+        for instance in filtered_instances['monitor_nodes']:
+            self.monitor_set.append(CollectingNode(name=instance.name,
+                                                   ssh_login_info=None,
+                                                   instance=instance,
+                                                   global_ip=instance.public_ips[0]))
+        for instance in filtered_instances['loader_nodes']:
+            self.loader_set.append(CollectingNode(name=instance.name,
+                                                  ssh_login_info={
+                                                      "hostname": instance.public_ips[0],
+                                                      "user": 'scylla-test',
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance.public_ips[0]))
+
     def get_running_cluster_sets(self):
         if self.backend == 'aws':
             self.get_aws_instances_by_testid()
-        if self.backend == 'gce':
+        elif self.backend == 'gce':
             self.get_gce_instances_by_testid()
+        elif self.backend == 'docker':
+            self.get_docker_instances_by_testid()
 
     def run(self):
         """Run collect logs process as standalone operation

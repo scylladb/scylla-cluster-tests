@@ -71,7 +71,10 @@ class RemoteBrowser():
         :type use_tunnel: bool, optional
         """
         self.remote_web_driver = remote_web_driver
-        self._use_tunnel = use_tunnel
+        if self.remote_web_driver.node.ssh_login_info:
+            self._use_tunnel = use_tunnel
+        else:
+            self._use_tunnel = False
         self._remote_browser = self._get_remote_browser()
 
     @property
@@ -92,7 +95,7 @@ class RemoteBrowser():
         """
         chrome_options = webdriver.ChromeOptions()
 
-        if not is_auto_ssh_running(self.remote_web_driver.name, self.remote_web_driver.node) and self._use_tunnel:
+        if self._use_tunnel and not is_auto_ssh_running(self.remote_web_driver.name, self.remote_web_driver.node):
             LOGGER.debug("Start autossh for Selenium remote webdriver ")
             start_auto_ssh(self.remote_web_driver.name,
                            self.remote_web_driver.node,
@@ -104,7 +107,8 @@ class RemoteBrowser():
         if self._use_tunnel:
             remote_browser_url = "http://127.0.0.1:{0.local_port}/wd/hub".format(self)
         else:
-            remote_browser_url = "http://{0.external_address}:{0.remote_port}/wd/hub".format(self.remote_web_driver)
+            remote_browser_url = "http://{0.node.external_address}:{0.remote_port}/wd/hub".format(
+                self.remote_web_driver)
 
         driver = webdriver.Remote(
             command_executor=remote_browser_url,
