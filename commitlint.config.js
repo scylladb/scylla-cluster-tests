@@ -9,7 +9,7 @@ module.exports = {
         'type-enum': [2,'always',['ci','docs','feature','fix','improvement','perf','refactor','revert','style','test', 'unit-test']],
         'type-empty': [2, 'never'],
         // Scope
-        'scope-empty': [1, 'never'],
+        'scope-empty': [2, 'never'],
         'scope-case': [2, 'always', ['lower-case']],
         'scope-min-length': [2, 'always', 5],
         // Body
