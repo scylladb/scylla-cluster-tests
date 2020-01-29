@@ -3,7 +3,7 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce']
+def target_backends = ['aws', 'gce', 'docker']
 
 def runSctProvisionTest(String backend){
     if (currentBuild.result != null) {
@@ -12,8 +12,11 @@ def runSctProvisionTest(String backend){
     echo "Going to Provision test on ${backend} for Pull Request ID: ${env.CHANGE_ID}"
     checkout scm
     def distro_cmd = ""
+    def sct_config_files = "test-cases/PR-provision-test.yaml"
     if (backend == 'gce') {
         distro_cmd = "export SCT_SCYLLA_LINUX_DISTRO='centos'"
+    } else if (backend == 'docker') {
+        sct_config_files = "test-cases/PR-provision-test-docker.yaml"
     }
     sh """
     #!/bin/bash
@@ -21,7 +24,7 @@ def runSctProvisionTest(String backend){
     env
     export SCT_CLUSTER_BACKEND="${backend}"
     export SCT_COLLECT_LOGS=false
-    export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
+    export SCT_CONFIG_FILES="${sct_config_files}"
     export BUILD_USER_ID="\${CHANGE_AUTHOR}"
     $distro_cmd
     echo "start test ......."
@@ -31,6 +34,10 @@ def runSctProvisionTest(String backend){
 }
 
 def runCollectLogs(String backend){
+    def sct_config_files = "test-cases/PR-provision-test.yaml"
+    if (backend == 'docker') {
+        sct_config_files = "test-cases/PR-provision-test-docker.yaml"
+    }
     sh """
     #!/bin/bash
 
@@ -39,7 +46,7 @@ def runCollectLogs(String backend){
 
     export SCT_CLUSTER_BACKEND="${backend}"
     export SCT_REGION_NAME="eu-west-1"
-    export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
+    export SCT_CONFIG_FILES="${sct_config_files}"
 
     echo "start collect logs ..."
     ./docker/env/hydra.sh collect-logs --logdir /sct
@@ -149,7 +156,7 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker") && currentBuild.result == null
                 }
             }
             steps {

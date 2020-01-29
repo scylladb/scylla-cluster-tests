@@ -4,12 +4,12 @@ import time
 import logging
 import os
 import types
+import tempfile
 
 from sdcm import cluster
 from sdcm.utils.common import retrying
 from sdcm.remote import LocalCmdRunner
 from sdcm.log import SDCMAdapter
-from sdcm.utils.common import makedirs
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
@@ -42,16 +42,20 @@ def _cmd(cmd, timeout=10):
 
 class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
-    def __init__(self, name, credentials, parent_cluster, base_logdir=None, node_prefix=None):  # pylint: disable=too-many-arguments
-        ssh_login_info = {'hostname': None,
-                          'user': 'scylla-test',
-                          'key_file': credentials.key_file}
+    def __init__(self,  # pylint: disable=too-many-arguments
+                 name,
+                 parent_cluster,
+                 base_logdir=None,
+                 ssh_login_info=None,
+                 node_prefix=None,
+                 dc_idx=None):
         self._public_ip_address = None
         super(DockerNode, self).__init__(name=name,
                                          parent_cluster=parent_cluster,
                                          base_logdir=base_logdir,
                                          ssh_login_info=ssh_login_info,
-                                         node_prefix=node_prefix)
+                                         node_prefix=node_prefix,
+                                         dc_idx=dc_idx)
         self.wait_for_status_running()
         self.wait_public_ip()
 
@@ -65,7 +69,7 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
         out = _cmd("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name)).stdout
         return json.loads(out)
 
-    @retrying(n=10, sleep_time=2, allowed_exceptions=(DockerContainerNotRunning,))
+    @retrying(n=20, sleep_time=2, allowed_exceptions=(DockerContainerNotRunning,))
     def wait_for_status_running(self):
         if not self.is_running():
             raise DockerContainerNotRunning(self.name)
@@ -92,7 +96,9 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
     def stop(self, timeout=30):
         _cmd('stop {}'.format(self.name), timeout=timeout)
 
+    @retrying(n=5, sleep_time=1)
     def destroy(self, force=True):  # pylint: disable=arguments-differ
+        self.stop()
         force_param = '-f' if force else ''
         _cmd('rm {} -v {}'.format(force_param, self.name))
 
@@ -141,19 +147,25 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def _create_node_image(self):
         self._update_image()
+        private_key = self.credentials[0].key_file
+        context_pub_key_path = os.path.join(self._context_path, 'scylla-test.pub')
+        LOCALRUNNER.run(f"ssh-keygen -y -f {private_key} > {context_pub_key_path}; sed -ri "
+                        f"'s/(ssh-rsa [^\\n]+)/\\1 test@localhost/g' {context_pub_key_path}")
         _cmd(f'build --build-arg SOURCE_IMAGE={self._image}:{self._version_tag} -t {self._node_img_tag} {self._context_path}',
              timeout=300)
+        LOCALRUNNER.run(f'rm -f {context_pub_key_path}', ignore_status=True)
 
     @staticmethod
     def _clean_old_images():
-        images = " ".join(_cmd('images -f "dangling=true" -q').stdout.split('\n'))
-        if images:
-            _cmd(f'rmi {images}', timeout=90)
+        _cmd('docker system prune --volumes -f')
 
     def _update_image(self):
         LOGGER.debug('update scylla image')
         _cmd(f'pull {self._image}:{self._version_tag}', timeout=300)
-        self._clean_old_images()
+        try:
+            self._clean_old_images()
+        except DockerCommandError as exc:
+            LOGGER.info(f'Cleaning old images failed with {str(exc)}')
 
     def _create_container(self, node_name, is_seed=False, seed_ip=None):
         labels = f"--label 'test_id={cluster.Setup.test_id()}'"
@@ -161,7 +173,6 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         if not is_seed and seed_ip:
             cmd = f'{cmd} --seeds="{seed_ip}"'
         _cmd(cmd, timeout=30)
-
         # remove the message of the day
         _cmd(f"""exec {node_name} bash -c "sed  '/\\/dev\\/stderr/d' /etc/bashrc -i" """)
 
@@ -177,8 +188,10 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def _create_node(self, node_name):
         return DockerNode(node_name,
-                          credentials=self.credentials[0],
                           parent_cluster=self,
+                          ssh_login_info={'hostname': None,
+                                          'user': 'scylla-test',
+                                          'key_file': self.credentials[0].key_file},
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix)
 
@@ -281,7 +294,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         # pylint: disable=no-member
         append_scylla_args = self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
-        return re.sub(r'--blocked-reactor-notify-ms\s.*\s', '', append_scylla_args)
+        return re.sub(r'--blocked-reactor-notify-ms[ ]+[0-9]+', '', append_scylla_args)
 
 
 class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
@@ -308,28 +321,34 @@ def send_receive_files(self, src, dst, delete_dst=False, preserve_perm=True, pre
         self.remoter.run(f'cp {src} {dst}')
 
 
-class DummyMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
-    def __init__(self, name, node_prefix=None, parent_cluster=None, base_logdir=None):  # pylint: disable=too-many-arguments,super-init-not-called
-        self.name = name
-        self.node_prefix = node_prefix
+class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
+    def __init__(self,  # pylint: disable=too-many-arguments
+                 name,
+                 parent_cluster,
+                 base_logdir=None,
+                 ssh_login_info=None,
+                 node_prefix=None,
+                 dc_idx=None):
+        super(DockerMonitoringNode, self).__init__(name=name,
+                                                   parent_cluster=parent_cluster,
+                                                   base_logdir=base_logdir,
+                                                   ssh_login_info=ssh_login_info,
+                                                   node_prefix=node_prefix,
+                                                   dc_idx=dc_idx)
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
+
+    def _init_remoter(self, ssh_login_info):  # pylint: disable=no-self-use
         self.remoter = LOCALRUNNER
         self.remoter.receive_files = types.MethodType(send_receive_files, self)
         self.remoter.send_files = types.MethodType(send_receive_files, self)
-        self.parent_cluster = parent_cluster
-        self.is_seed = False
-        self._distro = None
 
-        self.logdir = os.path.join(base_logdir, self.name)
-        makedirs(self.logdir)
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
+    def _init_port_mapping(self):  # pylint: disable=no-self-use
+        pass
 
     def wait_ssh_up(self, verbose=True, timeout=500):
         pass
 
     def update_repo_cache(self):
-        pass
-
-    def stop_task_threads(self, timeout=None):
         pass
 
     def _refresh_instance_state(self):
@@ -376,14 +395,14 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
     @property
     def monitor_install_path_base(self):
         if not self._monitor_install_path_base:
-            self._monitor_install_path_base = self.nodes[0].logdir
+            self._monitor_install_path_base = tempfile.mkdtemp(prefix='scylla-monitoring')
         return self._monitor_install_path_base
 
     def _create_node(self, node_name):
-        return DummyMonitoringNode(name=node_name,
-                                   parent_cluster=self,
-                                   base_logdir=self.logdir,
-                                   node_prefix=self.node_prefix)
+        return DockerMonitoringNode(name=node_name,
+                                    parent_cluster=self,
+                                    base_logdir=self.logdir,
+                                    node_prefix=self.node_prefix)
 
     def get_backtraces(self):
         pass

@@ -337,19 +337,16 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
         self.is_seed = False
+        self.remoter = None
         self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
         self.logdir = os.path.join(base_logdir, self.name)
         makedirs(self.logdir)
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
-
-        ssh_login_info['hostname'] = self.external_address
-
-        self.remoter = RemoteCmdRunner(**ssh_login_info)
+        if ssh_login_info:
+            ssh_login_info['hostname'] = self.external_address
+        self._init_remoter(ssh_login_info)
         self.ssh_login_info = ssh_login_info
-
-        self.log.debug(self.remoter.ssh_debug_cmd())
-
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -408,7 +405,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._kernel_version = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
+        self._init_port_mapping()
 
+    def _init_remoter(self, ssh_login_info):
+        self.remoter = RemoteCmdRunner(**ssh_login_info)
+        self.log.debug(self.remoter.ssh_debug_cmd())
+
+    def _init_port_mapping(self):
         if (IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION) and Setup.RSYSLOG_ADDRESS:
             start_auto_ssh(Setup.test_id(), self, Setup.RSYSLOG_ADDRESS[1], RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
 
@@ -3809,7 +3812,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     @property
     def monitor_install_path(self):
-        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-{}".format(self.monitor_branch))
+        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-src")
 
     @property
     def monitoring_conf_dir(self):
@@ -4014,7 +4017,10 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
             wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip
-            unzip {0.monitor_branch}.zip
+            rm -rf ./tmp {0.monitor_install_path} 2>/dev/null
+            unzip {0.monitor_branch}.zip -d ./tmp
+            mv ./tmp/scylla-monitoring-{0.monitor_branch}/ {0.monitor_install_path}
+            rm -rf ./tmp 2>/dev/null
         """.format(self))
         node.remoter.run("bash -ce '%s'" % install_script)
         if node.is_ubuntu():
@@ -4132,14 +4138,14 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     def start_scylla_monitoring(self, node):
         node.remoter.run("cp {0.monitor_install_path}/prometheus/scylla_manager_servers.example.yml"
                          " {0.monitor_install_path}/prometheus/scylla_manager_servers.yml".format(self))
-        run_script = dedent("""
-            cd {0.monitor_install_path}
-            mkdir -p {0.monitoring_data_dir}
+        run_script = dedent(f"""
+            cd -P {self.monitor_install_path}
+            mkdir -p {self.monitoring_data_dir}
             ./start-all.sh \
-            -s {0.monitoring_conf_dir}/scylla_servers.yml \
-            -n {0.monitoring_conf_dir}/node_exporter_servers.yml \
-            -d {0.monitoring_data_dir} -l -v master,{0.monitoring_version} -b "-web.enable-admin-api"
-        """.format(self))
+            -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
+            -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
+            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api"
+        """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
         self.save_sct_dashboards_config(node)
