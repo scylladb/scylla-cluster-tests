@@ -35,6 +35,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_02_verify_config(self):
         self.conf.verify_configuration()
+        self.conf.check_required_files()
 
     def test_03_dump_help_config_yaml(self):
         logging.debug(self.conf.dump_help_config_yaml())
@@ -209,6 +210,29 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertIsNotNone(conf.get('ami_id_db_scylla'))
         self.assertEqual(len(conf.get('ami_id_db_scylla').split(' ')), 2)
+
+    def test_conf_check_required_files(self):  # pylint: disable=no-self-use
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml \
+            ops'(insert=100)' no-warmup cl=ONE duration=10m -port jmx=6868 \
+            -mode cql3 native -rate threads=3000 -errors ignore"""
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+        conf.check_required_files()
+
+    def test_conf_check_required_files_negative(self):  # pylint: disable=no-self-use
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/stress_cmd_with_bad_profile.yaml'
+        os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)'\
+            no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=3000 -errors ignore"""
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+        try:
+            conf.check_required_files()
+        except ValueError as exc:
+            self.assertEqual(str(
+                exc), "Stress command parameter \'stress_cmd\' contains profile \'/tmp/1232123123123123123.yaml\' that does not exists under data_dir/")
 
     def test_config_dupes(self):
         def get_dupes(c):
