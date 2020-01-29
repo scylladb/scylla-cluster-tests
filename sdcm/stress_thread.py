@@ -158,11 +158,23 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                                      cs_log_filename=log_file_name,
                                      loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name):
-
-            result = node.remoter.run(cmd=node_cmd,
-                                      timeout=self.timeout,
-                                      ignore_status=True,
-                                      log_file=log_file_name)
+            result = None
+            try:
+                result = node.remoter.run(cmd=node_cmd,
+                                          timeout=self.timeout,
+                                          log_file=log_file_name)
+            except Exception as exc:  # pylint: disable=broad-except
+                #  pylint: disable=no-member
+                if hasattr(exc, 'result') and exc.result.failed:
+                    stderr = exc.result.stderr
+                    if len(stderr) > 100:
+                        stderr = stderr[:100]
+                    errors_str = f'Stress command completed with bad status {exc.result.exited}: {stderr}'
+                else:
+                    errors_str = f'Stress command execution failed with: {str(exc)}'
+                CassandraStressEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
+                                     log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                     errors=errors_str)
 
         CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
@@ -213,10 +225,15 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         for _, result in results:
             output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
-            if node_cs_res:
-                ret.append(node_cs_res)
+            try:
+                lines = output.splitlines()
+                node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
+                if node_cs_res:
+                    ret.append(node_cs_res)
+            except Exception as exc:  # pylint: disable=broad-except
+                CassandraStressEvent(
+                    type='failure', node='', severity=Severity.CRITICAL,
+                    errors=f'Failed to proccess stress summary due to {exc}')
 
         return ret
 
