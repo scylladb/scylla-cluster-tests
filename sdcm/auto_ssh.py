@@ -38,12 +38,12 @@ def start_auto_ssh(docker_name, node, local_port, remote_port, ssh_mode="-R"):
            -e AUTOSSH_GATETIME=0 \
            -v {key_path}:/id_rsa  \
            --restart always \
-           --name {container_name}-autossh jnovack/autossh
+           --name {container_name} jnovack/autossh
        '''.format(container_name=container_name, user_name=user_name, ssh_mode=ssh_mode, local_port=local_port,
                   remote_port=remote_port, key_path=key_path, host_name=host_name))
 
     atexit.register(stop_auto_ssh, docker_name, node)
-    LOGGER.debug('{container_name}-autossh {res.stdout}'.format(container_name=container_name, res=res))
+    LOGGER.debug('{container_name} {res.stdout}'.format(container_name=container_name, res=res))
 
 
 def stop_auto_ssh(docker_name, node):
