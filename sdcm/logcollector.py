@@ -354,6 +354,7 @@ class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
             # set test start time previous 6 hours
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
+        self.grafana_entity_names += kwargs.pop("extra_entities", [])
         super(GrafanaEntity, self).__init__(*args, **kwargs)
 
 
