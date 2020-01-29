@@ -200,14 +200,14 @@ class SctEvent():
         return self.__dict__ == other.__dict__
 
 
-class StartupTestEvent(SctEvent):
-    def __init__(self):
-        super().__init__()
-        self.severity = Severity.WARNING
-
-
 class SystemEvent(SctEvent):
     pass
+
+
+class StartupTestEvent(SystemEvent):
+    def __init__(self):
+        super().__init__()
+        self.severity = Severity.NORMAL
 
 
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
