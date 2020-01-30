@@ -4,12 +4,12 @@ stress_cmd: ["bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p reco
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 
-n_loaders: 1
+n_loaders: 3
 instance_type_db: 'i3.2xlarge'
 n_monitor_nodes: 1
 n_db_nodes: 3
 
-nemesis_class_name: NoOpMonkey # ChaosMonkey
+nemesis_class_name: ChaosMonkey
 nemesis_interval: 5
 
 user_prefix: 'alternator-3h'
