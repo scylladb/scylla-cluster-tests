@@ -2071,7 +2071,8 @@ server_encryption_options:
         else:
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
             self.remoter.run(
-                'sudo apt-get install -y scylla-manager{}'.format(' --force-yes' if not self.is_debian9() else ''))
+                'sudo apt-get install -y scylla-manager{}'.format(' --force-yes' if not self.is_debian9() and
+                                                                  not self.is_ubuntu18() else ''))
 
         if self.is_docker():
             try:
