@@ -43,17 +43,21 @@ class EventsLogUtils:
 @pytest.fixture(scope='module')
 def events():
     temp_dir = tempfile.mkdtemp()
-    start_metrics_server()
     start_events_device(temp_dir)
     yield EventsLogUtils(temp_dir=temp_dir)
 
     stop_events_device()
 
 
+@pytest.fixture(scope='session')
+def prom_address():
+    yield start_metrics_server()
+
+
 @pytest.fixture(scope='module')
 def docker_scylla():
     scylla = RemoteDocker(LocalNode(), image_name="scylladb/scylla:3.2.0",
-                          command_line="--alternator-port 8000", extra_docker_opts='--cpus="1"')
+                          command_line="--alternator-port 8000", extra_docker_opts='-p 8000 --cpus="1"')
 
     def db_up():
         try:
