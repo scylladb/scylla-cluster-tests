@@ -9,6 +9,7 @@ from textwrap import dedent
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.ndbench_thread import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
 
         return self
 
-    def copy_template(self, loader):
+    def copy_template(self, docker):
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
@@ -93,12 +94,12 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(dynamodb_teample)
                 tmp_file.flush()
-                loader.remoter.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
+                docker.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(aws_empty_file)
                 tmp_file.flush()
-                loader.remoter.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
+                docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
             self.stress_cmd += ' -P /tmp/dynamodb.properties'
 
@@ -108,8 +109,8 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
     def _run_stress(self, loader, loader_idx, cpu_idx):
         # pylint: disable=too-many-locals, too-many-nested-blocks, too-many-branches
         output = ''
-
-        self.copy_template(loader)
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200130")
+        self.copy_template(docker)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir)
@@ -126,7 +127,8 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
             metric.labels(loader.ip_address, loader_idx, name).inc(value)
 
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
-            YcsbStressEvent('error', node=loader, stress_cmd=self.stress_cmd, errors=line)
+            if line:
+                YcsbStressEvent('error', node=loader, stress_cmd=self.stress_cmd, errors=[line])
 
         YcsbStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
         timeout_start = time.time()
@@ -140,12 +142,12 @@ class YcsbStressThread():  # pylint: disable=too-many-instance-attributes
                 else:
                     node_cmd = self.stress_cmd
 
-                node_cmd = 'cd ~/ycsb-0.15.0 && {}'.format(node_cmd)
-                result = loader.remoter.run(cmd=node_cmd,
-                                            timeout=self.timeout,
-                                            ignore_status=True,
-                                            log_file=log_file_name,
-                                            watchers=[FailuresWatcher('ERROR', callback=raise_event_callback)])
+                node_cmd = 'cd /YCSB && {}'.format(node_cmd)
+                result = docker.run(cmd=node_cmd,
+                                    timeout=self.timeout,
+                                    ignore_status=True,
+                                    log_file=log_file_name,
+                                    watchers=[FailuresWatcher('ERROR', callback=raise_event_callback)])
 
                 assert result.exit_status == 0
 

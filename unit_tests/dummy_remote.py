@@ -1,8 +1,10 @@
 import os
 import logging
 import shutil
+import types
 
 from sdcm.remote import LocalCmdRunner
+from sdcm.docker import send_receive_files
 
 
 class DummeyOutput():  # pylint: disable=too-few-public-methods
@@ -26,9 +28,12 @@ class DummyRemote():  # pylint: disable=too-few-public-methods
 
 
 class LocalNode:  # pylint: disable=no-init,too-few-public-methods
-    remoter = LocalCmdRunner()
-    ip_address = "127.0.0.1"
-    logdir = os.path.dirname(__file__)
+    def __init__(self):
+        self.remoter = LocalCmdRunner()
+        self.remoter.receive_files = types.MethodType(send_receive_files, self.remoter)
+        self.remoter.send_files = types.MethodType(send_receive_files, self.remoter)
+        self.ip_address = "127.0.0.1"
+        self.logdir = os.path.dirname(__file__)
 
 
 class LocalLoaderSetDummy:  # pylint: disable=no-init,too-few-public-methods

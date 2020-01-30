@@ -108,14 +108,36 @@ class RemoteDocker:
         return self.internal_ip_address
 
     @property
+    def private_ip_address(self):
+        return self.internal_ip_address
+
+    @property
     def remoter(self):
         return self.run
+
+    def get_port(self, internal_port):
+        """
+        get specific port mapping
+
+        :param internal_port: port exposed by docker
+        :return: the external port automatically open by docker
+        """
+        external_port = self.node.remoter.run(f"docker port {self.docker_id} {internal_port}").stdout.strip()
+        return external_port
 
     def run(self, cmd, *args, **kwargs):
         return self.node.remoter.run(f"docker exec -i {self.docker_id} /bin/bash -c '{cmd}'", *args, **kwargs)
 
     def atexit(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
+
+    def send_files(self, src, dst):
+        self.node.remoter.send_files(src, src)
+        self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}", verbose=False, ignore_status=True)
+
+    def receive_files(self, src, dst):
+        self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
+        self.node.remoter.receive_files(dst, dst)
 
 
 class NdBenchStressThread:  # pylint: disable=too-many-instance-attributes
