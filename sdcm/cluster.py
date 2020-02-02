@@ -1789,10 +1789,14 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
-    def install_manager_agent(self, auth_token, manager_scylla_repo):
-        self.download_scylla_manager_repo(manager_scylla_repo)
+    def install_manager_agent(self, auth_token, manager_scylla_repo, package_path=None):
+        if package_path:
+            package_name = '{}scylla-manager-agent*'.format(package_path)
+        else:
+            self.download_scylla_manager_repo(manager_scylla_repo)
+            package_name = 'scylla-manager-agent'
         install_and_config_agent_command = dedent(r"""
-            yum install -y scylla-manager-agent
+            yum install -y {}
             sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
@@ -1800,7 +1804,7 @@ server_encryption_options:
             sed -i 's/#https/https/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             systemctl restart scylla-manager-agent
             systemctl enable scylla-manager-agent
-        """.format(auth_token))
+        """.format(package_name, auth_token))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
         version = self.remoter.run('scylla-manager-agent --version').stdout
         self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
@@ -2047,7 +2051,7 @@ server_encryption_options:
         time.sleep(5)
 
     # pylint: disable=too-many-branches,too-many-statements
-    def install_mgmt(self, scylla_repo, scylla_mgmt_repo, auth_token, segments_per_repair):
+    def install_mgmt(self, scylla_mgmt_repo, auth_token, segments_per_repair, package_url=None):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -2111,17 +2115,21 @@ server_encryption_options:
         self.log.debug("Copying TLS files from data_dir to node")
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
 
-        self.download_scylla_repo(scylla_repo)
-        self.download_scylla_manager_repo(scylla_mgmt_repo)
+        if package_url:
+            package_names = '{0}scylla-manager-server* {0}scylla-manager-client*'.format(package_url)
+        else:
+            self.download_scylla_manager_repo(scylla_mgmt_repo)
+            package_names = 'scylla-manager'
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
 
         if self.is_rhel_like():
-            self.remoter.run('sudo yum install -y scylla-manager')
+            self.remoter.run('sudo yum install -y {}'.format(package_names))
         else:
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            self.remoter.run('sudo apt-get install -y scylla-manager --force-yes')
+            self.remoter.run(
+                'sudo apt-get install -y {}{}'.format(package_names, ' --force-yes' if not self.is_debian9() else ''))
 
         if self.is_docker():
             try:
