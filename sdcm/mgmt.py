@@ -560,7 +560,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         sleep = 30
         LOGGER.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
         time.sleep(sleep)
-        LOGGER.debug("Initiating Scylla-Manager, version: {}".format(self.version))
+        LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.version))
         list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16, Distro.UBUNTU18]
         self.default_user = "centos"
         if manager_node.distro not in list_supported_distros:
