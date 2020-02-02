@@ -188,6 +188,10 @@ class SCTConfiguration(dict):
              type=str,
              help="Url to the repo of scylla manager agent version to install for management tests"),
 
+        dict(name="scylla_mgmt_pkg", env="SCT_SCYLLA_MGMT_PKG",
+             type=str,
+             help="Url to the scylla manager packages to install for management tests"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
