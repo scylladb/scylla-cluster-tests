@@ -13,6 +13,7 @@
 
 # pylint: disable=too-many-lines
 from __future__ import absolute_import
+import atexit
 import itertools
 import os
 import logging
@@ -26,13 +27,15 @@ import select
 import shutil
 import copy
 import string
+from typing import Iterable, List, Callable
 from urllib.parse import urlparse
 
 from functools import wraps
 from enum import Enum
 from collections import defaultdict
 import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures.thread import _python_exit
 import hashlib
 
 import boto3
@@ -347,12 +350,13 @@ def all_aws_regions():
 AWS_REGIONS = all_aws_regions()
 
 
-class ParallelObject():  # pylint: disable=too-few-public-methods
+class ParallelObject:
     """
         Run function in with supplied args in parallel using thread.
     """
 
-    def __init__(self, objects, timeout=6, num_workers=None, disable_logging=False):
+    def __init__(self, objects: Iterable, timeout: int = 6,  # pylint: disable=redefined-outer-name
+                 num_workers: int = None, disable_logging: bool = False):
         """Constructor for ParallelObject
 
         Build instances of Parallel object. Item of objects is used as parameter for
@@ -363,20 +367,17 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
                 if item in object is any other type, will be passed to func as is.
                 if function accept list as parameter, the item shuld be list of list item = [[]]
 
-        :type objects: Any
-        :param timeout: timeout for running future, defaults to 6
-        :type timeout: number, optional
+        :param timeout: global timeout for running all
         :param num_workers: num of parallel threads, defaults to None
-        :type num_workers: int, optional
         :param disable_logging: disable logging for running func, defaults to False
-        :type disable_logging: bool, optional
         """
         self.objects = objects
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)
 
-    def run(self, func, ignore_exceptions=False):
+    def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
         """Run callable object "func" in parallel
 
         Allow to run callable object in parallel.
@@ -390,9 +391,8 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
         what has stepped first.
 
         :param func: Callable object to run in parallel
-        :type func: Callable
         :param ignore_exceptions: ignore exception and return result, defaults to False
-        :type ignore_exceptions: bool, optional
+        :param unpack_objects: set to True when unpacking of objects to the func as args or kwargs needed
         :returns: list of FutureResult object
         :rtype: {List[FutureResult]}
         """
@@ -414,53 +414,79 @@ class ParallelObject():  # pylint: disable=too-few-public-methods
             return inner
 
         results = []
-        with ThreadPoolExecutor(max_workers=self.num_workers) as pool:
+
+        if not self.disable_logging:
             LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
-            if not self.disable_logging:
-                func = func_wrap(func)
-            futures = []
+            func = func_wrap(func)
 
-            for obj in self.objects:
-                if isinstance(obj, (list, tuple)):
-                    futures.append(pool.submit(func, *obj))
-                elif isinstance(obj, dict):
-                    futures.append(pool.submit(func, **obj))
-                else:
-                    futures.append(pool.submit(func, obj))
+        futures = []
 
-            for future in futures:
-                try:
-                    result = future.result(self.timeout)
-                    results.append(FutureResult(exc=None, result=result))
-                except Exception as ex:  # pylint disable=broad-except
-                    LOGGER.warning('Error happened during running %s in %s:\n%s',
-                                   func.__name__,
-                                   future,
-                                   ex.__class__.__name__)
-                    if ignore_exceptions:
-                        results.append(FutureResult(exc=ex, result=None))
-                        continue
-                    raise
+        for obj in self.objects:
+            if unpack_objects and isinstance(obj, (list, tuple)):
+                futures.append(self._thread_pool.submit(func, *obj))
+            elif unpack_objects and isinstance(obj, dict):
+                futures.append(self._thread_pool.submit(func, **obj))
+            else:
+                futures.append(self._thread_pool.submit(func, obj))
+        time_out = self.timeout
+        for obj_idx, future in enumerate(futures):
+            try:
+                result = future.result(time_out)
+            except FuturesTimeoutError as exception:
+                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=exception, result=None))
+                time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
+            except Exception as exception:  # pylint: disable=broad-except
+                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=exception, result=None))
+            else:
+                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=None, result=result))
+
+        self.clean_up(futures)
+
+        if ignore_exceptions:
+            return results
+
+        timed_out = [result for result in results if isinstance(result.exc, FuturesTimeoutError)]
+        if timed_out:
+            raise FuturesTimeoutError("when running on: %s" % [r.obj for r in results])
+        runs_that_finished_with_exception = [res for res in results if res.exc]
+        if runs_that_finished_with_exception:
+            raise ParallelObjectException(results=results)
         return results
 
+    def clean_up(self, futures):
+        # if there are futures that didn't run  we cancel them
+        for future in futures:
+            future.cancel()
+        self._thread_pool.shutdown(wait=False)
+        # we need to unregister internal function that waits for all threads to finish when interpreter exits
+        atexit.unregister(_python_exit)
 
-class FutureResult:
+
+class ParallelObjectResult:  # pylint: disable=too-few-public-methods
     """Object for result of future in ParallelObject
 
     Return as a result of ParallelObject.run method
     and contain result of func was run in parallel
-    and exception if it happend during run.
+    and exception if it happened during run.
     """
 
-    def __init__(self, result=None, exc=None):
+    def __init__(self, obj, result=None, exc=None):
+        self.obj = obj
         self.result = result
         self.exc = exc
 
-    def __getitem__(self, key):
-        return self.__dict__[key]
 
-    def __setitem__(self, key, value):
-        self.__dict__[key] = value
+class ParallelObjectException(Exception):
+    def __init__(self, results: List[ParallelObjectResult]):
+        super(ParallelObjectException, self).__init__()
+        self.results = results
+
+    def __str__(self):
+        ex_str = ""
+        for res in self.results:
+            if res.exc:
+                ex_str += f"{res.obj}: {res.exc}"
+        return ex_str
 
 
 def clean_cloud_instances(tags_dict):

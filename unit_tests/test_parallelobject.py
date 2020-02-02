@@ -5,8 +5,7 @@ import random
 import concurrent.futures
 
 
-from sdcm.utils.common import ParallelObject
-
+from sdcm.utils.common import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
 
@@ -56,60 +55,54 @@ def dummy_func_with_several_parameters(timeout, msg):
 
 
 class ParallelObjectTester(unittest.TestCase):
-
-    rand_timeouts = [10, 15, 20, 25, 5]
-    unpacking_args = [
-        [10, "test1"],
-        [15, "test2"],
-        [20, "test3"],
-    ]
-    list_as_arg = [
-        [[10, "test1"]],
-        [[15, "test2"]],
-        [[20, "test3"]],
-    ]
-    unpacking_kwargs = [
-        {"timeout": 10, "msg": "test1"},
-        {"timeout": 15, "msg": "test2"},
-        {"timeout": 20, "msg": "test3"},
-    ]
+    max_timout = 3
+    rand_timeouts = random.sample(range(1, max_timout + 1), max_timout)
+    unpacking_args = [[t, f"test{i}"] for i, t in enumerate(rand_timeouts)]
+    list_as_arg = [[[t, f"test{i}"]] for i, t in enumerate(rand_timeouts)]
+    unpacking_kwargs = [{"timeout": t, "msg": f"test{i}"} for i, t in enumerate(rand_timeouts)]
 
     def test_successful_parallel_run_func_returning_tuple(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=30, num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2,
+                                         num_workers=len(self.rand_timeouts))
         results = parallel_object.run(dummy_func_return_tuple)
         returned_results = [r.result for r in results]
         expected_results = [(timeout, 'test') for timeout in self.rand_timeouts]
         self.assertListEqual(returned_results, expected_results)
 
     def test_successful_parallel_run_func_returning_single_value(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=30, num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2)
         results = parallel_object.run(dummy_func_return_single)
         returned_results = [r.result for r in results]
         self.assertListEqual(returned_results, self.rand_timeouts)
 
     def test_raised_exception_by_timeout(self):
+        test_timeout = min(self.rand_timeouts)
+        start_time = time.time()
         with self.assertRaises(concurrent.futures.TimeoutError):
-            parallel_object = ParallelObject(self.rand_timeouts, timeout=10, num_workers=len(self.rand_timeouts))
+            parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout)
             parallel_object.run(dummy_func_return_tuple)
+        run_time = int(time.time() - start_time)
+        self.assertAlmostEqual(first=test_timeout, second=run_time, delta=1)
 
-    def test_exception_raised_in_thread_by_func(self):
-        with self.assertRaises(DummyException):
-            parallel_object = ParallelObject(self.rand_timeouts, timeout=30, num_workers=len(self.rand_timeouts))
+    def test_parallel_object_exception_raised(self):
+        with self.assertRaises(ParallelObjectException):
+            parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2)
             parallel_object.run(dummy_func_raising_exception)
 
     def test_ignore_exception_raised_in_func_and_get_results(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=30, num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2)
         results = parallel_object.run(dummy_func_raising_exception, ignore_exceptions=True)
         for res_obj in results:
+            self.assertIsNotNone(res_obj.obj)
             if res_obj.exc:
                 self.assertIsNone(res_obj.result)
                 self.assertIsInstance(res_obj.exc, DummyException)
             else:
                 self.assertIsNone(res_obj.exc)
-                self.assertListEqual(res_obj.result, "done")
+                self.assertEqual(res_obj.result, "done")
 
     def test_ignore_exception_by_timeout(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=10, num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=min(self.rand_timeouts))
         results = parallel_object.run(dummy_func_return_tuple, ignore_exceptions=True)
         for res_obj in results:
             if res_obj.exc:
@@ -120,30 +113,29 @@ class ParallelObjectTester(unittest.TestCase):
                 self.assertIn(res_obj.result, [(timeout, 'test') for timeout in self.rand_timeouts])
 
     def test_less_number_of_workers_than_length_of_iterable(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=30, num_workers=2)
+        parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2, num_workers=2)
         results = parallel_object.run(dummy_func_return_tuple)
         returned_results = [r.result for r in results]
         expected_results = [(timeout, 'test') for timeout in self.rand_timeouts]
         self.assertListEqual(returned_results, expected_results)
 
     def test_unpack_args_for_func(self):
-        parallel_object = ParallelObject(self.unpacking_args, timeout=30, num_workers=2)
-        results = parallel_object.run(dummy_func_with_several_parameters)
+        parallel_object = ParallelObject(self.unpacking_args, timeout=self.max_timout + 2, num_workers=2)
+        results = parallel_object.run(dummy_func_with_several_parameters, unpack_objects=True)
         returned_results = [r.result for r in results]
-        expected_results = [(timeout, msg)
-                            for timeout, msg in self.unpacking_args]  # pylint: disable=unnecessary-comprehension
+        expected_results = [tuple(item) for item in self.unpacking_args]
         self.assertListEqual(returned_results, expected_results)
 
     def test_unpack_kwargs_for_func(self):
-        parallel_object = ParallelObject(self.unpacking_kwargs, timeout=30, num_workers=2)
-        results = parallel_object.run(dummy_func_with_several_parameters)
+        parallel_object = ParallelObject(self.unpacking_kwargs, timeout=self.max_timout + 2, num_workers=2)
+        results = parallel_object.run(dummy_func_with_several_parameters, unpack_objects=True)
         returned_results = [r.result for r in results]
         expected_results = [(d["timeout"], d["msg"]) for d in self.unpacking_kwargs]
         self.assertListEqual(returned_results, expected_results)
 
     def test_successfull_parallel_run_func_accepted_list_as_parameter(self):
-        parallel_object = ParallelObject(self.list_as_arg, timeout=30, num_workers=len(self.list_as_arg))
-        results = parallel_object.run(dummy_func_accepts_list_as_parameter)
+        parallel_object = ParallelObject(self.list_as_arg, timeout=self.max_timout + 2)
+        results = parallel_object.run(dummy_func_accepts_list_as_parameter, unpack_objects=True)
         returned_results = [r.result for r in results]
         expected_results = [r[0][1] for r in self.list_as_arg]
         self.assertListEqual(returned_results, expected_results)
