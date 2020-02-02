@@ -1814,6 +1814,8 @@ server_encryption_options:
             systemctl restart scylla-manager-agent
         """.format(auth_token))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
+        version = self.remoter.run('scylla-manager-agent --version').stdout
+        self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
 
     def clean_scylla(self):
         """
