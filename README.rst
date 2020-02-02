@@ -426,6 +426,28 @@ FAQ
     # downloading a specific rpms built on master in job 888
     export SCT_UPDATE_DB_PACKAGES=s3://downloads.scylladb.com/rpm/unstable/centos/master/888/scylla/7/x86_64/
 
+**Q:** How to use SCT_SCYLLA_MGMT_PKG and what does it do?
+
+**A:** SCT has the ability to run a job (manager jobs) using your own scylla-manager package files. It will allow you to run one of the manager jobs using your self build package files, for example ::
+
+    # uploading to s3
+    aws s3 cp --recursive rpms s3://scylla-qa-public/`whoami`/
+
+    # download from s3 path
+    export SCT_SCYLLA_MGMT_PKG=s3://scylla-qa-public/`whoami`/rpms
+
+    # uploading to google storage
+    gsutil cp rpms/* gs://scratch.scylladb.com/`whoami`/rpms/
+
+    # download for google storage
+    export SCT_SCYLLA_MGMT_PKG=gs://scratch.scylladb.com/`whoami`/rpms
+
+    # downloading specific rpms built on master in job 762
+    export SCT_SCYLLA_MGMT_PKG=s3://downloads.scylladb.com/manager/rpm/unstable/centos/master/762/scylla-manager/7/x86_64/
+
+    # using a local path, place your rpms into a local folder inside the builder
+    export SCT_SCYLLA_MGMT_PKG=<path_to_my_rpms>/
+
 **Q:** How do I update the configuration docs ?
 
 **A:** Like that ::
