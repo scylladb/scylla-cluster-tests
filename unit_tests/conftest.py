@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from sdcm.prometheus import start_metrics_server
-from sdcm.ndbench_thread import RemoteDocker
+from sdcm.utils.docker import RemoteDocker
 from sdcm import wait
 from sdcm.utils.common import timeout
 from sdcm.sct_events import (start_events_device, stop_events_device)
@@ -57,7 +57,7 @@ def prom_address():
 @pytest.fixture(scope='module')
 def docker_scylla():
     scylla = RemoteDocker(LocalNode(), image_name="scylladb/scylla:3.2.0",
-                          command_line="--alternator-port 8000", extra_docker_opts='-p 8000 --cpus="1"')
+                          command_line="--smp 1 --alternator-port 8000", extra_docker_opts='-p 8000 --cpus="2"')
 
     def db_up():
         try:
@@ -69,6 +69,6 @@ def docker_scylla():
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
-    wait.wait_for(func=db_up, step=5, text='Waiting for DB services to be up', timeout=30, throw_exc=True)
+    wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=30, throw_exc=True)
 
     return scylla

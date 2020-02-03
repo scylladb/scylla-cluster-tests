@@ -3,15 +3,14 @@ import re
 import logging
 import time
 import uuid
-import concurrent.futures
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
-import atexit
-
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import NdbenchStressEvent, Severity
-from sdcm.utils.common import FileFollowerThread, generate_random_string
+from sdcm.utils.common import FileFollowerThread
 from sdcm.remote import FailuresWatcher
+from sdcm.utils.thread import DockerBasedStressThread
+from sdcm.utils.docker import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -81,107 +80,15 @@ def convert_bool_or_int(value):
     return value
 
 
-class RemoteDocker:
-    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts=""):  # pylint: disable=too-many-arguments
-        self.node = node
-        self._internal_ip_address = None
+class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
-        ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
-        res = self.node.remoter.run(
-            f'docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
-        self.docker_id = res.stdout.strip()
-        atexit.register(self.atexit)
-
-    @property
-    def internal_ip_address(self):
-        if not self._internal_ip_address:
-            self._internal_ip_address = self.node.remoter.run(
-                f"docker inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {self.docker_id}").stdout.strip()
-        return self._internal_ip_address
-
-    @property
-    def ip_address(self):
-        return self.internal_ip_address
-
-    @property
-    def external_address(self):
-        return self.internal_ip_address
-
-    @property
-    def private_ip_address(self):
-        return self.internal_ip_address
-
-    @property
-    def remoter(self):
-        return self.run
-
-    def get_port(self, internal_port):
-        """
-        get specific port mapping
-
-        :param internal_port: port exposed by docker
-        :return: the external port automatically open by docker
-        """
-        external_port = self.node.remoter.run(f"docker port {self.docker_id} {internal_port}").stdout.strip()
-        return external_port
-
-    def run(self, cmd, *args, **kwargs):
-        return self.node.remoter.run(f"docker exec -i {self.docker_id} /bin/bash -c '{cmd}'", *args, **kwargs)
-
-    def atexit(self):
-        return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
-
-    def send_files(self, src, dst):
-        self.node.remoter.send_files(src, src)
-        self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}", verbose=False, ignore_status=True)
-
-    def receive_files(self, src, dst):
-        self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
-        self.node.remoter.receive_files(dst, dst)
-
-
-class NdBenchStressThread:  # pylint: disable=too-many-instance-attributes
-
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None, round_robin=False,  # pylint: disable=too-many-arguments
-                 params=None):
-        self.loader_set = loader_set
-        self.timeout = timeout
-        self.stress_num = stress_num
-        self.node_list = node_list if node_list else []
-        self.round_robin = round_robin
-        self.params = params if params else dict()
-
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # remove the ndbench command, and parse the rest of the ; separated values
-        stress_cmd = re.sub(r'^ndbench', '', stress_cmd)
+        stress_cmd = re.sub(r'^ndbench', '', self.stress_cmd)
         self.stress_cmd = ' '.join([f'-Dndbench.config.{param.strip()}' for param in stress_cmd.split(';')])
         self.stress_cmd = f'./gradlew -Dndbench.config.cli.timeoutMillis={self.timeout * 1000}' \
                           f' -Dndbench.config.cass.host={self.node_list[0].external_address} {self.stress_cmd} run'
-
-        self.executor = None
-        self.results_futures = []
-        self.max_workers = 0
-        self.shell_marker = generate_random_string(20)
-
-    def run(self):
-        if self.round_robin:
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-            LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-        else:
-            loaders = self.loader_set.nodes
-
-        self.max_workers = len(loaders) * self.stress_num
-        LOGGER.debug("Starting %d ndbench Worker threads", self.max_workers)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
-
-        for loader_idx, loader in enumerate(loaders):
-            for cpu_idx in range(self.stress_num):
-                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx))]
-
-        return self
-
-    def create_stress_cmd(self, node, loader_idx):
-        pass
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         log_dir = os.path.join(loader.logdir, self.loader_set.name)
@@ -197,7 +104,6 @@ class NdBenchStressThread:  # pylint: disable=too-many-instance-attributes
 
         NdbenchStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
         try:
-
             LOGGER.debug("running: %s", self.stress_cmd)
 
             if self.stress_num > 1:
@@ -222,35 +128,3 @@ class NdBenchStressThread:  # pylint: disable=too-many-instance-attributes
             NdbenchStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
 
         return result
-
-    def get_results(self):
-        ret = []
-        results = []
-        timeout = self.timeout + 120
-        LOGGER.debug('Wait for %s stress threads results', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
-            results.append(future.result())
-
-        return ret
-
-    def verify_results(self):
-        ret = []
-        results = []
-        errors = []
-        timeout = self.timeout + 120
-        LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
-            results.append(future.result())
-
-        return ret, errors
-
-    def kill(self):
-        if self.round_robin:
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-        else:
-            loaders = self.loader_set.nodes
-        for loader in loaders:
-            loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
-                               timeout=60,
-                               ignore_status=True)
