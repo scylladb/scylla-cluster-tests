@@ -10,7 +10,11 @@ store_results_in_elasticsearch: False
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -m mixed -f
 # the below cmd runs about 10 hours
-gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 100 -m mixed -f --non-interactive --cql-features normal"
+gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 100 \
+-m mixed -f --non-interactive --cql-features normal \
+--replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\"
+--oracle-replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '1'}\""
+
 gemini_version: 'latest'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 

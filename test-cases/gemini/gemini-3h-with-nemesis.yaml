@@ -1,11 +1,11 @@
-test_duration: 500
+test_duration: 300
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
 n_monitor_nodes: 1
 instance_type_db: 'i3.large'
 
-user_prefix: 'gemini-basic-3h'
+user_prefix: 'gemini-with-nemesis-3h-normal'
 store_results_in_elasticsearch: False
 
 nemesis_class_name: 'GeminiChaosMonkey'
@@ -13,15 +13,18 @@ nemesis_interval: 5
 
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
+#--async-objects-stabilization-backoff duration   Duration between attempts to validate result sets from MV and SI for example 10ms or 1s (default 10ms)
 # the below cmd runs about 3 hours
-gemini_cmd: "gemini -d --duration 10800s --warmup 1800s -c 200 -m mixed -f --non-interactive --cql-features normal"
+gemini_cmd: "gemini -d --duration 3h --warmup 30m \
+-c 100 -m mixed -f --non-interactive \
+--cql-features normal --async-objects-stabilization-backoff 100ms \
+--replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" \
+--oracle-replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '1'}\""
+
 gemini_version: 'latest'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i3.8xlarge'
-ami_id_db_oracle: 'ami-0081311880c437b65' # ScyllaDB 2.3.3 us-east-1 AMI
+oracle_scylla_version: '3.0.11'
 append_scylla_args_oracle: '--enable-cache false'
-
-send_email: true
-email_recipients: ['rnd-internal@scylladb.com']
