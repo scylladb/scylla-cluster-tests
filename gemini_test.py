@@ -61,7 +61,7 @@ class GeminiTest(ClusterTester):
         test_queue = self.run_gemini(cmd=cmd)
 
         # sleep before run nemesis test_duration * .25
-        sleep_before_start = float(self.params.get('test_duration', 5)) * 60 * .25
+        sleep_before_start = float(self.params.get('test_duration', 5)) * 60 * .1
         self.log.info('Sleep interval {}'.format(sleep_before_start))
         time.sleep(sleep_before_start)
 
@@ -76,11 +76,14 @@ class GeminiTest(ClusterTester):
 
     def get_email_data(self):
         scylla_version = self.db_cluster.nodes[0].scylla_version
+        config_file_name = ";".join([os.path.splitext(os.path.basename(f))[0] for f in self.params['config_files']])
         oracle_db_version = self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else ""
         start_time = format_timestamp(self.start_time)
         critical = self.get_critical_events()
+        job_name = os.environ.get('JOB_NAME')
+        subject_name = job_name if job_name else config_file_name
         return {
-            "subject": 'Gemini - test results: {}'.format(start_time),
+            "subject": 'Result {} {}'.format(subject_name, start_time),
             "username": get_username(),
             "gemini_cmd": self.gemini_results['cmd'],
             "gemini_version": self.loaders.gemini_version,

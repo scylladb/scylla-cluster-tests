@@ -7,9 +7,9 @@ longevityPipeline(
     params: params,
 
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    aws_region: 'us-east-1',
     test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
-    test_config: 'test-cases/gemini/gemini-3h-with-nondisruptive-nemesis.yaml',
+    test_config: 'test-cases/gemini/gemini-3h-with-nemesis.yaml',
 
     timeout: [time: 530, unit: 'MINUTES'],
     email_recipients: 'qa@scylladb.com'
