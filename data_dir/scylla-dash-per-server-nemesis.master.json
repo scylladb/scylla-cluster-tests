@@ -767,21 +767,21 @@
                                 "refId": "F"
                             },
                             {
-                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_95\"}",
+                                "expr": "collectd_ycsb_read_gauge{type=\"p90\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "G"
                             },
                             {
-                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_95\"}",
+                                "expr": "collectd_ycsb_update_gauge{type=\"p90\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "H"
                             },
                             {
-                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_95\"}",
+                                "expr": "collectd_ycsb_insert_gauge{type=\"p90\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
@@ -909,21 +909,21 @@
                                 "refId": "F"
                             },
                             {
-                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_99\"}",
+                                "expr": "collectd_ycsb_read_gauge{type=\"p99\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "G"
                             },
                             {
-                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_99\"}",
+                                "expr": "collectd_ycsb_update_gauge{type=\"p99\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "H"
                             },
                             {
-                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_99\"}",
+                                "expr": "collectd_ycsb_insert_gauge{type=\"p99\"}",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
@@ -950,7 +950,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "short",
+                                "format": "ms",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
