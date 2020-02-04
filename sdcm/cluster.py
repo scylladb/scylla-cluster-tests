@@ -40,7 +40,7 @@ from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
 from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, SSHConnectTimeoutError
+from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url
@@ -78,8 +78,6 @@ SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
-NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError,
-                      ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError)
 
 
 def set_ip_ssh_connections(ip_type):

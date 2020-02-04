@@ -22,7 +22,7 @@ from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.utils.common import retrying, list_instances_aws, get_ami_tags
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
-from sdcm.remote import LocalCmdRunner
+from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -451,7 +451,7 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=[self._instance.id],
                                           Tags=tags_list)
 
-    @retrying(n=10, sleep_time=5, allowed_exceptions=cluster.NETWORK_EXCEPTIONS, message="Retrying set_hostname")
+    @retrying(n=10, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/

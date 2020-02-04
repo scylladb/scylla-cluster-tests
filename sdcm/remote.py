@@ -28,6 +28,7 @@ from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
 from paramiko import SSHException, RSAKey
+from paramiko.ssh_exception import NoValidConnectionsError
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
@@ -50,6 +51,10 @@ class SSHConnectTimeoutError(Exception):
     """
     Remote command output check failed.
     """
+
+
+NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError, EOFError,
+                      ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError)
 
 
 def _scp_remote_escape(filename):
@@ -105,8 +110,16 @@ class CommandRunner:
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
 
+    def _setup_watchers(self, verbose, log_file, additional_watchers):
+        watchers = additional_watchers if additional_watchers else []
+        if verbose:
+            watchers.append(OutputWatcher(self.log))
+        if log_file:
+            watchers.append(LogWriteWatcher(log_file))
+        return watchers
+
     def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
-            connect_timeout=300, verbose=True, log_file=None, retry=0):
+            verbose=True, new_session=False, log_file=None, retry=0, watchers=None):
         raise NotImplementedError("Should be implemented in subclasses")
 
     def _create_connection(self):
@@ -141,32 +154,41 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
         return Connection(host=self.hostname, user=self.user)
 
     def run(self, cmd, timeout=300, ignore_status=False,  # pylint: disable=too-many-arguments
-            connect_timeout=300, verbose=True, log_file=None, retry=0):
+            verbose=True, new_session=False, log_file=None, retry=1, watchers=None):
 
-        watchers = []
-        if verbose:
-            watchers.append(OutputWatcher(self.log))
-        start_time = time.time()
-        if verbose:
-            self.log.debug('Running command "{}"...'.format(cmd))
-        try:
-            result = self.connection.local(cmd, warn=ignore_status,
-                                           encoding='utf-8',
-                                           hide=True,
-                                           watchers=watchers,
-                                           timeout=timeout,
-                                           env=os.environ, replace_env=True)
+        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
-        except (Failure, UnexpectedExit) as details:
-            if hasattr(details, "result"):
-                self._print_command_results(details.result, verbose, ignore_status)
-            raise
+        @retrying(n=retry)
+        def _run():
 
-        setattr(result, 'duration', time.time() - start_time)
-        setattr(result, 'exit_status', result.exited)
+            start_time = time.time()
+            if verbose:
+                self.log.debug('Running command "{}"...'.format(cmd))
+            try:
+                command_kwargs = dict(
+                    command=cmd, warn=ignore_status,
+                    encoding='utf-8',
+                    hide=True,
+                    watchers=watchers,
+                    timeout=timeout,
+                    env=os.environ, replace_env=True
+                )
+                if new_session:
+                    with self._create_connection() as connection:
+                        result = connection.local(**command_kwargs)
+                else:
+                    result = self.connection.local(**command_kwargs)
+                setattr(result, 'duration', time.time() - start_time)
+                setattr(result, 'exit_status', result.exited)
+                return result
 
+            except (Failure, UnexpectedExit) as details:
+                if hasattr(details, "result"):
+                    self._print_command_results(details.result, verbose, ignore_status)
+                raise
+
+        result = _run()
         self._print_command_results(result, verbose, ignore_status)
-
         return result
 
 
@@ -193,8 +215,13 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
 
-    def __del__(self):
+    def stop(self):
+        self._ssh_is_up.clear()
         self.stop_ssh_up_thread()
+        self.connection.close()
+
+    def __del__(self):
+        self.stop()
 
     def _create_connection(self):
         return Connection(host=self.hostname,
@@ -224,34 +251,30 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             return "SSH access -> 'ssh %s@%s'" % (self.user,
                                                   self.hostname)
 
-    def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments,arguments-differ
-            connect_timeout=300, verbose=True,
-            log_file=None, retry=1, watchers=None, new_session=False):
-        self.connection.connect_timeout = connect_timeout
-        watchers = watchers if watchers else []
-        if verbose:
-            watchers.append(OutputWatcher(self.log))
-        if log_file:
-            watchers.append(LogWriteWatcher(log_file))
+    def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
+            verbose=True, new_session=False, log_file=None, retry=1, watchers=None):
+
+        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
         @retrying(n=retry)
         def _run():
-            if not self.is_up(timeout=connect_timeout):
+            if not self.is_up(timeout=self.connect_timeout):
                 err_msg = "Unable to run '{}': failed connecting to '{}' during {}s"
-                raise SSHConnectTimeoutError(err_msg.format(cmd, self.hostname, connect_timeout))
+                raise SSHConnectTimeoutError(err_msg.format(cmd, self.hostname, self.connect_timeout))
             try:
                 if verbose:
                     self.log.debug('Running command "{}"...'.format(cmd))
                 start_time = time.time()
+                command_kwargs = dict(
+                    command=cmd, warn=ignore_status,
+                    encoding='utf-8', hide=True,
+                    watchers=watchers, timeout=timeout
+                )
                 if new_session:
                     with self._create_connection() as connection:
-                        result = connection.run(cmd, warn=ignore_status,
-                                                encoding='utf-8', hide=True,
-                                                watchers=watchers, timeout=timeout)
+                        result = connection.run(**command_kwargs)
                 else:
-                    result = self.connection.run(cmd, warn=ignore_status,
-                                                 encoding='utf-8', hide=True,
-                                                 watchers=watchers, timeout=timeout)
+                    result = self.connection.run(**command_kwargs)
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
                 return result
@@ -639,62 +662,6 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         command = "rsync %s %s --timeout=300 --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, ssh_cmd,
                           " ".join(src), dst)
-
-    def run_output_check(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
-                         stdout_ok_regexp=None, stdout_err_regexp=None,
-                         stderr_ok_regexp=None, stderr_err_regexp=None,
-                         connect_timeout=300):
-        """
-        Run a cmd on the remote host, check output to determine success.
-
-        :param cmd: The cmd line string.
-        :param timeout: Time limit in seconds before attempting to kill the
-            running process. The run() function will take a few seconds
-            longer than 'timeout' to complete if it has to kill the process.
-        :param ignore_status: Do not raise an exception, no matter
-            what the exit code of the cmd is.
-        :param stdout_ok_regexp: Regular expression that should be in stdout
-            if the cmd was successul.
-        :param stdout_err_regexp: Regular expression that should be in stdout
-            if the cmd failed.
-        :param stderr_ok_regexp: regexp that should be in stderr if the
-            cmd was successul.
-        :param stderr_err_regexp: Regexp that should be in stderr if the
-            cmd failed.
-        :param connect_timeout: Connection timeout that will be passed to run.
-
-        :raises: OutputCheckError under the following conditions:
-            - The exit code of the cmd execution was not 0.
-            - If stderr_err_regexp is found in stderr,
-            - If stdout_err_regexp is found in stdout,
-            - If stderr_ok_regexp is not found in stderr.
-            - If stdout_ok_regexp is not found in stdout,
-        """
-
-        # We ignore the status, because we will handle it at the end.
-        result = self.run(cmd=cmd, timeout=timeout, ignore_status=True,
-                          connect_timeout=connect_timeout)
-
-        # Look for the patterns, in order
-        for (regexp, stream) in ((stderr_err_regexp, result.stderr),
-                                 (stdout_err_regexp, result.stdout)):
-            if regexp and stream:
-                err_re = re.compile(regexp)
-                if err_re.search(stream):
-                    e_msg = ('%s failed, found error pattern: "%s"' %
-                             (cmd, regexp))
-                    raise OutputCheckError(e_msg, result)
-
-        for (regexp, stream) in ((stderr_ok_regexp, result.stderr),
-                                 (stdout_ok_regexp, result.stdout)):
-            if regexp and stream:
-                ok_re = re.compile(regexp)
-                if ok_re.search(stream):
-                    if ok_re.search(stream):
-                        return
-
-        if not ignore_status and result.exit_status > 0:
-            raise Failure(result)
 
 
 class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
