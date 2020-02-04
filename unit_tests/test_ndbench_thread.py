@@ -8,28 +8,36 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 pytestmark = pytest.mark.usefixtures('events')
 
 
-def test_01_cql_api(docker_scylla):
+def test_01_cql_api(request, docker_scylla):
     loader_set = LocalLoaderSetDummy()
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5)
+
+    def cleanup_thread():
+        ndbench_thread.kill()
+    request.addfinalizer(cleanup_thread)
     ndbench_thread.run()
     ndbench_thread.get_results()
 
 
-def test_02_cql_kill(docker_scylla):
+def test_02_cql_kill(request, docker_scylla):
     """
     verifies that kill command on the NdBenchStressThread is working
     """
     loader_set = LocalLoaderSetDummy()
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800'
     ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500)
+
+    def cleanup_thread():
+        ndbench_thread.kill()
+    request.addfinalizer(cleanup_thread)
     ndbench_thread.run()
     time.sleep(3)
     ndbench_thread.kill()
     ndbench_thread.get_results()
 
 
-def test_03_dynamodb_api(docker_scylla, events):
+def test_03_dynamodb_api(request, docker_scylla, events):
     """
     this test isn't working yet, since we didn't figured out a way to use ndbench with dynamodb
     """
@@ -38,7 +46,12 @@ def test_03_dynamodb_api(docker_scylla, events):
     # start a command that would yield errors
     loader_set = LocalLoaderSetDummy()
     cmd = f'ndbench cli.clientName=DynamoDBKeyValue ; numKeys=20000000 ; numReaders=8; numWriters=8 ; readRateLimit=7200 ; writeRateLimit=1800; dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.internal_ip_address}:8000'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20)
+
+    def cleanup_thread():
+        ndbench_thread.kill()
+    request.addfinalizer(cleanup_thread)
+
     ndbench_thread.run()
     ndbench_thread.get_results()
 

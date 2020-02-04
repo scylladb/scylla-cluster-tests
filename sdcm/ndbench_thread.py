@@ -101,29 +101,35 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                 NdbenchStressEvent(type='error', severity=Severity.CRITICAL,
                                    node=loader, stress_cmd=self.stress_cmd, errors=[str(line)])
 
+        LOGGER.debug("running: %s", self.stress_cmd)
+
+        if self.stress_num > 1:
+            node_cmd = f'taskset -c {cpu_idx} bash -c "{self.stress_cmd}"'
+        else:
+            node_cmd = self.stress_cmd
+
+        docker = RemoteDocker(loader, 'scylladb/hydra-loaders:ndbench-jdk8-20200209',
+                              extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+
+        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; cd /ndbench && {node_cmd}'
+
         NdbenchStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
-        try:
-            LOGGER.debug("running: %s", self.stress_cmd)
 
-            if self.stress_num > 1:
-                node_cmd = f'taskset -c {cpu_idx} bash -c "{self.stress_cmd}"'
-            else:
-                node_cmd = self.stress_cmd
-
-            docker = RemoteDocker(loader, 'scylladb/hydra-loaders:ndbench-jdk8-20200206',
-                                  extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
-
-            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; cd /ndbench && {node_cmd}'
-
-            with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name):
+        with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name):
+            try:
                 result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + 60,
+                                    timeout=self.timeout + self.shutdown_timeout,
                                     ignore_status=True,
                                     log_file=log_file_name,
                                     verbose=True,
                                     watchers=[FailuresWatcher(r'\sERROR|\sFAILURE|\sFAILED', callback=raise_event_callback, raise_exception=False)])
 
-        finally:
-            NdbenchStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
+            except Exception as exc:  # pylint: disable=broad-except
+                errors_str = self.format_error(exc)
+                NdbenchStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
+                                   log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                   errors=errors_str)
+            finally:
+                NdbenchStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
 
         return result
