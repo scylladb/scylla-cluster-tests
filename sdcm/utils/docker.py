@@ -1,5 +1,4 @@
 import os
-import atexit
 
 
 def running_in_docker():
@@ -20,7 +19,6 @@ class RemoteDocker:
         res = self.node.remoter.run(
             f'docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
         self.docker_id = res.stdout.strip()
-        atexit.register(self.atexit)
 
     @property
     def internal_ip_address(self):
@@ -58,7 +56,7 @@ class RemoteDocker:
     def run(self, cmd, *args, **kwargs):
         return self.node.remoter.run(f"docker exec -i {self.docker_id} /bin/bash -c '{cmd}'", *args, **kwargs)
 
-    def atexit(self):
+    def kill(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
     def send_files(self, src, dst):

@@ -47,8 +47,10 @@ class YcsbStatsPublisher(FileFollowerThread):
         verify_regex = re.compile(r'\[VERIFY:(.*?)\]')
         verify_content = verify_regex.findall(line)[0]
 
+        logging.info(verify_content)
         for status_match in verify_status_regex.finditer(verify_content):
             stat = status_match.groupdict()
+            logging.info(stat)
             self.set_metric('verify', stat['status'], float(stat['value']))
 
     def run(self):
@@ -87,7 +89,11 @@ class YcsbStatsPublisher(FileFollowerThread):
 
                             for key, value in match.groupdict().items():
                                 if not key == 'count':
-                                    value = float(value) / 1000.0
+                                    try:
+                                        value = float(value) / 1000.0
+                                    except ValueError:
+                                        LOGGER.exception("value isn't a number, default to 0")
+                                        value = float(0)
                                 self.set_metric(operation, key, float(value))
 
                 except Exception:  # pylint: disable=broad-except
@@ -154,23 +160,29 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
                                 stress_cmd=self.stress_cmd, errors=[line])
 
+        LOGGER.debug("running: %s", self.stress_cmd)
+
+        if self.stress_num > 1:
+            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, self.stress_cmd)
+        else:
+            node_cmd = self.stress_cmd
+
+        node_cmd = 'cd /YCSB && {}'.format(node_cmd)
+
         YcsbStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
-        try:
-            LOGGER.debug("running: %s", self.stress_cmd)
 
-            if self.stress_num > 1:
-                node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, self.stress_cmd)
-            else:
-                node_cmd = self.stress_cmd
-
-            node_cmd = 'cd /YCSB && {}'.format(node_cmd)
-
-            with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
+        with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
+            try:
                 result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + 60,
+                                    timeout=self.timeout + self.shutdown_timeout,
                                     log_file=log_file_name,
                                     watchers=[FailuresWatcher(r'ERROR|UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
-        finally:
-            YcsbStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
+            except Exception as exc:  # pylint: disable=broad-except
+                errors_str = self.format_error(exc)
+                YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
+                                log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                errors=errors_str)
+            finally:
+                YcsbStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
 
         return result

@@ -42,7 +42,7 @@ class EventsLogUtils:
         return log_content_after
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
 def events():
     temp_dir = tempfile.mkdtemp()
     start_events_device(temp_dir)
@@ -56,7 +56,7 @@ def prom_address():
     yield start_metrics_server()
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
 def docker_scylla():
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
@@ -79,4 +79,6 @@ def docker_scylla():
 
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=30, throw_exc=True)
 
-    return scylla
+    yield scylla
+
+    scylla.kill()

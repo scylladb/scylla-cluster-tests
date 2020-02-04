@@ -13,7 +13,7 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 pytestmark = pytest.mark.usefixtures('events')
 
 
-def test_01_dynamodb_api(docker_scylla, prom_address):
+def test_01_dynamodb_api(request, docker_scylla, prom_address):
     loader_set = LocalLoaderSetDummy()
     alternator_port = 8000
 
@@ -26,6 +26,11 @@ def test_01_dynamodb_api(docker_scylla, prom_address):
     cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=dict(
         alternator_port=f'{alternator_port}', dynamodb_primarykey_type='HASH_AND_RANGE'))
+
+    def cleanup_thread():
+        ycsb_thread.kill()
+    request.addfinalizer(cleanup_thread)
+
     ycsb_thread.run()
 
     @timeout(timeout=10)
@@ -42,7 +47,7 @@ def test_01_dynamodb_api(docker_scylla, prom_address):
     ycsb_thread.get_results()
 
 
-def test_02_dynamodb_api_dataintegrity(docker_scylla, prom_address, events):
+def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events):
     loader_set = LocalLoaderSetDummy()
     alternator_port = 8000
 
@@ -58,20 +63,30 @@ def test_02_dynamodb_api_dataintegrity(docker_scylla, prom_address, events):
 
     # 2. do write without dataintegrity=true
     cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512'
-    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=10, params=dict(
+    ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=dict(
         alternator_port=f'{alternator_port}', dynamodb_primarykey_type='HASH_AND_RANGE'))
-    ycsb_thread.run()
-    ycsb_thread.get_results()
-    ycsb_thread.kill()
+
+    def cleanup_thread1():
+        ycsb_thread1.kill()
+    request.addfinalizer(cleanup_thread1)
+
+    ycsb_thread1.run()
+    ycsb_thread1.get_results()
+    ycsb_thread1.kill()
 
     # 3. do read with dataintegrity=true
-    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p hdrhistogram.summary.addstatus=true'
-    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=10, params=dict(
+    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p hdrhistogram.summary.addstatus=true -p operationcount=100000000'
+    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=dict(
         alternator_port=f'{alternator_port}', dynamodb_primarykey_type='HASH_AND_RANGE'))
-    ycsb_thread.run()
+
+    def cleanup_thread2():
+        ycsb_thread2.kill()
+    request.addfinalizer(cleanup_thread2)
+
+    ycsb_thread2.run()
 
     # 4. wait for expected metrics to be available
-    @timeout(timeout=10)
+    @timeout(timeout=20)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
         regex = re.compile(r'^collectd_ycsb_verify_gauge.*?([0-9\.]*?)$', re.MULTILINE)
@@ -79,10 +94,10 @@ def test_02_dynamodb_api_dataintegrity(docker_scylla, prom_address, events):
         assert 'collectd_ycsb_verify_gauge' in output
         assert 'UNEXPECTED_STATE' in output
         matches = regex.findall(output)
-        assert all(float(i) > 0 for i in matches), output
+        assert all(float(i) >= 0 for i in matches), output
 
     check_metrics()
-    ycsb_thread.get_results()
+    ycsb_thread2.get_results()
 
     # 5. check that events with the expected error were raised
     critical_log_content_after = events.wait_for_event_log_change('critical.log', critical_log_content_before)

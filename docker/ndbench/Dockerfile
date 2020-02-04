@@ -5,4 +5,5 @@ RUN apt -y update && apt -y install git && \
     ./gradlew build
 
 FROM openjdk:8 as app
+COPY --from=builder /root/.gradle /root/.gradle
 COPY --from=builder /ndbench /ndbench

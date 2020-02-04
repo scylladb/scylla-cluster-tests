@@ -44,6 +44,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.results_futures = []
         self.max_workers = 0
         self.shell_marker = generate_random_string(20)
+        self.shutdown_timeout = 180  # extra 3 minutes
 
     def run(self):
         if self.round_robin:
@@ -97,3 +98,22 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
             loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
                                timeout=60,
                                ignore_status=True)
+
+    @staticmethod
+    def format_error(exc):
+        """
+        format nicely the excpetion we get from stress command failures
+
+        :param exc: the exception
+        :return: string to add to the event
+        """
+        #  pylint: disable=no-member
+        if hasattr(exc, 'result') and exc.result.failed:
+            stderr = exc.result.stderr
+            if len(stderr) > 100:
+                stderr = stderr[:100]
+            errors_str = f'Stress command completed with bad status {exc.result.exited}: {stderr}'
+        else:
+            errors_str = f'Stress command execution failed with: {str(exc)}'
+
+        return errors_str
