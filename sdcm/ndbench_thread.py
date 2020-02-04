@@ -91,10 +91,9 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                           f' -Dndbench.config.cass.host={self.node_list[0].external_address} {self.stress_cmd} run'
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        log_dir = os.path.join(loader.logdir, self.loader_set.name)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, f'ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
+        if not os.path.exists(loader.logdir):
+            os.makedirs(loader.logdir)
+        log_file_name = os.path.join(loader.logdir, f'ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ndbench local log: %s', log_file_name)
 
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
