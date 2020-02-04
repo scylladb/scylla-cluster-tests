@@ -5,6 +5,7 @@ repos:
     rev: v2.0.0
     hooks:
     -   id: trailing-whitespace
+        exclude: .git/*
     -   id: end-of-file-fixer
         exclude: .git/*
     -   id: check-yaml

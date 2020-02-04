@@ -131,10 +131,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
 
-        log_dir = os.path.join(loader.logdir, self.loader_set.name)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        log_file_name = os.path.join(log_dir, 'ycsb-l%s-c%s-%s.log' %
+        if not os.path.exists(loader.logdir):
+            os.makedirs(loader.logdir)
+        log_file_name = os.path.join(loader.logdir, 'ycsb-l%s-c%s-%s.log' %
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
