@@ -1,11 +1,13 @@
 test_duration: 180
-stress_cmd: ["bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p recordcount=20000000 -p fieldcount=10 -p fieldlength=1024 -s",
-             "bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=20000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=10000 -s"]
+prepare_write_cmd: [
+  "bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p recordcount=20971520 -p fieldcount=10 -p fieldlength=512", ]
+stress_cmd: [
+  "bin/ycsb run  dynamodb -P workloads/workloada -threads 250 -p recordcount=20971520 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300", ]
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 n_loaders: 3
-instance_type_db: 'i3.2xlarge'
+instance_type_db: 'i3.4xlarge'
 n_monitor_nodes: 1
 n_db_nodes: 3
 
