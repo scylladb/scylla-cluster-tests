@@ -7,7 +7,7 @@ import tempfile
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events import YcsbStressEvent
+from sdcm.sct_events import YcsbStressEvent, Severity
 from sdcm.remote import FailuresWatcher
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.thread import DockerBasedStressThread
@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 class YcsbStatsPublisher(FileFollowerThread):
     METRICS = dict()
-    collectible_ops = ['read', 'update', 'cleanup', 'read-failed', 'update-failed']
+    collectible_ops = ['read', 'insert', 'update', 'cleanup', 'read-failed', 'update-failed', 'verify']
 
     def __init__(self, loader_node, loader_idx, ycsb_log_filename):
         super().__init__()
@@ -42,6 +42,15 @@ class YcsbStatsPublisher(FileFollowerThread):
         metric = self.METRICS[self.gauge_name(operation)]
         metric.labels(self.loader_node.ip_address, self.loader_idx, name).set(value)
 
+    def handle_verify_metric(self, line):
+        verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
+        verify_regex = re.compile(r'\[VERIFY:(.*?)\]')
+        verify_content = verify_regex.findall(line)[0]
+
+        for status_match in verify_status_regex.finditer(verify_content):
+            stat = status_match.groupdict()
+            self.set_metric('verify', stat['status'], float(stat['value']))
+
     def run(self):
         # pylint: disable=too-many-nested-blocks
 
@@ -57,7 +66,7 @@ class YcsbStatsPublisher(FileFollowerThread):
                 fr'.*?Max=(?P<max>\d*?),.*?Min=(?P<min>\d*?),'
                 fr'.*?Avg=(?P<avg>.*?),.*?90=(?P<p90>\d*?),'
                 fr'.*?99=(?P<p99>\d*?),.*?99.9=(?P<p999>\d*?),'
-                fr'.*?99.99=(?P<p9999>\d*?)\]'
+                fr'.*?99.99=(?P<p9999>\d*?)[\],\s]'
             )
 
         while not self.stopped():
@@ -73,6 +82,9 @@ class YcsbStatsPublisher(FileFollowerThread):
                     for operation, regex in regex_dict.items():
                         match = regex.search(line)
                         if match:
+                            if operation == 'verify':
+                                self.handle_verify_metric(line)
+
                             for key, value in match.groupdict().items():
                                 if not key == 'count':
                                     value = float(value) / 1000.0
@@ -127,7 +139,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
 
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200130",
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200204",
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
 
@@ -139,7 +151,8 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
             if line:
-                YcsbStressEvent('error', node=loader, stress_cmd=self.stress_cmd, errors=[line])
+                YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
+                                stress_cmd=self.stress_cmd, errors=[line])
 
         YcsbStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
         try:
@@ -156,7 +169,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 result = docker.run(cmd=node_cmd,
                                     timeout=self.timeout + 60,
                                     log_file=log_file_name,
-                                    watchers=[FailuresWatcher('ERROR', callback=raise_event_callback)])
+                                    watchers=[FailuresWatcher(r'ERROR|UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
         finally:
             YcsbStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
 
