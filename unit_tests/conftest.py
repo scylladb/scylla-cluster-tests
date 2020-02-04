@@ -1,6 +1,8 @@
+import os
 import logging
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from sdcm.prometheus import start_metrics_server
@@ -56,8 +58,14 @@ def prom_address():
 
 @pytest.fixture(scope='module')
 def docker_scylla():
+    # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
+    # since we are going to mount it in a DinD (docker-inside-docker) setup
+    base_dir = os.environ.get("_SCT_BASE_DIR", None)
+    entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
+    entryfile_path = entryfile_path.joinpath('./docker/scylla-sct/entry.sh')
+
     scylla = RemoteDocker(LocalNode(), image_name="scylladb/scylla:3.2.0",
-                          command_line="--smp 1 --alternator-port 8000", extra_docker_opts='-p 8000 --cpus="2"')
+                          command_line="--smp 1 --alternator-port 8000", extra_docker_opts=f'-p 8000 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint /entry.sh')
 
     def db_up():
         try:
