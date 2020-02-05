@@ -786,24 +786,27 @@
                                 "refId": "F"
                             },
                             {
-                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_95\"}",
+                                "expr": "avg(collectd_ycsb_read_gauge{type=\"p90\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB READ [{{instance}}]",
                                 "refId": "G"
                             },
                             {
-                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_95\"}",
+                                "expr": "avg(collectd_ycsb_update_gauge{type=\"p90\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB UPDATE [{{instance}}]",
                                 "refId": "H"
                             },
                             {
-                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_95\"}",
+                                "expr": "avg(collectd_ycsb_insert_gauge{type=\"p90\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB INSERT [{{instance}}]",
                                 "refId": "I"
                             }
                         ],
@@ -921,24 +924,27 @@
                                 "refId": "F"
                             },
                             {
-                                "expr": "collectd_ycsb_read_gauge{type=\"lat_perc_99\"}",
+                                "expr": "avg(collectd_ycsb_read_gauge{type=\"p99\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB READ [{{instance}}]",
                                 "refId": "G"
                             },
                             {
-                                "expr": "collectd_ycsb_update_gauge{type=\"lat_perc_99\"}",
+                                "expr": "avg(collectd_ycsb_update_gauge{type=\"p99\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB UPDATE [{{instance}}]",
                                 "refId": "H"
                             },
                             {
-                                "expr": "collectd_ycsb_cleanup_gauge{type=\"lat_perc_99\"}",
+                                "expr": "avg(collectd_ycsb_insert_gauge{type=\"p99\"}) by (instance)",
                                 "format": "time_series",
                                 "interval": "15s",
                                 "intervalFactor": 1,
+                                "legendFormat": "YCSB INSERT [{{instance}}]",
                                 "refId": "I"
                             }
                         ],

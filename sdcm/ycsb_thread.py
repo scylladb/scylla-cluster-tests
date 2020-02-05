@@ -157,6 +157,41 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
         return stress_cmd
 
+    @staticmethod
+    def parse_final_output(result):
+        """
+        parse ycsb final results to match what we get out of cassandra-stress
+        latencies returned in milliseconds
+
+        :param result: output of ycsb command
+        :return: dict
+        """
+        ops_regex = re.compile(r'\[OVERALL\],\sThroughput\(ops/sec\),\s(?P<op_rate>.*)')
+        latency_99_regex = re.compile(
+            r'\[(READ|INSERT|UPDATE)\],\s99thPercentileLatency\(us\),\s(?P<latency_99th_percentile>.*)')
+        latency_mean_regex = re.compile(r'\[(READ|INSERT|UPDATE)\],\sAverageLatency\(us\),\s(?P<latency_mean>.*)')
+
+        output = {'latency 99th percentile': 0,
+                  'latency mean': 0,
+                  'op rate': 0
+                  }
+        for line in result.stdout.splitlines():
+            match = ops_regex.match(line)
+            if match:
+                output['op rate'] = match.groupdict()['op_rate']
+            match = latency_99_regex.match(line)
+            if match:
+                output['latency 99th percentile'] += float(match.groups()[1]) / 1000.0
+                output['latency 99th percentile'] /= 2
+            match = latency_mean_regex.match(line)
+            if match:
+                output['latency mean'] += float(match.groups()[1]) / 1000.0
+                output['latency mean'] /= 2
+
+        # output back to strings
+        output = {k: str(v) for k, v in output.items()}
+        return output
+
     def _run_stress(self, loader, loader_idx, cpu_idx):
         dns_options = ""
         if self.params.get('alternator_use_dns_routing'):
@@ -198,7 +233,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                     timeout=self.timeout + self.shutdown_timeout,
                                     log_file=log_file_name,
                                     watchers=[FailuresWatcher(r'\sERROR|=UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
-                return result
+
+                return self.parse_final_output(result)
+
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,

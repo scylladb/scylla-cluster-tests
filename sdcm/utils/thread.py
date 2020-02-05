@@ -71,17 +71,15 @@ class DockerBasedStressThread:
         raise NotImplementedError()
 
     def get_results(self):
-        ret = []
         results = []
         timeout = self.timeout + 120
         LOGGER.debug('Wait for %s stress threads results', self.max_workers)
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
-        return ret
+        return results
 
     def verify_results(self):
-        ret = []
         results = []
         errors = []
         timeout = self.timeout + 120
@@ -89,7 +87,7 @@ class DockerBasedStressThread:
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
-        return ret, errors
+        return results, errors
 
     def kill(self):
         for loader in self.loaders:

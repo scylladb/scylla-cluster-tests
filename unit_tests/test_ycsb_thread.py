@@ -51,7 +51,13 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address):
         assert all(float(i) > 0 for i in matches), output
 
     check_metrics()
-    ycsb_thread.get_results()
+
+    output = ycsb_thread.get_results()
+    assert 'latency mean' in output[0]
+    assert float(output[0]['latency mean']) > 0
+
+    assert 'latency 99th percentile' in output[0]
+    assert float(output[0]['latency 99th percentile']) > 0
 
 
 def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events):

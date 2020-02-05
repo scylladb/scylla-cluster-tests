@@ -80,6 +80,7 @@ def call(Map pipelineParams) {
                                         stage("Run ${sub_test}"){
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
+                                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     dir('scylla-cluster-tests') {
                                                         checkout scm
 
@@ -91,7 +92,7 @@ def call(Map pipelineParams) {
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
                                                         export SCT_REGION_NAME=${pipelineParams.aws_region}
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
-
+                                                        export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
                                                         elif [[ ! -z "${params.scylla_version}" ]] ; then
@@ -102,6 +103,7 @@ def call(Map pipelineParams) {
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
                                                         fi
+
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"

@@ -25,8 +25,6 @@ from cassandra import AlreadyExists, InvalidRequest
 
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.alternator import create_table as alternator_create_table
-from sdcm.utils.common import normalize_ipv6_url
 
 
 class LongevityTest(ClusterTester):
@@ -49,18 +47,12 @@ class LongevityTest(ClusterTester):
 
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
-            if 'cassandra-stress'in stress_cmd:
-                stress_queue.append(self.run_stress_thread(**params))
-            elif stress_cmd.startswith('scylla-bench'):
+            if stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
                                                                  stats_aggregate_cmds=False,
-                                                                 round_robin=self.params.get('round_robin',
-                                                                                             default=False)))
-            elif stress_cmd.startswith('bin/ycsb'):
-                stress_queue.append(self.run_ycsb_thread(**params))
-
-            elif stress_cmd.startswith('ndbench'):
-                stress_queue.append(self.run_ndbench_thread(**params))
+                                                                 round_robin=self.params.get('round_robin')))
+            else:
+                stress_queue.append(self.run_stress_thread(**params))
 
             time.sleep(10)
 
@@ -175,21 +167,7 @@ class LongevityTest(ClusterTester):
         prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
         keyspace_num = self.params.get('keyspace_num', default=1)
 
-        alternator_port = self.params.get('alternator_port', default=None)
-        if alternator_port:
-            endpoint_url = 'http://{}:{}'.format(normalize_ipv6_url(self.db_cluster.nodes[0].external_address),
-                                                 alternator_port)
-
-            if self.params.get('alternator_enforce_authorization'):
-                with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute("""
-                        INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
-                    """, (self.params.get('alternator_access_key_id'),
-                          self.params.get('alternator_secret_access_key')))
-
-            alternator_create_table(endpoint_url, test_params=self.params, table_name='usertable')
-            params = dict(self.params, alternator_write_isolation='forbid')
-            alternator_create_table(endpoint_url, test_params=params, table_name='usertable_no_lwt')
+        self.pre_create_alternator_tables()
 
         if prepare_write_cmd:
             self.run_prepare_write_cmd()
