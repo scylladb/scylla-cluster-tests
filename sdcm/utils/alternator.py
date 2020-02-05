@@ -56,6 +56,12 @@ def create_table(endpoint_url, test_params, table_name=None):
         assert 'already exists' in str(ex)
 
 
+def set_table_write_isolation(table_name='usertable', isolation=None, endpoint_url=None):
+    dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
+    table = dynamodb.Table(table_name)
+    set_write_isolation(table, isolation)
+
+
 def set_write_isolation(table, isolation):
     got = table.meta.client.describe_table(TableName=table.name)['Table']
     arn = got['TableArn']

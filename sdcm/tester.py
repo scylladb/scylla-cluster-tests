@@ -55,7 +55,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys, get_username, PageFetcher, rows_to_list
+    get_testrun_status, download_encrypt_keys, get_username, PageFetcher, rows_to_list, normalize_ipv6_url
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
@@ -71,6 +71,7 @@ from sdcm.localhost import LocalHost
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
+from sdcm.utils.alternator import create_table as alternator_create_table
 
 configure_logging()
 
@@ -278,6 +279,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if self.db_cluster.nodes:
                 self.init_nodes(db_cluster=self.db_cluster)
                 self.set_system_auth_rf()
+
                 db_node_address = self.db_cluster.nodes[0].ip_address
                 self.loaders.wait_for_init(db_node_address=db_node_address)
 
@@ -321,6 +323,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                 "'replication_factor': %s};" % system_auth_rf)
             self.log.info('repair system_auth keyspace ...')
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
+
+    def pre_create_alternator_tables(self):
+
+        alternator_port = self.params.get('alternator_port', default=None)
+        if alternator_port:
+            self.log.info("Going to create alternator tables")
+            endpoint_url = 'http://{}:{}'.format(normalize_ipv6_url(self.db_cluster.nodes[0].external_address),
+                                                 alternator_port)
+
+            if self.params.get('alternator_enforce_authorization'):
+                with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                    session.execute("""
+                        INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
+                    """, (self.params.get('alternator_access_key_id'),
+                          self.params.get('alternator_secret_access_key')))
+
+            alternator_create_table(endpoint_url, self.params)
+            params = dict(self.params, alternator_write_isolation='forbid')
+            alternator_create_table(endpoint_url, test_params=params, table_name='usertable_no_lwt')
 
     def get_nemesis_class(self):
         """
@@ -721,7 +742,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments
-                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None):
+                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):
+
+        params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
+                      keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
+                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
+
+        if stress_cmd.startswith('cassandra-stress'):
+            return self.run_stress_cassandra_thread(**params)
+        elif stress_cmd.startswith('scylla-bench'):
+            return self.run_stress_thread_bench(**params)
+        elif stress_cmd.startswith('bin/ycsb'):
+            return self.run_ycsb_thread(**params)
+        elif stress_cmd.startswith('ndbench'):
+            return self.run_ndbench_thread(**params)
+        else:
+            raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
+
+    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
+                                    round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
@@ -745,8 +784,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return cs_thread
 
-    def run_stress_thread_bench(self, stress_cmd, duration=None, stats_aggregate_cmds=True, round_robin=False,  # pylint: disable=too-many-arguments
-                                use_single_loader=False):
+    def run_stress_thread_bench(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
+                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
         if self.create_stats:
@@ -764,7 +803,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments,unused-argument
                         round_robin=False, stats_aggregate_cmds=True,  # pylint: disable=too-many-arguments,unused-argument
-                        keyspace_num=None, keyspace_name=None, profile=None):  # pylint: disable=too-many-arguments,unused-argument
+                        keyspace_num=None, keyspace_name=None, profile=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
 
@@ -780,7 +819,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments
                            round_robin=False, stats_aggregate_cmds=True,
-                           keyspace_num=None, keyspace_name=None, profile=None):   # pylint: disable=unused-argument
+                           keyspace_num=None, keyspace_name=None, profile=None, use_single_loader=False):   # pylint: disable=unused-argument
 
         timeout = self.get_duration(duration)
 
@@ -1730,6 +1769,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
+    def check_regression_with_baseline(self, subtest_baseline):
+        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                                                      send_email=self.params.get('send_email', default=True),
+                                                      email_recipients=self.params.get('email_recipients', default=None))
+        is_gce = bool(self.params.get('cluster_backend') == 'gce')
+        try:
+            results_analyzer.check_regression_with_subtest_baseline(self._test_id,
+                                                                    base_test_id=cluster.Setup.test_id(),
+                                                                    subtest_baseline=subtest_baseline,
+                                                                    is_gce=is_gce)
+        except Exception as ex:  # pylint: disable=broad-except
+            self.log.exception('Failed to check regression: %s', ex)
+
     def check_specified_stats_regression(self, dict_specific_tested_stats):
 
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
@@ -1741,18 +1793,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    # Wait for up to 80 mins that there are no running compactions
-    @retrying(n=80, sleep_time=60, allowed_exceptions=(AssertionError,))
-    def wait_no_compactions_running(self):
-        compaction_query = "sum(scylla_compaction_manager_compactions{})"
-        now = time.time()
-        results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
-        self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
-        assert results or results == [], "No results from Prometheus"
-        # if all are zeros the result will be False, otherwise there are still compactions
-        if results:
-            assert any([float(v[1]) for v in results[0]["values"]]) is False, \
-                "Waiting until all compactions settle down"
+    def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
+        # Wait for up to 80 mins that there are no running compactions
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def is_compactions_done():
+            compaction_query = "sum(scylla_compaction_manager_compactions{})"
+            now = time.time()
+            results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
+            self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
+            assert results or results == [], "No results from Prometheus"
+            # if all are zeros the result will be False, otherwise there are still compactions
+            if results:
+                assert any([float(v[1]) for v in results[0]["values"]]) is False, \
+                    "Waiting until all compactions settle down"
+        is_compactions_done()
 
     def run_fstrim_on_all_db_nodes(self):
         """

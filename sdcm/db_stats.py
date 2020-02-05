@@ -118,7 +118,29 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
-def get_gemini_cmd_params(cmd):
+def get_ycsb_cmd_params(cmd):
+    """
+    Parsing ycsb command
+    :param cmd: stress cmd
+    :return: dict with params
+    """
+
+    cmd_params = {
+        "raw_cmd": cmd
+    }
+
+    threads_regex = re.compile(r'-threads\s*(.*?)[\s$]')
+    key_value_regex = re.compile(r"-p\s.*?(?P<key>.*?)=(?P<value>.*?)(\s|$)")
+    for match in key_value_regex.finditer(cmd):
+        match_dict = match.groupdict()
+        cmd_params[match_dict['key']] = match_dict['value']
+    match = threads_regex.search(cmd)
+    if match:
+        cmd_params['threads'] = match.group(1)
+    return cmd_params
+
+
+def get_raw_cmd_params(cmd):
     cmd = cmd.strip()
     cmd_params = {
         'raw_cmd': cmd
@@ -127,11 +149,12 @@ def get_gemini_cmd_params(cmd):
 
 
 class PrometheusDBStats():
-    def __init__(self, host, port=9090):
+    def __init__(self, host, port=9090, alternator=None):
         self.host = host
         self.port = port
         self.range_query_url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(host), port)
         self.config = self.get_configuration()
+        self.alternator = alternator
 
     @property
     def scylla_scrape_interval(self):
@@ -211,7 +234,10 @@ class PrometheusDBStats():
         if not self._check_start_end_time(start_time, end_time):
             return []
         # the query is taken from the Grafana Dashborad definition
-        query = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
+        if self.alternator:
+            query = "sum(irate(scylla_alternator_operation{}[30s]))"
+        else:
+            query = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
         return self._get_query_values(query, start_time, end_time)
 
     def get_scylla_reactor_utilization(self, start_time, end_time):
@@ -473,8 +499,10 @@ class TestStatsMixin(Stats):
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
-        elif stresser == 'gemini':
-            cmd_params = get_gemini_cmd_params(cmd)
+        elif stresser == 'ycsb':
+            cmd_params = get_ycsb_cmd_params(cmd)
+        elif stresser in ['gemini', 'ndbench']:
+            cmd_params = get_raw_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
@@ -506,7 +534,8 @@ class TestStatsMixin(Stats):
 
     def get_prometheus_stats(self):
         self.log.info("Calculating throughput stats from PrometheusDB...")
-        prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
+        prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address,
+                                                alternator=self.params.get('alternator_port'))
         offset = 120  # 2 minutes offset
         start = int(self._stats["test_details"]["start_time"] + offset)
         end = int(time.time() - offset)

@@ -264,6 +264,9 @@
             {% if grafana_screenshots[1] %}
                 <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
             {% endif %}
+            {% if grafana_screenshots[2] %}
+                <li><a href={{ grafana_screenshots[2] }}>Download "Alternator metrics" Grafana Screenshot</a></li>
+            {% endif %}
         {% endif %}
         {% if grafana_snapshots %}
             {% if grafana_snapshots[0] %}
@@ -271,6 +274,9 @@
             {% endif %}
             {% if grafana_snapshots[1] %}
                 <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[2] %}
+                <li><a href={{  grafana_snapshots[2] }}>Shared "Alternator metrics" Grafana Snapshot</a></li>
             {% endif %}
         {% endif %}
     </ul>

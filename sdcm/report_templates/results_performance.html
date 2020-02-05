@@ -1,6 +1,8 @@
 {% extends 'results_base_custom.html' %}
 {% block body %}
+    {% block title %}
     <h3>Test: {{ test_name }}</h3>
+    {% endblock %}
     <h3>
         <span>Test start time: </span>
         <span class="blue">{{ test_start_time }}</span>
@@ -49,13 +51,23 @@
     </table>
     {% endif %}
     {% endfor %}
-    <h1>Cassandra-stress stats comparison</h1>
+
     {% if cs_raw_cmd %}
+    <h1>Cassandra-stress stats comparison</h1>
     <h3>Command</h3>
     <table id="results_table">
     <tr><td>{{ cs_raw_cmd }}</td></tr>
     </table>
     {% endif %}
+
+    {% if ycsb_raw_cmd %}
+    <h1>YCSB (dynamodb) stats comparison</h1>
+    <h3>Command</h3>
+    <table id="results_table">
+    <tr><td>{{ ycsb_raw_cmd }}</td></tr>
+    </table>
+    {% endif %}
+
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
     <h2>{{ stat_name }}</h2>
     <table id="results_table">

@@ -200,6 +200,29 @@ class PerformanceFilterScyllaBench(QueryFilterScyllaBench, PerformanceQueryFilte
     pass
 
 
+class QueryFilterYCSB(QueryFilter):
+    _YCSB_CMD = ('ycsb', )
+    _YCSB_PARAMS = ('fieldcount', 'fieldlength', 'readproportion', 'insertproportion', 'recordcount', 'operationcount')
+
+    def test_details_params(self):
+        return self._YCSB_CMD
+
+    def cs_params(self):
+        return self._YCSB_PARAMS
+
+    def test_cmd_details(self):
+        test_details = ""
+        for ycsb in self._YCSB_CMD:
+            for param in self._YCSB_PARAMS:
+                param_val = self.test_doc['_source']['test_details'][ycsb][param]
+                test_details += ' AND test_details.{}.{}: {}'.format(ycsb, param, param_val)
+        return test_details
+
+
+class PerformanceFilterYCSB(QueryFilterYCSB, PerformanceQueryFilter):
+    pass
+
+
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),  # pylint: disable=too-many-arguments
                  email_template_fp="", query_limit=1000, logger=None):
@@ -499,8 +522,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     @staticmethod
     def _query_filter(test_doc, is_gce):
-        return PerformanceFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
-            else PerformanceFilterCS(test_doc, is_gce)()
+        if test_doc['_source']['test_details'].get('scylla-bench'):
+            return PerformanceFilterScyllaBench(test_doc, is_gce)()
+        elif test_doc['_source']['test_details'].get('ycsb'):
+            return PerformanceFilterYCSB(test_doc, is_gce)()
+        else:
+            return PerformanceFilterCS(test_doc, is_gce)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -657,6 +684,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
         cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
+        ycsb = doc['_source']['test_details'].get('ycsb')
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
@@ -669,13 +697,16 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        grafana_snapshots=self._get_grafana_snapshot(doc),
                        grafana_screenshots=self._get_grafana_screenshot(doc),
                        cs_raw_cmd=cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
+                       ycsb_raw_cmd=ycsb.get('raw_cmd', "") if ycsb else "",
                        job_url=doc['_source']['test_details'].get('job_url', ""),
                        dashboard_master=self.gen_kibana_dashboard_url(dashboard_path),
                        )
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
-        subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
+        subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
+        if ycsb:
+            subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
         html = self.render_to_html(results)
         self.send_email(subject, html)
 

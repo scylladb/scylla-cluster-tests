@@ -352,7 +352,7 @@ def verify_dockers_are_running():
 def verify_grafana_is_available(version):
     from sdcm.logcollector import GrafanaEntity
     grafana_statuses = []
-    for entity in GrafanaEntity.grafana_entity_names:
+    for entity in GrafanaEntity.base_grafana_entity_names:
         path = entity['path'].format(version=version.replace('.', '-'),
                                      dashboard_name=entity['name'])
         url = f"http://localhost:{GRAFANA_DOCKER_PORT}/{path}"

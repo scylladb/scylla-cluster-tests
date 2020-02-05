@@ -313,7 +313,7 @@ class SCTConfiguration(dict):
         dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,
              help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE",
              choices=['HASH', 'HASH_AND_RANGE']),
-        dict(name="alternator_write_isolation", env="SCT_ALTERNATOR_WRITE_ISOLATION", type=int,
+        dict(name="alternator_write_isolation", env="SCT_ALTERNATOR_WRITE_ISOLATION", type=str,
              help="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob"
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
         dict(name="alternator_use_dns_routing", env="SCT_ALTERNATOR_USE_DNS_ROUTING", type=boolean,

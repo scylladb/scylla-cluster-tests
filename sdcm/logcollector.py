@@ -348,7 +348,7 @@ class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
         grafana_entity_url_tmpl {str} -- template of grafana url to collect
         phantomjs_base {str} -- name and version of phantomjs package
     """
-    grafana_entity_names = [
+    base_grafana_entity_names = [
         {
             'name': 'scylla-per-server-metrics-nemesis',
             'path': 'dashboard/db/{dashboard_name}-{version}',
@@ -370,7 +370,7 @@ class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
             # set test start time previous 6 hours
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
-        self.grafana_entity_names += kwargs.pop("extra_entities", [])
+        self.grafana_entity_names = self.base_grafana_entity_names + kwargs.pop("extra_entities", [])
         super(GrafanaEntity, self).__init__(*args, **kwargs)
 
 
