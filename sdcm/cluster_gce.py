@@ -174,6 +174,10 @@ class GCENode(cluster.BaseNode):
         raise NotImplementedError('On GCE, VPC networks only support IPv4 unicast traffic. '
                                   'They do not support IPv6 traffic within the network.')
 
+    @property
+    def image(self):
+        return self._instance.image
+
 
 class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method
 
@@ -372,9 +376,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             instances = self._create_instances(count, dc_idx)
 
         self.log.debug('instances: %s', instances)
-        self.log.debug('GCE instance extra info: %s', instances[0].extra)
-        for ind, instance in enumerate(instances):
-            node_index = ind + self._node_index + 1
+        if instances:
+            self.log.debug('GCE instance extra info: %s', instances[0].extra)
+        for node_index, instance in enumerate(instances, start=self._node_index + 1):
             node = self._create_node(instance, node_index, dc_idx)
             nodes.append(node)
             self.nodes.append(node)

@@ -27,11 +27,12 @@ import select
 import shutil
 import copy
 import string
+from enum import Enum
+import sys
+import warnings
 from typing import Iterable, List, Callable
 from urllib.parse import urlparse
-
-from functools import wraps
-from enum import Enum
+from functools import wraps, partial
 from collections import defaultdict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -47,6 +48,10 @@ from libcloud.compute.types import Provider
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
+
+
+def deprecation(message):
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 def _remote_get_hash(remoter, file_path):
@@ -160,6 +165,9 @@ class Distro(Enum):
     UBUNTU18 = 5
     DEBIAN8 = 6
     DEBIAN9 = 7
+
+
+timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
 
 
 def generate_random_string(length):

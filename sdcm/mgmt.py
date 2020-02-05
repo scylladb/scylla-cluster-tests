@@ -14,7 +14,7 @@ import requests
 
 
 from sdcm import wait
-from sdcm.utils.common import Distro
+from sdcm.utils.distro import Distro
 
 LOGGER = logging.getLogger(__name__)
 

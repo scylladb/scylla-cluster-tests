@@ -178,6 +178,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return instances
 
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
+        if not count:  # EC2 API fails if we request zero instances.
+            return []
 
         tags_list = create_tags_list()
         tags_list.append({'Key': 'NodeType', 'Value': self.node_type})
@@ -343,7 +345,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         """)
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
-
         post_boot_script = cluster.Setup.get_startup_script()
         if self.extra_network_interface:
             post_boot_script += self.configure_eth1_script()
@@ -724,6 +725,10 @@ class AWSNode(cluster.BaseNode):
             tc_command = LOCAL_CMD_RUNNER.run("tcset eth1 {} --tc-command".format(tcconfig_params)).stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command)
 
+    @property
+    def image(self):
+        return self._instance.image_id
+
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
@@ -770,6 +775,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                node_type=node_type,
                                                extra_network_interface=params.get('extra_network_interface'))
         self.version = '2.1'
+        self._need_to_install_scylla = None
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
@@ -826,9 +832,14 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.config_setup(**setup_params)
 
-    def node_setup(self, node, verbose=False, timeout=3600):
-        endpoint_snitch = self.params.get('endpoint_snitch')
-        seed_address = ','.join(self.seed_nodes_ips)
+    def _scylla_pre_install(self, node):
+        # Assume that all nodes in the cluster use the same AMI. So, need to check the availability of Scylla once.
+        if self._need_to_install_scylla is None:
+            self._need_to_install_scylla = node.get_scylla_version() is None
+
+        if self._need_to_install_scylla:
+            self.log.info("Can't find Scylla on the %s (%s), will try to install", node, node.image)
+            return super()._scylla_pre_install(node)
 
         def scylla_ami_setup_done():
             """
@@ -856,29 +867,23 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             result = node.remoter.run('systemctl status scylla-server', ignore_status=True)
             return 'Failed to start Scylla Server.' in result.stdout
 
-        if not cluster.Setup.REUSE_CLUSTER:
-            node.wait_ssh_up(verbose=verbose)
-            wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
-            node.install_scylla_debuginfo()
+        wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
 
-            if cluster.Setup.MULTI_REGION:
-                if not endpoint_snitch:
-                    endpoint_snitch = "Ec2MultiRegionSnitch"
-                node.datacenter_setup(self.datacenter)
-            self.node_config_setup(node, seed_address, endpoint_snitch)
+    def _scylla_install(self, node):
+        if self._need_to_install_scylla:
+            super()._scylla_install(node)
 
-            if self.params.get('ip_ssh_connections') == 'ipv6':
-                node.set_web_listen_address()
+    def _scylla_post_install(self, node):
+        if self._need_to_install_scylla:
+            super()._scylla_post_install(node)
+        if self.params.get('ip_ssh_connections') == 'ipv6':
+            node.set_web_listen_address()
 
-            node.stop_scylla_server(verify_down=False)
-            node.start_scylla_server(verify_up=False)
-        else:
-            # for reconfigure rsyslog
-            node.run_startup_script()
+    def _reuse_cluster_setup(self, node):
+        node.run_startup_script()  # Reconfigure rsyslog.
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.check_nodes_status()
-        self.clean_replacement_node_ip(node)
+    def get_endpoint_snitch(self, default_multi_region="Ec2MultiRegionSnitch"):
+        return super().get_endpoint_snitch(default_multi_region)
 
     def destroy(self):
         self.stop_nemesis()
