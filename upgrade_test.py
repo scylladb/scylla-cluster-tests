@@ -162,7 +162,7 @@ class UpgradeTest(FillDatabaseData):
 
             orig_is_enterprise = node.is_enterprise
             if node.is_rhel_like():
-                result = node.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
                 new_is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
                                          'No matches found' not in result.stdout)
             else:
