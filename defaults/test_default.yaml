@@ -56,3 +56,7 @@ email_recipients: ['qa@scylladb.com']
 collect_logs: false
 
 loader_swap_size: 1024 # Size of swap file for loader node in bytes 1024 * 1MB
+
+alternator_enforce_authorization: false
+alternator_access_key_id: ''
+alternator_secret_access_key: ''

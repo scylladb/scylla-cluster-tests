@@ -303,6 +303,12 @@ class SCTConfiguration(dict):
              help="Port to configure for alternator in scylla.yaml"),
         dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,
              help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE"),
+        dict(name="alternator_enforce_authorization", env="SCT_ALTERNATOR_ENFORCE_AUTHORIZATION", type=boolean,
+             help="If true, enable the authorization check in dynamodb api (alternator)"),
+        dict(name="alternator_access_key_id", env="SCT_ALTERNATOR_ACCESS_KEY_ID", type=str,
+             help="the aws_access_key_id that would be used for alternator"),
+        dict(name="alternator_secret_access_key", env="SCT_ALTERNATOR_SECRET_ACCESS_KEY", type=str,
+             help="the aws_secret_access_key that would be used for alternator"),
 
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS", type=str,
              help="More arguments to append to scylla command line"),

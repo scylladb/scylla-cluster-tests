@@ -1557,7 +1557,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
-                     alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None):
+                     alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None,
+                     alternator_enforce_authorization=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1726,6 +1727,15 @@ server_encryption_options:
                                              scylla_yaml_contents)
             else:
                 scylla_yaml_contents += "\nalternator_port: %s\n" % alternator_port
+        if alternator_enforce_authorization:
+            if 'alternator_enforce_authorization' in scylla_yaml_contents:
+                if re.findall("alternator_enforce_authorization: False", scylla_yaml_contents):
+                    self.log.debug('alternator_enforce_authorization is not set as expected, update it to `False`.')
+                pattern = re.compile('alternator_enforce_authorization:.*')
+                scylla_yaml_contents = pattern.sub('alternator_enforce_authorization: True',
+                                                   scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nalternator_enforce_authorization: False\n"
 
         # system_key must be pre-created, kmip keys will be used for kmip server auth
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
@@ -3196,7 +3206,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                           hinted_handoff=self.params.get('hinted_handoff'),
                           authorizer=self.params.get('authorizer'),
                           alternator_port=self.params.get('alternator_port'),
-                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
