@@ -6,13 +6,13 @@ from botocore.errorfactory import ClientError
 LOGGER = logging.getLogger(__name__)
 
 
-def create_table(endpoint_url, test_params):
-    dynamodb_primarykey_type = test_params.get('dynamodb_primarykey_type', 'HASH')
-    write_isolation = test_params.get('alternator_write_isolation')
-
+def create_table(endpoint_url, dynamodb_primarykey_type, test_params):
     try:
-        dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
 
+        dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url,
+                                  aws_access_key_id=test_params.get('alternator_access_key_id'),
+                                  aws_secret_access_key=test_params.get('alternator_secret_access_key')
+                                  )
         name = 'usertable'
         params = dict()
 
