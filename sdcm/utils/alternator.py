@@ -11,11 +11,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 def create_table(endpoint_url, test_params, table_name=None):
-    dynamodb_primarykey_type = test_params.get('dynamodb_primarykey_type', 'HASH')
+    dynamodb_primarykey_type = test_params.get('dynamodb_primarykey_type')
     write_isolation = test_params.get('alternator_write_isolation')
 
     try:
-        dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
+        dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url,
+                                  aws_access_key_id=test_params.get('alternator_access_key_id'),
+                                  aws_secret_access_key=test_params.get('alternator_secret_access_key')
+                                  )
 
         name = table_name or 'usertable'
         params = dict()

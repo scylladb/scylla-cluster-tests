@@ -1,0 +1,60 @@
+test_duration: 2880
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 20 -p recordcount=200200300
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=50050075
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 20 -p recordcount=200200300
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=50050075 -p insertcount=50050075
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 20 -p recordcount=200200300
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=100100150 -p insertcount=50050075
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 20 -p recordcount=200200300
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=150150225 -p insertcount=50050075
+
+stress_cmd: [
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
+]
+
+round_robin: true
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+n_loaders: 4
+instance_type_db: 'i3.4xlarge'
+n_monitor_nodes: 1
+n_db_nodes: 4
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+nemesis_during_prepare: false
+
+user_prefix: 'alternator-48h'
+
+alternator_port: 8080
+alternator_use_dns_routing: true
+
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+
+store_results_in_elasticsearch: false
+use_mgmt: true
+
+server_encrypt: true
+client_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'

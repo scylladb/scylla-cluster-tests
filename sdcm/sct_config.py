@@ -315,6 +315,12 @@ class SCTConfiguration(dict):
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
         dict(name="alternator_use_dns_routing", env="SCT_ALTERNATOR_USE_DNS_ROUTING", type=boolean,
              help="If true, spawn a docker with a dns server for the ycsb loader to point to"),
+        dict(name="alternator_enforce_authorization", env="SCT_ALTERNATOR_ENFORCE_AUTHORIZATION", type=boolean,
+             help="If true, enable the authorization check in dynamodb api (alternator)"),
+        dict(name="alternator_access_key_id", env="SCT_ALTERNATOR_ACCESS_KEY_ID", type=str,
+             help="the aws_access_key_id that would be used for alternator"),
+        dict(name="alternator_secret_access_key", env="SCT_ALTERNATOR_SECRET_ACCESS_KEY", type=str,
+             help="the aws_secret_access_key that would be used for alternator"),
 
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS", type=str,
              help="More arguments to append to scylla command line"),
