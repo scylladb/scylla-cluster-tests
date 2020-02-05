@@ -1,0 +1,17 @@
+cluster_backend: 'gce'
+gce_image: 'https://www.googleapis.com/compute/v1/projects/rhel-cloud/global/images/family/rhel-7'
+gce_instance_type_db: 'n1-standard-2'
+gce_root_disk_type_db: 'pd-ssd'
+gce_root_disk_size_db: 50
+gce_n_local_ssd_disk_db: 1
+instance_provision: "spot"
+logs_transport: 'ssh'
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.3.repo'
+store_results_in_elasticsearch: False
+test_duration: 600
+user_prefix: 'artifacts-rhel7'

@@ -285,6 +285,20 @@ class UpgradeEmailReporter(BaseEmailReporter):
         return html
 
 
+class ArtifactsEmailReporter(BaseEmailReporter):
+
+    email_template_file = "results_artifacts.html"
+    fields = ["subject", "username", "test_status", "test_name", "start_time",
+              "end_time", "build_url", "scylla_version", "scylla_repo",
+              "scylla_node_image", "scylla_packages_installed", "test_id",
+              "events_summary", "nodes", "backend", ]
+
+    def build_report(self, report_data, template_str=None):
+        self.log.info("Prepare result to send in email")
+        html = self.render_to_html(report_data, template_str)
+        return html
+
+
 def build_reporter(tester):
     """Build reporter
 
@@ -301,6 +315,8 @@ def build_reporter(tester):
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Upgrade" in tester.__class__.__name__:
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Artifacts" in tester.__class__.__name__:
+        return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

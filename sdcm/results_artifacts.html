@@ -1,0 +1,92 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>Test: {{ test_name }}</h3>
+
+    <h3>Test-id: {{ test_id }}</h3>
+
+    <h3>Test details</h3>
+    <div>
+        <ul>
+            <li>Start time: {{ start_time }}</li>
+            <li>End time: {{ end_time }}</li>
+            <li>Build URL: <a href="{{ build_url }}">link</a></li>
+            <li>Test run by User: <b>{{ username }}</b></li>
+        </ul>
+    </div>
+
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>ScyllaDB version: {{ scylla_version }}</li>
+            <li>ScyllaDB repo: {{ scylla_repo }}</li>
+            <li>Actual {{ backend|upper }} image used: {{ scylla_node_image }}</li>
+            <li>Scylla packages installed:
+                <ul>
+                {% for pkg in scylla_packages_installed %}
+                    <li>{{ pkg }}</li>
+                {% endfor %}
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <h3>
+        <span>Test results </span>
+    </h3>
+    <div> {{ test_status[0] }} </div>
+    {% if test_status[1] %}
+        <div>
+            {% for line in test_status[1] %}
+                <pre>{{ line }}</pre>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <h3>
+        <span>Events summary</span>
+    </h3>
+    <div>
+        <ul>
+            {% for k, v in events_summary.items() %}
+                <li>{{k}} : {{v}}</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <h3>
+        Hydra commands:
+    </h3>
+    <div>
+        <ul>
+            <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
+        </ul>
+    </div>
+
+    <h3>Running instances</h3>
+    <div>
+    {% if nodes %}
+        <table class='longevity_result_table'>
+            <tr>
+                <th>Name</th>
+                <th>IP Address</th>
+                <th>Current State</th>
+                <th>Cloud</th>
+                <th>Region</th>
+            </tr>
+            {% for node in nodes %}
+            <tr>
+                <td>{{ node[0] }}</td>
+                <td>{{ node[1] }}</td>
+                <td>{{ node[2] }}</td>
+                <td>{{ node[3] }}</td>
+                <td>{{ node[4] }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    {% else %}
+        No instances
+    {% endif %}
+    </div>
+{% endblock %}

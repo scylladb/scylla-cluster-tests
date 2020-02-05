@@ -28,11 +28,11 @@ import shutil
 import copy
 import string
 import sys
+import warnings
 from typing import Iterable, List, Callable
 from urllib.parse import urlparse
 
 from functools import wraps, partial
-from enum import Enum
 from collections import defaultdict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -48,6 +48,10 @@ from libcloud.compute.types import Provider
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
+
+
+def deprecation(message):
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 def _remote_get_hash(remoter, file_path):
@@ -163,17 +167,6 @@ def log_run_info(arg):
 
 
 timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
-
-
-class Distro(Enum):
-    UNKNOWN = 0
-    CENTOS7 = 1
-    RHEL7 = 2
-    UBUNTU14 = 3
-    UBUNTU16 = 4
-    UBUNTU18 = 5
-    DEBIAN8 = 6
-    DEBIAN9 = 7
 
 
 def generate_random_string(length):

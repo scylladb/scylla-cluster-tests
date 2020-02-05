@@ -24,6 +24,7 @@ import threading
 import time
 import uuid
 import itertools
+from typing import List
 from textwrap import dedent
 from datetime import datetime
 import subprocess
@@ -42,8 +43,9 @@ from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, NETWORK_EXCEPTIONS
 from sdcm import wait
-from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, Distro, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url
+from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_scylla_repo_file, S3Storage, \
+    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation
+from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
@@ -465,32 +467,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     @property
     def distro(self):
-        # Distro attribute won't be changed, only need to detect once.
         if not self._distro:
             self.log.info("Trying to detect Linux distribution...")
-            result = self.remoter.run('cat /etc/redhat-release', ignore_status=True)
-            if 'CentOS' in result.stdout and 'release 7.' in result.stdout:
-                self._distro = Distro.CENTOS7
-            elif 'Red Hat Enterprise Linux' in result.stdout and 'release 7.' in result.stdout:
-                self._distro = Distro.RHEL7
-            else:
-                result = self.remoter.run('cat /etc/issue', ignore_status=True)
-                if 'Ubuntu 14.04' in result.stdout:
-                    self._distro = Distro.UBUNTU14
-                elif 'Ubuntu 16.04' in result.stdout:
-                    self._distro = Distro.UBUNTU16
-                elif 'Ubuntu 18.04' in result.stdout:
-                    self._distro = Distro.UBUNTU18
-                elif 'Debian GNU/Linux 8' in result.stdout:
-                    self._distro = Distro.DEBIAN8
-                elif 'Debian GNU/Linux 9' in result.stdout:
-                    self._distro = Distro.DEBIAN9
-
-            if not self._distro:
-                self.log.error("Unable to detect Linux distribution name")
-                self._distro = Distro.UNKNOWN
-            self.log.info("Detected Linux distribution: {}".format(self._distro.name))
-
+            self._distro = Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True).stdout)
         return self._distro
 
     @property
@@ -529,34 +508,44 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                 raise Exception('Seeds not found in the scylla.yaml')
 
     def is_centos7(self):
-        return self.distro == Distro.CENTOS7
+        deprecation("consider to use node.distro.is_centos7 property instead")
+        return self.distro.is_centos7
 
     def is_rhel7(self):
-        return self.distro == Distro.RHEL7
+        deprecation("consider to use node.distro.is_rhel7 property instead")
+        return self.distro.is_rhel7
 
     def is_rhel_like(self):
-        return self.distro == Distro.CENTOS7 or self.distro == Distro.RHEL7
+        deprecation("consider to use node.distro.is_rhel_like property instead")
+        return self.distro.is_rhel_like
 
     def is_ubuntu14(self):
-        return self.distro == Distro.UBUNTU14
+        deprecation("consider to use node.distro.is_ubuntu14 property instead")
+        return self.distro.is_ubuntu14
 
     def is_ubuntu16(self):
-        return self.distro == Distro.UBUNTU16
+        deprecation("consider to use node.distro.is_ubuntu16 property instead")
+        return self.distro.is_ubuntu16
 
     def is_ubuntu18(self):
-        return self.distro == Distro.UBUNTU18
+        deprecation("consider to use node.distro.is_ubuntu18 property instead")
+        return self.distro.is_ubuntu18
 
     def is_ubuntu(self):
-        return self.distro == Distro.UBUNTU16 or self.distro == Distro.UBUNTU14 or self.distro == Distro.UBUNTU18
+        deprecation("consider to use node.distro.is_ubuntu property instead")
+        return self.distro.is_ubuntu
 
     def is_debian8(self):
-        return self.distro == Distro.DEBIAN8
+        deprecation("consider to use node.distro.is_debian8 property instead")
+        return self.distro.is_debian8
 
     def is_debian9(self):
-        return self.distro == Distro.DEBIAN9
+        deprecation("consider to use node.distro.is_debian9 property instead")
+        return self.distro.is_debian9
 
     def is_debian(self):
-        return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
+        deprecation("consider to use node.distro.is_debian property instead")
+        return self.distro.is_debian
 
     # pylint: disable=too-many-arguments
     def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
@@ -619,7 +608,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
     def is_enterprise(self):
         if self._is_enterprise is None:
             if self.is_rhel_like():
-                result = self.remoter.run("sudo yum search scylla-enterprise", ignore_status=True)
+                result = self.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
                 if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result.stdout:
                     result = self.remoter.run("sudo cat /etc/yum.repos.d/scylla.repo")
                     self._is_enterprise = 'enterprise' in result.stdout
@@ -1871,6 +1860,12 @@ server_encryption_options:
         self.log.info("Installing Scylla...")
         force = '--force-yes '
         if self.is_rhel_like():
+            # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
+            if self.distro.is_centos8:
+                self.remoter.run("sudo yum install -y epel-release")
+            elif self.distro.is_rhel8:
+                self.remoter.run(
+                    "sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm")
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
@@ -1925,10 +1920,23 @@ server_encryption_options:
                     apt-get install gnupg1-curl dirmngr -y
                     apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
                     echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
+            elif self.distro.is_debian10:
+                force = ''
+                install_debian_10_prereqs = dedent("""
+                    export DEBIAN_FRONTEND=noninteractive
+                    apt-get update
+                    apt-get install apt-transport-https -y
+                    apt-get install gnupg1-curl dirmngr -y
+                    apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-buster/Debian_10.0/Release.key
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
+                    echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-buster/Debian_10.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
             self.remoter.run(
                 'sudo DEBIAN_FRONTEND=noninteractive apt-get {}-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y'.format(force))
@@ -2061,7 +2069,7 @@ server_encryption_options:
         else:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
-            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c', retry=3)
+            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C', retry=3)
 
         self.log.debug("Copying TLS files from data_dir to node")
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
@@ -2237,6 +2245,34 @@ server_encryption_options:
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
+
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+        if verify_up_before:
+            self.wait_db_up(timeout=timeout)
+        if not self.distro.is_ubuntu14:
+            self.remoter.run("sudo systemctl restart scylla-server.service",
+                             timeout=timeout, ignore_status=ignore_status)
+        else:
+            self.remoter.run("sudo service scylla-server restart",
+                             timeout=timeout, ignore_status=ignore_status)
+        if verify_up_after:
+            self.wait_db_up(timeout=timeout)
+
+    def restart_scylla_jmx(self, verify_up_before=False, verify_up_after=True, timeout=300):
+        if verify_up_before:
+            self.wait_jmx_up(timeout=timeout)
+        if not self.distro.is_ubuntu14:
+            self.remoter.run("sudo systemctl restart scylla-jmx.service", timeout=timeout)
+        else:
+            self.remoter.run("sudo service scylla-jmx restart", timeout=timeout)
+        if verify_up_after:
+            self.wait_jmx_up(timeout=timeout)
+
+    @log_run_info
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+        self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
+        if verify_up_after:
+            self.wait_jmx_up(timeout=timeout)
 
     def enable_client_encrypt(self):
         SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
@@ -2540,6 +2576,14 @@ server_encryption_options:
 
     def set_hostname(self):
         self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+
+    @property
+    def scylla_packages_installed(self) -> List[str]:
+        if self.distro.is_rhel_like:
+            cmd = "rpm -qa 'scylla*'"
+        else:
+            cmd = "dpkg-query --show 'scylla*'"
+        return self.remoter.run(cmd).stdout.splitlines()
 
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes
@@ -3185,60 +3229,79 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         self.nemesis_threads = []
 
     def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
-        node.config_setup(seed_address=seed_address, cluster_name=self.name,  # pylint: disable=no-member
-                          enable_exp=self.params.get('experimental'), endpoint_snitch=endpoint_snitch,
+        node.config_setup(seed_address=seed_address,
+                          cluster_name=self.name,  # pylint: disable=no-member
+                          enable_exp=self.params.get('experimental'),
+                          endpoint_snitch=endpoint_snitch,
                           authenticator=self.params.get('authenticator'),
                           server_encrypt=self.params.get('server_encrypt'),
                           client_encrypt=client_encrypt if client_encrypt is not None else self.params.get(
                               'client_encrypt'),
-                          append_scylla_yaml=self.params.get('append_scylla_yaml'), append_scylla_args=self.get_scylla_args(),
+                          append_scylla_yaml=self.params.get('append_scylla_yaml'),
+                          append_scylla_args=self.get_scylla_args(),
                           hinted_handoff=self.params.get('hinted_handoff'),
                           authorizer=self.params.get('authorizer'),
                           alternator_port=self.params.get('alternator_port'),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
 
     def node_setup(self, node, verbose=False, timeout=3600):
-        """
-        Install, configure and run scylla on node
-        :param node: scylla node object
-        :param verbose:
-        """
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
-        # update repo cache and system after system is up
+
+        if not Setup.REUSE_CLUSTER:
+            self._scylla_pre_install(node)
+            self._scylla_install(node)
+
+            node.install_scylla_debuginfo()
+
+            if Setup.MULTI_REGION:
+                node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
+            self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
+
+            self._scylla_post_install(node)
+
+            node.stop_scylla_server(verify_down=False)
+            node.start_scylla_server(verify_up=False)
+
+            self.log.info('io.conf right after reboot')
+            node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+        else:
+            self._reuse_cluster_setup(node)
+
+        node.wait_db_up(verbose=verbose, timeout=timeout)
+        node.check_nodes_status()
+
+        self.clean_replacement_node_ip(node)
+
+    @staticmethod
+    def _scylla_pre_install(node):
         node.update_repo_cache()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
             node.remoter.run('sudo systemctl disable apt-daily.timer')
             node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
             node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
+        node.clean_scylla()
+
+    def _scylla_install(self, node):
+        node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+
+    @staticmethod
+    def _scylla_post_install(node):
+        try:
+            disks = node.detect_disks(nvme=True)
+        except AssertionError:
+            disks = node.detect_disks(nvme=False)
+        node.scylla_setup(disks)
+
+    def _reuse_cluster_setup(self, node):
+        pass
+
+    def get_endpoint_snitch(self, default_multi_region="GossipingPropertyFileSnitch"):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        seed_address = ','.join(self.seed_nodes_ips)
-
-        if not Setup.REUSE_CLUSTER:
-            node.clean_scylla()
-            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
-            node.install_scylla_debuginfo()
-
-            if Setup.MULTI_REGION:
-                if not endpoint_snitch:
-                    endpoint_snitch = 'GossipingPropertyFileSnitch'
-                node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
-
-            self.node_config_setup(node, seed_address, endpoint_snitch)
-            try:
-                disks = node.detect_disks(nvme=True)
-            except AssertionError:
-                disks = node.detect_disks(nvme=False)
-            node.scylla_setup(disks)
-            # # not sure why we need this reboot
-            # node.reboot(hard=False, verify_ssh=True)
-            node.stop_scylla_server()
-            node.start_scylla_server()
-
-            self.log.info('io.conf right after reboot')
-            node.remoter.run('sudo cat /etc/scylla.d/io.conf')
-
-        self.clean_replacement_node_ip(node)
+        if Setup.MULTI_REGION:
+            if not endpoint_snitch:
+                endpoint_snitch = default_multi_region
+        return endpoint_snitch
 
     @staticmethod
     def clean_replacement_node_ip(node):

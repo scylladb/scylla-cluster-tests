@@ -256,11 +256,14 @@ def list_ami_branch(region, version):
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
-@click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']), default='centos', help='Distribution type')
-@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'jessie', 'stretch']), default=None, help='deb style versions')
+@click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']),
+              default='centos', help='Distribution type')
+@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic',     # Ubuntu
+                                                         'jessie', 'stretch', 'buster']),  # Debian
+              default=None, help='deb style versions')
 def list_repos(dist_type, dist_version):
     if not dist_type == 'centos' and dist_version is None:
-        click.secho("when passing --dist-type=debian/ubutnu need to pass --dist-version as well", fg='red')
+        click.secho("when passing --dist-type=debian/ubuntu need to pass --dist-version as well", fg='red')
         sys.exit(1)
 
     repo_maps = get_s3_scylla_repos_mapping(dist_type, dist_version)
@@ -466,7 +469,7 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, email_recipients=None, logdir=None):
     from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter, UpgradeEmailReporter,
-                                 get_running_instances_for_email_report,
+                                 ArtifactsEmailReporter, get_running_instances_for_email_report,
                                  read_email_data_from_file)
     if not email_recipients:
         LOGGER.warning("No email recipients. Email will not be sent")
@@ -496,6 +499,9 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
             reporter.send_report(test_results)
         elif "Upgrade" in reporter:
             reporter = UpgradeEmailReporter(email_recipients, logdir=testrun_dir)
+            reporter.send_report(test_results)
+        elif "Artifacts" in reporter:
+            reporter = ArtifactsEmailReporter(email_recipients, logdir=testrun_dir)
             reporter.send_report(test_results)
         else:
             LOGGER.warning("No reporter found")
