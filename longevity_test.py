@@ -179,6 +179,14 @@ class LongevityTest(ClusterTester):
         if alternator_port:
             endpoint_url = 'http://{}:{}'.format(normalize_ipv6_url(self.db_cluster.nodes[0].external_address),
                                                  alternator_port)
+
+            if self.params.get('alternator_enforce_authorization'):
+                with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                    session.execute("""
+                        INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
+                    """, (self.params.get('alternator_access_key_id'),
+                          self.params.get('alternator_secret_access_key')))
+
             alternator_create_table(endpoint_url, test_params=self.params, table_name='usertable')
             params = dict(self.params, alternator_write_isolation='forbid')
             alternator_create_table(endpoint_url, test_params=params, table_name='usertable_no_lwt')

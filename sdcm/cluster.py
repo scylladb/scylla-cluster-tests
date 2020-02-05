@@ -1582,7 +1582,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
-                     alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None):
+                     alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None,
+                     alternator_enforce_authorization=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1679,6 +1680,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if alternator_port:
             scylla_yml['alternator_port'] = alternator_port
+
+        if alternator_enforce_authorization:
+            scylla_yml['alternator_enforce_authorization'] = True
+        else:
+            scylla_yml['alternator_enforce_authorization'] = False
 
         scylla_yaml_contents = yaml.safe_dump(scylla_yml)
 
@@ -3251,7 +3257,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                           hinted_handoff=self.params.get('hinted_handoff'),
                           authorizer=self.params.get('authorizer'),
                           alternator_port=self.params.get('alternator_port'),
-                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
     def node_setup(self, node, verbose=False, timeout=3600):
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

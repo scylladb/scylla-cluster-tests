@@ -792,6 +792,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             append_scylla_yaml=self.params.get('append_scylla_yaml'),
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
             ip_ssh_connections=self.params.get('ip_ssh_connections'),
+            alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
