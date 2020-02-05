@@ -3708,6 +3708,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
         self.grafana_start_time = 0
+        self._sct_dashboard_json_file = None
 
     @staticmethod
     def get_monitor_install_path_base(node):
@@ -3753,6 +3754,17 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     @property
     def is_enterprise(self):
         return self.targets["db_cluster"].nodes[0].is_enterprise
+
+    @property
+    def sct_dashboard_json_file(self):
+        if not self._sct_dashboard_json_file:
+            sct_dashboard_json_filename = f"scylla-dash-per-server-nemesis.{self.monitoring_version}.json"
+            sct_dashboard_json_path = get_data_dir_path(sct_dashboard_json_filename)
+            if not os.path.exists(sct_dashboard_json_path):
+                sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.master.json"
+                sct_dashboard_json_path = get_data_dir_path(sct_dashboard_json_filename)
+            self._sct_dashboard_json_file = sct_dashboard_json_path
+        return self._sct_dashboard_json_file
 
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('Setup in BaseMonitorSet')
@@ -4054,31 +4066,23 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             {0.monitor_install_path}/monitor_version'.format(self), ignore_status=True)
 
     def add_sct_dashboards_to_grafana(self, node):
-        sct_dashboard_json = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
 
         def _register_grafana_json(json_filename):
             # added "[]" / "\\" for IPv6 support
             url = "'http://\\[{0.external_address}\\]:{1.grafana_port}/api/dashboards/db'".format(node, self)
-            json_path = get_data_dir_path(json_filename)
             result = LOCALRUNNER.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
-                                     (url, json_path))
+                                     (url, json_filename))
             return result.exited == 0
 
         wait.wait_for(_register_grafana_json, step=10,
-                      text="Waiting to register 'data_dir/%s'..." % sct_dashboard_json,
-                      json_filename=sct_dashboard_json)
+                      text="Waiting to register '%s'..." % self.sct_dashboard_json_file,
+                      json_filename=self.sct_dashboard_json_file)
 
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
-        sct_dashboard_file = self.get_sct_dashboards_config()
-        node.remoter.send_files(src=sct_dashboard_file, dst=sct_monitoring_addons_dir)
-
-    def get_sct_dashboards_config(self):
-        sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.{0.monitoring_version}.json".format(self)
-
-        return get_data_dir_path(sct_dashboard_json_filename)
+        node.remoter.send_files(src=self.sct_dashboard_json_file, dst=sct_monitoring_addons_dir)
 
     @log_run_info
     def install_scylla_monitoring(self, node):
