@@ -268,6 +268,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
             if self.params.get("use_mgmt", default=None):
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
+                pkg_path = None
                 if pkgs_url:
                     pkg_path = download_dir_from_cloud(pkgs_url)
                     self.params['scylla_mgmt_pkg'] = pkg_path
