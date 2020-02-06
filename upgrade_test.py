@@ -412,7 +412,11 @@ class UpgradeTest(FillDatabaseData):
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
-    def fill_and_verify_db_data(self, note, pre_fill=False, rewrite_data=True):
+    # There is a known scylla issue in truncate, the timeout exception will break the subtest,
+    # and test data won't be prepared for next subtest. Let's change to prepare data at the
+    # beginning of each subtest. We can change this back when the issue is fixed.
+    # https://github.com/scylladb/scylla/issues/4924
+    def fill_and_verify_db_data(self, note, pre_fill=True, rewrite_data=False):
         if pre_fill:
             self.log.info('Populate DB with many types of tables and data')
             self.fill_db_data()
@@ -440,7 +444,7 @@ class UpgradeTest(FillDatabaseData):
         with self.subTest('pre-test - prepare test kesyapces and tables'):
             # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
             self.prepare_keyspaces_and_tables()
-            self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
+            self.fill_and_verify_db_data('BEFORE UPGRADE')
 
             # write workload during entire test
             self.log.info('Starting c-s write workload during entire test')
