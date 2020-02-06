@@ -10,16 +10,19 @@ regions_data:
     subnet_id: 'subnet-ec4a72c4'
     ami_id_loader: 'ami-00410516d864c4a80' # Loader dedicated AMI
     ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    backup_bucket_location: 'manager-backup-tests-us-east-1'
   eu-west-1:
     security_group_ids: 'sg-059a7f66a947d4b5c'
     subnet_id: 'subnet-088fddaf520e4c7a8'
     ami_id_loader: 'ami-0a9a4dc9eb5fbf9e8' # Loader dedicated AMI
     ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    backup_bucket_location: 'manager-backup-tests-eu-west-1'
   us-west-2:
     security_group_ids: 'sg-81703ae4'
     subnet_id: 'subnet-5207ee37'
     ami_id_loader: 'ami-0c6fe6ef0d47ae428' # Loader dedicated AMI
     ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    backup_bucket_location: 'manager-backup-tests-eu-west-2'
 
 
 aws_root_disk_size_monitor: 35  # GB, remove this field if default disk size should be used
@@ -28,3 +31,4 @@ aws_root_disk_name_monitor: "/dev/sda1"  # use "/dev/xvda" for Debian 8 image
 ami_db_scylla_user: 'centos'
 ami_loader_user: 'centos'
 ami_monitor_user: 'centos'
+aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'

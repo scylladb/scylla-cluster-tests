@@ -3796,8 +3796,9 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         if self.params.get('use_mgmt', default=None):
             node.install_scylla(scylla_repo=self.params.get('scylla_repo_m'))
             package_path = self.params.get('scylla_mgmt_pkg', None)
-            node.remoter.run('mkdir -p {}'.format(package_path))
-            node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
+            if package_path:
+                node.remoter.run('mkdir -p {}'.format(package_path))
+                node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
             node.install_mgmt(scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
                               segments_per_repair=self.params.get('mgmt_segments_per_repair'),
                               package_url=package_path)
