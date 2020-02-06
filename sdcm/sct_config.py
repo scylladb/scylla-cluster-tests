@@ -168,6 +168,12 @@ class SCTConfiguration(dict):
                      Automatically lookup AMIs and repo links for formal versions.
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'"""),
 
+        dict(name="oracle_scylla_version", env="SCT_ORACLE_SCYLLA_VERSION",
+             type=str,
+             help="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
+                     Automatically lookup AMIs for formal versions.
+                     WARNING: can't be used together with 'ami_id_db_oracle'"""),
+
         dict(name="scylla_linux_distro", env="SCT_SCYLLA_LINUX_DISTRO", type=str,
              help="""The distro name and family name to use [centos/ubuntu-xenial/debien-jessie]"""),
 
@@ -948,6 +954,23 @@ class SCTConfiguration(dict):
                         break
                 else:
                     raise ValueError("repo for scylla version {} wasn't found in []".format(scylla_version))
+
+        # 5.1) handle oracle scylla_version if exists
+        oracle_scylla_version = self.get('oracle_scylla_version', None)
+        if oracle_scylla_version:
+            if 'ami_id_db_oracle' not in self and self.get('cluster_backend') == 'aws':
+                ami_list = []
+                for region in self.get('region_name').split():
+                    amis = get_scylla_ami_versions(region)
+                    for ami in amis:
+                        if oracle_scylla_version in ami['Name']:
+                            ami_list.append(ami['ImageId'])
+                            break
+                    else:
+                        raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
+                self['ami_id_db_oracle'] = " ".join(ami_list)
+            else:
+                raise ValueError("oracle_scylla_version and ami_id_db_oracle can't used together")
 
         # 6) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version', None)
