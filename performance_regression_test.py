@@ -127,7 +127,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.log.debug(debug_message)
 
         if save_stats:
-            self.create_test_stats(sub_type=sub_type)
+            if not self.exists():
+                self.create_test_stats(sub_type=sub_type)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue, store_results=True)
@@ -153,7 +154,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             stress_queue = list()
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
-            if not isinstance(prepare_write_cmd, str) and len(prepare_write_cmd) > 1:
+            if isinstance(prepare_write_cmd, list):
+                if len(prepare_write_cmd) == 1:
+                    prepare_write_cmd = prepare_write_cmd[0]
+            if isinstance(prepare_write_cmd, list):
                 # Check if it should be round_robin across loaders
                 if self.params.get('round_robin'):
                     self.log.debug('Populating data using round_robin')
@@ -161,12 +165,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
                 for stress_cmd in prepare_write_cmd:
                     params.update({'stress_cmd': stress_cmd})
-
                     # Run all stress commands
                     params.update(dict(stats_aggregate_cmds=False))
                     self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
                     stress_queue.append(self.run_stress_thread(**params))
-
             # One stress cmd command
             else:
                 stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,

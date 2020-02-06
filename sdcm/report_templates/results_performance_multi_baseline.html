@@ -1,0 +1,140 @@
+{%- extends 'results_base_new.html' -%}
+{%- block body -%}
+    {%- for group_name, subtestname_metricname_mtype_testid_value in results.items() -%}
+        {%- set vars = {} -%}
+    <h2>{{group_name}}</h2>
+    <table id="results_table">
+        {# Headers with test version,commit and date #}
+        {%- for subtest_name, metricname_mtype_testid_value in subtestname_metricname_mtype_testid_value.items() -%}
+            <tr>
+            <th>Subtest Name</th>
+            {%- for metric_name, mtype_testid_value in metricname_mtype_testid_value.data.items() -%}
+            <th>Metric Name</th>
+            <th>Type of metric</th>
+                {%- for test, value in mtype_testid_value.absolute.items() -%}
+                <th>
+                    {{ test.software.scylla_server_any.version.as_string }} <br> {{ test.software.scylla_server_any.date.as_string() }} <br> {{ test.software.scylla_server_any.commit }}
+                </th>
+                {%- endfor -%}
+                {%- break -%}
+            {%- endfor -%}
+            {%- break -%}
+            </tr>
+        {%- endfor -%}
+        {# Headers with test remarks #}
+        {%- for subtest_name, metricname_mtype_testid_value in subtestname_metricname_mtype_testid_value.items() -%}
+            <tr>
+            <th style="text-align: center" colspan="3"></th>
+            {%- for metric_name, mtype_testid_value in metricname_mtype_testid_value.data.items() -%}
+                {%- for test, value in mtype_testid_value.absolute.items() -%}
+                    <th style="text-align: center">
+                    {%- for test_remark in tests_info.get(test, {}).get('remarks', []) -%}
+                        {{ test_remark|safe }} <br>
+                    {%- endfor -%}
+                    </th>
+                {%- endfor -%}
+                {%- break -%}
+            {%- endfor -%}
+            {%- break -%}
+            </tr>
+        {%- endfor -%}
+        {# Cells with metric data #}
+        {%- for subtest_name, metricpath_mtype_testid_value in subtestname_metricname_mtype_testid_value.items() -%}
+            {%- if vars.update({'first_mtype_testid_value': 1}) -%} {%- endif -%}
+            {%- for metric_path, mtype_testid_value in metricpath_mtype_testid_value.data.items() -%}
+                {%- if vars.update({'first_testid_value': 1}) -%} {%- endif -%}
+                {%- for mtype, testid_value in mtype_testid_value.items() -%}
+                    <tr>
+                   {%- if vars.first_mtype_testid_value == 1 -%}
+                        {%- if vars.update({'first_mtype_testid_value': 0}) -%} {%- endif -%}
+                        <td rowspan="{{ metricpath_mtype_testid_value.total_metrics }}">{{ subtests_info.get(subtest_name, {'name': subtest_name}).name }} {%- if subtests_info.get(subtest_name, {}).get('baseline', None) -%} <small><br>Baseline:<br> {{ subtests_info[subtests_info[subtest_name].baseline].name }}</small> {%- endif -%}</td>
+                    {%- else -%}
+                    {%- endif -%}
+                    {%- if vars.first_testid_value == 1 -%}
+                        {%- if vars.update({'first_testid_value': 0}) -%} {%- endif -%}
+                        <td rowspan="{{ mtype_testid_value|length }}" >{{ metric_info[metric_path].name }}</td>
+                    {%- endif -%}
+                    <td>{{ mtype }}</td>
+                    {%- if vars.update({'current_test_metric': 'none'}) -%} {%- endif -%}
+                    {%- for test, metric_value in testid_value.items() -%}
+                        {%- if tests_info.get(test, {}).get('best_for', {}).get(subtest_name,{}).get(metric_path, False) -%}{%- set best_mark = '<sup style="color: dodgerblue">best</sup>' -%}{%- else -%}{%- set best_mark = '' -%}{%- endif -%}
+                        {%- if vars.current_test_metric == 'none' -%}
+                            {%- if metric_value is none -%}
+                                {%- if vars.update({'current_test_metric': 'False'}) -%} {%- endif -%}
+                                <td>N/A</td>
+                            {%- else -%}
+                                {%- if vars.update({'current_test_metric': metric_value}) -%} {%- endif -%}
+                                <td>{{'%0.2f'| format(metric_value.value|float)}} {{ metric_value.units }}</td>
+                            {%- endif -%}
+                        {%- elif vars.current_test_metric == 'False' -%}
+                            {%- if metric_value is none -%}<td>N/A</td>{%- else -%}<td>{{'%0.2f'| format(metric_value.value|float)}} {{ metric_value.units }}</td>{%- endif -%}
+                        {%- else -%}
+                            {%- if metric_value is none -%}
+                                <td>N/A</td>
+                            {%- else -%}{%- set rdiff = metric_value.rdiff(vars.current_test_metric) -%}
+                                {%- if vars.current_test_metric.better(metric_value) -%} {%- set style = 'color:green' -%} {%- else -%} {%- set style = 'color:red' -%} {%- endif -%}
+                                {%- if rdiff.abs < 1 -%}{%- set style = ' ' -%}{%- elif rdiff.abs > 4 -%}{%- set style = style + ';font-weight:bold' -%}{%- endif -%}
+                                <td>{{'%0.2f'| format(metric_value.value|float)}} {{ metric_value.units }} (<span style="{{ style|safe }}">{%- if rdiff.value > 0 -%}-{%- else -%}+{%- endif -%}{{'%0.2f'| format(rdiff.abs|float)}}%</span>) {%- if mtype == 'absolute' -%}{{ best_mark|safe }}{%- endif -%}</td>
+                            {%- endif -%}
+                        {%- endif -%}
+                    {%- endfor -%}
+                    </tr>
+                {%- endfor -%}
+            {%- endfor -%}
+        {%- endfor -%}
+    </table>
+    {%- endfor -%}
+    <div>Legend:</div>
+    <ul style="list-style-type:none">
+        <li>Type of metric - values in this column describe what data you see in the row:
+             <br>&nbsp;&nbsp;&nbsp;"absolute" - Values in the row contain actual metric data. In parenthesis you get ((&lt;current result&gt; - &lt;result&gt;) / &lt;result&gt;) * 100, it is green when difference is considered good
+             <br>&nbsp;&nbsp;&nbsp;"relative" - Values in the row contain (&lt;metric value&gt;/&lt;baseline metric value&gt;) * 100
+        </li>
+        <li>c-s - is cassandra-stress tool, you can read more  <a href="https://docs.datastax.com/en/dse/5.1/dse-admin/datastax_enterprise/tools/toolsCStress.html">here</a>
+        </li>
+    </ul>
+
+    <h2>Table of test IDs</h2>
+    <table id="results_table">
+        {# Headers with test version,commit and date #}
+        <tr>
+        {%- for test in tests_info.keys() -%}
+            <th>
+            {{ test.software.scylla_server_any.version.as_string }} <br> {{ test.software.scylla_server_any.date.as_string() }} <br> {{ test.software.scylla_server_any.commit }}
+            </th>
+        {%- endfor -%}
+        </tr>
+        <tr>
+        {%- for test_info in tests_info.values() -%}
+            <th style="text-align: center; white-space:normal;">
+            {%- for test_remark in test_info.get('remarks', []) -%}
+                {{ test_remark|safe }} <br>
+            {%- endfor -%}
+            </th>
+        {%- endfor -%}
+        </tr>
+        <tr>
+        {%- for test in tests_info.keys() -%}
+            <td style="white-space:normal">{{ test.test_id }}</td>
+        {%- endfor -%}
+        </tr>
+    </table>
+    <br/>
+    {%- for subtest in subtests -%}
+        {%- if subtests_info.get(subtest.subtest_name, None) -%}
+            <h2>{{ subtests_info.get(subtest.subtest_name).name }}</h2>
+            {%- if subtest.cassandra_stress and subtest.cassandra_stress.raw_cmd  -%}
+                <h3>Cassandra Stress Command</h3>
+                <table id="results_table"><tr><td>{{ subtest.cassandra_stress.raw_cmd }}</td></tr></table>
+            {%- endif -%}
+            {%- if subtest.grafana_screenshots -%}
+                {%- if subtest.grafana_screenshots[0] -%}
+                    <li><a href={{ subtest.grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+                {%- endif -%}
+                {%- if subtest.grafana_snapshots[1] -%}
+                    <li><a href={{ subtest.grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+                {%- endif -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+{%- endblock -%}

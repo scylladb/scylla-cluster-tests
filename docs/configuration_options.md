@@ -45,6 +45,7 @@
 | **<a name="seeds_num">seeds_num</a>**  | Number of seeds to select | 1 | SCT_SEEDS_NUM
 | **<a name="send_email">send_email</a>**  | If true would send email out of the performance regression test | N/A | SCT_SEND_EMAIL
 | **<a name="email_recipients">email_recipients</a>**  | list of email of send the performance regression test to | ['qa@scylladb.com'] | SCT_EMAIL_RECIPIENTS
+| **<a name="email_subject_postfix">email_subject_postfix</a>**  | postfix appended to the email subject | 'some text' | SCT_EMAIL_SUBJECT_POSTFIX
 | **<a name="bench_run">bench_run</a>**  | If true would kill the scylla-bench thread in the test teardown | N/A | SCT_BENCH_RUN
 | **<a name="fullscan">fullscan</a>**  | If true would kill the fullscan thread in the test teardown | N/A | SCT_FULLSCAN
 | **<a name="experimental">experimental</a>**  | when enabled scylla will use it's experimental features | True | SCT_EXPERIMENTAL

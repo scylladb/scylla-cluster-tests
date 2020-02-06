@@ -1,0 +1,65 @@
+# Test configuration for performance_regression_lwt_test.py:test_lwt_latency
+
+test_duration: 300
+prepare_write_cmd: [
+  "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(insert=1)' no-warmup cl=ALL n=60000000 -port jmx=6868 -mode cql3 native -rate threads=100"
+]
+
+# This is diskbound performance test, should have dataset size
+#   at least 10x of memory available on all nodes.
+# After running "ops(insert=1) n=1000000" you will get ~1m records
+#   with ~1.3k avg row size across ~895k partitions, table size will be ~1.3g
+# Memory limit is 4g and we are running on 3 nodes,
+#   so we need 3x4x5(Gb) ~ 60Gb dataset, i.e. we need at least 48439480 records
+
+# According to statistics gathered during runs, LWT statements under the hood triggers
+#  other operations, in particular DELETE IF <cond> invokes two SELECTs, one DELETE and two UPDATEs.
+# Here is statistics on that
+#                               			  I S D U
+# DELETE IF <cond> (stress_cmd_lwt_dc):       0 2 1 3
+# DELETE IF EXISTS (stress_cmd_lwt_de):  	  0	2 1 2
+# INSERT IF NOT EXISTS (stress_cmd_lwt_ine):  2	4 0 5
+# UPDATE IF <cond> (stress_cmd_lwt_uc):       0	4 0 7
+# UPDATE IF EXISTS (stress_cmd_lwt_ue):       0	4 0 4
+
+# Due to this statements for 'stress_cmd_lwt_i', 'stress_cmd_lwt_u', 'stress_cmd_lwt_d'
+#  where enhanced to call basic statements in same ration as LWT call them
+
+# That is why you see ops(stmt-insert=2,stmt-select=4,stmt-update=5) in stress_cmd_lwt_i
+
+stress_cmd_lwt_i: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=4,stmt-update=5)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=5000/s"
+stress_cmd_lwt_u: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=4,stmt-update=4)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=5000/s"
+stress_cmd_lwt_d: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=2,stmt-delete=1,stmt-update=2)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=5000/s"
+stress_cmd_lwt_ine: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=3500/s"
+stress_cmd_lwt_uc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-cond=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=1200/s"
+stress_cmd_lwt_ue: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=1000/s"
+stress_cmd_lwt_dc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-cond=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=2000/s"
+stress_cmd_lwt_de: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=2000/s"
+stress_cmd_lwt_mixed: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1,stmt-update-if-cond=1,stmt-update-if-exists=1,stmt-delete-if-cond=1,stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=2200/s"
+stress_cmd_lwt_mixed_baseline: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=16,stmt-delete=2,stmt-update=21)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100 throttle=5000/s"
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_loader: 'c4.2xlarge'
+instance_type_monitor: 't3.small'
+instance_type_db: 'i3.xlarge'
+
+user_prefix: 'perf-regression-latency-lwt-big'
+ami_id_db_scylla_desc: 'VERSION_DESC'
+regions_data:
+  us-east-1:
+    ami_id_loader: 'ami-0b94f0e897d884b1b'
+  eu-west-1:
+    ami_id_loader: 'ami-0ea704a8c9ec08e57'
+  us-west-2:
+    ami_id_loader: 'ami-063a97bde47353690'
+
+append_scylla_args: '--blocked-reactor-notify-ms 400 --memory 4G --experimental 1 --experimental-features=lwt'
+
+backtrace_decoding: false
+store_perf_results: true
+send_email: true
+email_recipients: ['qa@scylladb.com', 'lwt@scylladb.com']
+email_subject_postfix: 'disk-wise(big dataset)'

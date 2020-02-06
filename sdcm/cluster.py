@@ -43,7 +43,8 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, get_username
+    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, get_username, \
+    generate_random_string
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker import ContainerManager
 from sdcm.utils.thread import raise_event_on_failure
@@ -3427,6 +3428,38 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         if not self._node_cycle:
             self._node_cycle = itertools.cycle(self.nodes)
         return next(self._node_cycle)
+
+    def backup_keyspace(self, ks):
+        backup_name = generate_random_string(10)
+        for node in self.nodes:
+            node.run_nodetool('drain')
+            node.run_nodetool('flush')
+
+        for node in self.nodes:
+            node.stop_scylla_server()
+
+        for node in self.nodes:
+            node.remoter.run(f'sudo cp -r "/var/lib/scylla/data/{ks}" "/var/lib/scylla/data/{backup_name}"')
+
+        for node in self.nodes:
+            node.start_scylla_server()
+
+        return ks, backup_name
+
+    def restore_keyspace(self, backup_data):
+        ks, backup_name = backup_data
+        for node in self.nodes:
+            node.stop_scylla_server()
+
+        for node in self.nodes:
+            node.remoter.run(f'sudo rm -rf "/var/lib/scylla/data/{ks}";'
+                             f'sudo cp -r "/var/lib/scylla/data/{backup_name}" "/var/lib/scylla/data/{ks}"')
+
+        for node in self.nodes:
+            node.start_scylla_server()
+
+        for node in self.nodes:
+            node.run_nodetool('repair')
 
 
 class BaseLoaderSet():

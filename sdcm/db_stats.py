@@ -347,6 +347,9 @@ class Stats():
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
 
+    def exists(self):
+        return self.elasticsearch.exists(index=self._test_index, doc_type=self._es_doc_type, id=self._test_id)
+
 
 class TestStatsMixin(Stats):
     """
@@ -532,6 +535,7 @@ class TestStatsMixin(Stats):
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
+    @retrying(n=5, sleep_time=0, message="Retrying on getting prometheus stats")
     def get_prometheus_stats(self, alternator=False):
         self.log.info("Calculating throughput stats from PrometheusDB...")
         prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address,

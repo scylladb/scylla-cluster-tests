@@ -35,6 +35,7 @@ def call() {
             string(defaultValue: "eu-west-1",
                description: 'us-east-1|eu-west-1',
                name: 'aws_region')
+            string(defaultValue: '', description: '', name: 'loader_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
@@ -45,9 +46,11 @@ def call() {
             string(defaultValue: "keep-on-failure",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
+
             string(defaultValue: "destroy",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_loader_nodes')
+
             string(defaultValue: "keep-on-failure",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
@@ -105,6 +108,10 @@ def call() {
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_CONFIG_FILES=${test_config}
+
+                                    if [[ ! -z "" ]] ; then
+                                        export SCT_AMI_ID_LOADER="${params.loader_ami_id}"
+                                    fi
 
                                     if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"

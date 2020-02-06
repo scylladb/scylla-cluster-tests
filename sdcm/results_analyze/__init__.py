@@ -1,226 +1,27 @@
+# pylint: disable=too-many-lines
+
 import os
-import logging
 import math
 import pprint
-from datetime import datetime
+import logging
+import collections
 
-import jinja2
+from datetime import datetime
 from sortedcontainers import SortedDict
 
-from sdcm.db_stats import TestStatsMixin
+import jinja2
+
 from sdcm.es import ES
+from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email
+from sdcm.utils.es_queries import query_filter, QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
+    PerformanceFilterCS
+from test_lib.utils import MagicList, get_data_by_path
+from .test import TestResultClass
 
 
 LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)
-
-
-class QueryFilter():
-    """
-    Definition of query filtering parameters
-    """
-    SETUP_PARAMS = ['n_db_nodes', 'n_loaders', 'n_monitor_nodes']
-    SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor']
-
-    def __init__(self, test_doc, is_gce=False):
-        self.test_doc = test_doc
-        self.test_name = test_doc["_source"]["test_details"]["test_name"]
-        self.is_gce = is_gce
-        self.date_re = '/.*/'
-
-    def setup_instance_params(self):
-        return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
-
-    def filter_setup_details(self):
-        setup_details = ''
-        for param in self.SETUP_PARAMS + self.setup_instance_params():
-            if setup_details:
-                setup_details += ' AND '
-            setup_details += 'setup_details.{}: {}'.format(param, self.test_doc['_source']['setup_details'][param])
-        return setup_details
-
-    def filter_test_details(self):
-        test_details = 'test_details.job_name:\"{}\" '.format(
-            self.test_doc['_source']['test_details']['job_name'].split('/')[0])
-        test_details += self.test_cmd_details()
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-        test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", r"\:"))
-        return test_details
-
-    def test_cmd_details(self):
-        raise NotImplementedError('Derived classes must implement this method.')
-
-    def __call__(self, *args, **kwargs):
-        try:
-            return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
-        except KeyError:
-            LOGGER.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
-        return None
-
-
-class PerformanceQueryFilter(QueryFilter):
-
-    ALLOWED_PERFORMANCE_JOBS = [
-        {
-            "job_folder": "Perf-Regression",
-            "job_prefix": ["scylla-release-perf-regression"]
-        },
-        {
-            "job_folder": "scylla-master",
-            "job_prefix": ["scylla-master-perf-regression"]
-        },
-
-    ]
-
-    def filter_test_details(self):
-        test_details = self.build_filter_job_name()
-        test_details += self.test_cmd_details()
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-
-        test_details += ' AND {}'.format(self.build_filter_test_name())
-        return test_details
-
-    def build_filter_job_name(self):
-        """Prepare filter to search by job name
-
-        Select performance tests if job name is located in folder
-        MAIN_JOB_FOLDERS, of job name starts from MAIN_JOB_FOLDER item( this
-        is mostly doing for collecting previous tests)
-
-        For other job filter documents only with exact same job name
-        :returns: [description]
-        :rtype: {[type]}
-        """
-        job_name = self.test_doc['_source']['test_details']['job_name'].split("/")
-
-        def get_query_filter_by_job_folder(job_item):
-            filter_query = ""
-            if job_name[0] and job_name[0] in job_item['job_folder']:
-                base_job_name = job_name[1]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}\/* OR'.format(job_name[0],
-                                                                                      base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}\/*) '.format(base_job_name)
-            return filter_query
-
-        def get_query_filter_by_job_prefix(job_item):
-            filter_query = ""
-            for job_prefix in job_item['job_prefix']:
-                if not job_name[0].startswith(job_prefix):
-                    continue
-                base_job_name = job_name[0]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}\/* OR'.format(job_item['job_folder'],
-                                                                                      base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}\/*) '.format(base_job_name)
-                break
-            return filter_query
-
-        job_filter_query = ""
-        for job_item in self.ALLOWED_PERFORMANCE_JOBS:
-            job_filter_query = get_query_filter_by_job_folder(job_item)
-            if not job_filter_query:
-                job_filter_query = get_query_filter_by_job_prefix(job_item)
-            if job_filter_query:
-                break
-
-        if not job_filter_query:
-            job_filter_query = r'test_details.job_name.keyword: "{}" '.format(
-                self.test_doc['_source']['test_details']['job_name'])
-
-        return job_filter_query
-
-    def build_filter_test_name(self):
-        new_test_name = ""
-        avocado_test_name = ""
-        if ".py:" in self.test_name:
-            new_test_name = self.test_name.replace(".py:", ".")
-            avocado_test_name = self.test_name.replace(":", r"\:")
-        else:
-            avocado_test_name = self.test_name.replace(".", r".py\:", 1)
-            new_test_name = self.test_name
-
-        return " (test_details.test_name: {} OR test_details.test_name: {})".format(new_test_name, avocado_test_name)
-
-    def test_cmd_details(self):
-        raise NotImplementedError('Derived classes must implement this method.')
-
-
-class QueryFilterCS(QueryFilter):
-
-    _CMD = ('cassandra-stress', )
-    _PRELOAD_CMD = ('preload-cassandra-stress', )
-    _PARAMS = ('command', 'cl', 'rate threads', 'schema', 'mode', 'pop', 'duration')
-    _PROFILE_PARAMS = ('command', 'profile', 'ops', 'rate threads', 'duration')
-
-    def test_details_params(self):
-        return self._CMD + self._PRELOAD_CMD if \
-            self.test_doc['_source']['test_details'].get(self._PRELOAD_CMD[0]) else self._CMD
-
-    def cs_params(self):
-        return self._PROFILE_PARAMS if self.test_name.endswith('profiles') else self._PARAMS
-
-    def test_cmd_details(self):
-        test_details = ""
-        for cassandra_stress in self.test_details_params():
-            for param in self.cs_params():
-                if param == 'rate threads':
-                    test_details += r' AND test_details.{}.rate\ threads: {}'.format(
-                        cassandra_stress, self.test_doc['_source']['test_details'][cassandra_stress][param])
-                elif param == 'duration' and cassandra_stress.startswith('preload'):
-                    continue
-                else:
-                    if param not in self.test_doc['_source']['test_details'][cassandra_stress]:
-                        continue
-                    param_val = self.test_doc['_source']['test_details'][cassandra_stress][param]
-                    if param in ['profile', 'ops']:
-                        param_val = "\"{}\"".format(param_val)
-                    test_details += ' AND test_details.{}.{}: {}'.format(cassandra_stress, param, param_val)
-        return test_details
-
-
-class PerformanceFilterCS(QueryFilterCS, PerformanceQueryFilter):
-    pass
-
-
-class QueryFilterScyllaBench(QueryFilter):
-
-    _CMD = ('scylla-bench', )
-    _PARAMS = ('mode', 'workload', 'partition-count', 'clustering-row-count', 'concurrency', 'connection-count',
-               'replication-factor', 'duration')
-
-    def test_cmd_details(self):
-        test_details = ['AND test_details.{}.{}: {}'.format(
-            cmd, param, self.test_doc['_source']['test_details'][cmd][param])
-            for param in self._PARAMS for cmd in self._CMD]
-
-        return ' '.join(test_details)
-
-
-class PerformanceFilterScyllaBench(QueryFilterScyllaBench, PerformanceQueryFilter):
-    pass
-
-
-class QueryFilterYCSB(QueryFilter):
-    _YCSB_CMD = ('ycsb', )
-    _YCSB_PARAMS = ('fieldcount', 'fieldlength', 'readproportion', 'insertproportion', 'recordcount', 'operationcount')
-
-    def test_details_params(self):
-        return self._YCSB_CMD
-
-    def cs_params(self):
-        return self._YCSB_PARAMS
-
-    def test_cmd_details(self):
-        test_details = ""
-        for ycsb in self._YCSB_CMD:
-            for param in self._YCSB_PARAMS:
-                param_val = self.test_doc['_source']['test_details'][ycsb][param]
-                test_details += ' AND test_details.{}.{}: {}'.format(ycsb, param, param_val)
-        return test_details
-
-
-class PerformanceFilterYCSB(QueryFilterYCSB, PerformanceQueryFilter):
-    pass
 
 
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
@@ -273,7 +74,8 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         """
         email_template_fp = template if template else self._email_template_fp
         self.log.info("Rendering results to html using '%s' template...", email_template_fp)
-        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
+        loader = jinja2.FileSystemLoader(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '../report_templates'))
         print(os.path.dirname(os.path.abspath(__file__)))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=[
                                  'jinja2.ext.loopcontrols', 'jinja2.ext.do'])
@@ -583,7 +385,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce)
+        query = query_filter(doc, is_gce)
         if not query:
             return False
         self.log.debug("Query to ES: %s", query)
@@ -736,7 +538,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce)
+        query = query_filter(doc, is_gce)
         self.log.debug(query)
         if not query:
             return False
@@ -909,4 +711,359 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         html = self.render_to_html(results, template='results_performance_baseline.html')
         self.send_email(subject, html)
 
+        return True
+
+    def get_test_instance_by_id(self, test_id):
+        rp_main_test = TestResultClass.get_by_test_id(test_id, self._es_index)
+        if rp_main_test:
+            rp_main_test = rp_main_test[0]
+        if not rp_main_test or not rp_main_test.is_valid():
+            self.log.error('Cannot find main_test by id: {}!'.format(test_id))
+            return None
+        return rp_main_test
+
+    @staticmethod
+    def _add_remarks_to_test(test, remarks, tests_info):
+        if isinstance(remarks, str):
+            remarks = [remarks]
+        if test not in tests_info:
+            tests_info[test] = {'remarks': remarks}
+        elif 'remarks' not in tests_info[test]:
+            tests_info[test]['remarks'] = remarks
+        else:
+            tests_info[test]['remarks'].extend(remarks)
+
+    @staticmethod
+    def _add_best_for_info(test, subtest, metric_path, tests_info):
+        subtest_name = subtest.subtest_name
+        if test not in tests_info:
+            tests_info[test] = {'best_for': {subtest_name: {metric_path: True}}}
+        elif 'best_for' not in tests_info[test]:
+            tests_info[test]['best_for'] = {subtest_name: {metric_path: True}}
+        elif subtest_name not in tests_info[test]['best_for']:
+            tests_info[test]['best_for'][subtest_name] = {metric_path: True}
+        else:
+            tests_info[test]['best_for'][subtest_name][metric_path] = True
+
+    def _mark_best_tests(self, prior_subtests, metrics, tests_info, main_test_id):
+        main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
+        for _, prior_tests in prior_subtests.items():
+            prior_tests = MagicList(
+                [prior_test for prior_test in prior_tests if prior_test.main_test_id != main_test_id])
+            if not prior_tests:
+                continue
+            for metric_path in metrics:
+                # Getting main test of the subtest that showed best score in this metric
+                best_subtest = prior_tests.sort_by(f'{metric_path}.betterness')[-1]
+                # Find subtests from any other tests
+                self._add_best_for_info(
+                    main_tests_by_id[best_subtest.main_test_id][0],
+                    best_subtest,
+                    metric_path,
+                    tests_info
+                )
+
+    @staticmethod
+    def _clean_up_not_marked_runs(prior_subtests, tests_info):
+        main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
+        for _, prior_tests in prior_subtests.items():
+            for prior_test in [prior_test for prior_test in prior_tests
+                               if not main_tests_by_id.get(prior_test.main_test_id, False)]:
+                prior_tests.remove(prior_test)
+
+    def _find_versions_to_compare_with(self, test, prior_main_tests, tests_info):
+        current_test_version_int = test.software.scylla_server_any.version.as_int
+        current_test_version_major_int = test.software.scylla_server_any.version.major_as_int
+
+        grouped_by_version = prior_main_tests.group_by(
+            data_path='software.scylla_server_any.version.major_as_int',
+            sort_keys=-1,
+            group_values={
+                'data_path': 'software.scylla_server_any.version.as_int',
+                'sort_keys': -1
+            }
+        )
+
+        for version_major_int, prior_tests_grouped in grouped_by_version.items():
+            if version_major_int == current_test_version_major_int:
+                for version_int, prior_tests_grouped2 in prior_tests_grouped.items():
+                    if version_int == current_test_version_int:
+                        if prior_tests_grouped2:
+                            self._add_remarks_to_test(prior_tests_grouped2[0], 'Latest<br>(same version)', tests_info)
+                    elif version_int < current_test_version_int:
+                        if prior_tests_grouped2:
+                            self._add_remarks_to_test(prior_tests_grouped2[0], [], tests_info)
+            elif version_major_int < current_test_version_major_int:
+                limit = 2
+                for version_int, prior_tests_grouped2 in prior_tests_grouped.items():
+                    if limit < 0:
+                        break
+                    if prior_tests_grouped2:
+                        self._add_remarks_to_test(prior_tests_grouped2[0], [], tests_info)
+                        limit -= 1
+
+    @staticmethod
+    def _get_prior_tests_for_subtests(subtests: list):
+        output = collections.OrderedDict()
+        for subtest in subtests:
+            prior_tests = MagicList(
+                [prior_sub_test for prior_sub_test in subtest.get_prior_tests()
+                 if prior_sub_test.metrics and prior_sub_test.metrics.is_valid()
+                 ])
+            output[subtest] = prior_tests
+        return output
+
+    @staticmethod
+    def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):  # pylint: disable=too-many-branches
+        is_test_complete = {}
+        for subtest, prior_tests in prior_subtests.items():
+            for prior_test_id, _ in prior_tests.group_by('main_test_id').items():
+                if prior_test_id not in is_test_complete:
+                    is_test_complete[prior_test_id] = [subtest.subtest_name]
+                else:
+                    is_test_complete[prior_test_id].append(subtest.subtest_name)
+
+        for prior_test_id in list(is_test_complete.keys()):
+            is_test_complete[prior_test_id] = len(is_test_complete[prior_test_id]) >= expected_subtests_count
+        to_delete = []
+        for num, prior_main_test in enumerate(prior_main_tests):
+            if not is_test_complete.get(prior_main_test.test_id, False):
+                to_delete.append(num)
+        for num in sorted(to_delete, reverse=True):
+            prior_main_tests.pop(num)
+
+        for _, prior_tests in prior_subtests.items():
+            to_delete = []
+            for num, prior_subtest in enumerate(prior_tests):
+                if not is_test_complete.get(prior_subtest.main_test_id, False):
+                    to_delete.append(num)
+            if to_delete:
+                for num in sorted(to_delete, reverse=True):
+                    prior_tests.pop(num)
+
+    def check_regression_multi_baseline(
+            self,
+            test_id,
+            subtests_info: list = None,
+            metrics: list = None,
+            email_subject: str = None,
+    ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        """
+        Build regression report for subtests.
+        test_id: Main test id
+        subtests_info: List of subtest information.
+        metrics: List of metrics paths,
+        email_subject: email subject
+        Returns True if report was generated ans issued, otherwise - False
+
+        subtest_info example: [{
+            'name': 'INSERT IF NOT EXISTS',
+            'subtest_name': 'lwt-insert-not-exists',
+            'baseline': 'lwt-insert-std'
+        }, {
+            'name': 'INSERT',
+            'subtest_name': 'lwt-insert-std',
+        }]
+        'subtest_name' - should be same as you provide to sub_type argument of test.create_test_stats when creating stats for the subcase
+        'name' - Textual representation for reports
+        'baseline' - A subtest_name of baseline test, set it to None or do not add it of subtest does not have baseline.
+
+        Subtest that has baseline will be compared to baseline subtest of the same test and result will be showed next to subtest value.
+
+        metrics example: ['metrics.cs_metrics.latency_mean','metrics.cs_metrics.throughput']
+
+        Metric path is path with starting point of TestDataClass that points to metric value.
+        Look at sdcm/utils/es_test.py:TestDataClass for more details
+        """
+        if metrics is None:
+            metrics = [
+                'metrics.cs_metrics.latency_mean',
+                'metrics.cs_metrics.throughput'
+            ]
+        rp_main_test = self.get_test_instance_by_id(test_id)
+
+        if not rp_main_test:
+            self.log.error('Cannot find test with id: {}!'.format(test_id))
+            return False
+
+        if email_subject is None:
+            email_subject = 'Performance Regression Compare Results - {test.test_name} - ' \
+                            '{test.software.scylla_server_any.version.as_string}'.format(test=rp_main_test)
+        else:
+            email_subject = email_subject.format(test=rp_main_test)
+
+        rp_main_tests_to_compare = collections.OrderedDict()
+        rp_metric_info = {}
+
+        self._add_remarks_to_test(rp_main_test, 'Current', rp_main_tests_to_compare)
+
+        # Get prior main tests and clean it up from tests that has bad start_time or
+        # ran on scylla version newer than this test
+        prior_main_tests = MagicList([
+            prior_test for prior_test in rp_main_test.get_prior_tests() if
+            prior_test.is_valid() and prior_test.start_time and prior_test.start_time.is_valid() and
+            prior_test.test_id != rp_main_test.test_id
+        ])
+
+        if not prior_main_tests:
+            self.log.error('Cannot find prior runs for test with id: {}!'.format(test_id))
+            return False
+
+        # Get all subtests of the current main test and sort them by subtest name
+        rp_subtests_of_current_test = MagicList([
+            subtest for subtest in rp_main_test.get_subtests() if
+            subtest.is_valid() and subtest.complete_time and subtest.complete_time.is_valid()
+        ]).sort_by('subtest_name')
+
+        if not rp_subtests_of_current_test:
+            self.log.error('Cannot find subtests for test id: {}!'.format(test_id))
+            return False
+
+        if not subtests_info:
+            subtests_info = [
+                {
+                    'name': test.subtest_name,
+                    'subtest_name': test.subtest_name,
+                } for test in rp_subtests_of_current_test]
+        else:
+            new_subtests_info = []
+            for subtest_info in subtests_info:
+                for subtest in rp_subtests_of_current_test:
+                    if subtest_info['subtest_name'] == subtest.subtest_name:
+                        new_subtests_info.append(subtest_info)
+                        break
+            subtests_info = new_subtests_info
+            del new_subtests_info
+        rp_subtests_info = {subtest_info['subtest_name']: subtest_info for subtest_info in subtests_info}
+        rp_subtests_of_current_test = MagicList(
+            [test for test in rp_subtests_of_current_test if test.subtest_name in rp_subtests_info]
+        )
+
+        prior_subtests = self._get_prior_tests_for_subtests(rp_subtests_of_current_test)
+        self._cleanup_not_complete_main_tests(prior_main_tests, prior_subtests, len(rp_subtests_of_current_test) // 2)
+        self._find_versions_to_compare_with(rp_main_test, prior_main_tests, rp_main_tests_to_compare)
+        self._clean_up_not_marked_runs(prior_subtests, rp_main_tests_to_compare)
+        self._mark_best_tests(prior_subtests, metrics, rp_main_tests_to_compare, rp_main_test.test_id)
+
+        for metric_path in metrics:
+            rp_metric_info[metric_path] = rp_main_test.get_metric_class(metric_path)
+
+        rp_metrics_table = collections.OrderedDict()
+        prior_tests_by_main_test_id = {subtest.subtest_name: prior_tests.group_by(
+            'main_test_id') for subtest, prior_tests in prior_subtests.items()}
+
+        subtests_groups = {}
+
+        for subtest_info in rp_subtests_info.values():
+            groups = subtest_info.get('groups', [''])
+            for group in groups:
+                if group not in subtests_groups:
+                    subtests_groups[group] = MagicList()
+                subtests_groups[group].append(subtest_info)
+
+        tmp_subtest_by_name = rp_subtests_of_current_test.group_by('subtest_name')
+
+        for group_name, group_substest_infos in subtests_groups.items():  # pylint: disable=too-many-nested-blocks
+            rp_metrics_table[group_name] = rp_metrics_table_l1 = collections.OrderedDict()
+            grouped_subtests = []
+            subtest_info_grouped_by_baseline = group_substest_infos.group_by('baseline', '', sort_keys=1)
+            no_baselines = subtest_info_grouped_by_baseline.get('', None)
+            if no_baselines is None:
+                no_baselines = MagicList()
+            else:
+                no_baselines = subtest_info_grouped_by_baseline.pop('')
+            for baseline_subtest_name, subtest_infos in subtest_info_grouped_by_baseline.items():
+                no_baselines.remove_where('subtest_name', baseline_subtest_name)
+                if baseline_subtest_name in tmp_subtest_by_name and tmp_subtest_by_name[baseline_subtest_name]:
+                    grouped_subtests.append(tmp_subtest_by_name[baseline_subtest_name][0])
+                for subtest_info in MagicList(subtest_infos).sort_by('name'):
+                    if subtest_info['subtest_name'] in tmp_subtest_by_name \
+                            and tmp_subtest_by_name[subtest_info['subtest_name']]:
+                        grouped_subtests.append(tmp_subtest_by_name[subtest_info['subtest_name']][0])
+            for subtest_info in no_baselines:
+                if subtest_info['subtest_name'] in tmp_subtest_by_name \
+                        and tmp_subtest_by_name[subtest_info['subtest_name']]:
+                    grouped_subtests.append(tmp_subtest_by_name[subtest_info['subtest_name']][0])
+            del subtest_info_grouped_by_baseline
+
+            for subtest in grouped_subtests:
+                prior_tests = prior_subtests.get(subtest)
+                baseline_subtest_name = rp_subtests_info.get(subtest.subtest_name, {}).get('baseline', None)
+                baseline_prior_tests = None
+                if baseline_subtest_name:
+                    baseline_prior_tests = prior_tests_by_main_test_id.get(baseline_subtest_name, None)
+
+                grouped_by_main_test_id = prior_tests.group_by('main_test_id')
+                rp_metrics_table_l1[subtest.subtest_name] = rp_metrics_table_l2 = {
+                    'total_metrics': 0,
+                    'data': collections.OrderedDict()
+                }
+                for metric_path in metrics:
+                    rp_metrics_table_l2['data'][metric_path] = rp_metrics_table_l3 = {
+                        'relative': collections.OrderedDict(),
+                        'absolute': collections.OrderedDict()
+                    }
+                    metric_bucket_main = rp_metrics_table_l3['absolute']
+                    metric_bucket_baseline = rp_metrics_table_l3['relative']
+                    number_of_metrics = 0
+                    if not baseline_prior_tests:
+                        del rp_metrics_table_l3['relative']
+                    else:
+                        holds_any_value = False
+                        for main_test, _ in rp_main_tests_to_compare.items():
+                            prior_subtest = grouped_by_main_test_id.get(main_test.test_id, [])
+                            if not prior_subtest:
+                                metric_bucket_baseline[main_test] = None
+                                continue
+                            baseline_subtest = baseline_prior_tests.get(main_test.test_id, [])
+                            if not baseline_subtest:
+                                metric_bucket_baseline[main_test] = None
+                                continue
+                            baseline_metric = get_data_by_path(baseline_subtest[0], metric_path)
+                            metric_instance = get_data_by_path(prior_subtest[0], metric_path)
+                            if baseline_metric is None or metric_instance is None:
+                                metric_bucket_baseline[main_test] = None
+                                continue
+                            metric_bucket_baseline[main_test] = baseline_metric.rate(
+                                metric_instance,
+                                name=f'{metric_instance.name}<br>baseline diff'
+                            )
+                            holds_any_value = True
+                        if not holds_any_value:
+                            del rp_metrics_table_l3['relative']
+                        else:
+                            number_of_metrics += 1
+
+                    holds_any_value = False
+                    for main_test, _ in rp_main_tests_to_compare.items():
+                        prior_subtest = grouped_by_main_test_id.get(main_test.test_id, [])
+                        if not prior_subtest:
+                            metric_bucket_main[main_test] = None
+                            continue
+                        metric_instance = get_data_by_path(prior_subtest[0], metric_path, None)
+                        if metric_instance is None:
+                            metric_bucket_main[main_test] = None
+                            continue
+                        metric_bucket_main[main_test] = metric_instance
+                        holds_any_value = True
+                    if not holds_any_value:
+                        del rp_metrics_table_l2['data'][metric_path]
+                        number_of_metrics = 0
+                    else:
+                        number_of_metrics += 1
+                    rp_metrics_table_l2['total_metrics'] += number_of_metrics
+
+        results = dict(
+            current_main_test=rp_main_test,
+            results=rp_metrics_table,
+            metric_info=rp_metric_info,
+            tests_info=rp_main_tests_to_compare,
+            subtests=rp_subtests_of_current_test,
+            subtests_info=rp_subtests_info,
+        )
+        if len(rp_metric_info) == 1:
+            html = self.render_to_html(results, template='results_performance_multi_baseline_single_metric.html')
+        else:
+            html = self.render_to_html(results, template='results_performance_multi_baseline.html')
+        self.send_email(email_subject, html)
         return True
