@@ -809,13 +809,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
-            if self.params.get('bench_run', default=False):
-                self.loaders.kill_stress_thread_bench()
-            else:
-                self.loaders.kill_stress_thread()
-            if self.params.get('gemini_cmd', default=False):
-                self.loaders.kill_gemini_thread()
-            self.loaders.kill_ycsb_thread()
+            self.loaders.kill_stress_thread()
 
     def verify_stress_thread(self, cs_thread_pool):
         if isinstance(cs_thread_pool, dict):
