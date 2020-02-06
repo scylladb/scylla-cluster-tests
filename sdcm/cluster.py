@@ -3593,19 +3593,26 @@ class BaseLoaderSet():
         return next(self._loader_cycle)
 
     def kill_stress_thread(self):
+        self.kill_cassandra_stress_thread()
+        self.kill_stress_thread_bench()
+        self.kill_gemini_thread()
+        self.kill_docker_loaders()
+
+    def kill_cassandra_stress_thread(self):
         for loader in self.nodes:
             try:
-                loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
+                loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}',
+                                   verbose=False, ignore_status=True)
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning("failed to kill stress-command on [%s]: [%s]",
                                  str(loader), str(ex))
 
-    def kill_ycsb_thread(self):
+    def kill_docker_loaders(self):
         for loader in self.nodes:
             try:
-                loader.remoter.run(cmd='pgrep -f ycsb | xargs -I{}  kill -TERM -{}', ignore_status=True)
+                loader.remoter.run(cmd='docker ps -a -q | docker rm -f', verbose=False, ignore_status=True)
             except Exception as ex:  # pylint: disable=broad-except
-                self.log.warning("failed to kill ycsb stress command on [%s]: [%s]",
+                self.log.warning("failed to kill docker stress command on [%s]: [%s]",
                                  str(loader), str(ex))
 
     @staticmethod
@@ -3825,20 +3832,20 @@ class BaseLoaderSet():
 
     def kill_stress_thread_bench(self):
         for loader in self.nodes:
-            sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', ignore_status=True)
+            sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', verbose=False, ignore_status=True)
             if sb_active.exit_status == 0:
                 kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
-                    self.log.error('Terminate scylla-bench on node %s:\n%s',
-                                   loader, kill_result)
+                    self.log.warning('Terminate scylla-bench on node %s:\n%s',
+                                     loader, kill_result)
 
     def kill_gemini_thread(self):
         for loader in self.nodes:
-            sb_active = loader.remoter.run(cmd='pgrep -f gemini', ignore_status=True)
+            sb_active = loader.remoter.run(cmd='pgrep -f gemini', verbose=False, ignore_status=True)
             if sb_active.exit_status == 0:
                 kill_result = loader.remoter.run('pkill -f -TERM gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
-                    self.log.error('Terminate gemini on node %s:\n%s', loader, kill_result)
+                    self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
 
 
 class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes
