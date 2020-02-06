@@ -67,12 +67,6 @@ user_prefix: 'longevity-large-partitions-200k-pks-4d'
 
 space_node_threshold: 644245094
 
-# To validate rows in partitions: collect data about partitions and their rows amount
-# before and after running nemesis and compare it
-validate_partitions: true
-table_name: "scylla_bench.test"
-primary_key_column: "pk"
-
 # scylla-manager configuration
 # if running on aws and use_mgmt is true, the monitor image should not contain scylla
 use_mgmt: true

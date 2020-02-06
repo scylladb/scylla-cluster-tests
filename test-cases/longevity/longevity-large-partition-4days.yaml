@@ -1,9 +1,10 @@
 test_duration: 6480
 
 bench_run: true
-prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -consistency-level=quorum -concurrency=7 -rows-per-request=10",
-                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -consistency-level=quorum -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=5760m"
-                    ]
+
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10"]
+stress_cmd: ["scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=10000000 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=5760m"]
+
 n_db_nodes: 4
 n_loaders: 3
 n_monitor_nodes: 1
@@ -12,6 +13,7 @@ instance_type_db: 'i3en.3xlarge'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-large-partitions-4d'
 
