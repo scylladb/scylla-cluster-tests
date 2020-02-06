@@ -2860,6 +2860,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         self._seed_nodes_ips = []
         self._seed_nodes = []
         self._non_seed_nodes = []
+        self._node_cycle = None
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -3421,6 +3422,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
         # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
         return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_ips]
+
+    def get_node(self):
+        if not self._node_cycle:
+            self._node_cycle = itertools.cycle(self.nodes)
+        return next(self._node_cycle)
 
 
 class BaseLoaderSet():
