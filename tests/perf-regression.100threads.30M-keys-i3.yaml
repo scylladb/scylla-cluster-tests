@@ -17,7 +17,7 @@ append_scylla_args: '--blocked-reactor-notify-ms 4'
 
 # email definitions to send regression report
 send_email: true
-email_recipients: ['roy@scylladb.com', 'shlomi@scylladb.com', 'bentsi@scylladb.com']
+email_recipients: ['qa@scylladb.com']
 
 backends: !mux
     gce: !mux
