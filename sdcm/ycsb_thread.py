@@ -174,6 +174,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
                                 stress_cmd=stress_cmd, errors=[line, ])
 
+
         LOGGER.debug("running: %s", stress_cmd)
 
         if self.stress_num > 1:
