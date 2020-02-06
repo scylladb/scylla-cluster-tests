@@ -198,6 +198,46 @@ class SCTConfiguration(dict):
              type=str,
              help="Url to the scylla manager packages to install for management tests"),
 
+        dict(name="stress_cmd_lwt_i", env="SCT_STRESS_CMD_LWT_I",
+             type=str,
+             help="Stress command for LWT performance test for INSERT baseline"),
+
+        dict(name="stress_cmd_lwt_d", env="SCT_STRESS_CMD_LWT_D",
+             type=str,
+             help="Stress command for LWT performance test for DELETE baseline"),
+
+        dict(name="stress_cmd_lwt_u", env="SCT_STRESS_CMD_LWT_U",
+             type=str,
+             help="Stress command for LWT performance test for UPDATE baseline"),
+
+        dict(name="stress_cmd_lwt_ine", env="SCT_STRESS_CMD_LWT_INE",
+             type=str,
+             help="Stress command for LWT performance test for INSERT with IF NOT EXISTS"),
+
+        dict(name="stress_cmd_lwt_uc", env="SCT_STRESS_CMD_LWT_UC",
+             type=str,
+             help="Stress command for LWT performance test for UPDATE with IF <condition>"),
+
+        dict(name="stress_cmd_lwt_ue", env="SCT_STRESS_CMD_LWT_UE",
+             type=str,
+             help="Stress command for LWT performance test for UPDATE with IF EXISTS"),
+
+        dict(name="stress_cmd_lwt_de", env="SCT_STRESS_CMD_LWT_DE",
+             type=str,
+             help="Stress command for LWT performance test for DELETE with IF EXISTS"),
+
+        dict(name="stress_cmd_lwt_dc", env="SCT_STRESS_CMD_LWT_DC",
+             type=str,
+             help="Stress command for LWT performance test for DELETE with IF condition>"),
+
+        dict(name="stress_cmd_lwt_mixed", env="SCT_STRESS_CMD_LWT_MIXED",
+             type=str,
+             help="Stress command for LWT performance test for mixed lwt load"),
+
+        dict(name="stress_cmd_lwt_mixed_baseline", env="SCT_STRESS_CMD_LWT_MIXED_BASELINE",
+             type=str,
+             help="Stress command for LWT performance test for mixed lwt load baseline"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
@@ -269,6 +309,9 @@ class SCTConfiguration(dict):
 
         dict(name="email_recipients", env="SCT_EMAIL_RECIPIENTS", type=str_or_list,
              help="""list of email of send the performance regression test to"""),
+
+        dict(name="email_subject_postfix", env="SCT_EMAIL_SUBJECT_POSTFIX", type=str,
+             help="""Email subject postfix"""),
 
         # should be removed once stress commands would be refactored
         dict(name="bench_run", env="SCT_BENCH_RUN", type=boolean,
@@ -1123,7 +1166,9 @@ class SCTConfiguration(dict):
                            'stress_cmd_complex_verify_read', 'stress_cmd_complex_verify_more',
                            'write_stress_during_entire_test', 'verify_data_after_entire_test',
                            'stress_cmd_read_cl_quorum', 'verify_stress_after_cluster_upgrade',
-                           'stress_cmd_complex_verify_delete']:
+                           'stress_cmd_complex_verify_delete', 'stress_cmd_lwt_mixed', 'stress_cmd_lwt_de',
+                           'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
+                           'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i']:
             stress_cmds = self.get(param_name, default=None)
             if stress_cmds is None:
                 continue

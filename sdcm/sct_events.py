@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 from __future__ import absolute_import
 import os
 import re
@@ -10,8 +11,9 @@ from multiprocessing import Event, Process, Value, current_process
 import atexit
 import datetime
 import collections
+from contextlib import contextmanager, ExitStack
 from pathlib import Path
-from typing import Optional, Generic, TypeVar, Type
+from typing import Optional, Generic, TypeVar, Type, List
 
 import enum
 from enum import Enum
@@ -978,6 +980,23 @@ def stop_events_analyzer():
     if analyzer:
         analyzer.terminate()
         analyzer.join(timeout=60)
+
+
+@contextmanager
+def apply_log_filters(*event_filters_list: List[BaseFilter]):
+    with ExitStack() as stack:
+        for event_filter in event_filters_list:
+            stack.enter_context(event_filter)  # pylint: disable=no-member
+        yield
+
+
+def EVENT_FILTER_TIMEOUT():  # pylint: disable=invalid-name
+    return [
+        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*Operation timed out.*",
+                                    severity=Severity.WARNING, extra_time_to_expiration=30),
+        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*',
+                                    severity=Severity.WARNING, extra_time_to_expiration=30)
+    ]
 
 
 atexit.register(stop_events_device)

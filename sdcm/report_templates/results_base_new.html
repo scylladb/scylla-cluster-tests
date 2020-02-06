@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ subject }}</title>
+    <style>
+        .blue   { color: blue; }
+        .fbold  { font-weight: bold; }
+        .red    { color: red; }
+        .green  { color: green; }
+        .orange { color: orange; }
+        .black  { color: black; }
+        .fnormal { font-weight: normal; }
+        .notice { font-size:120%; }
+        .small { font-size:80%; }
+        #results_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 50%;
+            white-space: nowrap;
+        }
+        #results_table td, #results_table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+
+        }
+        #results_table tr:nth-child(even){background-color: #f2f2f2}
+        #results_table tr:hover {background-color: #ddd}
+        #results_table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: center;
+            background-color: #85C1E9;
+            color: white;
+        }
+
+        .gemini_result_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+        }
+        .gemini_result_table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        .longevity_result_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .longevity_run_failure_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .longevity_result_table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .longevity_run_failure_table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .longevity_result_runs {
+            vertical-align: top;
+        }
+
+        .longevity_result_table td, .longevity_result_table th {
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .longevity_result_table th {
+            padding: 8px;
+            text-align: center;
+            background-color: #85C1E9;
+            color: white;
+        }
+
+        .longevity_critical_errors_table {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .longevity_critical_errors_table td {
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        .divRow
+        {
+           display: block;
+           width: 100%;
+           border: 0 none;
+           padding: 0;
+           margin: 0;
+           border-bottom: 1px solid #ddd;
+           word-wrap: break-word;
+           white-space: nowrap;
+        }
+        .divCellLeft
+        {
+            display: inline-block;
+            width: 35%;
+            border-top: 0 none;
+            border-left: 0 none;
+            border-right: 1px solid #ddd;
+            border-bottom: 0 none;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            word-wrap: break-word;
+            white-space: nowrap;
+        }
+        .divCellRight
+        {
+            display: inline-block;
+            width: 65%;
+            border: 0 none;
+            text-align: left;
+            margin: 0;
+            padding: 0;
+            white-space: nowrap;
+
+        }
+        .gemini_field
+        {
+            background-color: #85c1e9;
+            color: #ffffff;
+        }
+
+    </style>
+</head>
+<body>
+
+{%- block test_info -%}
+    <h3>Test: {{ current_main_test.test_name }}</h3>
+    <h3>Test-id: {{ current_main_test.test_id }}</h3>
+    <h3>Test details</h3>
+    <div>
+        <ul>
+            <li>Start time: {{ current_main_test.start_time.as_string() }}</li>
+            {%- if current_main_test.complete_time and current_main_test.complete_time.is_valid()  -%} <li>End time: {{ current_main_test.complete_time.as_string() }}</li> {%- endif -%}
+            <li>Build URL: <a href="{{ current_main_test.jenkins.job_url }}">link</a></li>
+            {%- if current_main_test.started_by  -%} <li>Test run by User: <b>{{ current_main_test.started_by }}</b></li> {%- endif -%}
+            {%- if current_main_test.scylla_repo  -%} <li>Private repo: {{ current_main_test.scylla_repo }}</li> {%- endif -%}
+            {%- if current_main_test.repo_uuid  -%} <li>Private repo: {{ current_main_test.repo_uuid }}</li> {%- endif -%}
+            {%- if current_main_test.ostype -%} <li>Private repo OS type: {{ current_main_test.ostype }}</li> {%- endif -%}
+        </ul>
+    </div>
+    <h3><span>Version: </span><span class="blue">{{ current_main_test.software.scylla_server_any.version.as_string }}</span></h3>
+    <div>
+        <span> Version Details: </span>
+        <li><span> build date: </span><span class="blue"> {{ current_main_test.software.scylla_server_any.date.as_string() }} </span></li>
+        <li><span> commit id: </span><span class="blue"> {{ current_main_test.software.scylla_server_any.commit }} </span></li>
+    </div>
+    <div><span> Setup Details: </span>
+        <ul>
+        {%- for key, val in {
+            'Amazon AMI ID': current_main_test.db_cluster.ami_id,
+            'Backend': current_main_test.backend,
+            'DB Cluster Instance Type': current_main_test.db_cluster.type,
+            'DB Cluster Instance Count': current_main_test.db_cluster.nodes,
+            'DB Loader Instance Type': current_main_test.loader_cluster.type,
+            'DB Loader Instance Count': current_main_test.loader_cluster.nodes,
+            'DB Monitor Instance Type': current_main_test.monitor_cluster.type,
+            'DB Monitor Instance Count': current_main_test.monitor_cluster.nodes,
+        }.items()|sort -%}
+            {%- if val -%}<li>{{ key }}: <span class="blue"> {{ val }} </span></li>{%- endif -%}
+        {%- endfor -%}
+        </ul>
+    </div>
+{%- endblock -%}
+
+{%- block body -%}
+{%- endblock -%}
+
+{%- block test_results -%}
+    <h3>
+        <span>Test results </span>
+    </h3>
+    {%- if test_status == "SUCCESS" -%}
+        <span class='green'>{{ current_main_test.test_status }}</span>
+    {%- elif status == 'FAILED' -%}
+        <span class='red'>{{ current_main_test.test_status }}</span>
+    {%- else -%}
+        <span>{{ current_main_test.test_status }}</span>
+    {%- endif -%}
+{%- endblock -%}
+
+{%- block events_summary -%}
+    {%- if last_events -%}
+        <h3>
+            <span>Last events by severity</span>
+        </h3>
+        {%- for severity, events in last_events.items() -%}
+            <h4>
+            {{ severity }} - [{{ events_summary.get(severity, 0) }}]
+            </h4>
+            {%- for event in events -%}
+                {{event}} <br/>
+            {%- endfor -%}
+        {%- endfor -%}
+    {%- endif -%}
+{%- endblock -%}
+
+{%- block running_nodes -%}
+    {%- if nodes -%}
+    <h3>Running instances</h3>
+    <div>
+        <table class='longevity_result_table'>
+            <tr>
+                <th>Name</th>
+                <th>Ip address</th>
+                <th>Current State</th>
+                <th>Cloud</th>
+                <th>Region</th>
+            </tr>
+            {%- for node in nodes -%}
+            <tr>
+                <td>{{ node[0] }}</td>
+                <td>{{ node[1] }}</td>
+                <td>{{ node[2] }}</td>
+                <td>{{ node[3] }}</td>
+                <td>{{ node[4] }}</td>
+            </tr>
+        {%- endfor -%}
+        </table>
+    </div>
+    {%- else -%}
+    <h3>Running instances</h3>
+    <div>
+        No instances
+    </div>
+    {%- endif -%}
+{%- endblock -%}
+
+{%- block hydra_commands -%}
+    <h3>
+        Hydra commands:
+    </h3>
+    <div>
+        <ul>
+            <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ current_main_test.test_id }}</li>
+            <li>Show all stored logs command: $ hydra investigate show-logs {{ current_main_test.test_id }}</li>
+        </ul>
+    </div>
+{%- endblock -%}
+
+{%- block links -%}
+    {%- if current_main_test.gen_kibana_dashboard_url() or current_main_test.kibana_url or current_main_test.build_url or current_main_test.grafana_screenshots or current_main_test.grafana_snapshots -%}
+    <h3>Links:</h3>
+    <ul>
+        <li><a href={{ current_main_test.gen_kibana_dashboard_url() }}>Kibana</a></li>
+        <li><a href="{{ current_main_test.jenkins.job_url }}">Jenkins job</a></li>
+        {%- if current_main_test.grafana_screenshots -%}
+            {%- if current_main_test.grafana_screenshots[0] -%}
+                <li><a href={{ current_main_test.grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {%- endif -%}
+            {%- if current_main_test.grafana_snapshots[1] -%}
+                <li><a href={{ current_main_test.grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+            {%- endif -%}
+        {%- endif -%}
+        {%- if current_main_test.grafana_snapshots -%}
+            {%- if current_main_test.grafana_snapshots[0] -%}
+                <li><a href={{ current_main_test.grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {%- endif -%}
+            {%- if current_main_test.grafana_snapshots[1] -%}
+                <li><a href={{ current_main_test.grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {%- endif -%}
+        {%- endif -%}
+    {%- endif -%}
+    </ul>
+    {%- if current_main_test.grafana_screenshots -%}
+        <h3>Grafana Screenshot:</h3>
+        {%- for screenshot in current_main_test.grafana_screenshots -%}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {%- endfor -%}
+    {%- endif -%}
+{%- endblock -%}
+</body>
+</html>

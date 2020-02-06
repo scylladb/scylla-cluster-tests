@@ -1782,6 +1782,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
+    def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
+        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
+                                                      send_email=self.params.get('send_email', default=True),
+                                                      email_recipients=self.params.get('email_recipients', default=None))
+        if email_subject is None:
+            email_subject = 'Performance Regression Compare Results - {test.test_name} - {test.software.scylla_server_any.version.as_string}'
+            email_postfix = self.params.get('email_subject_postfix', '')
+            if email_postfix:
+                email_subject += ' - ' + email_postfix
+        try:
+            return results_analyzer.check_regression_multi_baseline(
+                self._create_test_id(doc_id_with_timestamp=False),
+                metrics=metrics,
+                subtests_info=subtests_info,
+                email_subject=email_subject)
+        except Exception as ex:  # pylint: disable=broad-except
+            self.log.exception('Failed to check regression: %s', ex)
+
     def check_specified_stats_regression(self, dict_specific_tested_stats):
 
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
