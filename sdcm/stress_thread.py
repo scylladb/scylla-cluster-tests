@@ -174,7 +174,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                     errors_str = f'Stress command execution failed with: {str(exc)}'
                 CassandraStressEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
                                      log_file_name=log_file_name, severity=Severity.CRITICAL,
-                                     errors=errors_str)
+                                     errors=[errors_str])
 
         CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
@@ -233,7 +233,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             except Exception as exc:  # pylint: disable=broad-except
                 CassandraStressEvent(
                     type='failure', node='', severity=Severity.CRITICAL,
-                    errors=f'Failed to proccess stress summary due to {exc}')
+                    errors=[f'Failed to proccess stress summary due to {exc}'])
 
         return ret
 
