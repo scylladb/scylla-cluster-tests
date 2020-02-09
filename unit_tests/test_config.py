@@ -264,6 +264,58 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
 
+    def test_16_oracle_scylla_version_us_east_1(self):
+        ami_3_0_11 = "ami-0a49c99b529429c18"
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "3.0.11"
+        os.environ['SCT_REGION_NAME'] = 'us-east-1'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get('ami_id_db_oracle'), ami_3_0_11)
+
+    def test_16_oracle_scylla_version_eu_west_1(self):
+        ami_3_0_11 = "ami-0535c88b85b914499"
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "3.0.11"
+        os.environ['SCT_REGION_NAME'] = 'eu-west-1'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf.get('ami_id_db_oracle'), ami_3_0_11)
+
+    def test_16_oracle_scylla_version_wrong_region(self):
+        ami_3_0_11_eu_west_1 = "ami-0535c88b85b914499"
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "3.0.11"
+        os.environ['SCT_REGION_NAME'] = 'us-east-1'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertNotEqual(conf.get('ami_id_db_oracle'), ami_3_0_11_eu_west_1)
+
+    def test_16_oracle_scylla_version_and_oracle_ami_together(self):
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = 'eu-west-1'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = '3.0.11'
+        os.environ['SCT_AMI_ID_DB_ORACLE'] = 'ami-0535c88b85b914499'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+
+        with self.assertRaises(ValueError) as context:
+            SCTConfiguration()
+
+        self.assertIn("oracle_scylla_version and ami_id_db_oracle can't used together", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
