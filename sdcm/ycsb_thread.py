@@ -47,10 +47,8 @@ class YcsbStatsPublisher(FileFollowerThread):
         verify_regex = re.compile(r'\[VERIFY:(.*?)\]')
         verify_content = verify_regex.findall(line)[0]
 
-        logging.info(verify_content)
         for status_match in verify_status_regex.finditer(verify_content):
             stat = status_match.groupdict()
-            logging.info(stat)
             self.set_metric('verify', stat['status'], float(stat['value']))
 
     def run(self):
@@ -103,14 +101,19 @@ class YcsbStatsPublisher(FileFollowerThread):
 class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
     def copy_template(self, docker):
+        if self.params.get('alternator_use_dns_routing'):
+            target_address = 'alternator'
+        else:
+            target_address = self.node_list[0].node.private_ip_address
+
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_empty_file
                 dynamodb.endpoint = http://{0}:{1}
                 requestdistribution = uniform
-            '''.format(self.node_list[0].private_ip_address,
-                       self.params.get('alternator_port')))  # TODO: hardcode to seed node
+            '''.format(target_address,
+                       self.params.get('alternator_port')))
 
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type', 'HASH')
 
@@ -141,13 +144,24 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 tmp_file.flush()
                 docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
-            self.stress_cmd += f' -s -P /tmp/dynamodb.properties -p maxexecutiontime={self.timeout}'
+    def build_stress_cmd(self):
+        stress_cmd = f'{self.stress_cmd} -s -P /tmp/dynamodb.properties'
+        if 'maxexecutiontime' not in stress_cmd:
+            stress_cmd += f' -p maxexecutiontime={self.timeout}'
+        return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200204",
-                              extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+        dns_options = ""
+        if self.params.get('alternator_use_dns_routing'):
+            dns = RemoteDocker(loader, "scylladb/hydra-loaders:alternator-dns-0.2",
+                               command_line=f'python3 /dns_server.py {self.node_list[0].ip_address} '
+                                            f'{self.params.get("alternator_port")}',
+                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+            dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200211",
+                              extra_docker_opts=f'{dns_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
+        stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir)
@@ -158,18 +172,18 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
             if line:
                 YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
-                                stress_cmd=self.stress_cmd, errors=[line])
+                                stress_cmd=stress_cmd, errors=[line, ])
 
-        LOGGER.debug("running: %s", self.stress_cmd)
+        LOGGER.debug("running: %s", stress_cmd)
 
         if self.stress_num > 1:
-            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, self.stress_cmd)
+            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, stress_cmd)
         else:
-            node_cmd = self.stress_cmd
+            node_cmd = stress_cmd
 
         node_cmd = 'cd /YCSB && {}'.format(node_cmd)
 
-        YcsbStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
+        YcsbStressEvent('start', node=loader, stress_cmd=stress_cmd)
 
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
@@ -177,12 +191,12 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                     timeout=self.timeout + self.shutdown_timeout,
                                     log_file=log_file_name,
                                     watchers=[FailuresWatcher(r'ERROR|UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
+                return result
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = self.format_error(exc)
                 YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
                                 log_file_name=log_file_name, severity=Severity.CRITICAL,
-                                errors=errors_str)
+                                errors=[errors_str])
+                raise
             finally:
-                YcsbStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)
-
-        return result
+                YcsbStressEvent('finish', node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name)
