@@ -17,5 +17,6 @@ nemesis_interval: 5
 user_prefix: 'alternator-3h'
 
 alternator_port: 8080
+alternator_use_dns_routing: true
 
 store_results_in_elasticsearch: false

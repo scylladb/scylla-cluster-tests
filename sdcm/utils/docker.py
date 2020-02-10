@@ -53,6 +53,9 @@ class RemoteDocker:
         external_port = self.node.remoter.run(f"docker port {self.docker_id} {internal_port}").stdout.strip()
         return external_port
 
+    def get_log(self):
+        return self.node.remoter.run(f"docker logs {self.docker_id}").stdout.strip()
+
     def run(self, cmd, *args, **kwargs):
         return self.node.remoter.run(f"docker exec -i {self.docker_id} /bin/bash -c '{cmd}'", *args, **kwargs)
 

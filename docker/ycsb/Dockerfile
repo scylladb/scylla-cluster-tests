@@ -10,4 +10,7 @@ RUN cd /YCSB/dynamodb/target && mkdir YCSB && tar xvvf ycsb-dynamo*.tar.gz -C YC
 
 
 FROM openjdk:8 as app
+RUN echo 'networkaddress.cache.ttl=0' >> $JAVA_HOME/jre/lib/security/java.security
+RUN echo 'networkaddress.cache.negative.ttl=0' >> $JAVA_HOME/jre/lib/security/java.security
+COPY java.policy $JAVA_HOME/jre/lib/security/java.policy
 COPY --from=builder /YCSB/dynamodb/target/YCSB /YCSB

@@ -6,7 +6,9 @@ from botocore.errorfactory import ClientError
 LOGGER = logging.getLogger(__name__)
 
 
-def create_table(endpoint_url, dynamodb_primarykey_type):
+def create_table(endpoint_url, test_params):
+    dynamodb_primarykey_type = test_params.get('dynamodb_primarykey_type', 'HASH')
+
     try:
         dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
 
