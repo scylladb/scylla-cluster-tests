@@ -171,7 +171,8 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
                     hide=True,
                     watchers=watchers,
                     timeout=timeout,
-                    env=os.environ, replace_env=True
+                    env=os.environ, replace_env=True,
+                    in_stream=False
                 )
                 if new_session:
                     with self._create_connection() as connection:
@@ -268,7 +269,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 command_kwargs = dict(
                     command=cmd, warn=ignore_status,
                     encoding='utf-8', hide=True,
-                    watchers=watchers, timeout=timeout
+                    watchers=watchers, timeout=timeout,
+                    in_stream=False
                 )
                 if new_session:
                     with self._create_connection() as connection:
