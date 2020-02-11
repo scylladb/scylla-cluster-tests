@@ -1814,6 +1814,7 @@ server_encryption_options:
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#https/https/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             systemctl restart scylla-manager-agent
+            systemctl enable scylla-manager-agent
         """.format(package_name, auth_token))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
         version = self.remoter.run('scylla-manager-agent --version').stdout
