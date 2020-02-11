@@ -224,6 +224,9 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             results.append(future.result())
 
         for _, result in results:
+            if not result:
+                # Silently skip if stress command throwed error, since it was already reported in _run_stress
+                continue
             output = result.stdout + result.stderr
             try:
                 lines = output.splitlines()
