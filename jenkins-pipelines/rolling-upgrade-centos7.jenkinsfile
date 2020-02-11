@@ -16,4 +16,5 @@ rollingUpgradePipeline(
     workaround_kernel_bug_for_iotune: true,
 
     timeout: [time: 360, unit: 'MINUTES']
+    provision_type: 'on_demand'
 )
