@@ -10,7 +10,7 @@ mgmt_segments_per_repair: 10
 experimental: true
 round_robin: false
 
-append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort_on_ebadf 1'
+append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 
 # for for version selection
 scylla_linux_distro: 'centos'
