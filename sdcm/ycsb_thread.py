@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 class YcsbStatsPublisher(FileFollowerThread):
     METRICS = dict()
-    collectible_ops = ['read', 'insert', 'update', 'cleanup', 'read-failed', 'update-failed', 'verify']
+    collectible_ops = ['read', 'insert', 'update', 'read-failed', 'update-failed', 'verify']
 
     def __init__(self, loader_node, loader_idx, ycsb_log_filename):
         super().__init__()
