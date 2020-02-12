@@ -286,7 +286,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.target_node.wait_jmx_up()
 
     def disrupt_restart_with_resharding(self):
-        self._set_current_disruption('RestartNode with resharding %s' % self.target_node)
+        self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
                       f'{murmur3_partitioner_ignore_msb_bits}')
