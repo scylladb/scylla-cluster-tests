@@ -3388,7 +3388,7 @@ class BaseLoaderSet():
         if not Setup.REUSE_CLUSTER:
             swap_size = self.params.get("loader_swap_size")
             if not swap_size:
-                self.log.info("Swap file is not configured")
+                self.log.info("Swap file for the loader is not configured")
             else:
                 node.create_swap_file(swap_size)
         # update repo cache and system after system is up
@@ -3800,6 +3800,13 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('Setup in BaseMonitorSet')
         node.wait_ssh_up()
+        # add swap file
+        if not Setup.REUSE_CLUSTER:
+            monitor_swap_size = self.params.get("monitor_swap_size")
+            if not monitor_swap_size:
+                self.log.info("Swap file for the monitor is not configured")
+            else:
+                node.create_swap_file(monitor_swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
         self.mgmt_auth_token = kwargs.get("auth_token", None)  # pylint: disable=attribute-defined-outside-init
