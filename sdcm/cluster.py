@@ -3438,7 +3438,8 @@ class BaseLoaderSet(object):
             log_file_name = os.path.join(logdir,
                                          'scylla-bench-l%s-%s.log' %
                                          (loader_idx, uuid.uuid4()))
-            ips = ",".join([n.private_ip_address for n in node_list])
+            # Select first seed node to send the scylla-bench cmds
+            ips = node_list[0].private_ip_address
             bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
             result = node.remoter.run(cmd="/$HOME/go/bin/{} -nodes {} | tee {}".format(stress_cmd.strip(), ips, bench_log),
                                       timeout=timeout,
