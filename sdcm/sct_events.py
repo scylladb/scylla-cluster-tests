@@ -32,7 +32,6 @@ class EventsDevice(Process):
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
         makedirs(self.event_log_base_dir)
         self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
-        self._client_socket = None
 
     def run(self):
         try:
@@ -72,16 +71,11 @@ class EventsDevice(Process):
             except TimeoutError:
                 raise RuntimeError("Event loop is not working properly")
 
-    def get_client_socket(self, filter_type=b'', reuse_socket=False):
-        if reuse_socket:
-            if self._client_socket is not None:
-                return self._client_socket
+    def get_client_socket(self, filter_type=b''):
         context = zmq.Context()
         socket = context.socket(zmq.SUB)  # pylint: disable=no-member
         socket.connect("tcp://localhost:%d" % self.sub_port.value)
         socket.setsockopt(zmq.SUBSCRIBE, filter_type)  # pylint: disable=no-member
-        if reuse_socket:
-            self._client_socket = socket
         return socket
 
     def subscribe_events(self, filter_type=b'', stop_event=None):
@@ -136,17 +130,22 @@ class EventsDevice(Process):
         return True
 
     @retrying(n=3, sleep_time=0, allowed_exceptions=TimeoutError)
-    def publish_event_guaranteed(self, event, reuse_socket=True):
-        client_socket = self.get_client_socket(reuse_socket=reuse_socket)
+    def publish_event_guaranteed(self, event):
+        client_socket = self.get_client_socket()
         self.publish_event(event)
-        if not client_socket.poll(timeout=1):
-            raise TimeoutError()
-        received_event = client_socket.recv_pyobj()
-        if not reuse_socket:
-            client_socket.close()
-        if event == received_event:
-            return True
-        raise TimeoutError()
+        end_time = time.time() + 2
+        while time.time() < end_time:
+            # This iteration cycle needed to make sure that it does not stop on getting very first event,
+            # which could be event not it is looking for, but something that is generated in other Thread
+            try:
+                if not client_socket.poll(timeout=1):
+                    continue
+                received_event = client_socket.recv_pyobj(flags=1)
+                if event == received_event:
+                    return True
+            except zmq.ZMQError:
+                continue
+        raise TimeoutError(f"Event {str(self)} was not delivered")
 
 
 # monkey patch JSONEncoder make enums jsonable
