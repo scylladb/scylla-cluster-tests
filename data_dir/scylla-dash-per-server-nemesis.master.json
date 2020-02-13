@@ -786,13 +786,6 @@
                                 "interval": "15s",
                                 "intervalFactor": 1,
                                 "refId": "I"
-                            },
-                            {
-                                "expr": "collectd_ndbench_write_gauge{type=\"lat_avg\"}",
-                                "format": "time_series",
-                                "interval": "15s",
-                                "intervalFactor": 1,
-                                "refId": "G"
                             }
                         ],
                         "thresholds": [],
@@ -4948,6 +4941,151 @@
                         "yaxes": [
                             {
                                 "format": "ops",
+                                "logBase": 1,
+                                "max": null,
+                                "min": 0,
+                                "show": true
+                            },
+                            {
+                                "format": "short",
+                                "logBase": 1,
+                                "max": null,
+                                "min": null,
+                                "show": true
+                            }
+                        ]
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "Gemini metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": "30",
+                "panels": [
+                    {
+                        "class": "text_panel",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">YCSB metrics</h1>",
+                        "editable": true,
+                        "error": false,
+                        "id": 71,
+                        "links": [],
+                        "mode": "html",
+                        "span": 12,
+                        "style": {},
+                        "title": "",
+                        "transparent": true,
+                        "type": "text"
+                    }
+                ],
+                "repeat": null,
+                "repeatIteration": null,
+                "repeatRowId": null,
+                "showTitle": false,
+                "title": "YCSB metrics",
+                "titleSize": "h6"
+            },
+            {
+                "collapse": false,
+                "height": 250,
+                "panels": [
+                    {
+                        "aliasColors": {},
+                        "bars": false,
+                        "class": "ops_panel",
+                        "dashLength": 10,
+                        "dashes": false,
+                        "datasource": "prometheus",
+                        "description": "",
+                        "editable": true,
+                        "error": false,
+                        "fill": 0,
+                        "grid": {},
+                        "id": 72,
+                        "legend": {
+                            "avg": false,
+                            "current": false,
+                            "max": false,
+                            "min": false,
+                            "show": false,
+                            "total": false,
+                            "values": false
+                        },
+                        "lines": true,
+                        "linewidth": 2,
+                        "links": [],
+                        "nullPointMode": "connected",
+                        "percentage": false,
+                        "pointradius": 1,
+                        "points": false,
+                        "renderer": "flot",
+                        "seriesOverrides": [],
+                        "spaceLength": 10,
+                        "span": 6,
+                        "stack": false,
+                        "steppedLine": false,
+                        "targets": [
+                            {
+                              "expr": "rate(collectd_ycsb_read_failed_gauge{type=\"count\"}[1m])",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "A",
+                              "hide": false
+                            },
+                            {
+                              "expr": "rate(collectd_ycsb_insert_failed_gauge{type=\"count\"}[1m])",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "B",
+                              "hide": false
+                            },
+                            {
+                              "expr": "rate(collectd_ycsb_verify_gauge{type=\"ERROR\"}[1m])",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "C",
+                              "hide": false
+                            },
+                            {
+                              "expr": "rate(collectd_ycsb_update_failed_gauge{type=\"count\"}[1m])",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "D",
+                              "hide": false
+                            },
+                            {
+                              "expr": "rate(collectd_ycsb_verify_gauge{type=\"UNEXPECTED_STATE\"}[1m])",
+                              "format": "time_series",
+                              "intervalFactor": 1,
+                              "refId": "E",
+                              "hide": false
+                            }
+                        ],
+                        "thresholds": [],
+                        "timeFrom": null,
+                        "timeShift": null,
+                        "title": "YCSB Error metrics",
+                        "tooltip": {
+                            "msResolution": false,
+                            "shared": true,
+                            "sort": 0,
+                            "value_type": "individual"
+                        },
+                        "type": "graph",
+                        "xaxis": {
+                            "buckets": null,
+                            "mode": "time",
+                            "name": null,
+                            "show": true,
+                            "values": []
+                        },
+                        "yaxes": [
+                            {
+                                "format": "opm",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
