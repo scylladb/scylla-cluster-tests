@@ -124,7 +124,7 @@ class PerformanceQueryFilter(QueryFilter):
                 break
 
         if not job_filter_query:
-            job_filter_query = r'test_details.job_name.keyword: {} '.format(
+            job_filter_query = r'test_details.job_name.keyword: "{}" '.format(
                 self.test_doc['_source']['test_details']['job_name'])
 
         return job_filter_query
