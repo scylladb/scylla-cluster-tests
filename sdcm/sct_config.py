@@ -378,6 +378,10 @@ class SCTConfiguration(dict):
 
         dict(name="gemini_seed", env="SCT_GEMINI_SEED", type=int,
              help="Seed number for gemini command"),
+        dict(name="gemini_table_options", env="SCT_GEMINI_TABLE_OPTIONS", type=list,
+             help="""table options for created table. example:
+                     ["cdc={'enabled': true}"]
+                     ["cdc={'enabled': true}", "compaction={'class': 'IncrementalCompactionStrategy'}"] """),
         # AWS config options
 
         dict(name="instance_type_loader", env="SCT_INSTANCE_TYPE_LOADER", type=str,
