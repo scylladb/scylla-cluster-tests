@@ -29,7 +29,8 @@ def raise_event_on_failure(func):
     return wrapper
 
 
-class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
+class DockerBasedStressThread:
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
                  round_robin=False, params=None):
         self.loader_set = loader_set
@@ -104,7 +105,6 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         :param exc: the exception
         :return: string to add to the event
         """
-        #  pylint: disable=no-member
         if hasattr(exc, 'result') and exc.result.failed:
             stderr = exc.result.stderr
             if len(stderr) > 100:

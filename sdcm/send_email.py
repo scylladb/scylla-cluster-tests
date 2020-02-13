@@ -63,7 +63,8 @@ class Email():
         msg = MIMEMultipart()
         msg['subject'] = subject
         msg['from'] = self.sender
-        msg['to'] = ','.join(recipients)
+        if recipients:
+            msg['to'] = ','.join(recipients)
         if html:
             text_part = MIMEText(content, "html")
         else:
@@ -149,16 +150,21 @@ class BaseEmailReporter():
         else:
             self.log.error("File for HTML report is missing")
 
-    def send_email(self, subject, content, html=True, files=()):
-        if self.email_recipients:
-            self.log.debug('Send email to {}'.format(self.email_recipients))
-            email = Email()
-            email.send(subject, content, html=html, recipients=self.email_recipients, files=files)
-        else:
-            self.log.warning("Won't send email (send_email: %s, recipients: %s)",
-                             self.send_email, self.email_recipients)
+    def send_email(self, email):
+        if not self.email_recipients:
+            self.log.warning(f'Email recipient is not set, not sending report')
+            return
+        try:
+            Email().send_email(recipients=self.email_recipients, email=email)
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error("Error during sending email: %s", details, exc_info=True)
+        finally:
+            self.log.info(f'Send email with results to {self.email_recipients}')
 
     def send_report(self, results):
+        if not self.email_recipients:
+            self.log.warning(f'Email recipient is not set, not sending report')
+            return
         report_data = self.build_data_for_report(results)
         attachments_data = self.build_data_for_attachments(results)
         smtp = Email()
@@ -180,19 +186,16 @@ class BaseEmailReporter():
         if email is None:
             self.log.error("Failed to prepare email", exc_info=True)
             return
-        try:
-            smtp.send_email(recipients=self.email_recipients, email=email)
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error("Error during sending email: %s", details, exc_info=True)
-        self.log.info(f'Send email with results to {self.email_recipients}')
+        self.send_email(email)
 
     def _generate_report_attachments(self, attachments_data):
         if attachments_data is None:
+            attachment_file = os.path.join(self.logdir, 'attachment_excluded.html')
             self.save_html_to_file(
                 {},
-                'attachment_excluded.html',
+                html_file_path=attachment_file,
                 template_str='<html><body>Attachment was excluded due to the size limitation</body></html>')
-            return ('attachment_excluded.html',)
+            return (attachment_file,)
         elif attachments_data:
             return self.build_report_attachments(attachments_data)
         else:
@@ -228,7 +231,7 @@ class LongevityEmailReporter(BaseEmailReporter):
               'username', 'nodes', 'events_summary']
 
     def cut_report_data(self, report_data, attachments_data, reason):
-        if ['test_status'] in attachments_data and len(attachments_data['test_status']) > 2 and len(
+        if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
                 attachments_data['test_status'][1]) > 101:
             #  Reduce number of records in test_status[1] to 100
             attachments_data['test_status'][1] = attachments_data['test_status'][1][:100]
