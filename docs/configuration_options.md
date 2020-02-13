@@ -72,6 +72,7 @@
 | **<a name="gemini_schema_url">gemini_schema_url</a>**  | Url of the schema/configuration the gemini tool would use | N/A | SCT_GEMINI_SCHEMA_URL
 | **<a name="gemini_cmd">gemini_cmd</a>**  | gemini command to run (for now used only in GeminiTest) | N/A | SCT_GEMINI_CMD
 | **<a name="gemini_seed">gemini_seed</a>**  | Seed number for gemini command | N/A | SCT_GEMINI_SEED
+| **<a name="gemini_table_options">gemini_table_options</a>**  | table options for created table. example:<br>["cdc={'enabled': true}"]<br>["cdc={'enabled': true}", "compaction={'class': 'IncrementalCompactionStrategy'}"] | N/A | SCT_GEMINI_TABLE_OPTIONS
 | **<a name="instance_type_loader">instance_type_loader</a>**  | AWS image type of the loader node | N/A | SCT_INSTANCE_TYPE_LOADER
 | **<a name="instance_type_monitor">instance_type_monitor</a>**  | AWS image type of the monitor node | N/A | SCT_INSTANCE_TYPE_MONITOR
 | **<a name="instance_type_db">instance_type_db</a>**  | AWS image type of the db node | N/A | SCT_INSTANCE_TYPE_DB

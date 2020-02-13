@@ -81,17 +81,20 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
 
     def _generate_gemini_command(self):
         seed = self.params.get('gemini_seed', None)
+        table_options = self.params.get('gemini_table_options')
         if not seed:
             seed = random.randint(1, 100)
         test_node = random.choice(self.test_cluster.nodes)
         oracle_node = random.choice(self.oracle_cluster.nodes) if self.oracle_cluster else None
 
-        cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {}".format(self.gemini_cmd.strip(),
-                                                                          test_node.ip_address,
-                                                                          self.gemini_result_file,
-                                                                          seed)
+        cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {} ".format(self.gemini_cmd.strip(),
+                                                                           test_node.ip_address,
+                                                                           self.gemini_result_file,
+                                                                           seed)
         if oracle_node:
-            cmd += " --oracle-cluster={}".format(oracle_node.ip_address)
+            cmd += "--oracle-cluster={} ".format(oracle_node.ip_address)
+        if table_options:
+            cmd += " ".join([f"--table-options \"{table_opt}\"" for table_opt in table_options])
         self.gemini_commands.append(cmd)
         return cmd
 
