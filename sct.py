@@ -445,8 +445,7 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
     table.align = 'l'
     for cluster_type, s3_link in collected_logs.items():
         table.add_row([cluster_type, s3_link])
-    click.echo(table.get_string(title="Collected logs by test-id: {} Directory: {}".format(collector.test_id,
-                                                                                           collector.storage_dir,)))
+    click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
 
 
 @cli.command('send-email', help='Send email with results for testrun')
