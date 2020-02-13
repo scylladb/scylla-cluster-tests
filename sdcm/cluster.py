@@ -3993,7 +3993,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 yaml.safe_dump(templ_yaml, output_file, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True)
 
-            LOCALRUNNER.run(f"rm -rf {temp_dir}")
+            LOCALRUNNER.run(f"rm -rf {temp_dir}", ignore_status=True)
 
         self.reconfigure_scylla_monitoring()
         if alert_manager:
