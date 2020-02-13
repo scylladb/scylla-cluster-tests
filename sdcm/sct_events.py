@@ -470,6 +470,7 @@ class FullScanEvent(SctEvent):
 
 
 class GeminiEvent(SctEvent):
+
     def __init__(self, type, cmd, result=None):  # pylint: disable=redefined-builtin
         super(GeminiEvent, self).__init__()
         self.type = type
@@ -485,7 +486,7 @@ class GeminiEvent(SctEvent):
                 self.result += "Command error: {stderr}\n"
             self.result = self.result.format(**result)
             if result['exit_code'] != 0 or result['stderr']:
-                self.severity = Severity.ERROR
+                self.severity = Severity.CRITICAL
                 self.type = 'error'
             self.msg += '\n{1.result}'
         self.publish()

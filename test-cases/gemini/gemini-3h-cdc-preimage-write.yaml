@@ -1,0 +1,24 @@
+test_duration: 300
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+instance_type_db: 'i3.large'
+
+store_results_in_elasticsearch: False
+user_prefix: "gemini-cdc-preimage-write"
+
+gemini_cmd: "gemini -d --duration 3h \
+-c 50 -m write -f --non-interactive \
+--cql-features all \
+--replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" "
+
+gemini_version: 'latest'
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_table_options:
+  - "cdc={'enabled': true, 'preimage': true}"
+
+db_type: scylla
+
+append_scylla_yaml: |
+  experimental_features:
+    - cdc
