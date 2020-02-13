@@ -15,7 +15,7 @@ from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
-                             ScyllaBenchEvent, TestResultEvent)
+                             ScyllaBenchEvent, TestResultEvent, PrometheusAlertManagerEvent)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class BaseEventsTest(unittest.TestCase):
         stop_events_device()
 
 
-class SctEventsTests(BaseEventsTest):
+class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
     def test_event_info(self):  # pylint: disable=no-self-use
         InfoEvent(message='jkgkjgl')
@@ -134,6 +134,25 @@ class SctEventsTests(BaseEventsTest):
         event = TestFrameworkEvent(source="Tester", source_method="setUp", exception=_full_traceback)
         print(str(event))
         event.publish()
+
+    def test_prometheus_alert_manager_event(self):  # pylint: disable=no-self-use
+        alert = dict(alert_name='NoCql', start='2020-02-23T21:30:09.591Z', end='2020-02-23T21:33:09.591Z',
+                     description='10.0.13.57 has denied cql connection for more than 30 seconds.', updated='2020-02-23T21:30:09.722Z',
+                     state='active', fingerprint='51e06cff6ae71d83', labels={'alertname': 'NoCql',
+                                                                             'cluster': 'alternator-3h-alternat-db-cluster-487c533b',
+                                                                             'host': '10.0.13.57',
+                                                                             'instance': '10.0.13.57',
+                                                                             'job': 'scylla_manager',
+                                                                             'monitor': 'scylla-monitor',
+                                                                             'severity': '2',
+                                                                             'sct_severity': 'CRITICAL'})
+        event = PrometheusAlertManagerEvent(raw_alert=alert)
+        print(event)
+        assert event.severity == Severity.CRITICAL
+
+        alert['labels']['sct_severity'] = "NOT_EXIST"
+        event = PrometheusAlertManagerEvent(raw_alert=alert)
+        assert event.severity == Severity.WARNING
 
     def test_get_logger_event_summary(self):
         log_content_before = self.get_event_log_file('events.log')
