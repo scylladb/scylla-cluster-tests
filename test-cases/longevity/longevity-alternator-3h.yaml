@@ -19,6 +19,8 @@ nemesis_during_prepare: false
 user_prefix: 'alternator-3h'
 
 alternator_port: 8080
+# cause of example like https://github.com/scylladb/scylla/issues/5802
+# I would rather  not use the DNS for now
 alternator_use_dns_routing: true
 
 store_results_in_elasticsearch: false
