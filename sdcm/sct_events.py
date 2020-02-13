@@ -673,6 +673,9 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
             self.alert_name = self.labels.get('alertname', '')
         else:
             self.alert_name = ''
+        sct_severity = self.labels.get('sct_severity')
+        if sct_severity:
+            self.severity = Severity.__dict__.get(sct_severity, Severity.WARNING)
 
     def __eq__(self, other):
         for name in ['alert_name', 'type', 'start', 'end', 'description', 'updated', 'state', 'fingerprint', 'labels']:

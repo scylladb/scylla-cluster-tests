@@ -4097,29 +4097,45 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             self.configure_alert_manager(node)
 
     def configure_alert_manager(self, node):
-        alertmanager_conf_file = os.path.join(self.monitor_install_path, "prometheus", "prometheus.rules")
+        alertmanager_conf_file = os.path.join(self.monitor_install_path, "prometheus", "prometheus.rules.yml")
         conf = dedent("""
-        # Alert for any instance that it's root disk free disk space bellow 25%.
-        ALERT RootDiskFull
-          IF node_filesystem_avail{mountpoint="/"}/node_filesystem_size{mountpoint="/"}*100 < 25
-          FOR 30s
-          LABELS { severity = "1" }
-          ANNOTATIONS {
-            summary = "Instance {{ $labels.instance }} root disk low space",
-            description = "{{ $labels.instance }} root disk has less than 25% free disk space.",
-          }
-        # Alert for 99% cassandra stress write spikes
-        ALERT CassandraStressWriteTooSlow
-          IF collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
-          FOR 1s
-          LABELS { severity = "1" }
-          ANNOTATIONS {
-            summary = "Cassandra Stress write latency more than 1000ms",
-            description = "Cassandra Stress write latency is more than 1000ms during 1 sec period of time",
-          }
+
+            # Alert for 99% cassandra stress write spikes
+              - alert: CassandraStressWriteTooSlow
+                expr: collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
+                for: 1s
+                labels:
+                  severity: "1"
+                  sct_severity: "ERROR"
+                annotations:
+                  description: "Cassandra Stress write latency more than 1000ms"
+                  summary: "Cassandra Stress write latency is more than 1000ms during 1 sec period of time"
+
+            # Alert for YCSB error spikes
+              - alert: YCSBTooManyErrors
+                expr: sum(rate(collectd_ycsb_read_failed_gauge{type="count"}[1m])) > 5 OR sum(rate(collectd_ycsb_update_failed_gauge{type="count"}[1m])) > 5  OR sum(rate(collectd_ycsb_insert_failed_gauge{type="count"}[1m])) > 5
+                for: 1s
+                labels:
+                  severity: "4"
+                  sct_severity: "CRITICAL"
+                annotations:
+                  description: "YCSB errors more than 5 errors per min"
+                  summary:  "YCSB errors more than 5 errors per min"
+
+            # Alert for YCSB validation error spikes
+              - alert: YCSBTooManyVerifyErrors
+                expr: sum(rate(collectd_ycsb_verify_gauge{type="ERROR"}[1m])) > 5 OR sum(rate(collectd_ycsb_verify_gauge{type="UNEXPECTED_STATE"}[1m])) > 5
+                for: 1s
+                labels:
+                  severity: "4"
+                  sct_severity: "CRITICAL"
+                annotations:
+                  description: "YCSB verify errors more than 5 errors per min"
+                  summary:  "YCSB verify errors more than 5 errors per min"
         """)
         with tempfile.NamedTemporaryFile("w") as alert_cont_tmp_file:
             alert_cont_tmp_file.write(conf)
+            alert_cont_tmp_file.flush()
             node.remoter.send_files(src=alert_cont_tmp_file.name, dst=alert_cont_tmp_file.name)
             node.remoter.run("bash -ce 'cat %s >> %s'" % (alert_cont_tmp_file.name, alertmanager_conf_file))
 

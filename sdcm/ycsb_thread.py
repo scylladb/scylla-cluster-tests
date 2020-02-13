@@ -12,6 +12,7 @@ from sdcm.remote import FailuresWatcher
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.thread import DockerBasedStressThread
 from sdcm.utils.docker import RemoteDocker
+from sdcm.utils.common import generate_random_string
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,14 +26,14 @@ class YcsbStatsPublisher(FileFollowerThread):
         self.loader_node = loader_node
         self.loader_idx = loader_idx
         self.ycsb_log_filename = ycsb_log_filename
-
+        self.uuid = generate_random_string(10)
         for operation in self.collectible_ops:
             gauge_name = self.gauge_name(operation)
             if gauge_name not in self.METRICS:
                 metrics = nemesis_metrics_obj()
                 self.METRICS[gauge_name] = metrics.create_gauge(gauge_name,
                                                                 'Gauge for ycsb metrics',
-                                                                ['instance', 'loader_idx', 'type'])
+                                                                ['instance', 'loader_idx', 'uuid', 'type'])
 
     @staticmethod
     def gauge_name(operation):
@@ -40,7 +41,7 @@ class YcsbStatsPublisher(FileFollowerThread):
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]
-        metric.labels(self.loader_node.ip_address, self.loader_idx, name).set(value)
+        metric.labels(self.loader_node.ip_address, self.loader_idx, self.uuid, name).set(value)
 
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
@@ -190,7 +191,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 result = docker.run(cmd=node_cmd,
                                     timeout=self.timeout + self.shutdown_timeout,
                                     log_file=log_file_name,
-                                    watchers=[FailuresWatcher(r'ERROR|UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
+                                    watchers=[FailuresWatcher(r'\sERROR|=UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
                 return result
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = self.format_error(exc)
