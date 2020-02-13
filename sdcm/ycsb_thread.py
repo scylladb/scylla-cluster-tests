@@ -104,7 +104,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
         else:
-            target_address = self.node_list[0].node.private_ip_address
+            target_address = self.node_list[0].private_ip_address
 
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
@@ -173,7 +173,6 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             if line:
                 YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
                                 stress_cmd=stress_cmd, errors=[line, ])
-
 
         LOGGER.debug("running: %s", stress_cmd)
 
