@@ -11,6 +11,9 @@ from unit_tests.dummy_remote import DummyRemote
 
 
 class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.remoter.stop()
 
     @property
     def private_ip_address(self):

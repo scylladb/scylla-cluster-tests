@@ -18,6 +18,10 @@ from unit_tests.dummy_remote import DummyRemote
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _database_log = None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.remoter.stop()
+
     @property
     def private_ip_address(self):
         return '127.0.0.1'
