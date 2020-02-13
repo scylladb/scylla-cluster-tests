@@ -512,18 +512,18 @@ class GrafanaSnapshot(GrafanaEntity):
         return {'links': snapshots, 'file': snapshots_file}
 
 
-class LogCollector():
+class LogCollector:
     """Base class for LogCollector types
 
-    Base class implements interface for collecting
-    various LogEntities on different types of Clusters/RemoteHosts
+        Base class implements interface for collecting
+        various LogEntities on different types of Clusters/RemoteHosts
 
-    Variables:
-        node_remote_dir {str} -- name of remote dir on remote host
-        _current_run {str} -- DateTime of current collecting log run
-        cluster_log_type {str} -- Type of cluster
-        log_entities {list} -- List of log entities, which should be collected on remote hosts
-        USER {str} -- name of user, for which search local file log versions
+        Variables:
+            node_remote_dir {str} -- name of remote dir on remote host
+            _current_run {str} -- DateTime of current collecting log run
+            cluster_log_type {str} -- Type of cluster
+            log_entities {list} -- List of log entities, which should be collected on remote hosts
+            USER {str} -- name of user, for which search local file log versions
     """
     _current_run = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     cluster_log_type = 'base'
@@ -630,6 +630,8 @@ class LogCollector():
 
         final_archive = self.archive_dir_with_zip64(self.local_dir)
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
+        remove_files(self.local_dir)
+        remove_files(final_archive)
         return s3_link
 
     def collect_logs_for_inactive_nodes(self, local_search_path=None):
