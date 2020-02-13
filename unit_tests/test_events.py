@@ -72,28 +72,25 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
             process.join()
         stop_events_device()
 
-    @staticmethod
-    def test_event_info():
+    def test_event_info(self):  # pylint: disable=no-self-use
         InfoEvent(message='jkgkjgl')
 
-    @staticmethod
-    def test_cassandra_stress():
+    def test_cassandra_stress(self):  # pylint: disable=no-self-use
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
         str(CassandraStressEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf",
                                  log_file_name="/filename/"))
 
-    @staticmethod
-    def test_scylla_bench():
+    def test_scylla_bench(self):  # pylint: disable=no-self-use
         str(ScyllaBenchEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf"))
         str(ScyllaBenchEvent(type='start', node="node xy", stress_cmd="adfadsfsdfsdfsdf",
                              log_file_name="/filename/"))
 
-    @staticmethod
-    def test_coredump_event():
+    def test_coredump_event(self):  # pylint: disable=no-self-use
         str(CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
                           node="node xy",
                           download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 .",
-                          timestamp="Tue 2020-01-14 10:40:25 UTC"
+                          timestamp=time.mktime(datetime.datetime.strptime(
+                              "Tue 2020-01-14 10:40:25 UTC", "%a %Y-%m-%d %H:%M:%S UTC").timetuple())
                           ))
 
     def test_thread_failed_event(self):  # pylint: disable=no-self-use
@@ -104,8 +101,7 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         str(ThreadFailedEvent(message='thread failed', traceback=_full_traceback))
 
-    @staticmethod
-    def test_scylla_log_event():
+    def test_scylla_log_event(self):  # pylint: disable=no-self-use
         str(DatabaseLogEvent(type="A", regex="B"))
 
         event = DatabaseLogEvent(type="A", regex="B")
@@ -115,8 +111,7 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         str(event)
 
-    @staticmethod
-    def test_disruption_event():
+    def test_disruption_event(self):  # pylint: disable=no-self-use
         try:
             1 / 0
         except ZeroDivisionError:
@@ -262,8 +257,7 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 5000 ms")
         self.assertTrue(event.severity == Severity.CRITICAL)
 
-    @staticmethod
-    def test_spot_termination():
+    def test_spot_termination(self):  # pylint: disable=no-self-use
         str(SpotTerminationEvent(node='test', message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
 
     def test_default_filters(self):
