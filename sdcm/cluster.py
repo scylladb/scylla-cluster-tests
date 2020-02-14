@@ -4155,8 +4155,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 }
             ]
 
+        screenshot_links = []
         for node in self.nodes:
-            screenshot_links = []
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time,
                                                      extra_entities=grafana_extra_entities)
