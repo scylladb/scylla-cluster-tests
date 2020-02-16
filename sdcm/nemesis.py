@@ -351,7 +351,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
                                            db_node=self.target_node)
         if not ks_cfs:
-            raise NoKeyspaceFound(
+            raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
@@ -701,7 +701,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         if not keyspace_table:
-            raise ValueError('Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
 
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
             keyspace_table=keyspace_table, name=name, val=val)
@@ -1066,8 +1067,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
                                            db_node=self.target_node)
         if not ks_cfs:
-            self.log.error('Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
-            return
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
+
         keyspace_table = random.choice(ks_cfs)
         keyspace, table = keyspace_table.split('.')
         cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace,
@@ -1423,6 +1425,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         def generate_random_parameters_values():  # pylint: disable=invalid-name
             ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
+            if not ks_cf_list:
+                raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
             try:
                 ks, cf = random.choice(ks_cf_list).split('.')
             except IndexError as details:
