@@ -112,6 +112,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_empty_file
                 dynamodb.endpoint = http://{0}:{1}
+                dynamodb.connectMax = 200
                 requestdistribution = uniform
             '''.format(target_address,
                        self.params.get('alternator_port')))
