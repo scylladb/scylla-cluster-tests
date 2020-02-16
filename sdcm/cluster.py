@@ -3450,7 +3450,7 @@ class BaseLoaderSet():
             systemctl enable docker
             systemctl start docker
         """)
-        node.remoter.run('bash -cxe "%s"' % docker_install)
+        node.remoter.run('sudo bash -cxe "%s"' % docker_install)
 
         node.remoter.run('sudo usermod -aG docker $USER')
         node.remoter.reconnect()
