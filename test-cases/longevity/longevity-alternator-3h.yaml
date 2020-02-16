@@ -1,11 +1,24 @@
 test_duration: 180
-prepare_write_cmd: [
-  "bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=20971520 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true", ]
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520
+    -p fieldcount=1 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=10485760
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520
+    -p fieldcount=1 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=10485760 -p insertcount=10485760
+
 stress_cmd: [
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 250 -p recordcount=20971520 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 250 -p recordcount=20971520 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  ]
-dynamodb_primarykey_type: HASH_AND_RANGE
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+]
+round_robin: true
 
 n_loaders: 2
 instance_type_db: 'i3.4xlarge'
@@ -19,6 +32,7 @@ nemesis_during_prepare: false
 user_prefix: 'alternator-3h'
 
 alternator_port: 8080
+dynamodb_primarykey_type: HASH_AND_RANGE
 # cause of example like https://github.com/scylladb/scylla/issues/5802
 # I would rather  not use the DNS for now
 alternator_use_dns_routing: true
