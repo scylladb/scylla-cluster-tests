@@ -688,7 +688,7 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
             Severity.CRITICAL: self.critical_events_filename,
             Severity.ERROR: self.error_events_filename,
             Severity.WARNING: self.warning_events_filename,
-            Severity.NORMAL: self.warning_events_filename,
+            Severity.NORMAL: self.normal_events_filename,
         }
         self.level_summary = collections.defaultdict(int)
 
