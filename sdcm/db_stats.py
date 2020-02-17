@@ -432,7 +432,7 @@ class TestStatsMixin(Stats):
         return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None, doc_id_with_timestamp=False):
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None, doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None):  # pylint: disable=too-many-arguments
 
         if not self.create_stats:
             return
@@ -442,10 +442,13 @@ class TestStatsMixin(Stats):
         self._stats['setup_details'] = self.get_setup_details()
         self._stats['versions'] = self.get_scylla_versions()
         self._stats['test_details'] = self.get_test_details()
+        test_name = test_name if test_name else self.id()
         if sub_type:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(self.id(), sub_type)
+            self._stats['test_details']['sub_type'] = sub_type
+        if sub_type and append_sub_test_to_name:
+            self._stats['test_details']['test_name'] = '{}_{}'.format(test_name, sub_type)
         else:
-            self._stats['test_details']['test_name'] = self.id()
+            self._stats['test_details']['test_name'] = test_name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
         if specific_tested_stats:

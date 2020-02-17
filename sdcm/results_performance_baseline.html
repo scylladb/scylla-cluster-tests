@@ -1,0 +1,147 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>Test: {{ test_name }}</h3>
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_start_time }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ test_version.version }} </span>
+    </h3>
+    <div>
+        <span> Version Details: </span>
+        <li>
+            <span> build date: </span>
+            <span class="blue"> {{ test_version.date }} </span>
+        </li>
+        <li>
+            <span> commit id: </span>
+            <span class="blue"> {{ test_version.commit_id }} </span>
+        </li>
+    </div>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in setup_details.items()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    <h1>Prometheus stats</h1>
+    <table id="results_table">
+        {% set metrics=("min", "avg", "max", "stdev") %}
+        <tr>
+            <th> Sub test </th>
+            <th> Stat </th>
+            {% for metric in metrics %}
+                <th>{{ metric }}</th>
+            {% endfor %}
+        </tr>
+        {% for sub_type in prometheus_stats.keys() %}
+            {% for stat_name in prometheus_stats[sub_type].keys() %}
+                {% if prometheus_stats[sub_type].get(stat_name) %}
+                <tr>
+                    <td> {{sub_type}} </td>
+                    <td>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</td>
+                    {% for metric in metrics %}
+                        <td>{{ "%.1f" % prometheus_stats[sub_type][stat_name][metric] }} </td>
+                    {% endfor %}
+                </tr>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </table>
+
+    {% if cs_raw_cmd %}
+    <h1>Cassandra-stress stats comparison</h1>
+    <h3>Command</h3>
+    <table id="results_table">
+    <tr><td>{{ cs_raw_cmd }}</td></tr>
+    </table>
+    {% endif %}
+
+    {% if ycsb_raw_cmd %}
+    <h1>YCSB (dynamodb) stats comparison</h1>
+    <h3>Command</h3>
+    <table id="results_table">
+    <tr><td>{{ ycsb_raw_cmd }}</td></tr>
+    </table>
+    {% endif %}
+
+    <h1> Current test result comparision </h1>
+    <table id="results_table">
+        <tr>
+            <th> Stat name </th>
+            <th> Baseline: <br/> {{baseline_type}} </th>
+            {% for cmp_res in res_list %}
+                <th> {{ cmp_res.version_dst }} </th>
+            {% endfor %}
+            <th> Date - Commit_id </th>
+        </tr>
+        {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
+            <tr>
+                <td> {{ stat_name.replace('_', ' ') }} </td>
+                <td> {{ "%.1f" % base_line.get(stat_name.replace('_', ' ')) }}
+                {% for cmp_res in res_list %}
+                    {% set stat=cmp_res.res.get(stat_name) %}
+                        <td> {{ "%.1f" % stat.val }} (
+                             {% with status = stat.status, percent = stat.percent,
+                                    percent_abs = stat.percent|replace('%', '')|int %}
+                                {% if status == 'Regression' and percent_abs > 4 %}
+                                    <span class="red fbold">-
+                                {% elif status == 'Progress' and percent_abs > 4 %}
+                                    <span class="green fbold">+
+                                {% else %}
+                                    <span>
+                                {% endif %}
+                                    {{ percent }}
+                                {% endwith %}
+                                    </span>
+                            )
+                        </td>
+                {% endfor %}
+                <td> {{ test_version.date }} - {{ test_version.commit_id }} </td>
+        {% endfor%}
+    </table>
+
+
+{% block links %}
+    <h3>Links:</h3>
+    <ul>
+        <li><a href={{ dashboard_master }}>Kibana</a></li>
+        <li><a href="{{ job_url }}">Jenkins job</a></li>
+        {% for sub_test, screenshots in grafana_screenshots.items() %}
+            {% if screenshots[0] %}
+                <li><a href={{ screenshots[0] }}>{{sub_test}} - Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if screenshots[1] %}
+                <li><a href={{ screenshots[1] }}>{{sub_test}} - Download "Overview metrics" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if screenshots[2] %}
+                <li><a href={{ screenshots[2] }}>{{sub_test}} - Download "Alternator metrics" Grafana Screenshot</a></li>
+            {% endif %}
+        {% endfor %}
+        {% for sub_test, snapshots in grafana_snapshots.items() %}
+            {% if snapshots[0] %}
+                <li><a href={{ snapshots[0] }}>{{sub_test}} - Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if snapshots[1] %}
+                <li><a href={{ snapshots[1] }}>{{sub_test}} - Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if snapshots[2] %}
+                <li><a href={{  snapshots[2] }}>{{sub_test}} -Shared "Alternator metrics" Grafana Snapshot</a></li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+    {% for sub_test, screenshots in grafana_screenshots.items() %}
+        <h3>{{sub_test}} - Grafana Screenshot:</h3>
+        {% for screenshot in screenshots %}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {% endfor %}
+    {% endfor %}
+{% endblock %}
+
+{% endblock %}
