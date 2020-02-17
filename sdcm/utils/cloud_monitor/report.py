@@ -70,10 +70,14 @@ class PerUserSummaryReport(BaseReport):
                 user_type = self.user_type(instance.owner)
                 results = self.report["results"]
                 if instance.owner not in results[user_type]:
-                    stats = dict(num_running_instances=0, num_stopped_instances=0)
+                    stats = dict(num_running_instances_spot=0, num_running_instances_on_demand=0,
+                                 num_stopped_instances=0)
                     results[user_type][instance.owner] = {cp: deepcopy(stats) for cp in self.report["cloud_providers"]}
                 if instance.state == "running":
-                    results[user_type][instance.owner][cloud]["num_running_instances"] += 1
+                    if instance.lifecycle == "spot":
+                        results[user_type][instance.owner][cloud]["num_running_instances_spot"] += 1
+                    else:
+                        results[user_type][instance.owner][cloud]["num_running_instances_on_demand"] += 1
                 if instance.state == "stopped":
                     results[user_type][instance.owner][cloud]["num_stopped_instances"] += 1
         return self.render_template()
