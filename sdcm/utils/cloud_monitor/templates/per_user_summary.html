@@ -3,16 +3,25 @@
 
     <table id="results_table">
         <tr>
-            <th>User</th>
+            <th rowspan="2">User</th>
             {% for cloud_provider in report.cloud_providers %}
-            <th>{{ cloud_provider.upper() }} Running/Stopped</th>
+            <th colspan="3">{{ cloud_provider.upper() }}</th>
+            {% endfor %}
+        </tr>
+        <tr>
+            {% for _ in report.cloud_providers %}
+                {% for state in ["On-demand: running", "Spot: running", "Stopped"] %}
+            <th>{{ state }}</th>
+                {% endfor %}
             {% endfor %}
         </tr>
         {% for user, stat in user_report|dictsort %}
         <tr>
             <td>{{ user }}</td>
             {% for cloud_provider in report.cloud_providers %}
-            <td>{{ stat[cloud_provider].num_running_instances }}/{{ stat[cloud_provider].num_stopped_instances }}</td>
+            <td>{{ stat[cloud_provider].num_running_instances_on_demand }}</td>
+            <td>{{ stat[cloud_provider].num_running_instances_spot }}</td>
+            <td>{{ stat[cloud_provider].num_stopped_instances }}</td>
             {% endfor %}
         </tr>
         {% endfor %}
