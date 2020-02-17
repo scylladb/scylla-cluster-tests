@@ -147,7 +147,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
-            self.create_test_stats(sub_type='write-prepare')
+            # create new document in ES with doc_id = test_id + timestamp
+            # allow to correctly save results for future compare
+            self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
             stress_queue = list()
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
@@ -179,7 +181,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def run_read_workload(self):
         base_cmd_r = self.params.get('stress_cmd_r')
-        self.create_test_stats(sub_type='read')
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='read', doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -188,7 +192,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def run_write_workload(self):
         base_cmd_w = self.params.get('stress_cmd_w')
-        self.create_test_stats(sub_type='write')
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='write', doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
@@ -197,7 +203,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def run_mixed_workload(self):
         base_cmd_m = self.params.get('stress_cmd_m')
-        self.create_test_stats(sub_type='mixed')
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='mixed', doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scylla_conf=True)
@@ -372,7 +380,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
-        self.create_test_stats()
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         # run a workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, keyspace_num=1,
@@ -393,8 +403,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_r = self.params.get('stress_cmd_r')
-
-        self.create_test_stats(sub_type='write-prepare')
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
@@ -402,8 +413,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.get_stress_results(queue=stress_queue, store_results=False)
         self.update_test_details()
 
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         # run a read workload
-        self.create_test_stats()
         self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
@@ -422,8 +435,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_m = self.params.get('stress_cmd_m')
-
-        self.create_test_stats(sub_type='write-prepare')
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
@@ -432,7 +446,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.update_test_details()
 
         # run a mixed workload
-        self.create_test_stats()
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
