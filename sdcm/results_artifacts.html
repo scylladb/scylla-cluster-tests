@@ -21,7 +21,7 @@
         <ul>
             <li>ScyllaDB version: {{ scylla_version }}</li>
             <li>ScyllaDB repo: {{ scylla_repo }}</li>
-            <li>Actual {{ backend|upper }} image used: {{ scylla_node_image }}</li>
+            <li>Actual {{ backend }} image used: {{ scylla_node_image }}</li>
             <li>Scylla packages installed:
                 <ul>
                 {% for pkg in scylla_packages_installed %}

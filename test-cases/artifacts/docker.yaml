@@ -1,0 +1,12 @@
+cluster_backend: 'docker'
+docker_image: 'scylladb/scylla'
+logs_transport: 'ssh'
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+scylla_version: '3.3.rc1'
+store_results_in_elasticsearch: False
+test_duration: 600
+user_prefix: 'artifacts-docker'

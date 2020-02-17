@@ -309,6 +309,10 @@ class PrometheusSnapshotErrorException(Exception):
     pass
 
 
+class ScyllaRequirementError(Exception):
+    pass
+
+
 def prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
@@ -3278,7 +3282,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             self._scylla_pre_install(node)
             self._scylla_install(node)
 
-            node.install_scylla_debuginfo()
+            if Setup.BACKTRACE_DECODING:
+                node.install_scylla_debuginfo()
 
             if Setup.MULTI_REGION:
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member

@@ -60,6 +60,11 @@ class ArtifactsTest(ClusterTester):
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
         critical = self.get_critical_events()
+
+        # Normalize backend name, e.g., `aws' -> `AWS', `gce' -> `GCE', `docker' -> `Docker'.
+        backend = self.params.get("cluster_backend")
+        backend = {"aws": "AWS", "gce": "GCE", "docker": "Docker"}.get(backend, backend)
+
         return {
             "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
             "username": get_username(),
@@ -75,5 +80,5 @@ class ArtifactsTest(ClusterTester):
             "test_id": self.test_id,
             "events_summary": get_logger_event_summary(),
             "nodes": [],
-            "backend": self.params.get("cluster_backend"),
+            "backend": backend,
         }

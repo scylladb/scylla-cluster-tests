@@ -13,7 +13,7 @@ def call(Map pipelineParams) {
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
-                   description: 'aws|gce',
+                   description: 'aws|gce|docker',
                    name: 'backend')
             string(defaultValue: '',
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
@@ -24,10 +24,16 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region_name')
-            string(defaultValue: "${pipelineParams.get('instance_type', '')}",
+            string(defaultValue: '',
+                   description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
+                   name: 'scylla_docker_image')
+            string(defaultValue: '',
+                   description: 'a Scylla version to run against (mostly for docker backend)',
+                   name: 'scylla_version')
+             string(defaultValue: "${pipelineParams.get('instance_type', '')}",
                    description: 'a cloud instance type (leave blank for test case defaults)',
                    name: 'instance_type')
-            string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
+           string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
@@ -74,11 +80,21 @@ def call(Map pipelineParams) {
                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
                                         export SCT_REGION_NAME="${params.region_name}"
+                                    elif [[ ! -z "${params.scylla_version}" ]]; then
+                                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
                                         export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                     else
-                                        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_REPO"
+                                        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                         exit 1
+                                    fi
+
+                                    if [[ ! -z "${params.scylla_docker_image}" ]]; then
+                                        export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
+                                        if [[ -z "${params.scylla_version}" ]]; then
+                                            echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
+                                            exit 1
+                                        fi
                                     fi
 
                                     if [[ ! -z "${params.instance_type}" ]]; then

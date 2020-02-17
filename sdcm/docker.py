@@ -13,25 +13,34 @@ from sdcm.log import SDCMAdapter
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
+AIO_MAX_NR_RECOMMENDED_VALUE = 1048576
 
 
-class DockerCommandError(Exception):
+class DockerError(Exception):
     pass
 
 
-class DockerContainerNotExists(Exception):
+class DockerCommandError(DockerError):
     pass
 
 
-class DockerContainerNotRunning(Exception):
+class DockerContainerNotExists(DockerError):
     pass
 
 
-class CannotFindContainers(Exception):
+class DockerContainerNotRunning(DockerError):
     pass
 
 
-def _cmd(cmd, timeout=10):
+class ScyllaDockerRequirementError(cluster.ScyllaRequirementError, DockerError):
+    pass
+
+
+class CannotFindContainers(DockerError):
+    pass
+
+
+def _docker(cmd, timeout=10):
     res = LOCALRUNNER.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout)
     if res.exit_status:
         if 'No such container:' in res.stderr:
@@ -61,12 +70,12 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
     def _get_public_ip_address(self):
         if not self._public_ip_address:
-            out = _cmd("inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {}".format(self.name)).stdout
+            out = _docker("inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {}".format(self.name)).stdout
             self._public_ip_address = out.strip()
         return self._public_ip_address
 
     def is_running(self):
-        out = _cmd("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name)).stdout
+        out = _docker("inspect --format='{{{{json .State.Running}}}}' {}".format(self.name)).stdout
         return json.loads(out)
 
     @retrying(n=20, sleep_time=2, allowed_exceptions=(DockerContainerNotRunning,))
@@ -88,19 +97,19 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
             time.sleep(1)
 
     def start(self, timeout=30):
-        _cmd('start {}'.format(self.name), timeout=timeout)
+        _docker('start {}'.format(self.name), timeout=timeout)
 
     def restart(self, timeout=30):  # pylint: disable=arguments-differ
-        _cmd('restart {}'.format(self.name), timeout=timeout)
+        _docker('restart {}'.format(self.name), timeout=timeout)
 
     def stop(self, timeout=30):
-        _cmd('stop {}'.format(self.name), timeout=timeout)
+        _docker('stop {}'.format(self.name), timeout=timeout)
 
     @retrying(n=5, sleep_time=1)
     def destroy(self, force=True):  # pylint: disable=arguments-differ
         self.stop()
         force_param = '-f' if force else ''
-        _cmd('rm {} -v {}'.format(force_param, self.name))
+        _docker('rm {} -v {}'.format(force_param, self.name))
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
@@ -112,8 +121,6 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        if verify_up:
-            self.wait_jmx_up(timeout=timeout)
 
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
@@ -125,8 +132,21 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-        if verify_down:
-            self.wait_jmx_down(timeout=timeout)
+
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+        if verify_up_before:
+            self.wait_db_up(timeout=timeout)
+        self.remoter.run("supervisorctl restart scylla", timeout=timeout)
+        if verify_up_after:
+            self.wait_db_up(timeout=timeout)
+
+    @cluster.log_run_info
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+        self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
+
+    @property
+    def image(self) -> str:
+        return self.parent_cluster.source_image
 
 
 class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
@@ -145,23 +165,27 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
                                             params=kwargs.get('params'),
                                             region_names=["localhost-dc"])  # no multi dc currently supported
 
+    @property
+    def source_image(self) -> str:
+        return f"{self._image}:{self._version_tag}"
+
     def _create_node_image(self):
         self._update_image()
         private_key = self.credentials[0].key_file
         context_pub_key_path = os.path.join(self._context_path, 'scylla-test.pub')
         LOCALRUNNER.run(f"ssh-keygen -y -f {private_key} > {context_pub_key_path}; sed -ri "
                         f"'s/(ssh-rsa [^\\n]+)/\\1 test@localhost/g' {context_pub_key_path}")
-        _cmd(f'build --build-arg SOURCE_IMAGE={self._image}:{self._version_tag} -t {self._node_img_tag} {self._context_path}',
-             timeout=300)
+        _docker(f'build --build-arg SOURCE_IMAGE={self.source_image} -t {self._node_img_tag} {self._context_path}',
+                timeout=300)
         LOCALRUNNER.run(f'rm -f {context_pub_key_path}', ignore_status=True)
 
     @staticmethod
     def _clean_old_images():
-        _cmd('system prune --volumes -f')
+        _docker('system prune --volumes -f')
 
     def _update_image(self):
         LOGGER.debug('update scylla image')
-        _cmd(f'pull {self._image}:{self._version_tag}', timeout=300)
+        _docker(f'pull {self._image}:{self._version_tag}', timeout=300)
         try:
             self._clean_old_images()
         except DockerCommandError as exc:
@@ -172,19 +196,19 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         cmd = f'run --cpus="1" --name {node_name} {labels} -d {self._node_img_tag}'
         if not is_seed and seed_ip:
             cmd = f'{cmd} --seeds="{seed_ip}"'
-        _cmd(cmd, timeout=30)
+        _docker(cmd, timeout=30)
         # remove the message of the day
-        _cmd(f"""exec {node_name} bash -c "sed  '/\\/dev\\/stderr/d' /etc/bashrc -i" """)
+        _docker(f"""exec {node_name} bash -c "sed  '/\\/dev\\/stderr/d' /etc/bashrc -i" """)
 
     def _get_containers_by_prefix(self):
-        c_ids = _cmd('container ls -a -q --filter name={}'.format(self._node_prefix)).stdout
+        c_ids = _docker('container ls -a -q --filter name={}'.format(self._node_prefix)).stdout
         if not c_ids:
             raise CannotFindContainers('name prefix: %s' % self._node_prefix)
         return [_ for _ in c_ids.split('\n') if _]
 
     @staticmethod
     def _get_connainer_name_by_id(c_id):
-        return json.loads(_cmd("inspect --format='{{{{json .Name}}}}' {}".format(c_id)).stdout).lstrip('/')
+        return json.loads(_docker("inspect --format='{{{{json .Name}}}}' {}".format(c_id)).stdout).lstrip('/')
 
     def _create_node(self, node_name):
         return DockerNode(node_name,
@@ -265,6 +289,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                                                   **kwargs)
 
     def node_setup(self, node, verbose=False, timeout=3600):
+        self.check_aio_max_nr(node)
+
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = ','.join(self.seed_nodes_ips)
 
@@ -275,13 +301,24 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         self.node_config_setup(node, seed_address, endpoint_snitch)
 
         node.stop_scylla_server(verify_down=False)
-        # clear data folder to drop wrong cluster name data
-        node.remoter.run('sudo rm -Rf /var/lib/scylla/data/*')
+        node.remoter.run('sudo rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
         node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.check_nodes_status()
         self.clean_replacement_node_ip(node)
+
+    @staticmethod
+    def check_aio_max_nr(node: DockerNode, recommended_value: int = AIO_MAX_NR_RECOMMENDED_VALUE):
+        """Verify that sysctl key `fs.aio-max-nr' set to recommended value.
+
+        See https://github.com/scylladb/scylla/issues/5638 for details.
+        """
+        aio_max_nr = int(node.remoter.run("cat /proc/sys/fs/aio-max-nr").stdout)
+        if aio_max_nr < recommended_value:
+            raise ScyllaDockerRequirementError(
+                f"{node}: value of sysctl key `fs.aio-max-nr' ({aio_max_nr}) "
+                f"is less than recommended value ({recommended_value})")
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None):   # pylint: disable=unused-argument,arguments-differ
