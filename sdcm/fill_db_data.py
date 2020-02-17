@@ -25,8 +25,10 @@ from uuid import UUID
 from cassandra import InvalidRequest
 from cassandra.util import sortedset  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
+from cassandra.protocol import ProtocolException
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.common import retrying
 
 
 LOGGER = logging.getLogger(__name__)
@@ -2891,13 +2893,17 @@ class FillDatabaseData(ClusterTester):
         for truncate in truncates:
             session.execute(truncate)
 
+    @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
+    def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
+        LOGGER.debug(truncate)
+        session.execute(truncate)
+
     def truncate_tables(self, session):
         # Run through the list of items and create all tables
         for item in self.all_verification_items:
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for truncate in item['truncates']:
-                    LOGGER.debug(truncate)
-                    session.execute(truncate)
+                    self.truncate_table(session, truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         # pylint: disable=too-many-nested-blocks
