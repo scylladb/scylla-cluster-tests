@@ -39,6 +39,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.node_list = node_list if node_list else []
         self.round_robin = round_robin
         self.params = params if params else dict()
+        self.loaders = []
 
         self.executor = None
         self.results_futures = []
@@ -53,6 +54,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
             LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
         else:
             loaders = self.loader_set.nodes
+        self.loaders = loaders
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
@@ -89,12 +91,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         return ret, errors
 
     def kill(self):
-        if self.round_robin:
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-        else:
-            loaders = self.loader_set.nodes
-        for loader in loaders:
+        for loader in self.loaders:
             loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
                                timeout=60,
                                ignore_status=True)
