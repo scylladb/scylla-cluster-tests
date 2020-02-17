@@ -2896,6 +2896,7 @@ class FillDatabaseData(ClusterTester):
         for item in self.all_verification_items:
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for truncate in item['truncates']:
+                    LOGGER.debug(truncate)
                     session.execute(truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
