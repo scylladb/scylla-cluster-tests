@@ -18,4 +18,4 @@ space_node_threshold: 644245094
 
 store_perf_results: true
 send_email: true
-email_recipients: ['qa@scylladb.com', 'rnd-internal@scylladb.com']
+email_recipients: ['qa@scylladb.com']
