@@ -23,7 +23,7 @@ from collections import OrderedDict
 from uuid import UUID
 
 from cassandra import InvalidRequest
-from cassandra.util import sortedset  # pylint: disable=no-name-in-module
+from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException
 
@@ -285,17 +285,17 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
                 "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
-                for _id in range(0, 100) for tld in ['com', 'org', 'net']],
+                for _id in range(0, 4) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
-                "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],
+                "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],  # issue ##2574
             'results': [
                 [[2, 'http://foo.com', 42]],
                 [[3, 'http://foo.com', 42]]],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': '#2029'},
-        # limit_multiget_test: Validate LIMIT option for 'multiget' in SELECT statements
+            'skip': ''},
+        # limit_multiget_test: issue ##2574 Validate LIMIT option for 'multiget' in SELECT statements
         {
             'create_tables': ["""CREATE TABLE limit_multiget_test (
                                 userid int,
@@ -313,9 +313,9 @@ class FillDatabaseData(ClusterTester):
             'results': [
                 [[2, 'http://foo.com', 42]]
             ],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': '#2029 order of keys is not applied with LIMIT for multiget IN'},
+            'skip': ''},
         # simple_tuple_query_test: CASSANDRA-8613
         {
             'create_tables': [
@@ -403,8 +403,9 @@ class FillDatabaseData(ClusterTester):
                                   userid uuid PRIMARY KEY,
                                   firstname text,
                                   lastname text,
-                                  age int);"""],
-            'truncates': ['CREATE INDEX byAge ON indexed_with_eq_test(age);'],
+                                  age int);""",
+                              'CREATE INDEX byAge ON indexed_with_eq_test(age);'],
+            'truncates': ['TRUNCATE indexed_with_eq_test'],
             'inserts': [
                 "INSERT INTO indexed_with_eq_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
                 "UPDATE indexed_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -416,9 +417,33 @@ class FillDatabaseData(ClusterTester):
                 [],
                 [['Samwise']]
             ],
-            'min_version': '2.0',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
+        # mv_with_eq_test: Check that you can query from materialized view
+        {
+            'create_tables': ["""
+                                CREATE TABLE mv_with_eq_test (
+                                  userid uuid PRIMARY KEY,
+                                  firstname text,
+                                  lastname text,
+                                  age int);""",
+                              'CREATE MATERIALIZED VIEW mv_byAge as SELECT * from mv_with_eq_test WHERE userid IS NOT NULL and age IS NOT NULL PRIMARY KEY (age, userid);'],
+            'truncates': ['TRUNCATE mv_with_eq_test'],
+            'inserts': [
+                "INSERT INTO mv_with_eq_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE mv_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            ],
+            'queries': [
+                "SELECT firstname FROM mv_with_eq_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
+                "SELECT firstname FROM mv_byAge WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND age = 33"],
+            'results': [
+                [['Frodo']],
+                [['Samwise']]
+            ],
+            'min_version': '3.0',
+            'max_version': '',
+            'skip': ''},
         # select_key_in_test: Query for KEY IN (...)
         {
             'create_tables': ["""CREATE TABLE select_key_in_test (
@@ -534,7 +559,7 @@ class FillDatabaseData(ClusterTester):
                 []],
             'min_version': '',
             'max_version': '',
-            'skip': '#2566 Clustering column "c2" cannot be restricted by an IN relation'},
+            'skip': ''},
         # order_by_test: Check ORDER BY support in SELECT statement
         {
             'create_tables': ["""CREATE TABLE order_by_test1 (
@@ -743,17 +768,18 @@ class FillDatabaseData(ClusterTester):
             'create_tables': ["""CREATE TABLE nameless_index_test (
                                 id text PRIMARY KEY,
                                 birth_year int,
-                            )"""],
+                            )""",
+                              'CREATE INDEX on nameless_index_test(birth_year)'],
             'truncates': ['TRUNCATE nameless_index_test'],
             'inserts': [
-                "INSERT INTO users (id, birth_year) VALUES ('Tom', 42)",
-                "INSERT INTO users (id, birth_year) VALUES ('Paul', 24)",
-                "INSERT INTO users (id, birth_year) VALUES ('Bob', 42)"],
-            'queries': ["SELECT id FROM users WHERE birth_year = 42"],
-            'results': [[['Tom'], ['Bob']]],
-            'min_version': '',
+                "INSERT INTO nameless_index_test (id, birth_year) VALUES ('Tom', 42)",
+                "INSERT INTO nameless_index_test (id, birth_year) VALUES ('Paul', 24)",
+                "INSERT INTO nameless_index_test (id, birth_year) VALUES ('Bob', 42)"],
+            'queries': ["SELECT id FROM nameless_index_test WHERE birth_year = 42"],
+            'results': [[['Bob'], ['Tom']]],
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'INDEX'},
+            'skip': ''},
         # deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug
         {
             'create_tables': ["""CREATE TABLE deletion_test1 (
@@ -1069,9 +1095,9 @@ class FillDatabaseData(ClusterTester):
             'queries': ["SELECT * FROM range_query_2ndary_test WHERE setid = 0 AND row < 1 ALLOW FILTERING;"],
             'results': [[[0, 0, 0]]],
             'invalid_queries': ["SELECT * FROM range_query_2ndary_test WHERE setid = 0 AND row < 1;"],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # set_test
         {
             'create_tables': ["""CREATE TABLE set_test (
@@ -1365,46 +1391,47 @@ class FillDatabaseData(ClusterTester):
         # composite_index_with_pk_test
         {
             'create_tables': ["""CREATE TABLE composite_index_with_pk_test (
-                        blog_id int,
-                        time1 int,
-                        time2 int,
-                        author text,
-                        content text,
-                        PRIMARY KEY (blog_id, time1, time2))"""],
+                                blog_id int,
+                                time1 int,
+                                time2 int,
+                                author text,
+                                content text,
+                                PRIMARY KEY (blog_id, time1, time2))""",
+                              "CREATE INDEX ON composite_index_with_pk_test(author)"],
             'truncates': ["TRUNCATE composite_index_with_pk_test"],
             'inserts': [
-                "INSERT INTO blogs (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
+                "INSERT INTO composite_index_with_pk_test (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
                     1, 0, 0, 'foo', 'bar1'),
-                "INSERT INTO blogs (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
+                "INSERT INTO composite_index_with_pk_test (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
                     1, 0, 1, 'foo', 'bar2'),
-                "INSERT INTO blogs (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
+                "INSERT INTO composite_index_with_pk_test (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
                     2, 1, 0, 'foo', 'baz'),
-                "INSERT INTO blogs (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
+                "INSERT INTO composite_index_with_pk_test (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', '%s')" % (
                     3, 0, 1, 'gux', 'qux')],
-            'queries': ["SELECT blog_id, content FROM blogs WHERE author='foo'",
-                        "SELECT blog_id, content FROM blogs WHERE time1 > 0 AND author='foo' ALLOW FILTERING",
-                        "SELECT blog_id, content FROM blogs WHERE time1 = 1 AND author='foo' ALLOW FILTERING",
-                        "SELECT blog_id, content FROM blogs WHERE time1 = 1 AND time2 = 0 AND author='foo' ALLOW FILTERING",
-                        "SELECT content FROM blogs WHERE time1 = 1 AND time2 = 1 AND author='foo' ALLOW FILTERING",
-                        "SELECT content FROM blogs WHERE time1 = 1 AND time2 > 0 AND author='foo' ALLOW FILTERING",
+            'queries': ["SELECT blog_id, content FROM composite_index_with_pk_test WHERE author='foo'",
+                        "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 > 0 AND author='foo' ALLOW FILTERING",
+                        "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND author='foo' ALLOW FILTERING",
+                        "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 0 AND author='foo' ALLOW FILTERING",
+                        "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 1 AND author='foo' ALLOW FILTERING",
+                        "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 > 0 AND author='foo' ALLOW FILTERING",
                         ],
             'results': [[[1, 'bar1'], [1, 'bar2'], [2, 'baz']],
                         [[2, 'baz']],
                         [[2, 'baz']],
                         [[2, 'baz']],
-                        None,
-                        None
+                        [],
+                        []
                         ],
-            'invalid_queries': ["SELECT content FROM blogs WHERE time2 >= 0 AND author='foo'",
-                                "SELECT blog_id, content FROM blogs WHERE time1 > 0 AND author='foo'",
-                                "SELECT blog_id, content FROM blogs WHERE time1 = 1 AND author='foo'",
-                                "SELECT blog_id, content FROM blogs WHERE time1 = 1 AND time2 = 0 AND author='foo'",
-                                "SELECT content FROM blogs WHERE time1 = 1 AND time2 = 1 AND author='foo'",
-                                "SELECT content FROM blogs WHERE time1 = 1 AND time2 > 0 AND author='foo'"
+            'invalid_queries': ["SELECT content FROM composite_index_with_pk_test WHERE time2 >= 0 AND author='foo'",
+                                "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 > 0 AND author='foo'",
+                                "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND author='foo'",
+                                "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 0 AND author='foo'",
+                                "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 1 AND author='foo'",
+                                "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 > 0 AND author='foo'"
                                 ],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # limit_bugs_test: Test for LIMIT bugs from CASSANDRA-4579
         {
             'create_tables': ["""CREATE TABLE limit_bugs_test1 (
@@ -1447,13 +1474,13 @@ class FillDatabaseData(ClusterTester):
                         [[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]],
                         [[1, 1, 1]],
                         [[1, 1, 1], [2, 2, 2]],
-                        [[1, 1, 1], [2, 2, 2], [3, 3, 3]],
+                        [[1, 1, 1], [2, 2, 2], [4, 4, 4]],
                         [[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]],
                         [[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]]
                         ],
             'min_version': '',
             'max_version': '',
-            'skip': 'limit_bugs_test'},
+            'skip': ''},
         # npe_composite_table_slice_test: Test for NPE when trying to select a slice from a composite table CASSANDRA-4532
         {
             'create_tables': ["""CREATE TABLE npe_composite_table_slice_test(
@@ -1558,19 +1585,18 @@ class FillDatabaseData(ClusterTester):
                         [],
                         [],
                         [],
-                        [],
                         [[1, 0], [1, 3], [0, 0], [0, 2]],
                         [],
                         [[1, 0], [1, 3], [0, 0]]],
             'min_version': '',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # refuse_in_with_indexes_test: Test for the validation bug of CASSANDRA-4709
         {
             'create_tables': [
                 """create table refuse_in_with_indexes_test (pk varchar primary key, col1 varchar, col2 varchar);""",
-                "create index_refuse_in_with_indexes_test1 on t1(col1);",
-                "create index refuse_in_with_indexes_test2 on t1(col2);"],
+                "create index refuse_in_with_indexes_test1 on refuse_in_with_indexes_test(col1);",
+                "create index refuse_in_with_indexes_test2 on refuse_in_with_indexes_test(col2);"],
             'truncates': ["TRUNCATE refuse_in_with_indexes_test"],
             'inserts': [
                 "insert into refuse_in_with_indexes_test (pk, col1, col2) values ('pk1','foo1','bar1');",
@@ -1580,12 +1606,13 @@ class FillDatabaseData(ClusterTester):
                 "insert into refuse_in_with_indexes_test (pk, col1, col2) values ('pk2','foo2','bar2');",
                 "insert into refuse_in_with_indexes_test (pk, col1, col2) values ('pk3','foo3','bar3');"
             ],
-            'queries': [],
-            'results': [],
-            'invalid_queries': ["select * from t1 where col2 in ('bar1', 'bar2');"],
-            'min_version': '',
+            'queries': ["select * from refuse_in_with_indexes_test where col1='foo2'",
+                        "select * from refuse_in_with_indexes_test where col2='bar3'"],
+            'results': [[['pk2', 'foo2', 'bar2']], [['pk3', 'foo3', 'bar3']]],
+            'invalid_queries': ["select * from refuse_in_with_indexes_test where col2 in ('bar4', 'bar5');"],
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # reversed_compact_test: Test for CASSANDRA-4716 bug and more generally for good behavior of ordering
         {
             'create_tables': [
@@ -1846,11 +1873,11 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO composite_index_collections_test (blog_id, time1, time2, author, content) VALUES (%d, %d, %d, '%s', %s)" % (
                     3, 0, 1, 'gux', "{ 'qux' }")
             ],
-            'queries': ["SELECT composite_index_collections_test, content FROM blogs WHERE author='foo'"],
-            'results': [[[[1, set(['bar1', 'bar2'])], [1, set(['bar2', 'bar3'])], [2, set(['baz'])]]]],
-            'min_version': '',
+            'queries': ["SELECT blog_id, content FROM composite_index_collections_test WHERE author='foo'"],
+            'results': [[[1, SortedSet(['bar1', 'bar2'])], [1, SortedSet(['bar2', 'bar3'])], [2, SortedSet(['baz'])]]],
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # truncate_clean_cache_test
         {
             'create_tables': [
@@ -1916,12 +1943,12 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO composite_partition_key_validation_test (a, b, c) VALUES (1, 'aze', 4d481800-4c5f-11e1-82e0-3f484de45426)",
                 "INSERT INTO composite_partition_key_validation_test (a, b, c) VALUES (1, 'ert', 693f5800-8acb-11e3-82e0-3f484de45426)",
                 "INSERT INTO composite_partition_key_validation_test (a, b, c) VALUES (1, 'opl', d4815800-2d8d-11e0-82e0-3f484de45426)"],
-            'queries': ["#LENGTH SELECT * FROM composite_partition_key_validation_test WHERE a=1"],
+            'queries': ["#LENGTH SELECT * FROM composite_partition_key_validation_test"],
             'results': [3],
             'invalid_queries': ["SELECT * FROM composite_partition_key_validation_test WHERE a=1"],
             'min_version': '',
             'max_version': '',
-            'skip': 'bug? Partition key parts: b must be restricted as other parts are'},
+            'skip': ''},
         # multi_in_test
         {
             'create_tables': [
@@ -1974,11 +2001,12 @@ class FillDatabaseData(ClusterTester):
                         2,
                         1,
                         2,
-                        3],
+                        2,
+                        0],
             'invalid_queries': ["select zipcode from multi_in_test where zipcode='06902'"],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': '#2566 Clustering column "state" cannot be restricted by an IN relation"'},
+            'skip': ''},
         # multi_in_test
         {
             'create_tables': [
@@ -2031,11 +2059,12 @@ class FillDatabaseData(ClusterTester):
                         2,
                         1,
                         2,
-                        3],
+                        2,
+                        0],
             'invalid_queries': ["select zipcode from multi_in_compact_test where zipcode='06902'"],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': '#2566 Clustering column "state" cannot be restricted by an IN relation"'},
+            'skip': ''},
         # multi_in_compact_non_composite_test
         {
             'create_tables': [
@@ -2118,24 +2147,6 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO conversion_functions_test(k, i, b) VALUES (0, blobAsVarint(bigintAsBlob(3)), textAsBlob('foobar'))"],
             'queries': ["SELECT i, blobAsText(b) FROM conversion_functions_test WHERE k = 0"],
             'results': [[[3, 'foobar']]],
-            'min_version': '',
-            'max_version': '',
-            'skip': ''},
-        # IN_clause_on_last_key_test: @since('2.0', max_version='3.12').  Fixed by CASSANDRA-12654 in 3.12
-        {
-            'create_tables': [
-                """CREATE TABLE test (
-                key text,
-                c bigint,
-                v text,
-                x set<text>,
-                PRIMARY KEY (key, c)
-            );"""],
-            'truncates': [],
-            'inserts': [],
-            'queries': [],
-            'results': [],
-            'invalid_queries': ["select zipcode from multi_in_compact_test where zipcode='06902'"],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -2360,12 +2371,12 @@ class FillDatabaseData(ClusterTester):
             'inserts': ["INSERT INTO range_key_ordered_test(k) VALUES (-1)",
                         "INSERT INTO range_key_ordered_test(k) VALUES ( 0)",
                         "INSERT INTO range_key_ordered_test(k) VALUES ( 1)"],
-            'queries': ["SELECT * FROM range_key_ordered_test"],
-            'results': [[[0], [1], [-1]]],
+            'queries': ["#SORTED SELECT * FROM range_key_ordered_test"],
+            'results': [[[-1], [0], [1]]],
             'invalid_queries': ["SELECT * FROM range_key_ordered_test WHERE k >= -1 AND k < 1;"],
             'min_version': '',
             'max_version': '',
-            'skip': 'ordered=True cluster.set_partitioner("org.apache.cassandra.dht.ByteOrderedPartitioner") required'},
+            'skip': ''},
         # nonpure_function_collection_test: CASSANDRA-5795
         {
             'create_tables': [
@@ -2449,20 +2460,20 @@ class FillDatabaseData(ClusterTester):
                        ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name1', 1)" % i for i in
                         range(0, 3)],
             'queries': ['SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 1',
-                        'SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 3',
+                        '#SORTED SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 3',
                         'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 1',
-                        'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 3',
+                        '#SORTED SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 3',
                         'SELECT DISTINCT pk FROM select_distinct_test3 LIMIT 1',
-                        'SELECT DISTINCT pk FROM select_distinct_test3 LIMIT 3'],
+                        '#SORTED SELECT DISTINCT pk FROM select_distinct_test3 LIMIT 3'],
             'results': [[[0, 0]],
                         [[0, 0], [1, 1], [2, 2]],
                         [[0, 0]],
                         [[0, 0], [1, 1], [2, 2]],
-                        [[0]],
+                        [[1]],
                         [[0], [1], [2]]],
             'min_version': '',
             'max_version': '',
-            'skip': 'ordered=True cluster.set_partitioner("org.apache.cassandra.dht.ByteOrderedPartitioner") required'},
+            'skip': ''},
         # function_with_null_test
         {
             'create_tables': ["""
@@ -2510,7 +2521,7 @@ class FillDatabaseData(ClusterTester):
                 "SELECT * FROM internal_application_error_on_select_test WHERE a = 3 AND b IN (1, 3)"],
             'min_version': '',
             'max_version': '',
-            'skip': 'Indexes are not supported yet'},
+            'skip': ''},
         # store_sets_with_if_not_exists_test: Test to fix bug where sets are not stored by INSERT with IF NOT EXISTS CASSANDRA-6069
         {
             'create_tables': ["""
@@ -2584,17 +2595,17 @@ class FillDatabaseData(ClusterTester):
            """],
             'truncates': ["TRUNCATE user_types_test"],
             'inserts': [
-                "INSERT INTO user_types_test (id, name) VALUES (UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd'), {{ firstname: 'Paul', lastname: 'smith'}})"],
+                "INSERT INTO user_types_test (id, name) VALUES (ea0b7cc8-dee9-437e-896c-c14ed34ce9cd, ('Paul', 'smith'))"],
             'queries': [
-                "SELECT name.firstname FROM user_types_test WHERE id = UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')",
-                "SELECT name.firstname FROM user_types_test WHERE id = UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')",
-                "UPDATE user_types_test SET addresses = addresses + {{ 'home': {{ street: '...', city: 'SF', zip_code: 94102, phones: {{}} }} }} WHERE id=UUID('ea0b7cc8-dee9-437e-896c-c14ed34ce9cd')"],
+                "SELECT name.firstname FROM user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
+                "SELECT name.firstname FROM user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
+                "UPDATE user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
             'results': [[['Paul']],
                         [['Paul']],
                         []],
             'min_version': '',
             'max_version': '',
-            'skip': 'Invalid number of arguments in call to function system.uuid: 0 required but 1 provided'},
+            'skip': ''},
         # more_user_types_test
         {
             'create_tables': ["""
@@ -2610,10 +2621,10 @@ class FillDatabaseData(ClusterTester):
         """, "CREATE TABLE more_user_types_test (id int PRIMARY KEY, val frozen<type2>)"],
             'truncates': ["TRUNCATE more_user_types_test"],
             'inserts': [
-                "INSERT INTO more_user_types_test(id, val) VALUES (0, { s : {{ s : {'foo', 'bar'}, m : { 'foo' : 'bar' }, l : ['foo', 'bar']} }})",
-                "SELECT * FROM more_user_types_test"],
-            'queries': [],
-            'results': [],
+                "INSERT INTO more_user_types_test(id, val) VALUES (0, { s : {{ s : {'foo', 'bar'}, m : { 'foo' : 'bar' }, l : ['foo', 'bar']} }})"
+            ],
+            'queries': ["#STR SELECT * FROM more_user_types_test"],
+            'results': ["[[0, type2(s=SortedSet([type1(s=SortedSet(['bar', 'foo']), m=OrderedMapSerializedKey([('foo', 'bar')]), l=['foo', 'bar'])]))]]"],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -2635,12 +2646,10 @@ class FillDatabaseData(ClusterTester):
             )
         """],
             'truncates': ["TRUNCATE intersection_logic_returns_empty_result_test1"],
-            'inserts': ["INSERT INTO intersection_logic_returns_empty_result_test1 (k, v) VALUES (0, 0)",
-                        "#FLUSH"],
+            'inserts': ["INSERT INTO intersection_logic_returns_empty_result_test1 (k, v) VALUES (0, 0)"],
             'queries': ["SELECT v FROM intersection_logic_returns_empty_result_test1 WHERE k=0 AND v IN (1, 0)",
                         "SELECT v FROM intersection_logic_returns_empty_result_test1 WHERE v IN (1, 0) ALLOW FILTERING",
                         "INSERT INTO intersection_logic_returns_empty_result_test2 (k, v) VALUES (0, 0)",
-                        "#FLUSH",
                         "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE k=0 AND v IN (1, 0)",
                         "SELECT v FROM intersection_logic_returns_empty_result_test2 WHERE v IN (1, 0) ALLOW FILTERING",
                         "DELETE FROM intersection_logic_returns_empty_result_test2 WHERE k = 0",
@@ -2662,7 +2671,7 @@ class FillDatabaseData(ClusterTester):
                         []],
             'min_version': '',
             'max_version': '',
-            'skip': 'allow filtering <Error from server: code=2000 [Syntax error in CQL query] message="line 1:0 no viable alternative at input ''">'},
+            'skip': ''},
         # nan_infinity_test
         {
             'create_tables': ["CREATE TABLE nan_infinity_test (f float PRIMARY KEY)"],
@@ -2744,9 +2753,9 @@ class FillDatabaseData(ClusterTester):
                 "insert into select_count_paging_test(field1, field2, field3) values ('hola', now(), false);"],
             'queries': ["select count(*) from select_count_paging_test where field3 = false limit 1;"],
             'results': [[[2]]],
-            'min_version': '',
+            'min_version': '3.0',
             'max_version': '',
-            'skip': 'Index support is not enabled'},
+            'skip': ''},
         # cas_and_ttl_test
         {
             'create_tables': ["CREATE TABLE cas_and_ttl_test (k int PRIMARY KEY, v int, lock boolean)"],
@@ -2784,7 +2793,7 @@ class FillDatabaseData(ClusterTester):
             'invalid_queries': ["SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v3) > (1, 0)"],
             'min_version': '',
             'max_version': '',
-            'skip': 'CHECK INVALID QURY IN 2.0'},
+            'skip': ''},
         # in_order_by_without_selecting_test: Test that columns don't need to be selected for ORDER BY when there is a IN
         # CASSANDRA-4911
         {
@@ -2803,16 +2812,20 @@ class FillDatabaseData(ClusterTester):
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 ASC",
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 DESC",
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0)",
-                        "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0) ORDER BY c1 ASC"],
+                        # message="Cannot page queries with both ORDER BY and a IN restriction on the partition key; you must either remove the ORDER BY or the IN and sort client side, or disable paging for this query"
+                        # "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0) ORDER BY c1 ASC"
+                        ],
             'results': [[[0, 0, 0, 0], [0, 0, 2, 2]],
                         [[0, 0, 0, 0], [0, 0, 2, 2]],
                         [[0], [2]],
                         [[0], [2]],
                         [[2], [0]], [[0], [1], [2], [3], [4], [5]],
-                        [[0], [1], [2], [3], [4], [5]]],
-            'min_version': '',
+                        [[0], [1], [2], [3], [4], [5]],
+                        # [[0], [1], [2], [3], [4], [5]]
+                        ],
+            'min_version': '3.0',
             'max_version': '',
-            'skip': '#2029'},
+            'skip': ''},
         # cas_and_compact_test: Test for CAS with compact storage table, and CASSANDRA-6813 in particular
         {
             'create_tables': ["""

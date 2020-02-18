@@ -23,7 +23,7 @@ from pkg_resources import parse_version
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
 from sdcm.utils.version_utils import is_enterprise
-from sdcm.sct_events import DbEventsFilter
+from sdcm.sct_events import DbEventsFilter, IndexSpecialColumnErrorEvent
 from sdcm.utils.common import format_timestamp
 from sdcm.cluster import get_username
 
@@ -422,6 +422,19 @@ class UpgradeTest(FillDatabaseData):
             self.log.info('Re-Populate DB with many types of tables and data')
             self.fill_db_data()
 
+    # Added to cover the issue #5621: upgrade from 3.1 to 3.2 fails on std::logic_error (Column idx_token doesn't exist
+    # in base and this view is not backing a secondary index)
+    # @staticmethod
+    def search_for_idx_token_error_after_upgrade(self, node, step):
+        self.log.debug('Search for idx_token error. Step {}'.format(step))
+        idx_token_error = node.search_database_log(
+            search_pattern='idx_token',
+            start_from_beginning=True)
+        if idx_token_error:
+            IndexSpecialColumnErrorEvent('Node: %s. Step: %s. '
+                                         'Found error: index special column "idx_token" is not recognized' %
+                                         (node.name, step))
+
     def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """
         Upgrade half of nodes in the cluster, and start special read workload
@@ -437,7 +450,7 @@ class UpgradeTest(FillDatabaseData):
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
-        with self.subTest('pre-test - prepare test kesyapces and tables'):
+        with self.subTest('pre-test - prepare test keyspaces and tables'):
             # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
             self.prepare_keyspaces_and_tables()
             self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
@@ -482,7 +495,8 @@ class UpgradeTest(FillDatabaseData):
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
 
-            with self.subTest('Step1 - Upgrade First Node '):
+            step = 'Step1 - Upgrade First Node '
+            with self.subTest(step):
                 # upgrade first node
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
                 self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
@@ -500,6 +514,8 @@ class UpgradeTest(FillDatabaseData):
                 # wait for the read workload to finish
                 self.verify_stress_thread(read_stress_queue)
                 self.fill_and_verify_db_data('after upgraded one node')
+                self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                              step=step+' - after upgraded one node')
 
                 # read workload
                 self.log.info('Starting c-s read workload for 10m')
@@ -509,7 +525,8 @@ class UpgradeTest(FillDatabaseData):
                 self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
                 time.sleep(60)
 
-            with self.subTest('Step2 - Upgrade Second Node '):
+            step = 'Step2 - Upgrade Second Node '
+            with self.subTest(step):
                 # upgrade second node
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
                 self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
@@ -520,6 +537,8 @@ class UpgradeTest(FillDatabaseData):
                 # wait for the 10m read workload to finish
                 self.verify_stress_thread(read_10m_cs_thread_pool)
                 self.fill_and_verify_db_data('after upgraded two nodes')
+                self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                              step=step+' - after upgraded two nodes')
 
                 # read workload (60m)
                 self.log.info('Starting c-s read workload for 60m')
@@ -535,17 +554,21 @@ class UpgradeTest(FillDatabaseData):
                 self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
                 self.db_cluster.nodes[indexes[1]].check_node_health()
 
-        with self.subTest('Step4 - Verify data during mixed cluster mode '):
+        step = 'Step4 - Verify data during mixed cluster mode '
+        with self.subTest(step):
             self.fill_and_verify_db_data('after rollback the second node')
             self.log.info('Repair the first upgraded Node')
             self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
+            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                          step=step)
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
 
-            with self.subTest('Step5 - Upgrade rest of the Nodes '):
+            step = 'Step5 - Upgrade rest of the Nodes '
+            with self.subTest(step):
                 for i in indexes[1:]:
                     self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
                     self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
@@ -553,6 +576,8 @@ class UpgradeTest(FillDatabaseData):
                     self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
                     self.db_cluster.node_to_upgrade.check_node_health()
                     self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
+                    self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                                  step=step)
 
         with self.subTest('Step6 - Verify stress results after upgrade '):
             self.log.info('Waiting for stress threads to complete after upgrade')
@@ -621,7 +646,8 @@ class UpgradeTest(FillDatabaseData):
             # self.verify_stress_thread(complex_cs_thread_pool)
 
         # During the test we filter and ignore some specific errors, but we want to allow only certain amount of them
-        with self.subTest('Step9 - Search for errors that we filter during the test '):
+        step = 'Step9 - Search for errors that we filter during the test '
+        with self.subTest(step):
             self.log.info('Checking how many failed_to_load_schem errors happened during the test')
             error_factor = 3
             schema_load_error_num = 0
@@ -631,6 +657,8 @@ class UpgradeTest(FillDatabaseData):
                                                   start_from_beginning=True,
                                                   publish_events=False)
                 schema_load_error_num += len(errors)
+                self.search_for_idx_token_error_after_upgrade(node=node,
+                                                              step=step)
 
             self.log.info('schema_load_error_num: %d', schema_load_error_num)
             assert schema_load_error_num <= error_factor * 8 * \
