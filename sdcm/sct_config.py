@@ -577,6 +577,8 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="pre_create_schema", env="SCT_PRE_CREATE_SCHEMA", type=boolean,
              help=""),
+        dict(name="pre_create_keyspace", env="SCT_PRE_CREATE_KEYSPACE", type=str,
+             help="Command to create keysapce to be pre-create before running workload"),
 
         dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
              help="Choose a specific compaction strategy to pre-create schema with."),
