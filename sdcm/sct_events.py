@@ -349,6 +349,17 @@ class InfoEvent(SctEvent):
         return "{0}: message={1.message}".format(super(InfoEvent, self).__str__(), self)
 
 
+class IndexSpecialColumnErrorEvent(SctEvent):
+    def __init__(self, message):
+        super(IndexSpecialColumnErrorEvent, self).__init__()
+        self.message = message
+        self.severity = Severity.ERROR
+        self.publish()
+
+    def __str__(self):
+        return f"{super().__str__()}: message={self.message}"
+
+
 class ThreadFailedEvent(SctEvent):
     def __init__(self, message, traceback):
         super(ThreadFailedEvent, self).__init__()
