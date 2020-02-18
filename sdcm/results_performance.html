@@ -64,29 +64,51 @@
             <th>Version compared to</th>
             <th>Best</th>
             <th>Diff best</th>
-            <th>Commit</th>
+            <th>Commit, Date</th>
+            <th>Last</th>
+            <th>Diff last</th>
+            <th>Commit, Date</th>
         </tr>
         {% for cmp_res in res_list %}
-        {% set stat=cmp_res.res.get(stat_name) %}
+        {% set best_stat=cmp_res.best.res.get(stat_name) %}
+        {% set last_stat=cmp_res.last.res.get(stat_name) %}
         <tr>
-            <td>{{ stat.val }}</td>
-            <td> <span class="fbold">{{ cmp_res.version_dst }}</span></td>
-            <td>{{ stat.best_val }}</td>
+            <td>{{ best_stat.val }}</td>
+            <td> <span class="fbold">{{ cmp_res.best.version_dst }}</span></td>
+            <td>{{ best_stat.best_val }}</td>
             <td>
-                {% with status = stat.status, percent = stat.percent,
-                   percent_abs = stat.percent|replace('%', '')|int %}
+                {% with status = best_stat.status, percent = best_stat.percent,
+                   percent_abs = best_stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
-                        <span class="red fbold">-
+                        <span class="red fbold">-{{ percent }}</span>
                     {% elif status == 'Progress' and percent_abs > 4 %}
-                        <span class="green fbold">+
+                        <span class="green fbold">+{{ percent }}</span>
                     {% else %}
-                        <span>
+                        <span>{{ percent }}</span>
                     {% endif %}
-                    {{ percent }}
                 {% endwith %}
-                </span>
             </td>
-            <td>{{ stat.best_id }}</td>
+            <td>
+                <div>#{{ best_stat.best_id.commit }}</div>
+                <div>{{ best_stat.best_id.date }}</div>
+            </td>
+            <td>{{ last_stat.best_val }}</td>
+            <td>
+                {% with status = last_stat.status, percent = last_stat.percent,
+                   percent_abs = last_stat.percent|replace('%', '')|int %}
+                    {% if status == 'Regression' and percent_abs > 4 %}
+                        <span class="red fbold">-{{ percent }}</span>
+                    {% elif status == 'Progress' and percent_abs > 4 %}
+                        <span class="green fbold">+{{ percent }}</span>
+                    {% else %}
+                        <span>{{ percent }}</span>
+                    {% endif %}
+                {% endwith %}
+            </td>
+            <td>
+                <div>#{{ last_stat.best_id.commit }}</div>
+                <div>{{ last_stat.best_id.date }}</div>
+            </td>
         </tr>
         {% endfor %}
     </table>
