@@ -28,7 +28,7 @@ from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
 from invoke.watchers import StreamWatcher, Responder
 from paramiko import SSHException, RSAKey
-from paramiko.ssh_exception import NoValidConnectionsError
+from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
 
 from sdcm.log import SDCMAdapter
 from sdcm.utils.common import retrying
@@ -53,8 +53,26 @@ class SSHConnectTimeoutError(Exception):
     """
 
 
-NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError, EOFError,
+NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError, EOFError, AuthenticationException,
                       ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError)
+
+
+class RetriableNetworkException(Exception):
+    """
+        SSH protocol exception that can be safely retried
+    """
+
+
+def is_error_retriable(err_str):
+    """Check that exception can be safely retried"""
+    exceptions = ("Authentication timeout", "Error reading SSH protocol banner", "Timeout opening channel",
+                  "Unable to open channel", "Key-exchange timed out waiting for key negotiation",
+                  "ssh_exchange_identification: Connection closed by remote host",
+                  )
+    for exception_str in exceptions:
+        if exception_str in err_str:
+            return True
+    return False
 
 
 def _scp_remote_escape(filename):
@@ -252,6 +270,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             return "SSH access -> 'ssh %s@%s'" % (self.user,
                                                   self.hostname)
 
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
             verbose=True, new_session=False, log_file=None, retry=1, watchers=None):
 
@@ -280,9 +299,11 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 setattr(result, 'duration', time.time() - start_time)
                 setattr(result, 'exit_status', result.exited)
                 return result
-            except SSHException as ex:
+            except NETWORK_EXCEPTIONS as ex:
                 LOGGER.error(ex)
                 self._ssh_is_up.clear()
+                if is_error_retriable(str(ex)):
+                    raise RetriableNetworkException(str(ex))
                 raise
             except Exception as details:  # pylint: disable=broad-except
                 if hasattr(details, "result"):
@@ -327,6 +348,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self._ssh_up_thread.join(5)
         self._ssh_up_thread = None
 
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
                       preserve_perm=True, preserve_symlinks=False):
         """
@@ -392,7 +414,12 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                                           escape=False)
                 local_dest = quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
-                result = LocalCmdRunner().run(scp)
+                try:
+                    result = LocalCmdRunner().run(scp)
+                except UnexpectedExit as ex:
+                    if is_error_retriable(ex.result.stderr):
+                        raise RetriableNetworkException(ex.result.stderr)
+                    raise
                 self.log.info("Command {} with status {}".format(result.command, result.exited))
                 if result.exited:
                     files_received = False
@@ -409,6 +436,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self._set_umask_perms(dst)
         return files_received
 
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,too-many-statements
                    preserve_symlinks=False, verbose=False):
         """
@@ -499,7 +527,12 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
                 scp = self._make_scp_cmd(local_sources, remote_dest)
-                result = LocalCmdRunner().run(scp)
+                try:
+                    result = LocalCmdRunner().run(scp)
+                except UnexpectedExit as ex:
+                    if is_error_retriable(ex.result.stderr):
+                        raise RetriableNetworkException(ex.result.stderr)
+                    raise
                 self.log.info('Command {} with status {}'.format(result.command, result.exited))
                 if result.exited:
                     files_sent = False
