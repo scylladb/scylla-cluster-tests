@@ -103,6 +103,9 @@ class LongevityTest(ClusterTester):
         keyspace_num = self.params.get('keyspace_num', default=1)
         write_queue = list()
         verify_queue = list()
+        if self.params.get('pre_create_keyspace'):
+            self._pre_create_keyspace()
+
         if pre_create_schema:
             self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
                 'scylla_encryption_options', None))
@@ -506,6 +509,13 @@ class LongevityTest(ClusterTester):
                             session.execute(query)
                         except (AlreadyExists, InvalidRequest) as exc:
                             self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
+
+    def _pre_create_keyspace(self):
+        query = self.params.get('pre_create_keyspace')
+        node = self.db_cluster.nodes[0]
+        # pylint: disable=no-member
+        with self.cql_connection_patient(node) as session:
+            session.execute(query)
 
     def _flush_all_nodes(self):
         """
