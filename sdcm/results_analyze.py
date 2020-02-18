@@ -584,8 +584,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         #             "latency mean": 0,
         #         },
         #         "best_test_id": {
-        #             "op rate": "9b4a0a287",
-        #             "latency mean": "9b4a0a287",
+        #             "op rate": {"commit": 9b4a0a287", "date": "2020.02.02"},
+        #             "latency mean": {"commit": 9b4a0a287", "date": "2020.02.02"},
         #
         #         }
         #     }
@@ -604,11 +604,19 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             curr_test_stats = self._test_stats(row)
             if not curr_test_stats:
                 continue
+
+            formated_version_date = datetime.strptime(version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
+            version_info_data = {"commit": version_info['commit_id'], "date": formated_version_date}
+
             if version not in group_by_version:
                 group_by_version[version] = dict(tests=SortedDict(), stats_best=dict(), best_test_id=dict())
                 group_by_version[version]['stats_best'] = {k: 0 for k in self.PARAMS}
-                group_by_version[version]['best_test_id'] = {k: version_info["commit_id"] for k in self.PARAMS}
-            group_by_version[version]['tests'][version_info['date']] = curr_test_stats
+                group_by_version[version]['best_test_id'] = {
+                    k: version_info_data for k in self.PARAMS}
+            group_by_version[version]['tests'][version_info['date']] = {
+                "test_stats": curr_test_stats,
+                "version": {k: version_info_data for k in self.PARAMS}
+            }
             old_best = group_by_version[version]['stats_best']
             group_by_version[version]['stats_best'] =\
                 {k: self._get_best_value(k, curr_test_stats[k], old_best[k])
@@ -617,12 +625,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             for k in self.PARAMS:
                 if k in curr_test_stats and k in old_best and\
                         group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
-                    group_by_version[version]['best_test_id'][k] = version_info["commit_id"]
-
+                    group_by_version[version]['best_test_id'][k] = version_info_data
         res_list = list()
         # compare with the best in the test version and all the previous versions
         test_version_info = self._test_version(doc)
         test_version = test_version_info['version']
+
         for version in group_by_version:
             if version == test_version and not group_by_version[test_version]['tests']:
                 self.log.info('No previous tests in the current version {} to compare'.format(test_version))
@@ -631,11 +639,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                group_by_version[version]['stats_best'],
                                version,
                                group_by_version[version]['best_test_id'])
-            res_list.append(cmp_res)
+            _, latest_version_test = group_by_version[version]["tests"].peekitem(index=-1)
+            latest_res = self.cmp(test_stats,
+                                  latest_version_test["test_stats"],
+                                  version,
+                                  latest_version_test["version"])
+            res_list.append({"best": cmp_res, "last": latest_res})
         if not res_list:
             self.log.info('No test results to compare with')
             return False
-
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
