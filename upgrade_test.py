@@ -521,10 +521,10 @@ class UpgradeTest(FillDatabaseData):
                 self.verify_stress_thread(read_10m_cs_thread_pool)
                 self.fill_and_verify_db_data('after upgraded two nodes')
 
-                # read workload (80m)
-                self.log.info('Starting c-s read workload for 80m')
-                stress_cmd_read_80m = self.params.get('stress_cmd_read_80m')
-                read_80m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_80m)
+                # read workload (60m)
+                self.log.info('Starting c-s read workload for 60m')
+                stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
+                read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
                 self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
                 time.sleep(60)
 
@@ -554,8 +554,8 @@ class UpgradeTest(FillDatabaseData):
 
         with self.subTest('Step6 - Verify stress results after upgrade '):
             self.log.info('Waiting for stress threads to complete after upgrade')
-            # wait for the 80m read workload to finish
-            self.verify_stress_thread(read_80m_cs_thread_pool)
+            # wait for the 60m read workload to finish
+            self.verify_stress_thread(read_60m_cs_thread_pool)
 
             self.verify_stress_thread(entire_write_cs_thread_pool)
 
