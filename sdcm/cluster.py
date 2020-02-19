@@ -1958,6 +1958,15 @@ server_encryption_options:
             self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'
                              .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
+    def is_scylla_installed(self):
+        if self.distro.is_rhel_like:
+            result = self.remoter.run(f'rpm -q {self.scylla_pkg()}', verbose=False, ignore_status=True)
+        elif self.distro.is_ubuntu or self.distro.is_debian:
+            result = self.remoter.run(f'dpkg-query --show {self.scylla_pkg()}', verbose=False, ignore_status=True)
+        else:
+            raise ValueError(f"Unsupported Linux distribution: {self.distro}")
+        return result.exit_status == 0
+
     def get_scylla_version(self):
         version_commands = ["scylla --version", "rpm -q {}".format(self.scylla_pkg())]
         for version_cmd in version_commands:
