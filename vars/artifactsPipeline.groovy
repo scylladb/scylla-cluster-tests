@@ -4,7 +4,7 @@ def call(Map pipelineParams) {
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, 'eu-west-1')
+                label getJenkinsLabels(params.backend, params.get('region_name', 'eu-west-1'))
             }
         }
         environment {
@@ -16,12 +16,21 @@ def call(Map pipelineParams) {
                    description: 'aws|gce',
                    name: 'backend')
             string(defaultValue: '',
-                   description: 'a Scylla repo to run against',
+                   description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
+                   name: 'scylla_ami_id')
+            string(defaultValue: '',
+                   description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
+                   name: 'region_name')
+            string(defaultValue: "${pipelineParams.get('instance_type', '')}",
+                   description: 'a cloud instance type (leave blank for test case defaults)',
+                   name: 'instance_type')
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
-             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
@@ -61,7 +70,28 @@ def call(Map pipelineParams) {
 
                                     export SCT_COLLECT_LOGS=false
                                     export SCT_CONFIG_FILES=${params.test_config}
-                                    export SCT_SCYLLA_REPO="${params.scylla_repo}"
+
+                                    if [[ ! -z "${params.scylla_ami_id}" ]]; then
+                                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                                        export SCT_REGION_NAME="${params.region_name}"
+                                    elif [[ ! -z "${params.scylla_repo}" ]]; then
+                                        export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                    else
+                                        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_REPO"
+                                        exit 1
+                                    fi
+
+                                    if [[ ! -z "${params.instance_type}" ]]; then
+                                        case "${params.backend}" in
+                                            "aws")
+                                                export SCT_INSTANCE_TYPE_DB="${params.instance_type}"
+                                                ;;
+                                            "gce")
+                                                export SCT_GCE_INSTANCE_TYPE_DB="${params.instance_type}"
+                                                ;;
+                                        esac
+                                    fi
+
                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
                                     export SCT_INSTANCE_PROVISION="${params.instance_provision}"

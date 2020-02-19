@@ -729,6 +729,10 @@ class AWSNode(cluster.BaseNode):
     def image(self):
         return self._instance.image_id
 
+    @property
+    def ena_support(self) -> bool:
+        return self._instance.ena_support
+
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
