@@ -1931,10 +1931,10 @@ server_encryption_options:
                     apt-get update
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
-                    apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-buster/Debian_10.0/Release.key
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
-                    echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-buster/Debian_10.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
+                    curl https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
+                    apt-get install software-properties-common -y
+                    add-apt-repository --yes https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
