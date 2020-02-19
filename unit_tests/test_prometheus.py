@@ -1,7 +1,6 @@
 import os
 import time
 import unittest
-import tempfile
 import shutil
 import json
 import requests
@@ -126,16 +125,6 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
 
 
 class PrometheusAlertManagerTest(unittest.TestCase):
-    temp_dir = None
-
-    @classmethod
-    def setUpClass(cls):
-        cls.temp_dir = tempfile.mkdtemp()
-
-    @classmethod
-    def tearDownClass(cls):
-        # stop_events_device()
-        shutil.rmtree(cls.temp_dir)
 
     def test_alert_manager_listener_artificial_run(self):
         with open(os.path.join(os.path.dirname(__file__),
