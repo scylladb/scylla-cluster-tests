@@ -39,6 +39,10 @@ class ArtifactsTest(ClusterTester):
         self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
 
     def test_scylla_service(self):
+        if self.params["cluster_backend"] == "aws":
+            with self.subTest("check ENA support"):
+                assert self.node.ena_support, "ENA support is not enabled"
+
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
 

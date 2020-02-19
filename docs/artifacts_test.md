@@ -12,6 +12,7 @@ There are pipeline files for Jenkins in the repository:
 vars
 `-- artifactsPipeline.groovy
 jenkins-pipelines
+|-- artifacts-ami.jenkinsfile
 |-- artifacts-centos7.jenkinsfile
 |-- artifacts-centos8.jenkinsfile
 |-- artifacts-debian9.jenkinsfile
@@ -22,7 +23,12 @@ jenkins-pipelines
 ```
 
 `vars/artifactsPipeline.groovy` is a pipeline call definition which used to run same pipeline with different parameters.
-The only required parameter for each job is `scylla_repo`, a path to a ScyllaDB repo (e.g., `https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/master/latest/scylla.repo`)
+
+You should use different parameters for .rpm/.deb tests and for AMI test:
+- The only required parameter for .rpm/.deb jobs is `scylla_repo`, a path to a ScyllaDB repo (e.g., `https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/master/latest/scylla.repo`)
+- For AMI job you need two parameters: `scylla_ami_id` and `region_name`
+
+Optionally, you can override default cloud instance type by providing `instance_type` parameter.
 
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.
 
@@ -79,4 +85,17 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu
 ## Ubuntu 18.04 LTS (bionic)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu1804.yaml
+```
+
+## AMI
+
+You can use `hydra` to find Scylla AMI in the desired region (`us-east-1` in example below):
+```sh
+hydra list-ami-versions -r us-east-1
+```
+
+and run the test:
+
+```sh
+SCT_AMI_ID_DB_SCYLLA=<ami you've found> SCT_REGION_NAME=us-east-1 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
 ```
