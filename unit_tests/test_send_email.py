@@ -16,12 +16,11 @@ class EmailReporterTest(unittest.TestCase):
     temp_dir = None
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls):  # pylint: disable=invalid-name
         cls.temp_dir = tempfile.mkdtemp()
 
     @classmethod
-    def tearDownClass(cls):
-        # stop_events_device()
+    def tearDownClass(cls):  # pylint: disable=invalid-name
         shutil.rmtree(cls.temp_dir)
 
     def _get_report_data(self, zipfile_path):
