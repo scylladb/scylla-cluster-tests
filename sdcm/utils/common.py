@@ -729,13 +729,14 @@ def clean_instances_gce(tags_dict):
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    all_gce_instances = list_instances_gce(tags_dict=tags_dict)
+    gce_instances_to_clean = list_instances_gce(tags_dict=tags_dict)
 
-    for instance in all_gce_instances:
+    def delete_instance(instance):
         LOGGER.info("Going to delete: {}".format(instance.name))
         # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
         res = instance.destroy()
-        LOGGER.info("{} deleted. res={}".format(instance.name, res))
+        LOGGER.info("{} deleted={}".format(instance.name, res))
+    ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
 _SCYLLA_AMI_CACHE = defaultdict(dict)
