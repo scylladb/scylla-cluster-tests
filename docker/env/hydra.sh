@@ -25,6 +25,16 @@ if ! docker --version; then
     exit 1
 fi
 
+echo "Cleaning unused Docker resources..."
+# will clean
+#  - all stopped containers
+#  - all networks not used by at least one container
+#  - all volumes not used by at least one container
+#  - all dangling images
+#  - all dangling build cache
+docker system prune --volumes -f
+
+
 if [[ ! -z "`docker images scylladb/hydra:${VERSION} -q`" ]]; then
     echo "Image up-to-date"
 else
