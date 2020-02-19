@@ -838,7 +838,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
     def _scylla_pre_install(self, node):
         # Assume that all nodes in the cluster use the same AMI. So, need to check the availability of Scylla once.
         if self._need_to_install_scylla is None:
-            self._need_to_install_scylla = node.get_scylla_version() is None
+            self._need_to_install_scylla = not node.is_scylla_installed()
 
         if self._need_to_install_scylla:
             self.log.info("Can't find Scylla on the %s (%s), will try to install", node, node.image)
