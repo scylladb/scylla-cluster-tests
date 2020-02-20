@@ -1236,6 +1236,95 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
+    def copy_table(self, src_keyspace, src_table, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+        result = True
+        create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
+                           "and keyspace_name = '%s'" % (src_table, src_keyspace)
+        self.create_table_as(src_keyspace, src_table, dest_keyspace, dest_table, create_statement)
+
+        if copy_data:
+            result = self.copy_data_between_tables(src_keyspace, src_table, dest_keyspace, dest_table)
+
+        return result
+
+    def copy_view(self, src_keyspace, src_view, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+        result = True
+        create_statement = "SELECT * FROM system_schema.views where view_name = '%s' " \
+                           "and keyspace_name = '%s'" % (src_view, src_keyspace)
+        self.log.debug('Start create table with statement: {}'.format(create_statement))
+        self.create_table_as(src_keyspace, src_view, dest_keyspace, dest_table, create_statement)
+        self.log.debug('Finish create table')
+        if copy_data:
+            result = self.copy_data_between_tables(src_keyspace, src_view, dest_keyspace, dest_table)
+
+        return result
+
+    def create_table_as(self, src_keyspace, src_table, dest_keyspace, dest_table, create_statement):  # pylint: disable=too-many-arguments
+        """ Create table with same structure as another table or view """
+        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+
+            result = self.rows_to_list(session.execute(create_statement))
+            if result:
+                result = session.execute("SELECT * FROM {keyspace}.{table} LIMIT 1".format(keyspace=src_keyspace,
+                                                                                           table=src_table))
+
+                # Create table with table/view structure
+                columns = list(zip(result.column_names, [typelist.typename for typelist in result.column_types]))
+
+                primary_keys = []
+                for column in result.column_names:
+                    column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
+                                                  "and table_name='{name}' and column_name='{column}'".format(ks=src_keyspace,
+                                                                                                              name=src_table,
+                                                                                                              column=column))
+                    if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
+                        primary_keys.append(column)
+
+                create_cql = 'create table {keyspace}.{name} ({columns}, PRIMARY KEY ({pk}))' \
+                    .format(keyspace=dest_keyspace,
+                            name=dest_table,
+                            columns=', '.join(['%s %s' % (c[0], c[1]) for c in columns]),
+                            pk=', '.join(primary_keys))
+                self.log.debug('Create new table with cql: {}'.format(create_cql))
+                session.execute(create_cql)
+
+    def copy_data_between_tables(self, src_keyspace, src_table, dest_keyspace, dest_table):
+        """ Copy all data from one table/view to another table
+            Structure of the tables has to be same
+        """
+        self.log.debug('Start copying data')
+        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            # Copy data from source to the destination table
+            session.default_fetch_size = 0
+            result = session.execute("SELECT * FROM {keyspace}.{table}".format(keyspace=src_keyspace,
+                                                                               table=src_table))
+            columns = list(zip(result.column_names, [typelist.typename for typelist in result.column_types]))
+            insert_statement = session.prepare(
+                'insert into {keyspace}.{name} ({columns}) values ({values})'.format(keyspace=dest_keyspace,
+                                                                                     name=dest_table,
+                                                                                     columns=', '.join(
+                                                                                         [c[0] for c in columns]),
+                                                                                     values=', '.join(['?' for _ in columns])))
+
+            self.log.debug('Copying {} rows'.format(len(result.current_rows)))
+            for row in result.current_rows:
+                session.execute(insert_statement, row)
+            source_rows_count = len(result.current_rows)
+
+            result = session.execute("SELECT * FROM {keyspace}.{name}".format(keyspace=dest_keyspace, name=dest_table))
+            self.log.debug('Copyied {} rows'.format(len(result.current_rows)))
+            if len(result.current_rows) != source_rows_count:
+                self. log.warning('Problem during copying data. '
+                                  'Rows in source table: {source}; '
+                                  'Rows in destination table: {destination}.'.format(source=source_rows_count,
+                                                                                     destination=len(result.current_rows))
+                                  )
+                return False
+            self.log.debug('All rows have been copied from {from_name} to {to_name}'.format(from_name=src_table,
+                                                                                            to_name=dest_table))
+        self.log.debug('Finish copying data')
+        return True
+
     def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):
         # Get and save how many rows in each partition.
         # It may be used for validation data in the end of test

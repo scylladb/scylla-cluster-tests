@@ -1,4 +1,4 @@
-# Based on https://gist.github.com/tjake/8995058fed11d9921e31
+# LWT test: create and update data using LWT.
 ### DML ###
 
 # Keyspace Name
@@ -6,23 +6,30 @@ keyspace: cqlstress_lwt_example
 
 # The CQL for creating a keyspace (optional if it already exists)
 keyspace_definition: |
-  CREATE KEYSPACE cqlstress_lwt_example WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+  CREATE KEYSPACE IF NOT EXISTS cqlstress_lwt_example WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
 
 # Table name
 table: blogposts
 
 # The CQL for creating a table you wish to stress (optional if it already exists)
 table_definition: |
-  CREATE TABLE blogposts (
+  CREATE TABLE IF NOT EXISTS blogposts (
         domain int,
         published_date int,
-        lwt_ind int,
+        lwt_indicator int,
         url text,
         author text,
         title text,
         PRIMARY KEY(domain, published_date)
   ) WITH compaction = { 'class':'LeveledCompactionStrategy' }
     AND comment='A table to hold blog posts'
+
+extra_definitions:
+  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator as select domain, lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator < 0 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_upd as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 1000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator_upd as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_not_updated_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 1000000 and lwt_indicator < 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
 
 ### Column Distribution Specifications ###
 
@@ -33,8 +40,8 @@ columnspec:
   - name: published_date
     cluster: uniform(1..1000)         #under each domain we will have max 1000 posts
 
-  - name: lwt_ind
-    population: seq(1..1000000)   #10M possible domains to pick from
+  - name: lwt_indicator
+    population: seq(1..1001000)
 
   - name: url
     size: uniform(30..30)
@@ -65,8 +72,8 @@ queries:
       cql: select * from blogposts where domain = ? LIMIT 1
       fields: samerow
    lwt_update_one_column:
-      cql: update blogposts set lwt_ind = 10000001 where domain = ? and published_date = ? if lwt_ind < 0
+      cql: update blogposts set lwt_indicator = 30000000 where domain = ? and published_date = ? if lwt_indicator < 0
       fields: samerow
    lwt_update_two_columns:
-      cql: update blogposts set lwt_ind = 20000001, author = 'text' where domain = ? and published_date = ? if lwt_ind > 0 and lwt_ind < 10000001 and author != 'text'
+      cql: update blogposts set lwt_indicator = 20000000, author = 'text' where domain = ? and published_date = ? if lwt_indicator > 0 and lwt_indicator <= 1000000 and author != 'text'
       fields: samerow

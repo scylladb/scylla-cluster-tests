@@ -20,6 +20,7 @@ import itertools
 import os
 import logging
 import random
+import re
 import socket
 import time
 import datetime
@@ -46,6 +47,7 @@ import boto3
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
+import yaml
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -85,6 +87,108 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
     assert _remote_get_hash(remoter, dst) == hash_expected
+
+
+def get_profile_content(stress_cmd):
+    cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
+    sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
+    if not os.path.exists(sct_cs_profile):
+        raise FileNotFoundError('User profile file {} not found'.format(sct_cs_profile))
+
+    cs_profile = sct_cs_profile
+
+    with open(cs_profile, 'r') as yaml_stream:
+        profile = yaml.safe_load(yaml_stream)
+    return cs_profile, profile
+
+
+class retrying():  # pylint: disable=invalid-name,too-few-public-methods
+    """
+        Used as a decorator to retry function run that can possibly fail with allowed exceptions list
+    """
+
+    def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
+                 allowed_exceptions=(Exception,), message="", timeout=0):  # pylint: disable=redefined-outer-name
+        if n:
+            self.n = n  # number of times to retry  # pylint: disable=invalid-name
+        else:
+            self.n = sys.maxsize * 2 + 1
+        self.sleep_time = sleep_time  # number seconds to sleep between retries
+        self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
+        self.message = message  # string that will be printed between retries
+        self.timeout = timeout  # if timeout is defined it will raise error
+        #   if it is reached even when maximum retries not reached yet
+
+    def __call__(self, func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            if self.timeout:
+                end_time = time.time() + self.timeout
+            else:
+                end_time = 0
+            if self.n == 1:
+                # there is no need to retry
+                return func(*args, **kwargs)
+            for i in range(self.n):
+                try:
+                    if self.message and i > 0:
+                        LOGGER.info("%s [try #%s]", self.message, i)
+                    return func(*args, **kwargs)
+                except self.allowed_exceptions as ex:
+                    LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
+                    time.sleep(self.sleep_time)
+                    if i == self.n - 1 or (end_time and time.time() > end_time):
+                        LOGGER.error(f"'{func.__name__}': Number of retries exceeded!")
+                        raise
+
+        return inner
+
+
+def log_run_info(arg):
+    """
+        Decorator that prints BEGIN before the function runs and END when function finished running.
+        Uses function name as a name of action or string that can be given to the decorator.
+        If the function is a method of a class object, the class name will be printed out.
+
+        Usage examples:
+            @log_run_info
+            def foo(x, y=1):
+                pass
+            In: foo(1)
+            Out:
+                BEGIN: foo
+                END: foo (ran 0.000164)s
+
+            @log_run_info("Execute nemesis")
+            def disrupt():
+                pass
+            In: disrupt()
+            Out:
+                BEGIN: Execute nemesis
+                END: Execute nemesis (ran 0.000271)s
+    """
+    def _inner(func, msg=None):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            class_name = ""
+            if args and func.__name__ in dir(args[0]):
+                class_name = " <%s>" % args[0].__class__.__name__
+            action = "%s%s" % (msg, class_name)
+            start_time = datetime.datetime.now()
+            LOGGER.debug("BEGIN: %s", action)
+            res = func(*args, **kwargs)
+            end_time = datetime.datetime.now()
+            LOGGER.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
+            return res
+        return inner
+
+    if callable(arg):  # when decorator is used without a string message
+        return _inner(arg, arg.__name__)
+    else:
+        return lambda f: _inner(f, arg)
+
+
+timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
 
 
 def generate_random_string(length):
