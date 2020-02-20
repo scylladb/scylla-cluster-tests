@@ -107,6 +107,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             'sec_index': 'users',  # Ignore SI user-profile tables
             'ks_truncate': 'counter1',  # Ignore counter table
             'keyspace1': 'counter1',  # Ignore counter table
+            # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
+            'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
 
     def update_stats(self, disrupt, status=True, data=None):
@@ -1741,7 +1743,7 @@ class NotSpotNemesis(Nemesis):
         raise NotImplementedError()
 
 
-def log_time_elapsed_and_status(method):
+def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
     """
     Log time elapsed for method to run
 
@@ -1749,7 +1751,7 @@ def log_time_elapsed_and_status(method):
     :return: Wrapped method.
     """
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         # pylint: disable=too-many-locals
         args[0].cluster.check_cluster_health()
         num_nodes_before = len(args[0].cluster.nodes)
@@ -1768,6 +1770,14 @@ def log_time_elapsed_and_status(method):
             'node': str(args[0].target_node),
             'type': 'end',
         }
+        # TODO: Temporary print. Will be removed
+        view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0])
+        table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
+                                                    name='blogposts_not_updated_lwt_indicator_expect')
+        if view_count and table_count and view_count != table_count:
+            args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
+                              'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
+
         try:
             result = method(*args, **kwargs)
         except UnsupportedNemesis as exp:
@@ -1805,6 +1815,13 @@ def log_time_elapsed_and_status(method):
             if num_nodes_before != num_nodes_after:
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                   (num_nodes_before, num_nodes_after))
+            # TODO: Temporary print. Will be removed
+            view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0])
+            table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
+                                                        name='blogposts_not_updated_lwt_indicator_expect')
+            if view_count and table_count and view_count != table_count:
+                args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
+                                  'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
         return result
 
     return wrapper

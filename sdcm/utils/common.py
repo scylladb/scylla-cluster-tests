@@ -20,6 +20,7 @@ import itertools
 import os
 import logging
 import random
+import re
 import socket
 import time
 import datetime
@@ -46,6 +47,7 @@ import boto3
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
+import yaml
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -85,6 +87,19 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
     assert _remote_get_hash(remoter, dst) == hash_expected
+
+
+def get_profile_content(stress_cmd):
+    cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
+    sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
+    if not os.path.exists(sct_cs_profile):
+        raise FileNotFoundError('User profile file {} not found'.format(sct_cs_profile))
+
+    cs_profile = sct_cs_profile
+
+    with open(cs_profile, 'r') as yaml_stream:
+        profile = yaml.safe_load(yaml_stream)
+    return cs_profile, profile
 
 
 def generate_random_string(length):
