@@ -19,13 +19,12 @@ import uuid
 import time
 import logging
 import concurrent.futures
-import yaml
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
-from sdcm.utils.common import FileFollowerThread, makedirs, generate_random_string
+from sdcm.utils.common import FileFollowerThread, makedirs, generate_random_string, get_profile_content
 from sdcm.sct_events import CassandraStressLogEvent, Severity
 
 LOGGER = logging.getLogger(__name__)
@@ -105,17 +104,10 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         # When using cassandra-stress with "user profile" the profile yaml should be provided
         if 'profile' in stress_cmd and not self.profile:
-            cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
-
             # support of using -profile in sct test-case yaml, assumes they exists data_dir
             # TODO: move those profile to their own directory
-            sct_cs_profile = os.path.join(os.path.dirname(__file__), '../', 'data_dir', os.path.basename(cs_profile))
-            if os.path.exists(sct_cs_profile):
-                cs_profile = sct_cs_profile
-
-            with open(cs_profile, 'r') as yaml_stream:
-                profile = yaml.safe_load(yaml_stream)
-                keyspace_name = profile['keyspace']
+            cs_profile, profile = get_profile_content(stress_cmd)
+            keyspace_name = profile['keyspace']
             self.profile = cs_profile
             self.keyspace_name = keyspace_name
 

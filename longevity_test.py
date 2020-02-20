@@ -103,6 +103,64 @@ class LongevityTest(ClusterTester):
                                                                              params['interval']))
         return params
 
+    def run_prepare_write_cmd(self):
+        # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
+        # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+        pre_create_schema = self.params.get('pre_create_schema', default=False)
+        keyspace_num = self.params.get('keyspace_num', default=1)
+        write_queue = list()
+        verify_queue = list()
+        if pre_create_schema:
+            self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
+                'scylla_encryption_options', None))
+
+        # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
+        # the loaders (round_robin).
+        if keyspace_num > 1 and self.params.get('round_robin'):
+            self.log.debug("Using round_robin for multiple Keyspaces...")
+            for i in range(1, keyspace_num + 1):
+                keyspace_name = self._get_keyspace_name(i)
+                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                               'keyspace_name': keyspace_name,
+                                                               'round_robin': True})
+        # Not using round_robin and all keyspaces will run on all loaders
+        else:
+            self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                           'keyspace_num': keyspace_num,
+                                                           'round_robin': self.params.get('round_robin')})
+
+        # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
+        # all keys were written succesfully
+        if self.params.get('nemesis_during_prepare'):
+            # Wait for some data (according to the param in the yaml) to be populated, for multi keyspace need to
+            # pay attention to the fact it checks only on keyspace1
+            self.db_cluster.wait_total_space_used_per_node(keyspace=None)
+            self.db_cluster.start_nemesis()
+
+        # Wait on the queue till all threads come back.
+        # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
+        for stress in write_queue:
+            self.verify_stress_thread(cs_thread_pool=stress)
+
+        # Run nodetool flush on all nodes to make sure nothing left in memory
+        # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
+        # side, but I don't think we should continue with this approach.
+        # If we decided to add this back in the future, we need to wrap it with try-except because it can run
+        # in parallel to nemesis and it will fail on one of the nodes.
+        # self._flush_all_nodes()
+
+        # In case we would like to verify all keys were written successfully before we start other stress / nemesis
+        prepare_verify_cmd = self.params.get('prepare_verify_cmd', default=None)
+        if prepare_verify_cmd:
+            self._run_all_stress_cmds(verify_queue, params={'stress_cmd': prepare_verify_cmd,
+                                                            'keyspace_num': keyspace_num})
+
+            for stress in verify_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
+
+        self.log.info('Prepare finished')
+
     def test_custom_time(self):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
@@ -112,14 +170,10 @@ class LongevityTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
         stress_queue = list()
-        write_queue = list()
-        verify_queue = list()
 
         # prepare write workload
         prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
         keyspace_num = self.params.get('keyspace_num', default=1)
-
-        pre_create_schema = self.params.get('pre_create_schema', default=False)
 
         alternator_port = self.params.get('alternator_port', default=None)
         if alternator_port:
@@ -128,55 +182,7 @@ class LongevityTest(ClusterTester):
             alternator_create_table(endpoint_url, test_params=self.params)
 
         if prepare_write_cmd:
-            # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
-            # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
-            if pre_create_schema:
-                self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
-                    'scylla_encryption_options', None))
-
-            # When the load is too heavy for one lader when using MULTI-KEYSPACES, the load is spreaded evenly across
-            # the loaders (round_robin).
-            if keyspace_num > 1 and self.params.get('round_robin'):
-                self.log.debug("Using round_robin for multiple Keyspaces...")
-                for i in range(1, keyspace_num + 1):
-                    keyspace_name = self._get_keyspace_name(i)
-                    self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                                   'keyspace_name': keyspace_name,
-                                                                   'round_robin': True})
-            # Not using round_robin and all keyspaces will run on all loaders
-            else:
-                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_num': keyspace_num,
-                                                               'round_robin': self.params.get('round_robin')})
-
-            # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
-            # all keys were written succesfully
-            if self.params.get('nemesis_during_prepare'):
-                # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
-                # pay attention to the fact it checks only on keyspace1
-                self.db_cluster.wait_total_space_used_per_node(keyspace=None)
-                self.db_cluster.start_nemesis()
-
-            # Wait on the queue till all threads come back.
-            # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
-            for stress in write_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
-
-            # Run nodetool flush on all nodes to make sure nothing left in memory
-            # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
-            # side, but I don't think we should continue with this approach.
-            # If we decided to add this back in the future, we need to wrap it with try-except because it can run
-            # in parallel to nemesis and it will fail on one of the nodes.
-            # self._flush_all_nodes()
-
-            # In case we would like to verify all keys were written successfully before we start other stress / nemesis
-            prepare_verify_cmd = self.params.get('prepare_verify_cmd', default=None)
-            if prepare_verify_cmd:
-                self._run_all_stress_cmds(verify_queue, params={'stress_cmd': prepare_verify_cmd,
-                                                                'keyspace_num': keyspace_num})
-
-                for stress in verify_queue:
-                    self.verify_stress_thread(cs_thread_pool=stress)
+            self.run_prepare_write_cmd()
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions', default=None)
