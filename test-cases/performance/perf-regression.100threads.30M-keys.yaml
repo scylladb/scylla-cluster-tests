@@ -16,6 +16,8 @@ instance_type_monitor: 't3.small'
 user_prefix: 'perf-regression'
 space_node_threshold: 644245094
 
+backtrace_decoding: false
+
 store_perf_results: true
 send_email: true
 email_recipients: ['qa@scylladb.com']

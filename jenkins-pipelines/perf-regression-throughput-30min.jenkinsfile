@@ -12,5 +12,5 @@ perfRegressionParallelPipeline(
     test_config: "test-cases/performance/perf-regression.100threads.30M-keys.yaml",
     sub_tests: ["test_write", "test_read", "test_mixed"],
 
-    timeout: [time: 300, unit: "MINUTES"]
+    timeout: [time: 350, unit: "MINUTES"]
 )
