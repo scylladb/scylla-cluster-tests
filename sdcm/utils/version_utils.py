@@ -5,6 +5,13 @@ from pkg_resources import parse_version
 from repodataParser.RepoParser import Parser
 
 
+# Examples of ScyllaDB version strings:
+#   - 666.development-0.20200205.2816404f575
+#   - 3.3.rc1-0.20200209.0d0c1d43188
+#   - 2019.1.4-0.20191217.b59e92dbd
+SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
+
+
 def get_branch_version(url):
     try:
         return get_branch_version_from_list(url)

@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 import itertools
-from typing import List
+from typing import List, Optional
 from textwrap import dedent
 from datetime import datetime
 import subprocess
@@ -48,10 +48,12 @@ from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_
 from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
+from sdcm.utils.version_utils import SCYLLA_VERSION_RE
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
+
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -1967,24 +1969,28 @@ server_encryption_options:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
         return result.exit_status == 0
 
-    def get_scylla_version(self):
-        version_commands = ["scylla --version", "rpm -q {}".format(self.scylla_pkg())]
-        for version_cmd in version_commands:
-            try:
-                result = self.remoter.run(version_cmd)
-                self.log.info("'scylla --version' output: %s", result.stdout)
-            except Exception as ex:  # pylint: disable=broad-except
-                self.log.error('Failed getting scylla version: %s', ex)
-            else:
-                match = re.match(r"((\d+)\.(\d+)\.([\d\w]+)\.?([\d\w]+)?).*", result.stdout)
-                if match:
-                    scylla_version = match.group(1)
-                    self.log.info("Found ScyllaDB version: %s", scylla_version)
-                    self.scylla_version = scylla_version
-                    return scylla_version
-                else:
-                    self.log.error("Unmatched ScyllaDB version, not caching it")
-        return None
+    def get_scylla_version(self) -> Optional[str]:
+        commands = ["scylla --version", ]
+
+        if self.distro.is_rhel_like:
+            commands.append(f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}")
+        else:
+            commands.append(f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}")
+
+        for cmd in commands:
+            result = self.remoter.run(cmd, ignore_status=True)
+            match = result.ok and SCYLLA_VERSION_RE.match(result.stdout)
+            if match:
+                self.scylla_version = match.group().replace("~", ".")
+                self.log.info("Found ScyllaDB version: %s", self.scylla_version)
+                break
+            self.log.debug("Unable to get or parse ScyllaDB version using `%s':\n%s\n%s",
+                           cmd, result.stdout, result.stderr)
+        else:
+            self.log.warning("All attempts to get ScyllaDB version failed. Looks like there is no ScyllaDB installed.")
+            self.scylla_version = None
+
+        return self.scylla_version
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
