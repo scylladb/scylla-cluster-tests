@@ -210,6 +210,8 @@ class StartupTestEvent(SystemEvent):
 
 
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+    __test__ = False  # Mark this class to be not collected by pytest.
+
     def __init__(self, source, source_method,  # pylint: disable=redefined-builtin,too-many-arguments
                  exception=None, message=None, args=None, kwargs=None, severity=None):
         super().__init__()
@@ -649,6 +651,8 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
 
 
 class TestKiller(Process):
+    __test__ = False  # Mark this class to be not collected by pytest.
+
     def __init__(self, timeout_before_kill=2, test_callback=None):
         super(TestKiller, self).__init__()
         self._test_pid = os.getpid()
