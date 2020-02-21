@@ -556,13 +556,16 @@ class ParallelObjectException(Exception):
         return ex_str
 
 
-def clean_cloud_instances(tags_dict):
+def clean_cloud_resources(tags_dict):
     """
     Remove all instances with specific tags from both AWS/GCE
 
     :param tags_dict: a dict of the tag to select the instances,e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
+    if "TestId" not in tags_dict or "RunByUser" not in tags_dict:
+        LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
+        return
     clean_instances_aws(tags_dict)
     clean_elastic_ips_aws(tags_dict)
     clean_instances_gce(tags_dict)
@@ -1486,84 +1489,40 @@ def get_builder_by_test_id(test_id):
 
 def get_post_behavior_actions(config):
     action_per_type = {
-        "db_nodes": None,
-        "monitor_nodes": None,
-        "loader_nodes": None
+        "db_nodes": {"NodeType": "scylla-db", "action": None},
+        "monitor_nodes": {"NodeType": "monitor", "action": None},
+        "loader_nodes": {"NodeType": "loader", "action": None},
     }
 
     for key in action_per_type:
         config_key = 'post_behavior_{}'.format(key)
-        action_per_type[key] = config.get(config_key)
+        action_per_type[key]["action"] = config.get(config_key)
 
     return action_per_type
 
 
-def clean_aws_instances_according_post_behavior(params, config, logdir):  # pylint: disable=invalid-name
-
-    status = get_testrun_status(params.get('TestId'), logdir)
-
-    def apply_action(instances, action):
-        if action == 'destroy':
-            instances_ids = [instance['InstanceId'] for instance in instances]
-            if not instances_ids:
-                LOGGER.warning("No InstanceId found for termination")
-                return
-            LOGGER.info('Clean next instances %s', instances_ids)
-            try:
-                client.terminate_instances(InstanceIds=instances_ids)
-            except Exception as details:  # pylint: disable=broad-except
-                LOGGER.error("Error during instance termination: %s", details)
-        elif action == 'keep-on-failure':
-            if status:
-                LOGGER.info('Run failed. Leave instances running')
-            else:
-                LOGGER.info('Run was Successful. Killing nodes')
-                apply_action(instances, action='destroy')
-        elif action == 'keep':
-            LOGGER.info('Leave instances running')
-        else:
-            LOGGER.warning('Unsupported action %s', action)
-
-    aws_instances = list_instances_aws(params, group_as_region=True)
-    for region, instances in aws_instances.items():
-        if not instances:
-            continue
-        client = boto3.client("ec2", region_name=region)
-        filtered_instances = filter_aws_instances_by_type(instances)
-        actions_per_type = get_post_behavior_actions(config)
-
-        for instance_set_type, action in actions_per_type.items():
-            LOGGER.info('Apply action "%s" for %s instances', action, instance_set_type)
-            apply_action(filtered_instances[instance_set_type], action)
-
-
-def clean_gce_instances_according_post_behavior(params, config, logdir):  # pylint: disable=invalid-name
-
-    status = get_testrun_status(params.get('TestId'), logdir)
-
-    def apply_action(instances, action):
-        if action == 'destroy':
-            for instance in instances:
-                LOGGER.info('Destroying instance: %s', instance.name)
-                instance.destroy()
-                LOGGER.info('Destroyed instance: %s', instance.name)
-        elif action == 'keep-on-failure':
-            if status:
-                LOGGER.info('Run failed. Leave instances running')
-            else:
-                LOGGER.info('Run wasSuccessful. Killing nodes')
-                apply_action(instances, action='destroy')
-        elif action == 'keep':
-            LOGGER.info('Leave instances runing')
-        else:
-            LOGGER.warning('Unsupported action %s', action)
-
-    gce_instances = list_instances_gce(params)
-    filtered_instances = filter_gce_instances_by_type(gce_instances)
+def clean_resources_according_post_behavior(params, config, logdir):
+    success = get_testrun_status(params.get('TestId'), logdir)
     actions_per_type = get_post_behavior_actions(config)
-
-    for instance_set_type, action in actions_per_type.items():
-        apply_action(filtered_instances[instance_set_type], action)
+    LOGGER.debug(actions_per_type)
+    for cluster_nodes_type, action_type in actions_per_type.items():
+        if action_type["action"] == "keep":
+            LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
+        elif action_type["action"] == "destroy":
+            params["NodeType"] = action_type["NodeType"]
+            LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
+            clean_cloud_resources(params)
+            continue
+        elif action_type["action"] == "keep-on-failure" and not success:
+            params["NodeType"] = action_type["NodeType"]
+            LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
+                        action_type["action"], cluster_nodes_type)
+            clean_cloud_resources(params)
+            continue
+        else:
+            LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
+                        action_type["action"], cluster_nodes_type)
+            continue
 
 
 def search_test_id_in_latest(logdir):
