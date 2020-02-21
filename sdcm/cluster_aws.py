@@ -413,7 +413,7 @@ class AWSNode(cluster.BaseNode):
                           'key_file': credentials.key_file}
         if len(self._instance.network_interfaces) == 2:
             # first we need to configure the both networks so we'll have public ip
-            self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx)
+            self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx, node_type)
 
         self._wait_public_ip()
         super(AWSNode, self).__init__(name=name,
@@ -529,7 +529,7 @@ class AWSNode(cluster.BaseNode):
     def _refresh_instance_state(self):
         raise NotImplementedError()
 
-    def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx):
+    def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx, node_type=None):
         primary_interface = [
             interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
         if primary_interface.association_attribute is None:
@@ -538,12 +538,14 @@ class AWSNode(cluster.BaseNode):
             response = client.allocate_address(Domain='vpc')
 
             self.eip_allocation_id = response['AllocationId']
-
+            tags_list = create_tags_list()
+            if node_type:
+                tags_list.append({'Key': 'NodeType', 'Value': node_type})
             client.create_tags(
                 Resources=[
                     self.eip_allocation_id
                 ],
-                Tags=create_tags_list()
+                Tags=tags_list
             )
             client.associate_address(
                 AllocationId=self.eip_allocation_id,

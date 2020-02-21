@@ -12,12 +12,11 @@ from prettytable import PrettyTable
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_monitor import cloud_report
-from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_instances,
+from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_resources,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
-                               clean_aws_instances_according_post_behavior,
-                               clean_gce_instances_according_post_behavior,
+                               clean_resources_according_post_behavior,
                                search_test_id_in_latest, get_testrun_dir)
 from sdcm.utils.monitorstack import restore_monitor_stack
 from sdcm.cluster import Setup
@@ -75,9 +74,8 @@ def provision(**kwargs):
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.option('--logdir', type=str, help='directory with test run')
 @click.option('--config-file', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
-@click.option('--backend', type=str, help="")
 @click.pass_context
-def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint: disable=too-many-arguments,too-many-branches
+def clean_resources(ctx, user, test_id, logdir, config_file):  # pylint: disable=too-many-arguments,too-many-branches
     params = dict()
 
     if config_file or logdir:
@@ -92,11 +90,9 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
             click.echo(clean_resources.get_help(ctx))
             return
 
-        if not backend:
-            backend = "aws"
-
-        if not os.environ.get('SCT_CLUSTER_BACKEND', None):
-            os.environ['SCT_CLUSTER_BACKEND'] = backend
+        # need to pass SCTConfigration verification,
+        # but not affect on result
+        os.environ['SCT_CLUSTER_BACKEND'] = "aws"
 
         if config_file:
             os.environ['SCT_CONFIG_FILES'] = str(list(config_file))
@@ -105,11 +101,8 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
 
         for _test_id in test_id:
             params['TestId'] = _test_id
-            if 'aws' in backend:
-                clean_aws_instances_according_post_behavior(params, config, logdir)
-            if 'gce' in backend:
-                clean_gce_instances_according_post_behavior(params, config, logdir)
 
+            clean_resources_according_post_behavior(params, config, logdir)
     else:
         if not (user or test_id):
             click.echo(clean_resources.get_help(ctx))
@@ -121,10 +114,10 @@ def clean_resources(ctx, user, test_id, logdir, config_file, backend):  # pylint
         if test_id:
             for _test_id in test_id:
                 params['TestId'] = _test_id
-                clean_cloud_instances(params)
+                clean_cloud_resources(params)
                 click.echo('cleaned instances for {}'.format(params))
         else:
-            clean_cloud_instances(params)
+            clean_cloud_resources(params)
             click.echo('cleaned instances for {}'.format(params))
 
 
