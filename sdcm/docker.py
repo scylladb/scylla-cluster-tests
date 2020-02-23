@@ -157,7 +157,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     @staticmethod
     def _clean_old_images():
-        _cmd('docker system prune --volumes -f')
+        _cmd('system prune --volumes -f')
 
     def _update_image(self):
         LOGGER.debug('update scylla image')
@@ -336,6 +336,7 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
                                                    node_prefix=node_prefix,
                                                    dc_idx=dc_idx)
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
+        self._grafana_address = None
 
     def _init_remoter(self, ssh_login_info):  # pylint: disable=no-self-use
         self.remoter = LOCALRUNNER
@@ -353,6 +354,31 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
     def _refresh_instance_state(self):
         return ["127.0.0.1"], ["127.0.0.1"]
+
+    @property
+    def grafana_address(self):
+        """
+        the communication address for usage between the test and grafana server
+        :return:
+        """
+        # Under docker grafana is starting in port mapping mode and have no dedicated ip address
+        # because this address is going to be used by RemoteWebDriver from RemoteWebDriverContainer
+        # we can't provide 127.0.0.1 to it
+        # Solution here is to get provide gateway from bridge network, since port mapping works on that ip address too.
+
+        if self._grafana_address is not None:
+            return self._grafana_address
+        result = self.remoter.run(
+            "docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge",
+            ignore_status=True
+        )
+        if result.exit_status == 0 and result.stdout:
+            address = result.stdout.splitlines()[0]
+            match = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", address)
+            if match:
+                self._grafana_address = match.group()
+                return address
+        return None
 
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method

@@ -34,6 +34,7 @@ class CollectingNode():  # pylint: disable=too-few-public-methods
         self.ssh_login_info = ssh_login_info
         self._instance = instance
         self.external_address = global_ip
+        self.grafana_address = global_ip
 
 
 class PrometheusSnapshotErrorException(Exception):
@@ -242,7 +243,7 @@ class MonitoringStack(BaseLogEntity):
             return ""
         archive_name = "monitoring_data_stack_{monitor_branch}_{monitor_version}.tar.gz".format(**locals())
 
-        annotations_json = self.get_grafana_annotations(node)
+        annotations_json = self.get_grafana_annotations(node.grafana_address)
         tmp_dir = tempfile.mkdtemp()
         with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:  # pylint: disable=invalid-name
             f.write(annotations_json)
@@ -276,11 +277,11 @@ class MonitoringStack(BaseLogEntity):
             scylla_version = "None"
         return name, monitor_version, scylla_version
 
-    def get_grafana_annotations(self, node):  # pylint: disable=inconsistent-return-statements
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+    def get_grafana_annotations(self, grafana_ip):  # pylint: disable=inconsistent-return-statements
+        annotations_url = "http://{grafana_ip}:{grafana_port}/api/annotations"
         try:
             res = requests.get(annotations_url.format(
-                node_ip=node.external_address, grafana_port=self.grafana_port))
+                grafana_ip=grafana_ip, grafana_port=self.grafana_port))
             if res.ok:
                 return res.text
         except Exception as ex:  # pylint: disable=broad-except
@@ -288,7 +289,7 @@ class MonitoringStack(BaseLogEntity):
             return ""
 
     @staticmethod
-    def dashboard_exists(node, uid):
+    def dashboard_exists(grafana_ip, uid):
         """Check on Grafana server, that dashboard exists
 
         Send request to Grafana and validate that dashboard with uid
@@ -301,9 +302,9 @@ class MonitoringStack(BaseLogEntity):
         Returns:
             bool -- return True if exists, false otherwise
         """
-        checked_dashboard_url = "http://{node_ip}:{grafana_port}/api/dashboards/db/{uid}"
+        checked_dashboard_url = "http://{grafana_ip}:{grafana_port}/api/dashboards/db/{uid}"
         try:
-            res = requests.get(checked_dashboard_url.format(node_ip=node.external_address,
+            res = requests.get(checked_dashboard_url.format(grafana_ip=grafana_ip,
                                                             grafana_port=MonitoringStack.grafana_port,
                                                             uid=uid))
             return bool(res.ok and res.json())
@@ -381,7 +382,7 @@ class GrafanaScreenShot(GrafanaEntity):
                 webdriver_container.run()
             remote_browser = RemoteBrowser(webdriver_container)
             for screenshot in self.grafana_entity_names:
-                dashboard_exists = MonitoringStack.dashboard_exists(node,
+                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
                                                                     uid="-".join([screenshot['name'],
                                                                                   version])
                                                                     )
@@ -392,7 +393,7 @@ class GrafanaScreenShot(GrafanaEntity):
                     version=version,
                     dashboard_name=screenshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=node.external_address,
+                    node_ip=node.grafana_address,
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
@@ -475,7 +476,7 @@ class GrafanaSnapshot(GrafanaEntity):
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
-                dashboard_exists = MonitoringStack.dashboard_exists(node,
+                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
                                                                     uid="-".join([snapshot['name'],
                                                                                   version])
                                                                     )
@@ -486,7 +487,7 @@ class GrafanaSnapshot(GrafanaEntity):
                     version=version,
                     dashboard_name=snapshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=node.external_address,
+                    node_ip=node.grafana_address,
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
