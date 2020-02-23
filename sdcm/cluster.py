@@ -682,6 +682,14 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             return self.private_ip_address
 
     @property
+    def grafana_address(self):
+        """
+        the communication address for usage between the test and grafana server
+        :return:
+        """
+        return self.external_address
+
+    @property
     def is_spot(self):
         return False
 
