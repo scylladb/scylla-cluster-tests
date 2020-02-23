@@ -894,12 +894,23 @@ class FileFollowerThread():
         return FileFollowerIterator(filename, self)
 
 
-class ScyllaCQLSession():
+class ScyllaCQLSession:
     def __init__(self, session, cluster):
         self.session = session
         self.cluster = cluster
 
     def __enter__(self):
+        execute_orig = self.session.execute
+
+        def execute_verbose(*args, **kwargs):
+            if args:
+                query = args[0]
+            else:
+                query = kwargs.get("query")
+            LOGGER.debug(f"Executing CQL '{query}'...")
+            return execute_orig(*args, **kwargs)
+
+        self.session.execute = execute_verbose
         return self.session
 
     def __exit__(self, exc_type, exc_val, exc_tb):
