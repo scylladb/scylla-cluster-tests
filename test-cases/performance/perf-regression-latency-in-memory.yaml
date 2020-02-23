@@ -28,3 +28,4 @@ append_scylla_args: "--in-memory-storage-size-mb 80000 --blocked-reactor-notify-
 store_perf_results: true
 send_email: true
 email_recipients: ['qa@scylladb.com', 'rnd-internal@scylladb.com']
+backtrace_decoding: false
