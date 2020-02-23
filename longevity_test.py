@@ -148,7 +148,8 @@ class LongevityTest(ClusterTester):
             # Not using round_robin and all keyspaces will run on all loaders
             else:
                 self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_num': keyspace_num})
+                                                               'keyspace_num': keyspace_num,
+                                                               'round_robin': self.params.get('round_robin')})
 
             # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
             # all keys were written succesfully
