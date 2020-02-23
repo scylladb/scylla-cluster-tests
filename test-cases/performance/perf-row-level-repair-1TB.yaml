@@ -24,3 +24,5 @@ append_scylla_args: '--blocked-reactor-notify-ms 50'
 
 store_perf_results: true
 send_email: 'true'
+
+backtrace_decoding: false
