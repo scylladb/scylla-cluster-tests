@@ -2,10 +2,11 @@ import json
 
 import boto3
 
+
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
 
-class KeyStore():
+class KeyStore:
     def __init__(self):
         self.s3 = boto3.resource("s3")
 
@@ -36,3 +37,6 @@ class KeyStore():
     def get_qa_ssh_keys(self):
         # TODO
         pass
+
+    def get_housekeeping_db_credentials(self):
+        return self._get_json("housekeeping-db.json")

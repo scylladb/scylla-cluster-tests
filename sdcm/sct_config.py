@@ -1183,8 +1183,8 @@ class SCTConfiguration(dict):
         assert seeds_num > 0, "Seed number should be at least one"
 
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
-        assert seeds_num <= num_of_db_nodes, 'Seeds number ({}) should be not more then nodes number ({})'. \
-            format(seeds_num, num_of_db_nodes)
+        assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, \
+            f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
 
         partition_range_with_data_validation = self.get('partition_range_with_data_validation')
         if partition_range_with_data_validation:

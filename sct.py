@@ -461,9 +461,8 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, email_recipients=None, logdir=None):
-    from sdcm.send_email import (GeminiEmailReporter, LongevityEmailReporter, UpgradeEmailReporter,
-                                 ArtifactsEmailReporter, get_running_instances_for_email_report,
-                                 read_email_data_from_file)
+    from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
+
     if not email_recipients:
         LOGGER.warning("No email recipients. Email will not be sent")
         return
@@ -478,26 +477,13 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
         LOGGER.warning("File with email results data not found")
         return
 
-    reporter = test_results.get('reporter')
     email_recipients = email_recipients.split(',')
-    if not reporter:
-        LOGGER.warning("No reporter found")
-    else:
+    reporter = build_reporter(test_results.get("reporter", ""), email_recipients, testrun_dir)
+    if reporter:
         test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
-        if "Gemini" in reporter:
-            reporter = GeminiEmailReporter(email_recipients, logdir=testrun_dir)
-            reporter.send_report(test_results)
-        elif "Longevity" in reporter:
-            reporter = LongevityEmailReporter(email_recipients, logdir=testrun_dir)
-            reporter.send_report(test_results)
-        elif "Upgrade" in reporter:
-            reporter = UpgradeEmailReporter(email_recipients, logdir=testrun_dir)
-            reporter.send_report(test_results)
-        elif "Artifacts" in reporter:
-            reporter = ArtifactsEmailReporter(email_recipients, logdir=testrun_dir)
-            reporter.send_report(test_results)
-        else:
-            LOGGER.warning("No reporter found")
+        reporter.send_report(test_results)
+    else:
+        LOGGER.warning("No reporter found")
 
 
 if __name__ == '__main__':
