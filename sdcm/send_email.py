@@ -3,6 +3,7 @@ import os.path
 import logging
 import tempfile
 import json
+from typing import Optional, Sequence
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -208,8 +209,9 @@ class BaseEmailReporter():
                 '<html><body>Report was not sent due to the size limitation</body></html>')
         return self.build_report(report_data)
 
-    def build_report(self, report_data, template_str=None):
-        return self.render_to_html(report_data, template_str=None)
+    def build_report(self, report_data):
+        self.log.info("Prepare result to send in email")
+        return self.render_to_html(report_data)
 
     def build_report_attachments(self, attachments_data, template_str=None):
         return ()
@@ -241,9 +243,9 @@ class LongevityEmailReporter(BaseEmailReporter):
             return report_data, None
         return None, None
 
-    def build_report(self, report_data, template_str=None):
+    def build_report(self, report_data):
         report_data['short_report'] = True
-        return self.render_to_html(report_data, template_str)
+        return super().build_report(report_data)
 
     def build_report_attachments(self, attachments_data, template_str=None):
         report_file = os.path.join(self.logdir, 'email_report.html')
@@ -264,11 +266,6 @@ class GeminiEmailReporter(BaseEmailReporter):
               'build_url', 'nemesis_name', 'nemesis_details',
               'test_id', 'nodes', 'events_summary']
 
-    def build_report(self, report_data, template_str=None):
-        self.log.info('Prepare result to send in email')
-        html = self.render_to_html(report_data, template_str)
-        return html
-
 
 class UpgradeEmailReporter(BaseEmailReporter):
 
@@ -279,11 +276,6 @@ class UpgradeEmailReporter(BaseEmailReporter):
               'start_time', 'end_time', 'username',
               'build_url', 'test_id', 'nodes', 'events_summary']
 
-    def build_report(self, report_data, template_str=None):
-        self.log.info('Prepare result to send in email')
-        html = self.render_to_html(report_data, template_str)
-        return html
-
 
 class ArtifactsEmailReporter(BaseEmailReporter):
 
@@ -293,30 +285,29 @@ class ArtifactsEmailReporter(BaseEmailReporter):
               "scylla_node_image", "region_name", "scylla_packages_installed",
               "test_id", "events_summary", "nodes", "backend", ]
 
-    def build_report(self, report_data, template_str=None):
-        self.log.info("Prepare result to send in email")
-        html = self.render_to_html(report_data, template_str)
-        return html
+
+class PrivateRepoEmailReporter(BaseEmailReporter):
+
+    email_template_file = "results_private_repo.html"
+    fields = ["subject", "username", "test_status", "test_name", "start_time",
+              "end_time", "build_url", "scylla_repo", "test_id", "events_summary",
+              "repo_uuid", "repo_ostype", ]
 
 
-def build_reporter(tester):
-    """Build reporter
+def build_reporter(name: str,
+                   email_recipients: Sequence[str] = (),
+                   logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
 
-    [description]
-
-    Arguments:
-        tester {ClusterTester} -- instance of ClusterTester for currrent test
-    """
-    email_recipients = tester.params.get('email_recipients', default=None)
-    logdir = tester.logdir
-    if "Gemini" in tester.__class__.__name__:
+    if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in tester.__class__.__name__:
+    elif "Longevity" in name:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Upgrade" in tester.__class__.__name__:
+    elif "Upgrade" in name:
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Artifacts" in tester.__class__.__name__:
+    elif "Artifacts" in name:
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "PrivateRepo" in name:
+        return PrivateRepoEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

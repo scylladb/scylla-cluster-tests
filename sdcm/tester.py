@@ -187,7 +187,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
-        self.email_reporter = build_reporter(self)
+        self.email_reporter = build_reporter(self.__class__.__name__,
+                                             self.params.get('email_recipients', default=()),
+                                             self.logdir)
         self.start_time = time.time()
 
         if self.params.get("logs_transport") == 'rsyslog':
@@ -253,7 +255,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             self.init_resources()
 
-            self.init_nodes(db_cluster=self.db_cluster)
+            if self.db_cluster.nodes:
+                self.init_nodes(db_cluster=self.db_cluster)
+                self.set_system_auth_rf()
+                db_node_address = self.db_cluster.nodes[0].ip_address
+                self.loaders.wait_for_init(db_node_address=db_node_address)
 
             # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
             if self.cs_db_cluster:
@@ -264,12 +270,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 # sync test_start_time with ES
                 self.start_time = self.get_test_start_time()
 
-            self.set_system_auth_rf()
-
-            db_node_address = self.db_cluster.nodes[0].ip_address
-            self.loaders.wait_for_init(db_node_address=db_node_address)
-
-            if self.params.get("use_mgmt", default=None):
+            if self.db_cluster.nodes and self.params.get("use_mgmt", default=None):
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
                 pkg_path = None
                 if pkgs_url:

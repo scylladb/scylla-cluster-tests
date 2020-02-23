@@ -2,6 +2,8 @@
 
 Artifacts tests are kind of smoke tests which verify that packaging artifacts like .rpm/.deb files, cloud or container images produced by ScyllaDB builds can be deployed successfully.
 
+Private repo test is also kind of artifacts test.
+
 # Jenkins pipelines
 
 Artifacts tests triggered by another projects which build .rpm's and .deb's. E.g., tests for CentOS triggered by `centos-rpm` project.
@@ -20,7 +22,8 @@ jenkins-pipelines
 |-- artifacts-docker.jenkinsfile
 |-- artifacts-oel76.jenkinsfile
 |-- artifacts-ubuntu1604.jenkinsfile
-`-- artifacts-ubuntu1804.jenkinsfile
+|-- artifacts-ubuntu1804.jenkinsfile
+`-- private-repo.jenkinsfile
 ```
 
 `vars/artifactsPipeline.groovy` is a pipeline call definition which used to run same pipeline with different parameters.
@@ -33,6 +36,8 @@ You should use different parameters for .rpm/.deb tests and for AMI test:
 Optionally, you can override default cloud instance type by providing `instance_type` parameter.
 
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.
+
+`private-repo.jenkinsfile` can be used to create a Jenkins project which verifies private repo correctness. You need to provide `scylla_repo` parameter which points to a private repo.
 
 # How to run artifacts tests using `hydra`
 
@@ -99,7 +104,15 @@ hydra list-ami-versions -r us-east-1
 and run the test:
 
 ```sh
-SCT_AMI_ID_DB_SCYLLA=<ami you've found> SCT_REGION_NAME=us-east-1 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
+SCT_AMI_ID_DB_SCYLLA="<ami you've found>" SCT_REGION_NAME=us-east-1 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
+```
+
+# How to run private repo test using `hydra`
+
+Note, that this test doesn't create any node, but `hydra` required `--backend` parameter. Use `gce` for this parameter.
+
+```sh
+SCT_SCYLLA_REPO="<URL to private repo to verify>" hydra run-test private_repo_test --backend gce --config test-cases/private-repo/private-repo.yaml
 ```
 
 ## Docker
