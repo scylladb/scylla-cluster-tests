@@ -67,6 +67,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('scylla_repo_m', '')}",
                    description: 'backend scylla repo for manager',
                    name: 'scylla_repo_m')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
+                   description: 'Url to the scylla manager packages',
+                   name: 'scylla_mgmt_pkg')
         }
         options {
             timestamps()
@@ -148,6 +152,10 @@ def call(Map pipelineParams) {
 
                                     if [[ ! -z "${params.scylla_repo_m}" ]] ; then
                                         export SCT_SCYLLA_REPO_M="${params.scylla_repo_m}"
+                                    fi
+
+                                    if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then
+                                        export SCT_SCYLLA_MGMT_PKG="${params.scylla_mgmt_pkg}"
                                     fi
 
                                     echo "start test ......."
