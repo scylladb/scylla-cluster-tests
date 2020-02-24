@@ -44,7 +44,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation
+    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation, cached_property
 from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
@@ -363,7 +363,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._init_system = None
         self.db_init_finished = False
 
-        self._distro = None
         self._short_hostname = None
         self._alert_manager = None
 
@@ -469,12 +468,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         with self.lock:
             self._running_nemesis = nemesis
 
-    @property
+    @cached_property
     def distro(self):
-        if not self._distro:
-            self.log.info("Trying to detect Linux distribution...")
-            self._distro = Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True).stdout)
-        return self._distro
+        self.log.info("Trying to detect Linux distribution...")
+        return Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True).stdout)
 
     @property
     def is_client_encrypt(self):
