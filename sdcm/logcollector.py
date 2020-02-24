@@ -1,3 +1,4 @@
+#  pylint: disable=too-many-lines
 import datetime
 import io
 import logging
@@ -8,7 +9,6 @@ import time
 import zipfile
 import fnmatch
 import traceback
-
 import requests
 
 from selenium.webdriver.support.ui import WebDriverWait
@@ -20,21 +20,29 @@ from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                makedirs, filter_gce_instances_by_type, get_sct_root_path)
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.remote import RemoteCmdRunner
+from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer, RemoteBrowser
+from sdcm.utils.docker import get_docker_bridge_gateway
+
 
 LOGGER = logging.getLogger(__name__)
 
 
 class CollectingNode():  # pylint: disable=too-few-public-methods
 
-    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None):
+    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None):  # pylint: disable=too-many-arguments
         self.name = name
-        self.remoter = RemoteCmdRunner(**ssh_login_info) if ssh_login_info else None
+        if ssh_login_info is None:
+            self.remoter = LocalCmdRunner()
+        else:
+            self.remoter = RemoteCmdRunner(**ssh_login_info)
         self.ssh_login_info = ssh_login_info
         self._instance = instance
         self.external_address = global_ip
-        self.grafana_address = global_ip
+        if grafana_ip is None:
+            self.grafana_address = global_ip
+        else:
+            self.grafana_address = grafana_ip
 
 
 class PrometheusSnapshotErrorException(Exception):
@@ -69,18 +77,15 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        if not node.remoter:
+        if not node.remoter or remote_dst is None:
             return None
 
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
-        archive_logfile = LogCollector.archive_log_remotely(node=node,
-                                                            log_filename=remote_logfile)
-        local_logfile = LogCollector.receive_log(node=node,
-                                                 remote_log_path=archive_logfile,
-                                                 local_dir=local_dst)
-        return local_logfile
+        archive_logfile = LogCollector.archive_log_remotely(node=node, log_filename=remote_logfile)
+        LogCollector.receive_log(node=node, remote_log_path=archive_logfile, local_dir=local_dst)
+        return os.path.join(local_dst, os.path.basename(archive_logfile))
 
 
 class FileLog(CommandLog):
@@ -207,10 +212,11 @@ class PrometheusSnapshots(BaseLogEntity):
         """
         self.setup_monitor_data_dir(node)
         remote_snapshot_archive = self.get_prometheus_snapshot_remote(node)
-        local_archive_path = LogCollector.receive_log(node,
-                                                      remote_log_path=remote_snapshot_archive,
-                                                      local_dir=local_dst)
-        return local_archive_path
+        LogCollector.receive_log(
+            node,
+            remote_log_path=remote_snapshot_archive,
+            local_dir=local_dst)
+        return os.path.join(local_dst, os.path.basename(remote_snapshot_archive))
 
 
 class MonitoringStack(BaseLogEntity):
@@ -369,6 +375,7 @@ class GrafanaScreenShot(GrafanaEntity):
         GrafanaEntity
     """
 
+    @retrying(n=5)
     def get_grafana_screenshot(self, node, local_dst):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
@@ -463,6 +470,7 @@ class GrafanaSnapshot(GrafanaEntity):
         LOGGER.debug(snapshot_link_element.text)
         return snapshot_link_element.text
 
+    @retrying(n=5)
     def get_grafana_snapshot(self, node):
         """
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
@@ -616,14 +624,16 @@ class LogCollector:
                 except Exception as details:  # pylint: disable=unused-variable, broad-except
                     LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
 
-        if self.nodes:
-            try:
-                workers_number = int(len(self.nodes) / 2)
-                workers_number = len(self.nodes) if workers_number < 2 else workers_number
-                ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(
-                    collect_logs_per_node, ignore_exceptions=True)
-            except Exception as details:  # pylint: disable=broad-except
-                LOGGER.error('Error occured during collecting logs %s', details)
+        if not self.nodes:
+            LOGGER.warning(f'No nodes found for in {self.cluster_log_type} cluster')
+            return None
+        try:
+            workers_number = int(len(self.nodes) / 2)
+            workers_number = len(self.nodes) if workers_number < 2 else workers_number
+            ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(
+                collect_logs_per_node, ignore_exceptions=True)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error('Error occured during collecting logs %s', details)
 
         if not os.listdir(self.local_dir):
             LOGGER.warning('Directory %s is empty', self.local_dir)
@@ -937,11 +947,11 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0]))
-        for instance in filtered_instances['monitor_nodes']:
-            self.monitor_set.append(CollectingNode(name=instance.name,
-                                                   ssh_login_info=None,
-                                                   instance=instance,
-                                                   global_ip=instance.public_ips[0]))
+        self.monitor_set.append(CollectingNode(
+            name=f"monitor-node-{self.test_id}-0",
+            global_ip='127.0.0.1',
+            grafana_ip=get_docker_bridge_gateway(LocalCmdRunner())
+        ))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={

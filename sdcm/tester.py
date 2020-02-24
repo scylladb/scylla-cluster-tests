@@ -39,7 +39,7 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 from sdcm.keystore import KeyStore
-from sdcm import cluster, nemesis, docker, cluster_baremetal, db_stats, wait
+from sdcm import cluster, nemesis, cluster_docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
 from sdcm.cluster import UserRemoteCredentials
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -615,14 +615,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             credentials=self.credentials,
             params=self.params
         )
-        self.db_cluster = docker.ScyllaDockerCluster(**params)
+        self.db_cluster = cluster_docker.ScyllaDockerCluster(**params)
 
         params['n_nodes'] = int(self.params.get('n_loaders'))
-        self.loaders = docker.LoaderSetDocker(**params)
+        self.loaders = cluster_docker.LoaderSetDocker(**params)
 
         params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
         params['targets'] = dict(db_cluster=self.db_cluster, loaders=self.loaders)
-        self.monitors = docker.MonitorSetDocker(**params)
+        self.monitors = cluster_docker.MonitorSetDocker(**params)
 
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches

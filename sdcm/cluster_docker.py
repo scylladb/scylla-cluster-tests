@@ -4,12 +4,12 @@ import time
 import logging
 import os
 import types
-import tempfile
 
 from sdcm import cluster
 from sdcm.utils.common import retrying
 from sdcm.remote import LocalCmdRunner
 from sdcm.log import SDCMAdapter
+from sdcm.utils.docker import get_docker_bridge_gateway
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
@@ -102,12 +102,8 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
     def restart(self, timeout=30):  # pylint: disable=arguments-differ
         _docker('restart {}'.format(self.name), timeout=timeout)
 
-    def stop(self, timeout=30):
-        _docker('stop {}'.format(self.name), timeout=timeout)
-
     @retrying(n=5, sleep_time=1)
     def destroy(self, force=True):  # pylint: disable=arguments-differ
-        self.stop()
         force_param = '-f' if force else ''
         _docker('rm {} -v {}'.format(force_param, self.name))
 
@@ -163,6 +159,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         super(DockerCluster, self).__init__(node_prefix=self._node_prefix,
                                             n_nodes=kwargs.get('n_nodes'),
                                             params=kwargs.get('params'),
+                                            cluster_prefix=kwargs.get('cluster_prefix'),
                                             region_names=["localhost-dc"])  # no multi dc currently supported
 
     @property
@@ -193,7 +190,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def _create_container(self, node_name, is_seed=False, seed_ip=None):
         labels = f"--label 'test_id={cluster.Setup.test_id()}'"
-        cmd = f'run --cpus="1" --name {node_name} {labels} -d {self._node_img_tag}'
+        cmd = f'run --cpus="1" -h "{node_name}" --name "{node_name}" {labels} -d {self._node_img_tag}'
         if not is_seed and seed_ip:
             cmd = f'{cmd} --seeds="{seed_ip}"'
         _docker(cmd, timeout=30)
@@ -405,17 +402,8 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
 
         if self._grafana_address is not None:
             return self._grafana_address
-        result = self.remoter.run(
-            "docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge",
-            ignore_status=True
-        )
-        if result.exit_status == 0 and result.stdout:
-            address = result.stdout.splitlines()[0]
-            match = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", address)
-            if match:
-                self._grafana_address = match.group()
-                return address
-        return None
+        self._grafana_address = get_docker_bridge_gateway(self.remoter)
+        return self._grafana_address
 
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
@@ -455,12 +443,6 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         # since running local, don't install anything, just the monitor
         pass
 
-    @property
-    def monitor_install_path_base(self):
-        if not self._monitor_install_path_base:
-            self._monitor_install_path_base = tempfile.mkdtemp(prefix='scylla-monitoring')
-        return self._monitor_install_path_base
-
     def _create_node(self, node_name):
         return DockerMonitoringNode(name=node_name,
                                     parent_cluster=self,
@@ -469,3 +451,21 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
 
     def get_backtraces(self):
         pass
+
+    def destroy(self):
+        for node in self.nodes:
+            try:
+                self.stop_selenium_remote_webdriver(node)
+                self.log.error(f"Stopping Selenium WebDriver succeded")
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error(f"Stopping Selenium WebDriver failed with {str(exc)}")
+            try:
+                self.stop_scylla_monitoring(node)
+                self.log.error(f"Stopping scylla monitoring succeeded")
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error(f"Stopping scylla monitoring failed with {str(exc)}")
+            try:
+                node.remoter.run(f"sudo rm -rf '{self._monitor_install_path_base}'")
+                self.log.error(f"Cleaning up scylla monitoring succeeded")
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")

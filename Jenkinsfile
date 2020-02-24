@@ -49,7 +49,7 @@ def runCollectLogs(String backend){
     export SCT_CONFIG_FILES="${sct_config_files}"
 
     echo "start collect logs ..."
-    ./docker/env/hydra.sh collect-logs --logdir /sct
+    ./docker/env/hydra.sh collect-logs --backend ${backend} --logdir /sct
     echo "end collect logs"
     """
 }

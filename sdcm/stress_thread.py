@@ -245,8 +245,8 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         for node, result in results:
             if not result:
+                # Silently skip if stress command throwed error, since it was already reported in _run_stress
                 continue
-
             output = result.stdout + result.stderr
             lines = output.splitlines()
             node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
