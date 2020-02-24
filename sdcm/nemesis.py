@@ -98,7 +98,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_columns_info = {}
         self._add_drop_column_target_table = []
         self._add_drop_column_tables_to_ignore = {
-            'scylla_bench': '*'  # Ignore scylla-bench tables
+            'scylla_bench': '*',  # Ignore scylla-bench tables
+            'mview': 'users',  # Ignore MV user-profile tables
+            'sec_index': 'users'  # Ignore SI user-profile tables
         }
 
     def update_stats(self, disrupt, status=True, data=None):
