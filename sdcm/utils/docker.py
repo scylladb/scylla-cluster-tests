@@ -1,4 +1,5 @@
 import os
+import re
 
 
 def running_in_docker():
@@ -69,3 +70,17 @@ class RemoteDocker:
     def receive_files(self, src, dst):
         self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
         self.node.remoter.receive_files(dst, dst)
+
+
+def get_docker_bridge_gateway(remoter):
+    result = remoter.run(
+        "docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge",
+        ignore_status=True
+    )
+    if result.exit_status != 0 or not result.stdout:
+        return None
+    address = result.stdout.splitlines()[0]
+    match = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", address)
+    if not match:
+        return None
+    return match.group()

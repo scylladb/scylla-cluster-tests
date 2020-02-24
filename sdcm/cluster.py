@@ -346,8 +346,11 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.remoter = None
         self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
-        self.logdir = os.path.join(base_logdir, self.name)
-        makedirs(self.logdir)
+        if base_logdir:
+            self.logdir = os.path.join(base_logdir, self.name)
+            makedirs(self.logdir)
+        else:
+            self.logdir = None
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         if ssh_login_info:
             ssh_login_info['hostname'] = self.external_address
@@ -773,12 +776,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     def start_journal_thread(self):
         logs_transport = self.parent_cluster.params.get("logs_transport")
-        cluster_backend = self.parent_cluster.params.get("cluster_backend")
-
-        if cluster_backend == "docker":
-            self._docker_log_process = subprocess.Popen(
-                ['/bin/sh', '-c', f"docker logs -f  {self.name}  > {self.database_log} 2>&1"])
-            return
 
         if logs_transport == "rsyslog":
             self.log.info("Using rsyslog as log transport")
@@ -786,6 +783,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             self._journal_thread = threading.Thread(target=self.journal_thread)
             self._journal_thread.daemon = True
             self._journal_thread.start()
+        elif logs_transport == "docker":
+            self._docker_log_process = subprocess.Popen(
+                ['/bin/sh', '-c', f"docker logs -f  {self.name}  > {self.database_log} 2>&1"])
         else:
             raise Exception("Unknown logs transport: %s" % logs_transport)
 
@@ -2636,11 +2636,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
         self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
-        assert '_SCT_TEST_LOGDIR' in os.environ
 
-        self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'],
-                                   self.name)
-        makedirs(self.logdir)
+        self.init_log_directory()
 
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.info('Init nodes')
@@ -2663,6 +2660,11 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
         super(BaseCluster, self).__init__()
+
+    def init_log_directory(self):
+        assert '_SCT_TEST_LOGDIR' in os.environ
+        self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
+        makedirs(self.logdir)
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
@@ -3819,8 +3821,9 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self._sct_dashboard_json_file = None
 
     @staticmethod
+    @retrying(n=5)
     def get_monitor_install_path_base(node):
-        return node.remoter.run("echo $HOME").stdout.strip()
+        return os.path.join(node.remoter.run("echo $HOME").stdout.strip(), "sct-monitoring")
 
     @property
     def monitor_install_path_base(self):
@@ -4227,7 +4230,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     def get_grafana_annotations(self, node):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
         try:
-            res = requests.get(url=annotations_url.format(node_ip=normalize_ipv6_url(node.external_address),
+            res = requests.get(url=annotations_url.format(node_ip=normalize_ipv6_url(node.grafana_address),
                                                           grafana_port=self.grafana_port))
             if res.ok:
                 return res.text
@@ -4237,16 +4240,16 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     def set_grafana_annotations(self, node, annotations_data):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
-        res = requests.post(url=annotations_url.format(node_ip=normalize_ipv6_url(node.external_address),
+        res = requests.post(url=annotations_url.format(node_ip=normalize_ipv6_url(node.grafana_address),
                                                        grafana_port=self.grafana_port),
                             data=annotations_data, headers={'Content-Type': 'application/json'})
         self.log.info("posting annotations result: %s", res)
 
     def stop_scylla_monitoring(self, node):
-        kill_script = dedent("""
-            cd {0.monitor_install_path}
+        kill_script = dedent(f"""
+            cd {self.monitor_install_path}
             ./kill-all.sh
-        """.format(self))
+        """)
         node.remoter.run("bash -ce '%s'" % kill_script)
 
     def get_grafana_screenshot_and_snapshot(self, test_start_time=None):

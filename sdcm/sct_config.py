@@ -781,7 +781,7 @@ class SCTConfiguration(dict):
              help="options will be used for enable encryption at-rest for tables"),
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
-             help="How to transport logs: rsyslog or ssh", choices=("rsyslog", "ssh")),
+             help="How to transport logs: rsyslog, ssh or docker", choices=("rsyslog", "ssh", "docker")),
 
         dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
              help="Collect logs from instances and sct runner"),
@@ -1202,10 +1202,6 @@ class SCTConfiguration(dict):
 
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
-
-        # in docker default to ssh, since stream via `docker logs` anyhow, no need for rsyslod docker to start
-        if self.get('cluster_backend') == 'docker':
-            self['logs_transport'] = "ssh"
 
     def dump_config(self):
         """

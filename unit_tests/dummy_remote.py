@@ -4,7 +4,7 @@ import shutil
 import types
 
 from sdcm.remote import LocalCmdRunner
-from sdcm.docker import send_receive_files
+from sdcm.cluster_docker import send_receive_files
 
 
 class DummeyOutput():  # pylint: disable=too-few-public-methods
