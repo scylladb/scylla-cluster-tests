@@ -8,17 +8,18 @@ import tempfile
 import logging
 import datetime
 
-from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller,
+from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller, TestResultEvent,
                              InfoEvent, CassandraStressEvent, ScyllaBenchEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary)
+from sdcm.tester import ClusterTester
+from sdcm.prometheus import start_metrics_server
 
 LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
 
-class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
+class BaseEventsTest(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
     def get_event_logs(self):
         log_file = os.path.join(self.temp_dir, 'events_log', 'events.log')
@@ -49,10 +50,8 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         cls.killed = Event()
 
-        def callback(var):  # pylint: disable=unused-argument
-            cls.killed.set()
-
-        cls.test_killer = TestKiller(timeout_before_kill=5, test_callback=callback)
+        cls.test_killer = TestKiller(timeout_before_kill=5,
+                                     test_callback=cls.killed.set)
         cls.test_killer.start()
         time.sleep(5)
 
@@ -62,6 +61,9 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
             process.terminate()
             process.join()
         stop_events_device()
+
+
+class SctEventsTests(BaseEventsTest):
 
     @staticmethod
     def test_event_info():
@@ -303,6 +305,59 @@ class SctEventsTests(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         LOGGER.info('sent kill')
         self.assertTrue(self.killed.wait(20), "kill wasn't sent")
+
+
+class TesterFailure(BaseEventsTest):
+
+    def test_failure_found(self):
+        self.assertTrue(1 == 0)
+
+    def tearDown(self) -> None:
+        test_error, test_failure = ClusterTester.get_test_failures(self)
+        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        assert tre.severity == Severity.CRITICAL
+        tre.publish()
+        print(str(tre))
+        assert test_failure
+        assert not test_error
+        events_log = self.get_event_logs()
+        assert "ERROR" not in events_log
+        self._outcome.errors = []  # we don't want to fail test
+
+
+class TesterError(BaseEventsTest):
+
+    def test_error_found(self):  # pylint: disable=no-self-use
+        raise Exception("error in during test")
+
+    def tearDown(self) -> None:
+        test_error, test_failure = ClusterTester.get_test_failures(self)
+        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        assert tre.severity == Severity.CRITICAL
+        tre.publish()
+        print(str(tre))
+        assert not test_failure
+        assert test_error
+        events_log = self.get_event_logs()
+        assert "FAILURE" not in events_log
+        self._outcome.errors = []  # we don't want to fail test
+
+
+class TesterNoErrors(BaseEventsTest):
+
+    def test_no_errors_found(self):  # pylint: disable=no-self-use
+        print("happy test")
+
+    def tearDown(self) -> None:
+        test_error, test_failure = ClusterTester.get_test_failures(self)
+        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        assert tre.severity == Severity.NORMAL
+        tre.publish()
+        print(str(tre))
+        assert not test_failure
+        assert not test_error
+        events_log = self.get_event_logs()
+        assert "FAILURE" not in events_log and "ERROR" not in events_log
 
 
 if __name__ == "__main__":

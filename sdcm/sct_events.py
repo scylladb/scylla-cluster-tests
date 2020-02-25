@@ -14,6 +14,7 @@ from pathlib import Path
 
 import enum
 from enum import Enum
+from textwrap import dedent
 import zmq
 import dateutil.parser
 
@@ -185,6 +186,38 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
         params = ','.join([args, kwargs]) if kwargs or args else ''
         return f"{super().__str__()}, source={self.source}.{self.source_method}({params}){message}"
+
+
+class TestResultEvent(SctEvent):
+    __test__ = False  # Mark this class to be not collected by pytest.
+
+    def __init__(self, test_name, error, failure):
+        super().__init__()
+        self.test_name = test_name
+        self.error = error
+        self.failure = failure
+        self.ok = not error and not failure
+        self.severity = Severity.NORMAL if self.ok else Severity.CRITICAL
+
+    def __str__(self):
+        header = dedent(f"""
+            {"=" * 70}
+            {self.test_name}
+            {"-" * 70}""")
+        footer = f"\n{'-' * 70}\n"
+        err_type, err_text = ('ERROR', self.error) if self.error else ('FAILURE', self.failure)
+        failed_msg = dedent(f"""
+            {header}
+            \n{err_type}:
+            \n{err_text}
+            {footer}
+        """)
+        ok_msg = dedent(f"""
+            {header}
+            \nPASSED :)
+            {footer}
+        """)
+        return ok_msg if self.ok else failed_msg
 
 
 class DbEventsFilter(SystemEvent):

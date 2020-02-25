@@ -57,7 +57,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent
+    TestFrameworkEvent, TestResultEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
@@ -1340,15 +1340,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.credentials = []
 
     def tearDown(self):
-
-        self.log.info('TearDown is starting...')
-        test_errors, test_failures = self.print_failure_to_log()
-        try:
-            self.tag_ami_with_result(test_errors, test_failures)
-        except Exception:  # pylint: disable=broad-except
-            self.log.exception("Failed to tag ami")
-
         InfoEvent('TEST_END')
+        self.log.info('TearDown is starting...')
+        try:
+            test_error, test_failure = self.get_test_failures()
+            test_result_event = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+            TEST_LOG.info(str(test_result_event))
+        except Exception:  # pylint: disable=broad-except
+            self.log.exception("Unable to get test result")
+        self.tag_ami_with_result(test_error, test_failure)
+        test_result_event.publish()
         try:
             self.finalize_test()
         except Exception as details:
@@ -1577,15 +1578,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
                       format(cluster.Setup.test_id()))
 
-    def print_failure_to_log(self):
+    def get_test_failures(self):
         """
-        Print to logging in case of failure or error in unittest
-        since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
-
-        applied the idea from
-        https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
-
-        :return: None
+            Print to logging in case of failure or error in unittest
+            since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
+            applied the idea from
+            https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
         """
         def list2reason(exc_list):
             """
@@ -1605,18 +1603,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
             result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)  # pylint: disable=no-member
         error = list2reason(result.errors)
-        failure = list2reason(result.failures)
-        ok = not error and not failure
-
-        if not ok:
-            typ, text = ('ERROR', error) if error else ('FAIL', failure)
-            TEST_LOG.error("=" * 70)
-            TEST_LOG.error("%s: %s", typ, self.id())
-            TEST_LOG.error("-" * 70)
-            TEST_LOG.error(text)
-            TEST_LOG.error("-" * 70)
-
-        return error, failure
+        test_failure = list2reason(result.failures)
+        return error, test_failure
 
     def stop_all_nodes_except_for(self, node):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
@@ -1772,18 +1760,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def tag_ami_with_result(self, test_error, test_failure):
         if self.params.get('cluster_backend', '') == 'aws' and self.params.get('tag_ami_with_result', False):
+            try:
+                test_result = 'PASSED'
+                if test_error:
+                    test_result = 'ERROR'
+                if test_failure:
+                    test_result = 'FAILURE'
 
-            test_result = 'PASSED'
-            if test_error:
-                test_result = 'ERROR'
-            if test_failure:
-                test_result = 'FAILURE'
+                job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
+                ami_id = self.params.get('ami_id_db_scylla').split()[0]
+                region_name = self.params.get('aws_region').split()[0]
 
-            job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
-            ami_id = self.params.get('ami_id_db_scylla').split()[0]
-            region_name = self.params.get('aws_region').split()[0]
-
-            tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
+                tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
+            except Exception:  # pylint: disable=broad-except
+                self.log.exception("Failed to tag ami")
 
     def get_critical_events(self):
         return get_testrun_status(self.test_id, self.logdir)
