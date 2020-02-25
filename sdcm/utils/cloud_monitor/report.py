@@ -19,7 +19,8 @@ class BaseReport:
 
     def _jinja_render_template(self, **kwargs):
         loader = jinja2.FileSystemLoader(self.templates_dir)
-        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
+        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'],
+                                 finalize=lambda x: x if x != 0 else "")
         template = env.get_template(self.html_template)
         html = template.render(**kwargs)
         return html
