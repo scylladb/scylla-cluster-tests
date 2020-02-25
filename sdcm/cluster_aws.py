@@ -827,7 +827,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.config_setup(**setup_params)
 
-    def node_setup(self, node, verbose=False, timeout=3600):
+    def node_setup(self, node, verbose=False, timeout=3600, wait_for_db_up=True):
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = ','.join(self.seed_nodes_ips)
 
@@ -878,7 +878,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             # for reconfigure rsyslog
             node.run_startup_script()
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
+        if wait_for_db_up:
+            node.wait_db_up(verbose=verbose, timeout=timeout)
         node.check_nodes_status()
         self.clean_replacement_node_ip(node)
 

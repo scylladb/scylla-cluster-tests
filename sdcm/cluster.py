@@ -3067,12 +3067,13 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):  # pylint: disable=unused-argument
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_for_db_up=True):  # pylint: disable=unused-argument
         """
         Scylla cluster setup.
         :param node_list: List of nodes to watch for init.
         :param verbose: Whether to print extra info while watching for init.
         :param timeout: timeout in minutes to wait for init to be finished
+        :param wait_for_db_up: conditional if wait for DB to be UP
         :return:
         """
         node_list = node_list or self.nodes  # pylint: disable=no-member

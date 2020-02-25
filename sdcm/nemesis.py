@@ -400,14 +400,14 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
+            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_for_db_up=False)
+            self.monitoring_set.reconfigure_scylla_monitoring()
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("Setup of the '%s' failed, removing it from list of nodes" % new_node)
             self.cluster.nodes.remove(new_node)
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
-        self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
     def _terminate_cluster_node(self, node):
