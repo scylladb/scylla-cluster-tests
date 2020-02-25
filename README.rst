@@ -372,6 +372,16 @@ Save the journalctl of one node to the database.log and move to the folder
 
 For examples see utilities documentation
 
+Building Hydra Docker image
+===========================
+
+Once you have changes in the requirements-python.txt or in hydra Dockerfile::
+
+    # change the version in docker/env/version
+
+    # this would build and push to dockerhub and to ECR on all regions we are using hydra
+    ./docker/env/build_n_push.sh
+
 FAQ
 ====
 **Q:** My c-s and memesis metrics are not exposed to the monitor while running locally, why ?

@@ -2,12 +2,14 @@
 set -e
 CMD=$@
 DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
+DOCKER_REPO=scylladb/hydra
+
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
 VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
-PY_PREREQS_FILE=requirements-python.txt
-CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
+
+
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
 export GIT_USER_EMAIL=$(git config --get user.email)
 
@@ -35,17 +37,11 @@ echo "Cleaning unused Docker resources..."
 docker system prune --volumes -f
 
 
-if [[ ! -z "`docker images scylladb/hydra:${VERSION} -q`" ]]; then
+if [[ ! -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Image up-to-date"
 else
-    echo "Image with version $VERSION not found. Building..."
-    sleep 7
-    cd ${DOCKER_ENV_DIR}
-    cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
-    cp -f ${SCT_DIR}/${CENTOS_PREREQS_FILE} .
-    docker build --network=host -t scylladb/hydra:${VERSION} .
-    rm -f ${PY_PREREQS_FILE} ${CENTOS_PREREQS_FILE}
-    cd -
+    echo "Image with version $VERSION not found. Pulling..."
+    docker pull ${DOCKER_REPO}:${VERSION}
 fi
 # Check for SSH keys
 ${SCT_DIR}/get-qa-ssh-keys.sh
@@ -100,5 +96,5 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${AWS_OPTIONS} \
     --net=host \
     --name=${SCT_TEST_ID} \
-    scylladb/hydra:${VERSION} \
+    ${DOCKER_REPO}:${VERSION} \
     /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"
