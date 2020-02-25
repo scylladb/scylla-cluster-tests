@@ -537,6 +537,8 @@ class UpgradeTest(FillDatabaseData):
 
         with self.subTest('Step4 - Verify data during mixed cluster mode '):
             self.fill_and_verify_db_data('after rollback the second node')
+            self.log.info('Repair the first upgraded Node')
+            self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
