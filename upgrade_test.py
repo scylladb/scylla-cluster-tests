@@ -530,6 +530,8 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.nodes[indexes[1]].check_node_health()
 
         self.fill_and_verify_db_data('after rollback the second node')
+        self.log.info('Repair the first upgraded Node')
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
 
         for i in indexes[1:]:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
