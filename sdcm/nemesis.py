@@ -95,6 +95,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._add_drop_column_max_per_drop = 5
         self._add_drop_column_max_per_add = 5
         self._add_drop_column_max_column_name_size = 10
+        self._add_drop_column_max_columns = 200
         self._add_drop_column_columns_info = {}
         self._add_drop_column_target_table = []
         self._add_drop_column_tables_to_ignore = {
@@ -806,9 +807,11 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
     def _add_drop_column_generate_columns_to_add(self, added_columns_info):
         add = []
         #  pylint: disable=unused-variable
-        for num in range(random.randrange(1, self._add_drop_column_max_per_add)):
-            added_columns_info = self._add_drop_column_get_added_columns_info(self._add_drop_column_target_table,
-                                                                              self._add_drop_column_columns_info)
+        upper_limit_columns_to_add = min(
+            self._add_drop_column_max_columns - len(added_columns_info['column_names']),
+            self._add_drop_column_max_per_add
+        )
+        for num in range(random.randrange(1, upper_limit_columns_to_add)):
             new_column_name = self._random_column_name(added_columns_info['column_names'].keys(),
                                                        self._add_drop_column_max_column_name_size)
             new_column_type = CQLTypeBuilder.get_random(added_columns_info['column_types'], allow_levels=10,
