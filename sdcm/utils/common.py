@@ -1476,7 +1476,7 @@ def get_builder_by_test_id(test_id):
             return None
 
     search_obj = ParallelObject(builders, timeout=30, num_workers=len(builders))
-    results = search_obj.run(search_test_id_on_builder, ignore_exceptions=True)
+    results = search_obj.run(search_test_id_on_builder, ignore_exceptions=True, unpack_objects=True)
     found_builders = [builder.result for builder in results if not builder.exc and builder.result]
     if not found_builders:
         LOGGER.info("Nothing found for %s", test_id)
