@@ -146,7 +146,7 @@ def call(Map pipelineParams) {
                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
 
                                     echo "start clean resources ..."
-                                    ./docker/env/hydra.sh clean-resources --backend ${params.backend} --logdir /sct
+                                    ./docker/env/hydra.sh clean-resources --logdir /sct
                                     echo "end clean resources"
                                     """
                                 }
