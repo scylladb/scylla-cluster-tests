@@ -1647,7 +1647,11 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                     murmur3_partitioner_ignore_msb_bits)
 
         if enable_exp:
-            scylla_yaml_contents += "\nexperimental: true\n"
+            pattern = re.compile('experimental:.*')
+            if pattern.findall(scylla_yaml_contents):
+                scylla_yaml_contents = pattern.sub('experimental: true', scylla_yaml_contents)
+            else:
+                scylla_yaml_contents += "\nexperimental: true\n"
 
         if endpoint_snitch:
             pattern = re.compile('endpoint_snitch:.*')
