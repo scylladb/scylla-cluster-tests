@@ -54,7 +54,6 @@ def truncate_entries(func):
 
 
 def check_reload_systemd_config(node):
-    reload_conf = False
     for i in ['scylla-server', 'scylla-jmx']:
         result = node.remoter.run('systemctl status %s' % i, ignore_status=True)
         if ".service changed on disk. Run 'systemctl daemon-reload' to reload units" in result.stderr:
