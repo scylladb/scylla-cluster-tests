@@ -1174,7 +1174,7 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         for row in result[4:]:
             if '|' not in row:
                 continue
-            if row.startswith('system') or row.startswith('a#usertable'):
+            if row.startswith('system') or row.startswith('alternator_usertable'):
                 continue
             splitter_result.append(row.split('|'))
         return splitter_result
