@@ -127,6 +127,7 @@ def teardown_on_exception(method):
             return method(*args, **kwargs)
         except Exception:
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
+            args[0].setup_failure = traceback.format_exc()
             args[0].tearDown()
             raise
     return wrapper
@@ -136,6 +137,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
         self.result = None
+        self.setup_failure = None  # is set when exception occurs during setUp
         self.status = "RUNNING"
         self.params = SCTConfiguration()
         self.params.verify_configuration()
@@ -1345,11 +1347,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             test_error, test_failure = self.get_test_failures()
             test_result_event = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-            TEST_LOG.info(str(test_result_event))
         except Exception:  # pylint: disable=broad-except
             self.log.exception("Unable to get test result")
-        self.tag_ami_with_result(test_error, test_failure)
         test_result_event.publish()
+        self.tag_ami_with_result(test_error, test_failure)
         try:
             self.finalize_test()
         except Exception as details:
@@ -1584,7 +1585,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
             applied the idea from
             https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
+            :returns tuple(error, test_failure)
         """
+
+        if self.setup_failure:
+            return self.setup_failure, None
+
         def list2reason(exc_list):
             """
             Gets last backtrace string from `exc_list`

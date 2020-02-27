@@ -11,7 +11,7 @@ import datetime
 from sdcm.sct_events import (start_events_device, stop_events_device, Event, TestKiller, TestResultEvent,
                              InfoEvent, CassandraStressEvent, ScyllaBenchEvent, CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary)
-from sdcm.tester import ClusterTester
+from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.prometheus import start_metrics_server
 
 LOGGER = logging.getLogger(__name__)
@@ -308,6 +308,7 @@ class SctEventsTests(BaseEventsTest):
 
 
 class TesterFailure(BaseEventsTest):
+    setup_failure = None
 
     def test_failure_found(self):
         self.assertTrue(1 == 0)
@@ -326,6 +327,7 @@ class TesterFailure(BaseEventsTest):
 
 
 class TesterError(BaseEventsTest):
+    setup_failure = None
 
     def test_error_found(self):  # pylint: disable=no-self-use
         raise Exception("error in during test")
@@ -344,6 +346,7 @@ class TesterError(BaseEventsTest):
 
 
 class TesterNoErrors(BaseEventsTest):
+    setup_failure = None
 
     def test_no_errors_found(self):  # pylint: disable=no-self-use
         print("happy test")
@@ -358,6 +361,22 @@ class TesterNoErrors(BaseEventsTest):
         assert not test_error
         events_log = self.get_event_logs()
         assert "FAILURE" not in events_log and "ERROR" not in events_log
+
+
+class TesterErrorDuringSetUp(unittest.TestCase):
+    __unittest_expecting_failure__ = True
+
+    @teardown_on_exception
+    def test_noop(self):  # pylint: disable=no-self-use
+        raise Exception("Something bad happened during setUp!")
+
+    def tearDown(self) -> None:
+        assert self.setup_failure is not None, "setup_failure should contain traceback"  # pylint: disable=no-member
+        test_error, test_failure = ClusterTester.get_test_failures(self)
+        assert test_failure is None
+        assert test_error is not None
+        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        assert tre.severity == Severity.CRITICAL
 
 
 if __name__ == "__main__":
