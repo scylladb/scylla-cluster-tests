@@ -76,6 +76,7 @@ class ArtifactsTest(ClusterTester):
             "scylla_version": self.node.scylla_version,
             "scylla_repo": self.params.get("scylla_repo"),
             "scylla_node_image": self.node.image,
+            "region_name": self.params.get("region_name"),
             "scylla_packages_installed": self.node.scylla_packages_installed,
             "test_id": self.test_id,
             "events_summary": get_logger_event_summary(),
