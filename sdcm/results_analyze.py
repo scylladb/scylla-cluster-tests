@@ -828,7 +828,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                              group_by_version_sub_type[version][sub_type]['stats_best'],
                                              version,
                                              group_by_version_sub_type[version][sub_type]['best_test_id'])
-            versions_res_list.append(cmp_res)
+            versions_res_list.append({version: cmp_res})
 
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
@@ -839,7 +839,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
                        test_version=test_version_info,
-                       base_line=base_line['stats'],
+                       base_line=base_line,
                        res_list=current_res_list,
                        ver_res_list=versions_res_list,
                        setup_details=self._get_setup_details(doc, is_gce),

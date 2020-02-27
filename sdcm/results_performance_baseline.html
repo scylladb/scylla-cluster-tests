@@ -84,7 +84,7 @@
         {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
             <tr>
                 <td> {{ stat_name.replace('_', ' ') }} </td>
-                <td> {{ "%.1f" % base_line.get(stat_name.replace('_', ' ')) }}
+                <td> {{ "%.1f" % base_line.stats.get(stat_name.replace('_', ' ')) }}
                 {% for cmp_res in res_list %}
                     {% set stat=cmp_res.res.get(stat_name) %}
                         <td> {{ "%.1f" % stat.val }} (
@@ -106,6 +106,65 @@
                 <td> {{ test_version.date }} - {{ test_version.commit_id }} </td>
         {% endfor%}
     </table>
+
+    <h1> Current result comparision vs best result per version </h1>
+
+    {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
+    <h2>{{ stat_name }}</h2>
+    <table id="results_table">
+        <tr>
+            <th>Version</th>
+            <th>{{baseline_type}}</th>
+            <th>Commit id/<br/>Commit date</th>
+            {% for cmp_res in res_list %}
+                <th> {{ cmp_res.version_dst }} </th>
+                <th>Commit id/<br/>Commit date</th>
+            {% endfor %}
+
+        </tr>
+        <tr>
+            <td> Current test result </td>
+            <td> {{ base_line.stats.get(stat_name.replace('_', ' ')) }} </td>
+            <td> Commit: {{ base_line.version.commit_id }}, Date: {{ base_line.version.date }} </td>
+            {% for cmp_res in res_list %}
+            {% set stat=cmp_res.res.get(stat_name) %}
+            <td> {{ stat.val }} </td>
+            <td> {{ stat.best_id }} </td>
+            {% endfor %}
+
+        </tr>
+
+        {% for version_res in ver_res_list %}
+        {% for version, v_res in version_res.items() %}
+        <tr>
+            <td> {{ version }}</td>
+            {% for cdc_type, ver_cdc_cmp_res in v_res.items() %}
+                {% set stat=ver_cdc_cmp_res.res.get(stat_name) %}
+            <td>
+                {{ stat.val }} <br/>
+                {% with status = stat.status, percent = stat.percent,
+                   percent_abs = stat.percent|replace('%', '')|int %}
+                    {% if status == 'Regression' and percent_abs > 4 %}
+                        <span class="red fbold">-
+                    {% elif status == 'Progress' and percent_abs > 4 %}
+                        <span class="green fbold">+
+                    {% else %}
+                        <span>
+                    {% endif %}
+                    {{ percent }}
+                {% endwith %}
+                </span>
+            </td>
+            <td>{{ stat.best_id }}</td>
+            {% endfor %}
+
+        </tr>
+        {% endfor %}
+        {% endfor %}
+    </table>
+    {% endfor %}
+
+{% endblock %}
 
 
 {% block links %}
