@@ -397,6 +397,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
+        self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
         try:
@@ -407,7 +408,6 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
-        self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
     def _terminate_cluster_node(self, node):
