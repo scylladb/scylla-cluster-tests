@@ -350,7 +350,12 @@ class TestStatsMixin(Stats):
     def get_scylla_versions(self):
         versions = {}
         try:
-            versions_output = self.db_cluster.nodes[0].remoter.run('rpm -qa | grep scylla').stdout.splitlines()
+            node = self.db_cluster.nodes[0]
+            if node.is_rhel_like():
+                version_cmd = 'rpm -qa |grep scylla'
+            else:
+                version_cmd = "dpkg -l |grep scylla|awk '{print $2 \"-\" $3}'"
+            versions_output = node.remoter.run(version_cmd).stdout.splitlines()
             for line in versions_output:
                 for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
                                 'scylla-enterprise-server', 'scylla-enterprise-tools']:
