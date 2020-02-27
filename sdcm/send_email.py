@@ -287,8 +287,8 @@ class ArtifactsEmailReporter(BaseEmailReporter):
     email_template_file = "results_artifacts.html"
     fields = ["subject", "username", "test_status", "test_name", "start_time",
               "end_time", "build_url", "scylla_version", "scylla_repo",
-              "scylla_node_image", "scylla_packages_installed", "test_id",
-              "events_summary", "nodes", "backend", ]
+              "scylla_node_image", "region_name", "scylla_packages_installed",
+              "test_id", "events_summary", "nodes", "backend", ]
 
     def build_report(self, report_data, template_str=None):
         self.log.info("Prepare result to send in email")
