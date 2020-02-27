@@ -563,12 +563,13 @@ def clean_cloud_resources(tags_dict):
     :param tags_dict: a dict of the tag to select the instances,e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
-    if "TestId" not in tags_dict or "RunByUser" not in tags_dict:
+    if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
-        return
+        return False
     clean_instances_aws(tags_dict)
     clean_elastic_ips_aws(tags_dict)
     clean_instances_gce(tags_dict)
+    return True
 
 
 def aws_tags_to_dict(tags_list):
