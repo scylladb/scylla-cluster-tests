@@ -6,7 +6,7 @@ import json
 from json import JSONEncoder
 import signal
 import time
-from multiprocessing import Process, Value, current_process
+from multiprocessing import Event, Process, Value, current_process
 import atexit
 import datetime
 import collections
@@ -20,6 +20,9 @@ import dateutil.parser
 
 from sdcm.utils.common import safe_kill, pid_exists, makedirs, retrying, timeout
 
+
+EVENTS_DEVICE_START_TIMEOUT = 30  # seconds
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -27,38 +30,49 @@ class EventsDevice(Process):
 
     def __init__(self, log_dir):
         super(EventsDevice, self).__init__()
-        self.pub_port = Value('d', 0)
-        self.sub_port = Value('d', 0)
+
+        self._ready = Event()
+        self._pub_port = Value('d', 0)
+        self._sub_port = Value('d', 0)
 
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
         makedirs(self.event_log_base_dir)
         self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
 
     def run(self):
+        # pylint: disable=no-member; disable `no-member' messages because of zmq.
+
+        context = frontend = backend = None
+
         try:
             context = zmq.Context(1)
-            # Socket facing clients
-            frontend = context.socket(zmq.SUB)  # pylint: disable=no-member
-            self.pub_port.value = frontend.bind_to_random_port("tcp://*")
-            frontend.setsockopt(zmq.SUBSCRIBE, b"")  # pylint: disable=no-member
 
-            # Socket facing services
-            backend = context.socket(zmq.PUB)  # pylint: disable=no-member
-            self.sub_port.value = backend.bind_to_random_port("tcp://*")
-            LOGGER.info("EventDevice Listen on pub_port=%d, sub_port=%d", self.pub_port.value, self.sub_port.value)
+            # Socket facing clients.
+            frontend = context.socket(zmq.SUB)
+            self._pub_port.value = frontend.bind_to_random_port("tcp://*")
+            frontend.setsockopt(zmq.SUBSCRIBE, b"")
+            frontend.setsockopt(zmq.LINGER, 0)
 
-            backend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
-            frontend.setsockopt(zmq.LINGER, 0)  # pylint: disable=no-member
-            zmq.proxy(frontend, backend)  # pylint: disable=no-member
+            # Socket facing services.
+            backend = context.socket(zmq.PUB)
+            self._sub_port.value = backend.bind_to_random_port("tcp://*")
+            backend.setsockopt(zmq.LINGER, 0)
 
+            self._ready.set()
+
+            LOGGER.info("EventsDevice listen on pub_port=%d, sub_port=%d", self._pub_port.value, self._sub_port.value)
+            zmq.proxy(frontend, backend)
         except Exception:  # pylint: disable=broad-except
             LOGGER.exception("zmq device failed")
         except (KeyboardInterrupt, SystemExit) as ex:
             LOGGER.debug("EventsDevice was halted by %s", ex.__class__.__name__)
         finally:
-            frontend.close()
-            backend.close()
-            context.term()
+            if frontend:
+                frontend.close()
+            if backend:
+                backend.close()
+            if context:
+                context.term()
 
     @staticmethod
     @timeout(timeout=120)
@@ -71,6 +85,18 @@ class EventsDevice(Process):
                 StartupTestEvent().publish(guaranteed=True)
             except TimeoutError:
                 raise RuntimeError("Event loop is not working properly")
+
+    @property
+    def sub_port(self):
+        if self._ready.wait(timeout=EVENTS_DEVICE_START_TIMEOUT):
+            return self._sub_port
+        raise RuntimeError("EventsDevice is not ready to send events.")
+
+    @property
+    def pub_port(self):
+        if self._ready.wait(timeout=EVENTS_DEVICE_START_TIMEOUT):
+            return self._pub_port
+        raise RuntimeError("EventsDevice is not ready to receive events.")
 
     def get_client_socket(self, filter_type=b''):
         context = zmq.Context()
