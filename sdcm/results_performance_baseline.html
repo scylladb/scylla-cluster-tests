@@ -79,7 +79,7 @@
             {% for cmp_res in res_list %}
                 <th> {{ cmp_res.version_dst }} </th>
             {% endfor %}
-            <th> Date - Commit_id </th>
+            <th> #commit, date </th>
         </tr>
         {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
             <tr>
@@ -103,7 +103,7 @@
                             )
                         </td>
                 {% endfor %}
-                <td> {{ test_version.date }} - {{ test_version.commit_id }} </td>
+                <td>  #{{ test_version.commit_id }}, {{ test_version.date }} </td>
         {% endfor%}
     </table>
 
@@ -112,23 +112,25 @@
     {% for stat_name in ["op_rate", "latency_mean", "latency_99th_percentile"] %}
     <h2>{{ stat_name }}</h2>
     <table id="results_table">
+        {% set subtests = [baseline_type, ] %}
         <tr>
             <th>Version</th>
             <th>{{baseline_type}}</th>
-            <th>Commit id/<br/>Commit date</th>
+            <th>#commit, date</th>
             {% for cmp_res in res_list %}
                 <th> {{ cmp_res.version_dst }} </th>
-                <th>Commit id/<br/>Commit date</th>
+                {% do subtests.append(cmp_res.version_dst) %}
+                <th>#commit, date</th>
             {% endfor %}
 
         </tr>
         <tr>
             <td> Current test result </td>
-            <td> {{ base_line.stats.get(stat_name.replace('_', ' ')) }} </td>
-            <td> Commit: {{ base_line.version.commit_id }}, Date: {{ base_line.version.date }} </td>
+            <td> {{ "%.1f" % base_line.stats.get(stat_name.replace('_', ' ')) }} </td>
+            <td> #{{ base_line.version.commit_id }}, {{ base_line.version.date }} </td>
             {% for cmp_res in res_list %}
             {% set stat=cmp_res.res.get(stat_name) %}
-            <td> {{ stat.val }} </td>
+            <td> {{ "%.1f" % stat.val }} </td>
             <td> {{ stat.best_id }} </td>
             {% endfor %}
 
@@ -138,10 +140,10 @@
         {% for version, v_res in version_res.items() %}
         <tr>
             <td> {{ version }}</td>
-            {% for cdc_type, ver_cdc_cmp_res in v_res.items() %}
-                {% set stat=ver_cdc_cmp_res.res.get(stat_name) %}
+            {% for subtest in subtests %}
+                {% set stat=v_res[subtest].res.get(stat_name) %}
             <td>
-                {{ stat.val }} <br/>
+                {{ "%.1f" % stat.best_val }} <br/>
                 {% with status = stat.status, percent = stat.percent,
                    percent_abs = stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
