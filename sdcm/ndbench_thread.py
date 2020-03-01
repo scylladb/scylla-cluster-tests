@@ -87,7 +87,8 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         # remove the ndbench command, and parse the rest of the ; separated values
         stress_cmd = re.sub(r'^ndbench', '', self.stress_cmd)
         self.stress_cmd = ' '.join([f'-Dndbench.config.{param.strip()}' for param in stress_cmd.split(';')])
-        self.stress_cmd = f'./gradlew -Dndbench.config.cli.timeoutMillis={self.timeout * 1000}' \
+        timeout = '' if 'cli.timeoutMillis' in self.stress_cmd else f'-Dndbench.config.cli.timeoutMillis={self.timeout * 1000}'
+        self.stress_cmd = f'./gradlew {timeout}' \
                           f' -Dndbench.config.cass.host={self.node_list[0].external_address} {self.stress_cmd} run'
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
@@ -122,8 +123,9 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                                     ignore_status=True,
                                     log_file=log_file_name,
                                     verbose=True,
-                                    watchers=[FailuresWatcher(r'\sERROR|\sFAILURE|\sFAILED', callback=raise_event_callback, raise_exception=False)])
+                                    watchers=[FailuresWatcher(r'\sERROR|\sFAILURE|\sFAILED|\sis\scorrupt', callback=raise_event_callback, raise_exception=False)])
 
+                return result
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = self.format_error(exc)
                 NdbenchStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
