@@ -252,7 +252,8 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         self.log.info("Rendering results to html using '%s' template...", email_template_fp)
         loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
         print(os.path.dirname(os.path.abspath(__file__)))
-        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
+        env = jinja2.Environment(loader=loader, autoescape=True, extensions=[
+                                 'jinja2.ext.loopcontrols', 'jinja2.ext.do'])
         template = env.get_template(email_template_fp)
         html = template.render(results)
         self.log.info("Results has been rendered to html")
@@ -724,7 +725,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
         # get the best res for all versions of this job
-        group_by_version_sub_type = dict()
+        group_by_version_sub_type = SortedDict()
         # Example:
         # group_by_type = {
         #     "version": {
@@ -751,7 +752,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # }
         # Find best results for each version
 
-        current_tests = dict()
+        current_tests = SortedDict()
         grafana_snapshots = dict()
         grafana_screenshots = dict()
         for row in tests_filtered['hits']['hits']:
@@ -760,37 +761,40 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 continue
             version_info = self._test_version(row)
             version = version_info['version']
+            version_info['date'] = datetime.strptime(version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
             if not version:
+                self.log.error('Skip with wrong version %s', row['_id'])
                 continue
             if "results" not in row["_source"]:
+                self.log.error('Skip with no results %s', row['_id'])
                 continue
-            sub_type = row["_source"]['test_details']['sub_type']
+            sub_type = row["_source"]['test_details'].get('sub_type')
             curr_test_stats = self._test_stats(row)
-            if not curr_test_stats:
+            if not curr_test_stats or not sub_type:
+                self.log.error('Skip with no test stats %s', row['_id'])
                 continue
-            if base_test_id in row["_id"]:
-                if sub_type not in current_tests and curr_test_stats:
-                    current_tests[sub_type] = dict()
-                    current_tests[sub_type]['stats'] = curr_test_stats
-                    current_tests[sub_type]['version'] = version_info
-                    current_tests[sub_type]['best_test_id'] = {
-                        k: f"Commit: {version_info['commit_id']}, Date: {version_info['date']}" for k in self.PARAMS}
-                    current_tests[sub_type]['results'] = row['_source']['results']
+            if base_test_id in row["_id"] and sub_type not in current_tests:
+                current_tests[sub_type] = dict()
+                current_tests[sub_type]['stats'] = curr_test_stats
+                current_tests[sub_type]['version'] = version_info
+                current_tests[sub_type]['best_test_id'] = {
+                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS}
+                current_tests[sub_type]['results'] = row['_source']['results']
+                grafana_snapshots[sub_type] = self._get_grafana_snapshot(row)
+                grafana_screenshots[sub_type] = self._get_grafana_screenshot(row)
 
-                    grafana_snapshots[sub_type] = self._get_grafana_snapshot(row)
-                    grafana_screenshots[sub_type] = self._get_grafana_screenshot(row)
-
-                    continue
-
+                self.log.info('Added current test results %s. Check next', row['_id'])
+                continue
             if version not in group_by_version_sub_type:
                 group_by_version_sub_type[version] = dict()
 
-            if sub_type not in group_by_version_sub_type:
-                group_by_version_sub_type[version][sub_type] = dict(tests=SortedDict(), stats_best=dict(),
-                                                                    best_test_id=dict())
+            if sub_type not in group_by_version_sub_type[version]:
+                group_by_version_sub_type[version][sub_type] = dict(
+                    tests=SortedDict(), stats_best=dict(), best_test_id=dict())
                 group_by_version_sub_type[version][sub_type]['stats_best'] = {k: 0 for k in self.PARAMS}
                 group_by_version_sub_type[version][sub_type]['best_test_id'] = {
-                    k: f"Commit: {version_info['commit_id']}, Date: {version_info['date']}" for k in self.PARAMS}
+                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS}
+
             group_by_version_sub_type[version][sub_type]['tests'][version_info['date']] = curr_test_stats
             old_best = group_by_version_sub_type[version][sub_type]['stats_best']
             group_by_version_sub_type[version][sub_type]['stats_best'] = \
@@ -801,17 +805,18 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 if k in curr_test_stats and k in old_best and \
                         group_by_version_sub_type[version][sub_type]['stats_best'][k] == curr_test_stats[k]:
                     group_by_version_sub_type[version][sub_type]['best_test_id'][
-                        k] = f"Commit: {version_info['commit_id']}, Date: {version_info['date']}"
+                        k] = f"#{version_info['commit_id']}, {version_info['date']}"
 
         current_res_list = list()
         versions_res_list = list()
 
         test_version_info = self._test_version(doc)
+        test_version_info['date'] = datetime.strptime(test_version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
         test_version = test_version_info['version']
         base_line = current_tests.get(subtest_baseline)
         for sub_type in current_tests:
             if not current_tests[sub_type] or sub_type == subtest_baseline:
-                self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                self.log.info(f'No tests with {subtest_baseline} in the current run {test_version} to compare')
                 continue
             cmp_res = self.cmp(current_tests[sub_type]['stats'],
                                base_line['stats'],
@@ -868,9 +873,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.py:LongevityTest.test_custom_time
-        subject = 'Performance Regression Compare Results - {} - {}'.format(test_name, test_version)
+        subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
         if ycsb:
-            subject = '(Alternator) Performance Regression - {} - {}'.format(test_name, test_version)
+            subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
         html = self.render_to_html(results, template='results_performance_baseline.html')
         self.send_email(subject, html)
 
