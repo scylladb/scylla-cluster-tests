@@ -10,3 +10,4 @@ scylla_version: '3.3.rc1'
 store_results_in_elasticsearch: False
 test_duration: 600
 user_prefix: 'artifacts-docker'
+system_auth_rf: 1

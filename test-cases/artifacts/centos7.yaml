@@ -15,3 +15,4 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-
 store_results_in_elasticsearch: False
 test_duration: 600
 user_prefix: 'artifacts-centos7'
+system_auth_rf: 1
