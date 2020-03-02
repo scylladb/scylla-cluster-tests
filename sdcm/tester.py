@@ -296,7 +296,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def set_system_auth_rf(self):
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf')
-        if system_auth_rf and not cluster.Setup.REUSE_CLUSTER:
+        if system_auth_rf > 1 and not cluster.Setup.REUSE_CLUSTER:
             self.log.info('change RF of system_auth to %s', system_auth_rf)
             node = self.db_cluster.nodes[0]
             credentials = self.db_cluster.get_db_auth()

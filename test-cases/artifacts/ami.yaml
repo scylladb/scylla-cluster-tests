@@ -13,3 +13,4 @@ scylla_linux_distro: 'centos'
 store_results_in_elasticsearch: False
 test_duration: 600
 user_prefix: 'artifacts-ami'
+system_auth_rf: 1

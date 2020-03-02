@@ -296,7 +296,7 @@ class SCTConfiguration(dict):
         dict(name="authorizer", env="SCT_AUTHORIZER", type=str,
              help="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer"),
 
-        dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF", type=str,
+        dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF", type=int,
              help="Replication factor will be set to system_auth"),
 
         dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
