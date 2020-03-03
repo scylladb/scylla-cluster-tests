@@ -558,7 +558,7 @@ class NdbenchStressEvent(YcsbStressEvent):
 
 
 class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
-    def __init__(self, type, regex, severity=Severity.CRITICAL):  # pylint: disable=redefined-builtin
+    def __init__(self, type, regex, severity=Severity.ERROR):  # pylint: disable=redefined-builtin
         super(DatabaseLogEvent, self).__init__()
         self.type = type
         self.regex = regex
@@ -798,6 +798,7 @@ EVENTS_PROCESSES = dict()
 
 def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-name
     from sdcm.utils.grafana import GrafanaEventAggragator, GrafanaAnnotator
+    from sdcm.sct_events_analyzer import EventsAnalyzer
 
     EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
     EVENTS_PROCESSES['MainDevice'].start()
@@ -805,10 +806,12 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'] = GrafanaEventAggragator()
+    EVENTS_PROCESSES['EVENTS_ANALYZER'] = EventsAnalyzer()
 
     EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].start()
+    EVENTS_PROCESSES['EVENTS_ANALYZER'].start()
 
     try:
         EVENTS_PROCESSES['MainDevice'].wait_till_event_loop_is_working(number_of_events=20)
@@ -824,7 +827,8 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
 
 def stop_events_device():
     LOGGER.debug("Stopping Events consumers...")
-    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR', 'EVENTS_GRAFANA_AGGRAGATOR', 'MainDevice']
+    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR',
+                 'EVENTS_GRAFANA_AGGRAGATOR', 'EVENTS_ANALYZER', 'MainDevice']
     LOGGER.debug("Signalling events consumers to terminate...")
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:

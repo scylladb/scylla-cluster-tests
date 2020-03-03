@@ -55,7 +55,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address):
 def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events):
     loader_set = LocalLoaderSetDummy()
 
-    critical_log_content_before = events.get_event_log_file('critical.log')
+    error_log_content_before = events.get_event_log_file('error.log')
 
     # 2. do write without dataintegrity=true
     cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512'
@@ -94,5 +94,5 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     ycsb_thread2.get_results()
 
     # 5. check that events with the expected error were raised
-    critical_log_content_after = events.wait_for_event_log_change('critical.log', critical_log_content_before)
-    assert 'UNEXPECTED_STATE' in critical_log_content_after
+    error_log_content_after = events.wait_for_event_log_change('error.log', error_log_content_before)
+    assert 'UNEXPECTED_STATE' in error_log_content_after

@@ -17,6 +17,8 @@ from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
                              ScyllaBenchEvent, TestResultEvent, PrometheusAlertManagerEvent)
 
+from sdcm.cluster import Setup
+
 LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
@@ -267,16 +269,16 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertIn("not filtered", log_content_after)
         self.assertNotIn("this is filtered", log_content_after)
 
-    def test_stall_severity(self):
+    def test_stall_severity(self):  # pylint: disable=no-self-use
         event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
         event.add_info_and_publish(node="A", line_number=22,
                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 2000 ms")
-        self.assertTrue(event.severity == Severity.NORMAL)
+        assert event.severity == Severity.NORMAL
 
         event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
         event.add_info_and_publish(node="A", line_number=22,
                                    line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 5000 ms")
-        self.assertTrue(event.severity == Severity.CRITICAL)
+        assert event.severity == Severity.ERROR
 
     def test_spot_termination(self):  # pylint: disable=no-self-use
         str(SpotTerminationEvent(node='test', message='{"action": "terminate", "time": "2017-09-18T08:22:00Z"}'))
@@ -301,14 +303,14 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertIn('other back trace', log_content_after)
         self.assertNotIn('supressed', log_content_after)
 
-    def test_failed_stall_during_filter(self):
+    def test_failed_stall_during_filter(self):  # pylint: disable=no-self-use
         with DbEventsFilter(type="NO_SPACE_ERROR"), \
                 DbEventsFilter(type='BACKTRACE', line='No space left on device'):
             event = DatabaseLogEvent(type="REACTOR_STALLED", regex="B")
             event.add_info_and_publish(node="A", line_number=22,
                                        line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20")
             logging.info(event.severity)
-            self.assertTrue(event.severity == Severity.CRITICAL)
+            assert event.severity == Severity.ERROR, event.severity
 
     @unittest.skip("for manual use only")
     def test_measure_speed_of_events_processing(self):  # pylint: disable=no-self-use
@@ -437,6 +439,28 @@ class TesterMultiSubTest(unittest.TestCase):
         tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
         assert tre.severity == Severity.CRITICAL
         self._outcome.errors = []  # we don't want to fail test
+
+
+class TestEventAnalyzer(BaseEventsTest):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.result = None
+
+    def setUp(self):
+        Setup.set_tester_obj(self)
+
+    def run(self, result=None):
+        self.result = self.defaultTestResult() if result is None else result
+        result = super(TestEventAnalyzer, self).run(self.result)
+        return result
+
+    @unittest.skip("this is only an integration test")
+    def test_error_signal_is_stopping_test(self):  # pylint: disable=no-self-use
+        DatabaseLogEvent(regex="", severity=Severity.CRITICAL, type="None").add_info_and_publish(
+            "node1", "A line we didn't expect", "????")
+        time.sleep(10)
+
+        raise Exception("this won't happen")
 
 
 if __name__ == "__main__":

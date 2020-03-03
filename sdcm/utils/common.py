@@ -1503,7 +1503,7 @@ def get_post_behavior_actions(config):
 
 
 def clean_resources_according_post_behavior(params, config, logdir):
-    success = get_testrun_status(params.get('TestId'), logdir)
+    success = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
     for cluster_nodes_type, action_type in actions_per_type.items():
@@ -1557,13 +1557,16 @@ def get_testrun_dir(base_dir, test_id=None):
     return None
 
 
-def get_testrun_status(test_id=None, logdir=None):
-
+def get_testrun_status(test_id=None, logdir=None, only_critical=False):
     testrun_dir = get_testrun_dir(logdir, test_id)
     status = None
     if testrun_dir:
         with open(os.path.join(testrun_dir, 'events_log/critical.log')) as f:  # pylint: disable=invalid-name
             status = f.readlines()
+
+        if not only_critical:
+            with open(os.path.join(testrun_dir, 'events_log/error.log')) as f:  # pylint: disable=invalid-name
+                status += f.readlines()
 
     return status
 
