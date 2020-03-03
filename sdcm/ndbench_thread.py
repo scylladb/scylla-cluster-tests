@@ -99,7 +99,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
 
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
             if line:
-                NdbenchStressEvent(type='error', severity=Severity.CRITICAL,
+                NdbenchStressEvent(type='error', severity=Severity.ERROR,
                                    node=loader, stress_cmd=self.stress_cmd, errors=[str(line)])
 
         LOGGER.debug("running: %s", self.stress_cmd)
@@ -129,7 +129,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = self.format_error(exc)
                 NdbenchStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                   log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                   log_file_name=log_file_name, severity=Severity.ERROR,
                                    errors=errors_str)
             finally:
                 NdbenchStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)

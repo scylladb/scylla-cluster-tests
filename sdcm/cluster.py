@@ -118,6 +118,7 @@ class Setup:
     _test_name = None
     TAGS = dict()
     _logdir = None
+    _tester_obj = None
 
     @classmethod
     def test_id(cls):
@@ -132,6 +133,15 @@ class Setup:
                 test_id_file.write(str(test_id))
         else:
             LOGGER.warning("TestID already set!")
+
+    @classmethod
+    def tester_obj(cls):
+        return cls._tester_obj
+
+    @classmethod
+    def set_tester_obj(cls, tester_obj):
+        if not cls._tester_obj:
+            cls._tester_obj = tester_obj
 
     @classmethod
     def logdir(cls):

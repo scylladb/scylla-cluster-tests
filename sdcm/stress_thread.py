@@ -36,7 +36,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
         super(CassandraStressEventsPublisher, self).__init__()
         self.cs_log_filename = cs_log_filename
         self.node = str(node)
-        self.cs_events = [CassandraStressLogEvent(type='IOException', regex=r'java\.io\.IOException', severity=Severity.CRITICAL),
+        self.cs_events = [CassandraStressLogEvent(type='IOException', regex=r'java\.io\.IOException', severity=Severity.ERROR),
                           CassandraStressLogEvent(type='ConsistencyError', regex=r'Cannot achieve consistency level', severity=Severity.ERROR)]
 
     def run(self):

@@ -173,7 +173,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
             if line:
-                YcsbStressEvent('error', severity=Severity.CRITICAL, node=loader,
+                YcsbStressEvent('error', severity=Severity.ERROR, node=loader,
                                 stress_cmd=stress_cmd, errors=[line, ])
 
         LOGGER.debug("running: %s", stress_cmd)
@@ -197,7 +197,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = self.format_error(exc)
                 YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                log_file_name=log_file_name, severity=Severity.ERROR,
                                 errors=[errors_str])
                 raise
             finally:

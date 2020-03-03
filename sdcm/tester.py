@@ -24,6 +24,7 @@ import warnings
 from uuid import uuid4
 from functools import wraps
 import traceback
+import signal
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -134,6 +135,13 @@ def teardown_on_exception(method):
     return wrapper
 
 
+def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
+    raise AssertionError("Critical Error has failed the test")
+
+
+signal.signal(signal.SIGUSR2, critical_failure_handler)
+
+
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -151,6 +159,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # Test id is set by Hydra or generated if running without Hydra
             cluster.Setup.set_test_id(self.params.get('test_id', default=uuid4()))
         cluster.Setup.set_test_name(self.id())
+        cluster.Setup.set_tester_obj(self)
         self.log = logging.getLogger(__name__)
         self.logdir = cluster.Setup.logdir()
 
@@ -198,6 +207,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
+
+    def run(self, result=None):
+        self.result = self.defaultTestResult() if result is None else result
+        result = super(ClusterTester, self).run(self.result)
+        return result
 
     @property
     def test_id(self):
@@ -1312,9 +1326,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                       db_cluster_coredumps)
 
         if db_cluster_errors:
-            self.log.error('Errors found on DB node logs:')
+            self.log.error('Error/Critical events found:')
             self.log.error(db_cluster_errors)
-            self.fail('Errors found on DB node logs (see test logs)')
+            self.fail('Error/Critical events found (see test logs)')
 
     def clean_resources(self):
         # pylint: disable=too-many-branches
