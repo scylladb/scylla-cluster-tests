@@ -8,6 +8,7 @@ artifactsPipeline(
 
     test_config: 'test-cases/artifacts/oel76.yaml',
     backend: 'aws',
+    region_name: 'eu-west-1',
     instance_provision: 'spot_low_price',
 
     timeout: [time: 30, unit: 'MINUTES'],

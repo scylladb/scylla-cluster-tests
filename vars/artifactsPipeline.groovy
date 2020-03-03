@@ -21,7 +21,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('region_name', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region_name')
             string(defaultValue: '',
