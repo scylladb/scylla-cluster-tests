@@ -1598,10 +1598,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             :param exc_list: unittest list of failures or errors
             :return: string of backtrace
             """
-            if exc_list and exc_list[-1][0] is self:
-                return exc_list[-1][1]
-            else:
-                return None
+            if exc_list:
+                return "\n--------\n".join(f"{i[0]}:\n{i[1]}" for i in exc_list)
+            return None
 
         if hasattr(self, '_outcome'):  # Python 3.4+
             result = self.defaultTestResult()  # these 2 methods have no side effects

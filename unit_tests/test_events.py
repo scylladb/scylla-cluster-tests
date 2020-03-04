@@ -379,5 +379,30 @@ class TesterErrorDuringSetUp(unittest.TestCase):
         assert tre.severity == Severity.CRITICAL
 
 
+class TesterMultiSubTest(unittest.TestCase):
+    setup_failure = None
+    __unittest_expecting_failure__ = True
+
+    @unittest.skip("integration")
+    def test_multi_subtest(self):
+        with self.subTest("test1"):
+            print("test1")
+
+        with self.subTest("test2"):
+            assert 1 == 0
+
+        with self.subTest("test3"):
+            assert 1 == 0
+
+    def tearDown(self) -> None:
+        test_error, test_failure = ClusterTester.get_test_failures(self)
+        assert "test3" in test_failure
+        assert "test2" in test_failure
+        assert test_error is None
+        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        assert tre.severity == Severity.CRITICAL
+        self._outcome.errors = []  # we don't want to fail test
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
