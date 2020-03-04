@@ -2040,6 +2040,7 @@ server_encryption_options:
         """
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
+        extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
         if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune') or "3.10.0-1062" in self.kernel_version:
             self.log.warning(dedent("""
                 Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
@@ -2048,14 +2049,15 @@ server_encryption_options:
                 The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
                 the config files are copied from a succeed GCE instance (same instance type, same test
             """.format(self.kernel_version)))
-            self.remoter.run(
-                'sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup'.format(devname, ','.join(disks)))
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup {}'
+                             .format(devname, ','.join(disks), extra_setup_args))
             for conf in ['io.conf', 'io_properties.yaml']:
                 self.remoter.send_files(src=os.path.join('./configurations/', conf),  # pylint: disable=not-callable
                                         dst='/tmp/')
                 self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
         else:
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {}'.format(devname, ','.join(disks)))
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} {}'
+                             .format(devname, ','.join(disks), extra_setup_args))
 
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"

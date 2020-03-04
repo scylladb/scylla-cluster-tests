@@ -830,6 +830,9 @@ class SCTConfiguration(dict):
         dict(name="store_perf_results", env="SCT_STORE_PERF_RESULTS", type=bool,
              help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
                 Intended to be used in performance testing"""),
+
+        dict(name="append_scylla_setup_args", env="SCT_APPEND_SCYLLA_SETUP_ARGS", type=str,
+             help="More arguments to append to scylla_setup command line"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
