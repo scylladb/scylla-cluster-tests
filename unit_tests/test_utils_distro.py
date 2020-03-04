@@ -177,6 +177,18 @@ VERSION_CODENAME=bionic
 UBUNTU_CODENAME=bionic
 """,
 
+    "Amazon Linux 2": """\
+NAME="Amazon Linux"
+VERSION="2"
+ID="amzn"
+ID_LIKE="centos rhel fedora"
+VERSION_ID="2"
+PRETTY_NAME="Amazon Linux 2"
+ANSI_COLOR="0;33"
+CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2"
+HOME_URL="https://amazonlinux.com/"
+""",
+
     "Unknown": """\
 ID=sillylinux
 VERSION_ID=666
@@ -254,6 +266,12 @@ class TestDistro(unittest.TestCase):
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 18.04"])
         self.assertTrue(distro.is_ubuntu18)
         self.assertTrue(distro.is_ubuntu)
+
+    def test_amazon2(self):
+        self.assertTrue(Distro.AMAZON2.is_amazon2)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
+        self.assertTrue(distro.is_amazon2)
+        self.assertTrue(distro.is_rhel_like)
 
     def test_parsing_error(self):
         self.assertRaises(DistroError, Distro.from_os_release, DISTROS_OS_RELEASE["Garbage"])

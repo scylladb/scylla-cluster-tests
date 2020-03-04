@@ -30,6 +30,7 @@ class Distro(enum.Enum):
     RHEL7 = ("rhel", "7")
     RHEL8 = ("rhel", "8")
     OEL7 = ("ol", "7")
+    AMAZON2 = ("amzn", "2")
     DEBIAN8 = ("debian", "8")
     DEBIAN9 = ("debian", "9")
     DEBIAN10 = ("debian", "10")
@@ -110,8 +111,12 @@ class Distro(enum.Enum):
         return self == self.OEL7
 
     @property
+    def is_amazon2(self):
+        return self == self.AMAZON2
+
+    @property
     def is_rhel_like(self):
-        return self.value[0] in ("centos", "rhel", "ol", )  # pylint: disable=unsubscriptable-object
+        return self.value[0] in ("centos", "rhel", "ol", "amzn", )  # pylint: disable=unsubscriptable-object
 
     @property
     def is_ubuntu14(self):

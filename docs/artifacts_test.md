@@ -14,6 +14,7 @@ There are pipeline files for Jenkins in the repository:
 vars
 `-- artifactsPipeline.groovy
 jenkins-pipelines
+|-- artifacts-amazon2.jenkinsfile
 |-- artifacts-ami.jenkinsfile
 |-- artifacts-centos7.jenkinsfile
 |-- artifacts-centos8.jenkinsfile
@@ -84,6 +85,11 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rhel8.
 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.yaml
 ```
 
+## Amazon Linux 2
+```sh
+hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon2.yaml
+```
+
 ## Ubuntu 16.04 LTS (xenial)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu1604.yaml
@@ -107,18 +113,18 @@ and run the test:
 SCT_AMI_ID_DB_SCYLLA="<ami you've found>" SCT_REGION_NAME=us-east-1 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/ami.yaml
 ```
 
-# How to run private repo test using `hydra`
-
-Note, that this test doesn't create any node, but `hydra` required `--backend` parameter. Use `gce` for this parameter.
-
-```sh
-SCT_SCYLLA_REPO="<URL to private repo to verify>" hydra run-test private_repo_test --backend gce --config test-cases/private-repo/private-repo.yaml
-```
-
 ## Docker
 
 If you want to run against some official ScyllaDB Docker image, you should go to [tag list](https://hub.docker.com/r/scylladb/scylla/tags) and choose some tag name (i.e., `3.3.rc1`)
 
 ```sh
 SCT_SCYLLA_VERSION=<tag you've chose> hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
+```
+
+# How to run private repo test using `hydra`
+
+Note, that this test doesn't create any node, but `hydra` required `--backend` parameter. Use `gce` for this parameter.
+
+```sh
+SCT_SCYLLA_REPO="<URL to private repo to verify>" hydra run-test private_repo_test --backend gce --config test-cases/private-repo/private-repo.yaml
 ```
