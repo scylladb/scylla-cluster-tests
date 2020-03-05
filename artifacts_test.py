@@ -11,13 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import time
-
 from sdcm.tester import ClusterTester
-from sdcm.cluster import get_username
-from sdcm.utils.common import format_timestamp
-from sdcm.sct_events import get_logger_event_summary
 
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
@@ -57,29 +51,18 @@ class ArtifactsTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
-        start_time = format_timestamp(self.start_time)
-        config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
-        critical = self.get_critical_events()
+
+        email_data = self._get_common_email_data()
 
         # Normalize backend name, e.g., `aws' -> `AWS', `gce' -> `GCE', `docker' -> `Docker'.
         backend = self.params.get("cluster_backend")
         backend = {"aws": "AWS", "gce": "GCE", "docker": "Docker"}.get(backend, backend)
 
-        return {
-            "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
-            "username": get_username(),
-            "test_status": ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
-            "test_name": self.id(),
-            "start_time": start_time,
-            "end_time": format_timestamp(time.time()),
-            "build_url": os.environ.get("BUILD_URL"),
-            "scylla_version": self.node.scylla_version,
-            "scylla_repo": self.params.get("scylla_repo"),
-            "scylla_node_image": self.node.image,
-            "region_name": self.params.get("region_name"),
-            "scylla_packages_installed": self.node.scylla_packages_installed,
-            "test_id": self.test_id,
-            "events_summary": get_logger_event_summary(),
-            "nodes": [],
-            "backend": backend,
-        }
+        email_data.update({"backend": backend,
+                           "region_name": self.params.get("region_name"),
+                           "scylla_node_image": self.node.image,
+                           "scylla_packages_installed": self.node.scylla_packages_installed,
+                           "scylla_repo": self.params.get("scylla_repo"),
+                           "scylla_version": self.node.scylla_version, })
+
+        return email_data
