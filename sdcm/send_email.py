@@ -3,7 +3,7 @@ import os.path
 import logging
 import tempfile
 import json
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -11,7 +11,8 @@ from email.mime.text import MIMEText
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws
+from sdcm.utils.common import list_instances_gce, list_instances_aws, cached_property
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -108,8 +109,17 @@ class Email():
 
 
 class BaseEmailReporter():
-    #  pylint: disable=unused-argument, no-self-use
-    fields = []
+    COMMON_EMAIL_FIELDS = ("build_url",
+                           "end_time",
+                           "events_summary",
+                           "nodes",
+                           "start_time",
+                           "subject",
+                           "test_id",
+                           "test_name",
+                           "test_status",
+                           "username",)
+    _fields = ()
     email_template_file = 'results_base.html'
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
@@ -117,6 +127,10 @@ class BaseEmailReporter():
         self.email_template_fp = email_template_fp if email_template_fp else self.email_template_file
         self.log = logger if logger else LOGGER
         self.logdir = logdir if logdir else tempfile.mkdtemp()
+
+    @cached_property
+    def fields(self) -> Tuple[str, ...]:
+        return self.COMMON_EMAIL_FIELDS + self._fields
 
     def build_data_for_report(self, results):
         return {key: results.get(key, "N/A") for key in self.fields}
@@ -213,24 +227,27 @@ class BaseEmailReporter():
         self.log.info("Prepare result to send in email")
         return self.render_to_html(report_data)
 
-    def build_report_attachments(self, attachments_data, template_str=None):
+    @staticmethod
+    def build_report_attachments(attachments_data, template_str=None):  # pylint: disable=unused-argument
         return ()
 
-    def cut_report_data(self, report_data, attachments_data, reason):
+    @staticmethod
+    def cut_report_data(report_data, attachments_data, reason):  # pylint: disable=unused-argument
         if attachments_data is not None:
             return report_data, None
         return None, None
 
 
 class LongevityEmailReporter(BaseEmailReporter):
-
+    _fields = ("grafana_screenshots",
+               "grafana_snapshots",
+               "nemesis_details",
+               "nemesis_name",
+               "number_of_db_nodes",
+               "scylla_ami_id",
+               "scylla_instance_type",
+               "scylla_version",)
     email_template_file = "results_longevity.html"
-    fields = ['subject', 'grafana_screenshots', 'grafana_snapshots',
-              'test_status', 'test_name', 'start_time', 'end_time',
-              'build_url', 'scylla_version', 'scylla_ami_id',
-              'scylla_instance_type', 'number_of_db_nodes',
-              'nemesis_name', 'nemesis_details', 'test_id',
-              'username', 'nodes', 'events_summary']
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
@@ -255,43 +272,46 @@ class LongevityEmailReporter(BaseEmailReporter):
 
 
 class GeminiEmailReporter(BaseEmailReporter):
-
+    _fields = ("gemini_cmd",
+               "gemini_version",
+               "nemesis_details",
+               "nemesis_name",
+               "number_of_db_nodes",
+               "number_of_oracle_nodes",
+               "oracle_ami_id",
+               "oracle_db_version",
+               "oracle_instance_type",
+               "results",
+               "scylla_ami_id",
+               "scylla_instance_type",
+               "scylla_version",
+               "status",)
     email_template_file = "results_gemini.html"
-    fields = ['subject', 'gemini_cmd', 'gemini_version',
-              'scylla_version', 'scylla_ami_id', 'scylla_instance_type',
-              'number_of_db_nodes', 'number_of_oracle_nodes',
-              'oracle_db_version', 'oracle_ami_id', 'oracle_instance_type',
-              "results", "status", 'test_name', 'test_id', 'test_status',
-              'start_time', 'end_time', 'username',
-              'build_url', 'nemesis_name', 'nemesis_details',
-              'test_id', 'nodes', 'events_summary']
 
 
 class UpgradeEmailReporter(BaseEmailReporter):
-
+    _fields = ("number_of_db_nodes",
+               "scylla_ami_id",
+               "scylla_instance_type",
+               "scylla_version",)
     email_template_file = "results_upgrade.html"
-    fields = ['subject', 'scylla_version', 'scylla_ami_id',
-              'scylla_instance_type', 'number_of_db_nodes',
-              "results", "status", 'test_name', 'test_id', 'test_status',
-              'start_time', 'end_time', 'username',
-              'build_url', 'test_id', 'nodes', 'events_summary']
 
 
 class ArtifactsEmailReporter(BaseEmailReporter):
-
+    _fields = ("backend",
+               "region_name",
+               "scylla_node_image",
+               "scylla_packages_installed",
+               "scylla_repo",
+               "scylla_version",)
     email_template_file = "results_artifacts.html"
-    fields = ["subject", "username", "test_status", "test_name", "start_time",
-              "end_time", "build_url", "scylla_version", "scylla_repo",
-              "scylla_node_image", "region_name", "scylla_packages_installed",
-              "test_id", "events_summary", "nodes", "backend", ]
 
 
 class PrivateRepoEmailReporter(BaseEmailReporter):
-
+    _fields = ("repo_ostype",
+               "repo_uuid",
+               "scylla_repo",)
     email_template_file = "results_private_repo.html"
-    fields = ["subject", "username", "test_status", "test_name", "start_time",
-              "end_time", "build_url", "scylla_repo", "test_id", "events_summary",
-              "repo_uuid", "repo_ostype", ]
 
 
 def build_reporter(name: str,

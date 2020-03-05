@@ -13,14 +13,9 @@
 #
 # Copyright (c) 2018 ScyllaDB
 
-
 import time
-import os
 
 from sdcm.tester import ClusterTester
-from sdcm.cluster import get_username
-from sdcm.utils.common import format_timestamp
-from sdcm.sct_events import get_logger_event_summary
 
 
 class GeminiTest(ClusterTester):
@@ -75,36 +70,23 @@ class GeminiTest(ClusterTester):
             self.fail(self.gemini_results['results'])
 
     def get_email_data(self):
-        scylla_version = self.db_cluster.nodes[0].scylla_version
-        config_file_name = ";".join([os.path.splitext(os.path.basename(f))[0] for f in self.params['config_files']])
-        oracle_db_version = self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else ""
-        start_time = format_timestamp(self.start_time)
-        critical = self.get_critical_events()
-        job_name = os.environ.get('JOB_NAME')
-        subject_name = job_name if job_name else config_file_name
-        return {
-            "subject": 'Result {} {}'.format(subject_name, start_time),
-            "username": get_username(),
-            "gemini_cmd": self.gemini_results['cmd'],
-            "gemini_version": self.loaders.gemini_version,
-            "scylla_version": scylla_version,
-            "scylla_ami_id": self.params.get('ami_id_db_scylla'),
-            "scylla_instance_type": self.params.get('instance_type_db'),
-            "number_of_db_nodes": self.params.get('n_db_nodes'),
-            "number_of_oracle_nodes": self.params.get('n_test_oracle_db_nodes', 1),
-            "oracle_db_version": oracle_db_version,
-            "oracle_ami_id": self.params.get('ami_id_db_oracle'),
-            "oracle_instance_type": self.params.get('instance_type_db_oracle'),
-            "results": self.gemini_results['results'],
-            "status": self.gemini_results['status'],
-            'test_name': self.id(),
-            'test_id': self.test_id,
-            'start_time': start_time,
-            'end_time': format_timestamp(time.time()),
-            'build_url': os.environ.get('BUILD_URL', None),
-            'nemesis_name': self.params.get('nemesis_class_name'),
-            'nemesis_details': self.get_nemesises_stats(),
-            'test_status': ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
-            'nodes': [],
-            'events_summary': get_logger_event_summary(),
-        }
+        self.log.info('Prepare data for email')
+
+        email_data = self._get_common_email_data()
+        email_data.update({"gemini_cmd": self.gemini_results["cmd"],
+                           "gemini_version": self.loaders.gemini_version,
+                           "nemesis_details": self.get_nemesises_stats(),
+                           "nemesis_name": self.params.get("nemesis_class_name"),
+                           "number_of_db_nodes": self.params.get("n_db_nodes"),
+                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes", 1),
+                           "oracle_ami_id": self.params.get("ami_id_db_oracle"),
+                           "oracle_db_version":
+                               self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
+                           "oracle_instance_type": self.params.get("instance_type_db_oracle"),
+                           "results": self.gemini_results["results"],
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla"),
+                           "scylla_instance_type": self.params.get("instance_type_db"),
+                           "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
+                           "status": self.gemini_results["status"], })
+
+        return email_data

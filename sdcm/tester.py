@@ -41,7 +41,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from sdcm.keystore import KeyStore
 from sdcm import cluster, nemesis, cluster_docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
-from sdcm.cluster import UserRemoteCredentials
+from sdcm.cluster import UserRemoteCredentials, get_username
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -57,7 +57,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent
+    TestFrameworkEvent, TestResultEvent, get_logger_event_summary
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
@@ -1787,6 +1787,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         have to be implemented in child class.
         """
         return {}
+
+    def _get_common_email_data(self) -> dict:
+        """Helper for subclasses which extracts common data for email."""
+
+        start_time = format_timestamp(self.start_time)
+        config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
+        critical = self.get_critical_events()
+
+        return {"build_url": os.environ.get("BUILD_URL"),
+                "end_time": format_timestamp(time.time()),
+                "events_summary": get_logger_event_summary(),
+                "nodes": [],
+                "start_time": start_time,
+                "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
+                "test_id": self.test_id,
+                "test_name": self.id(),
+                "test_status": ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
+                "username": get_username(), }
 
     def tag_ami_with_result(self, test_error, test_failure):
         if self.params.get('cluster_backend', '') == 'aws' and self.params.get('tag_ami_with_result', False):

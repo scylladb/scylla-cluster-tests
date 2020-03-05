@@ -11,17 +11,12 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import re
 import json
-import time
 
 import requests
 
 from sdcm.tester import ClusterTester
-from sdcm.cluster import get_username
-from sdcm.sct_events import get_logger_event_summary
-from sdcm.utils.common import format_timestamp
 from sdcm.utils.housekeeping import HousekeepingDB
 
 
@@ -164,20 +159,10 @@ class PrivateRepoTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
-        start_time = format_timestamp(self.start_time)
-        config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
-        critical = self.get_critical_events()
-        return {
-            "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
-            "username": get_username(),
-            "test_status": ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
-            "test_name": self.id(),
-            "start_time": start_time,
-            "end_time": format_timestamp(time.time()),
-            "build_url": os.environ.get("BUILD_URL"),
-            "scylla_repo": self.params.get("scylla_repo"),
-            "test_id": self.test_id,
-            "events_summary": get_logger_event_summary(),
-            "repo_uuid": self.uuid,
-            "repo_ostype": self.ostype,
-        }
+
+        email_data = self._get_common_email_data()
+        email_data.update({"repo_ostype": self.ostype,
+                           "repo_uuid": self.uuid,
+                           "scylla_repo": self.params.get("scylla_repo"), })
+
+        return email_data

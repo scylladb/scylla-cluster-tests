@@ -25,10 +25,8 @@ from cassandra import AlreadyExists, InvalidRequest
 
 
 from sdcm.tester import ClusterTester
-from sdcm.cluster import get_username
 from sdcm.utils.alternator import create_table as alternator_create_table
-from sdcm.utils.common import format_timestamp, normalize_ipv6_url
-from sdcm.sct_events import get_logger_event_summary
+from sdcm.utils.common import normalize_ipv6_url
 
 
 class LongevityTest(ClusterTester):
@@ -490,34 +488,20 @@ class LongevityTest(ClusterTester):
             node.run_nodetool("flush")
 
     def get_email_data(self):
-        self.log.info('Prepare data for email')
-        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
-            self.start_time) if self.monitors else dict()
-        start_time = format_timestamp(self.start_time)
-        config_file_name = ";".join([os.path.splitext(os.path.basename(f))[0] for f in self.params['config_files']])
-        job_name = os.environ.get('JOB_NAME')
-        subject_name = job_name if job_name else config_file_name
-        critical = self.get_critical_events()
-        return {
-            'subject': 'Result {}: {}'.format(subject_name, start_time),
-            'username': get_username(),
-            'grafana_screenshots': grafana_dataset.get('screenshots', []),
-            'grafana_snapshots': grafana_dataset.get('snapshots', []),
-            'test_status': ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
-            'test_name': self.id(),
-            'start_time': start_time,
-            'end_time': format_timestamp(time.time()),
-            'build_url': os.environ.get('BUILD_URL', None),
-            'scylla_version': self.db_cluster.nodes[0].scylla_version if self.db_cluster else 'N/A',
-            'scylla_ami_id': self.params.get('ami_id_db_scylla', '-'),
-            "scylla_instance_type": self.params.get('instance_type_db'),
-            "number_of_db_nodes": self.params.get('n_db_nodes'),
-            'nemesis_name': self.params.get('nemesis_class_name'),
-            'nemesis_details': self.get_nemesises_stats(),
-            'test_id': self.test_id,
-            "nodes": [],
-            'events_summary': get_logger_event_summary(),
-        }
+        self.log.info("Prepare data for email")
+
+        email_data = self._get_common_email_data()
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
+        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
+                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                           "nemesis_details": self.get_nemesises_stats(),
+                           "nemesis_name": self.params.get("nemesis_class_name"),
+                           "number_of_db_nodes": self.params.get('n_db_nodes'),
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla", "-"),
+                           "scylla_instance_type": self.params.get('instance_type_db'),
+                           "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A", })
+
+        return email_data
 
     def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
