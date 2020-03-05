@@ -243,6 +243,16 @@ class ManagerTask(ScyllaManagerBase):
         relevant_key = [key for key in parsed_progress_table.keys() if parsed_progress_table[key]][0]
         return parsed_progress_table[relevant_key]
 
+    def wait_for_task_done_status(self, timeout=10800):
+        start_time = time.time()
+        while start_time + timeout > time.time():
+            if 'ERROR (4/4)' in self.manager_node.remoter.run(f'sctool -c {self.cluster_id} task list | grep {self.id}').stdout.strip():
+                return False, TaskStatus.ERROR
+            if self.status == TaskStatus.DONE:
+                return True, self.status
+            time.sleep(5)
+        return False, self.status
+
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
         Check if the status of a given task is in list
