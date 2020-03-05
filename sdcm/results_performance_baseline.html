@@ -143,7 +143,7 @@
             {% for subtest in subtests %}
                 {% set stat=v_res[subtest].res.get(stat_name) %}
             <td>
-                {{ "%.1f" % stat.best_val }} <br/>
+                {{ "%.1f" % stat.val }} <br/>
                 {% with status = stat.status, percent = stat.percent,
                    percent_abs = stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
@@ -203,6 +203,4 @@
             <img src="{{ screenshot }}"  height="50%" width="50%">
         {% endfor %}
     {% endfor %}
-{% endblock %}
-
 {% endblock %}

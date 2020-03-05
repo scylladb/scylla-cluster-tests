@@ -729,7 +729,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # Example:
         # group_by_type = {
         #     "version": {
-        #           "cdc_disabled|cdc_enabled|cdc_pre_image": {
+        #           "sub_type": {
         #               "tests": {  # SortedDict(),
         #                   "20180726": {
         #                       "latency 99th percentile": 10.3,
@@ -841,8 +841,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     continue
                 if sub_type not in current_tests:
                     continue
-                cmp_res[sub_type] = self.cmp(current_tests[sub_type]['stats'],
-                                             group_by_version_sub_type[version][sub_type]['stats_best'],
+                cmp_res[sub_type] = self.cmp(group_by_version_sub_type[version][sub_type]['stats_best'],
+                                             current_tests[sub_type]['stats'],
                                              version,
                                              group_by_version_sub_type[version][sub_type]['best_test_id'])
             versions_res_list.append({version: cmp_res})
