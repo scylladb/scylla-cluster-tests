@@ -64,13 +64,15 @@ def call(Map pipelineParams) {
                         } else {
                             sub_tests = [pipelineParams.test_name]
                         }
-                        for (sub_test in sub_tests) {
+                        for (t in sub_tests) {
                             def perf_test
+                            def sub_test = t
                             if (sub_test == pipelineParams.test_name) {
                                 perf_test = sub_test
                             } else {
                                 perf_test = "${pipelineParams.test_name}.${sub_test}"
                             }
+
                             tasks["sub_test=${sub_test}"] = {
                                 node(getJenkinsLabels(params.backend, params.aws_region)) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
