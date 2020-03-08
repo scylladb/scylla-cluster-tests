@@ -470,6 +470,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.get('aws_root_disk_size_loader', default=None)
+        if loader_info['device_mappings'] is None:
+            if loader_info['disk_size']:
+                loader_info['device_mappings'] = [{
+                    "DeviceName": self.params.get("aws_root_disk_name_loader", default="/dev/sda1"),
+                    "Ebs": {
+                        "VolumeSize": loader_info['disk_size'],
+                        "VolumeType": "gp2"
+                    }
+                }]
+            else:
+                loader_info['device_mappings'] = []
+
+
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
