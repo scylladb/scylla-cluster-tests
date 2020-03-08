@@ -13,6 +13,6 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-stretch'
 scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-3.3-stretch.list'
 store_results_in_elasticsearch: False
-test_duration: 600
+test_duration: 60
 user_prefix: 'artifacts-debian9'
 system_auth_rf: 1
