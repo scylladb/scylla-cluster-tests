@@ -88,6 +88,8 @@
 | **<a name="aws_root_disk_name_db">aws_root_disk_name_db</a>**  |  | N/A | SCT_AWS_ROOT_DISK_NAME_DB
 | **<a name="aws_root_disk_size_monitor">aws_root_disk_size_monitor</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_MONITOR
 | **<a name="aws_root_disk_name_monitor">aws_root_disk_name_monitor</a>**  |  | N/A | SCT_AWS_ROOT_DISK_NAME_MONITOR
+| **<a name="aws_root_disk_size_loader">aws_root_disk_size_loader</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_MONITOR
+| **<a name="aws_root_disk_name_loader">aws_root_disk_name_loader</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_MONITOR
 | **<a name="ami_db_scylla_user">ami_db_scylla_user</a>**  |  | N/A | SCT_AMI_DB_SCYLLA_USER
 | **<a name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
