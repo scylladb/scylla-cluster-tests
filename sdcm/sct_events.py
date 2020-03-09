@@ -379,7 +379,7 @@ class CoreDumpEvent(SctEvent):
         self.corefile_url = corefile_url
         self.download_instructions = download_instructions
         self.backtrace = backtrace
-        self.severity = Severity.CRITICAL
+        self.severity = Severity.ERROR
         self.node = str(node)
         if timestamp is not None:
             self.timestamp = timestamp
@@ -429,7 +429,7 @@ class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
 
 
 class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, name, status=Severity.CRITICAL, node=None, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, type, name, status=Severity.ERROR, node=None, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super(ClusterHealthValidatorEvent, self).__init__()
         self.name = name
         self.type = type
