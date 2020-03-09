@@ -38,7 +38,10 @@ table_definition: |
     testflag int,
     pid text,
     ppid text,
-    users_task list<text>
+    users_task list<text>,
+    nums_list list<int>,
+    nums_set set<int>,
+    names_set set<text>,
   ) WITH bloom_filter_fp_chance = 0.01
     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
     AND comment = 'Request for unit level UIs'
@@ -77,6 +80,16 @@ columnspec:
   - name: users_task
     size: fixed(2)
 
+  - name: nums_list
+    population: exp(1..10000)
+
+  - name: nums_set
+    size: fixed(100)
+    population: exp(1..10000)
+
+  - name: names_set
+    size: fixed(500)
+
 insert:
   partitions: fixed(1)
   batchtype: UNLOGGED
@@ -84,4 +97,7 @@ insert:
 queries:
   read1:
     cql: select * from large_collection_test.table_with_large_collection where pk_id = ?
+    fields: samerow
+  update1:
+    cql: update large_collection_test.table_with_large_collection set users_name=?,users_desc=?,users_comment=?,users_task=?,nums_list=?,nums_set=?,names_set=? where pk_id = ?
     fields: samerow
