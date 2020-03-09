@@ -845,10 +845,10 @@ class SCTConfiguration(dict):
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
-        'aws':  ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
-                 "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                 "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor",  "ami_db_scylla_user",
-                 "ami_monitor_user"],
+        'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
+                "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
+                "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
+                "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db', 'gce_root_disk_type_db',
                 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'gce_instance_type_loader',

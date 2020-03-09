@@ -246,10 +246,10 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
             self.severity = Severity.CRITICAL
         else:
             self.severity = severity
-        self.source = str(source)
-        self.source_method = str(source_method)
-        self.exception = str(exception)
-        self.message = str(message)
+        self.source = str(source) if source else None
+        self.source_method = str(source_method) if source_method else None
+        self.exception = str(exception) if exception else None
+        self.message = str(message) if message else None
         self.args = args
         self.kwargs = kwargs
 
@@ -259,7 +259,7 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         args = f' args={self.args}' if self.args else ''
         kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
         params = ','.join([args, kwargs]) if kwargs or args else ''
-        return f"{super().__str__()}, source={self.source}.{self.source_method}({params}){message}"
+        return f"{super().__str__()}, source={self.source}.{self.source_method}({params}) {message}"
 
 
 class TestResultEvent(SctEvent):
@@ -791,6 +791,21 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                 LOGGER.info(msg)
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Failed to write event to event.log")
+
+    def get_events_by_category(self, limit=0):
+        output = {}
+        for severity, events_file_path in self.level_to_file_mapping.items():
+            try:
+                with events_file_path.open() as events_file:
+                    output[severity.name] = events_bucket = []
+                    for event_data in events_file:
+                        if limit and len(events_bucket) > limit:
+                            events_bucket.pop(0)
+                        events_bucket.append(event_data)
+            except Exception:  # pylint: disable=broad-except
+                if not output.get(severity.name, None):
+                    output[severity.name] = []
+        return output
 
 
 EVENTS_PROCESSES = dict()

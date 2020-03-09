@@ -58,14 +58,16 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary
+    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.rsyslog_daemon import stop_rsyslog
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
-from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, save_email_data_to_file
+from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
+    save_email_data_to_file
+
 
 configure_logging()
 
@@ -483,7 +485,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 }]
             else:
                 loader_info['device_mappings'] = []
-
 
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
@@ -1756,14 +1757,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             for nem in self.db_cluster.nemesis:
                 nemesis_stats.update(nem.stats)
-
-        for detail in nemesis_stats.values():
-            for run in detail.get('runs', []):
-                run['start'] = format_timestamp(float(run['start']))
-                run['end'] = format_timestamp(float(run['end']))
-            for failure in detail.get('failures', []):
-                failure['start'] = format_timestamp(float(failure['start']))
-                failure['end'] = format_timestamp(float(failure['end']))
+        if nemesis_stats:
+            for detail in nemesis_stats.values():
+                for run in detail.get('runs', []):
+                    run['start'] = format_timestamp(float(run['start']))
+                    run['end'] = format_timestamp(float(run['end']))
+                for failure in detail.get('failures', []):
+                    failure['start'] = format_timestamp(float(failure['start']))
+                    failure['end'] = format_timestamp(float(failure['end']))
         return nemesis_stats
 
     def save_email_data(self):
@@ -1827,6 +1828,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return {"build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": get_logger_event_summary(),
+                "last_events": EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].get_events_by_category(100),
                 "nodes": [],
                 "start_time": start_time,
                 "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",

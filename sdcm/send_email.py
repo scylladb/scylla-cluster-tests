@@ -112,6 +112,7 @@ class BaseEmailReporter():
     COMMON_EMAIL_FIELDS = ("build_url",
                            "end_time",
                            "events_summary",
+                           "last_events",
                            "nodes",
                            "start_time",
                            "subject",
@@ -248,6 +249,8 @@ class LongevityEmailReporter(BaseEmailReporter):
                "scylla_instance_type",
                "scylla_version",)
     email_template_file = "results_longevity.html"
+    last_events_limit = 5
+    last_events_body_limit = 200
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
@@ -262,13 +265,31 @@ class LongevityEmailReporter(BaseEmailReporter):
 
     def build_report(self, report_data):
         report_data['short_report'] = True
+        report_data['last_events'] = self._get_last_events(report_data)
         return super().build_report(report_data)
 
     def build_report_attachments(self, attachments_data, template_str=None):
         report_file = os.path.join(self.logdir, 'email_report.html')
+        attachments_data['last_events'] = self._get_last_events(attachments_data)
         self.save_html_to_file(attachments_data, report_file, template_str=template_str)
         attachments = (report_file, )
         return attachments
+
+    def _get_last_events(self, report_data):
+        last_events = {}
+        original_last_events = report_data.get('last_events')
+        if original_last_events != "N/A":
+            for severity, events in original_last_events.items():
+                if not events:
+                    last_events[severity] = ['No events in this category']
+                    continue
+                last_events[severity] = severity_events = []
+                for event in reversed(events):
+                    severity_events.insert(0, event[:self.last_events_body_limit])
+                if len(severity_events) > self.last_events_limit:
+                    severity_events.append('There are more events. See log file.')
+                    break
+        return last_events
 
 
 class GeminiEmailReporter(BaseEmailReporter):
