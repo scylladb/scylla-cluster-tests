@@ -2359,6 +2359,15 @@ server_encryption_options:
                 self.remoter.run('cp -r %s %s' % (f, new_full_path), ignore_status=True)
         return root_dir
 
+    def generate_coredump_file(self, restart_scylla=True):
+        self.log.info('Generate scylla core')
+        self.remoter.run("sudo pkill -f --signal 3 /usr/bin/scylla")
+        self.wait_db_down(timeout=600)
+        if restart_scylla:
+            self.log.debug('Restart scylla server')
+            self.stop_scylla(timeout=600)
+            self.start_scylla(timeout=600)
+
     def get_console_output(self):
         # TODO add to each type of node
         # comment raising exception. replace with log warning
@@ -2420,7 +2429,8 @@ server_encryption_options:
             options += '-u {} -pw {} '.format(*credentials)
         return "nodetool {options} {sub_cmd} {args}".format(options=options, sub_cmd=sub_cmd, args=args)
 
-    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True):
+    def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
+                     ignore_status=False, verbose=True, coredump_on_timeout=False):
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -2433,14 +2443,21 @@ server_encryption_options:
             -pwf    --password-file Password file path.
             -pw --password  Password.
             -u  --username  Username.
+        :param timeout: time for command execution
         :param ignore_status: don't throw exception if the command fails
+        :param coredump_on_timeout: Send signal SIGQUIT to scylla process
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-        result = self.remoter.run(cmd, ignore_status=ignore_status, verbose=verbose)
-        self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
-
-        return result
+        try:
+            result = self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
+            self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
+            return result
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.critical(f"Command '{cmd}' error: {details}")
+            if coredump_on_timeout and isinstance(details, CommandTimedOut):
+                self.generate_coredump_file()
+            raise
 
     def check_node_health(self):
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
