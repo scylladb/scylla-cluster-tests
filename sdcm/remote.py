@@ -225,6 +225,9 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
             self.run(f'cp {src} {dst}')
 
 
+LOCALRUNNER = LocalCmdRunner()
+
+
 class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, hostname, user="root", port=22, connect_timeout=60, password="",  # pylint: disable=too-many-arguments
