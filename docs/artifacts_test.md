@@ -32,7 +32,7 @@ jenkins-pipelines
 You should use different parameters for .rpm/.deb tests and for AMI test:
 - The only required parameter for .rpm/.deb jobs is `scylla_repo`, a path to a ScyllaDB repo (e.g., `https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/master/latest/scylla.repo`)
 - For AMI job you need two parameters: `scylla_ami_id` and `region_name`
-- For Docker job you need two parameters: `scylla_docker_image` and `scylla_version`
+- For Docker job you need two parameters: `scylla_docker_image` (e.g., `scylladb/scylla` or `scylladb/scylla-nightly`) and `scylla_version` (it'll be used as Docker image tag)
 
 Optionally, you can override default cloud instance type by providing `instance_type` parameter.
 
@@ -118,7 +118,7 @@ SCT_AMI_ID_DB_SCYLLA="<ami you've found>" SCT_REGION_NAME=us-east-1 hydra run-te
 If you want to run against some official ScyllaDB Docker image, you should go to [tag list](https://hub.docker.com/r/scylladb/scylla/tags) and choose some tag name (i.e., `3.3.rc1`)
 
 ```sh
-SCT_SCYLLA_VERSION=<tag you've chose> hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
+SCT_SCYLLA_VERSION="<tag you've chose>" hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
 ```
 
 # How to run private repo test using `hydra`

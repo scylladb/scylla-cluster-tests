@@ -311,9 +311,8 @@ class SCTConfiguration(dict):
              help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE",
              choices=['HASH', 'HASH_AND_RANGE']),
         dict(name="alternator_write_isolation", env="SCT_ALTERNATOR_WRITE_ISOLATION", type=int,
-             help="Set the write isolation for the alternator table, "
-                  "see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies "
-                  "for more details"),
+             help="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob"
+                  "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
         dict(name="alternator_use_dns_routing", env="SCT_ALTERNATOR_USE_DNS_ROUTING", type=boolean,
              help="If true, spawn a docker with a dns server for the ycsb loader to point to"),
 
@@ -770,7 +769,8 @@ class SCTConfiguration(dict):
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="verify_stress_after_cluster_upgrade", env="SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE", type=str_or_list,
+        dict(name="verify_stress_after_cluster_upgrade", env="SCT_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE",
+             type=str_or_list,
              help="""cassandra-stress commands.
             You can specify everything but the -node parameter, which is going to
             be provided by the test suite infrastructure.
@@ -825,7 +825,8 @@ class SCTConfiguration(dict):
              """,
              choices=("keep", "keep-on-failure", "destroy")),
         dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
-             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend"),
+             help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, "
+                  "only effect GCE backend"),
 
         dict(name="loader_swap_size", env="SCT_LOADER_SWAP_SIZE", type=int,
              help="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB"),
@@ -850,13 +851,13 @@ class SCTConfiguration(dict):
                 "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
-        'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db', 'gce_root_disk_type_db',
-                'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'gce_instance_type_loader',
-                'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor',
-                'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor',
-                'gce_datacenter', 'scylla_repo'],
+        'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db',
+                'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
+                'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                'gce_n_local_ssd_disk_monitor', 'gce_datacenter', 'scylla_repo'],
 
-        'docker': ['docker_image', 'user_credentials_path', 'scylla_repo'],
+        'docker': ['docker_image', 'user_credentials_path'],
 
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
@@ -940,9 +941,9 @@ class SCTConfiguration(dict):
         dist_version = scylla_linux_distro.split('-')[-1]
 
         if scylla_version:
-            # Look for the version, and return it's info ami + repo
-            # According to backend, populate 'scylla_repo' or 'ami_id_db_scylla'
-            if 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
+            if self.get("cluster_backend") == "docker":
+                LOGGER.info("Assume that Scylla Docker image has repo file pre-installed.")
+            elif 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
                     if ':' in scylla_version:
@@ -970,7 +971,7 @@ class SCTConfiguration(dict):
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
 
-            if 'scylla_repo_loader' not in self and ':' not in scylla_version:
+            if self.get("n_loaders") and "scylla_repo_loader" not in self and ":" not in scylla_version:
                 scylla_linux_distro_loader = self.get('scylla_linux_distro_loader', '')
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]

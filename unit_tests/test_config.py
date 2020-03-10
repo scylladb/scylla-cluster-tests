@@ -65,6 +65,24 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertIn('docker_image', conf.dump_config())
         self.assertEqual(conf.get('docker_image'), 'scylladb/scylla')
 
+    @staticmethod
+    def test_06a_docker_latest_no_loader():
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_SCYLLA_VERSION'] = 'latest'
+        os.environ['SCT_N_LOADERS'] = "0"
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
+    @staticmethod
+    def test_06b_docker_development():
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_SCYLLA_VERSION'] = '666.development-blah'
+        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'http://example.com/scylla.repo'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+
     def test_07_baremetal_exception(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'baremetal'
         conf = SCTConfiguration()
@@ -143,7 +161,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @staticmethod
     def test_12_scylla_version_repo():
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
         conf = SCTConfiguration()
@@ -151,7 +169,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @staticmethod
     def test_12_scylla_version_repo_case1():  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
 
@@ -159,13 +177,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     def test_12_scylla_version_repo_case2(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
         self.assertRaisesRegex(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
     def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
@@ -179,7 +197,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
 
     def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
@@ -254,8 +272,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertListEqual(list(get_dupes(opts)), [])
 
     def test_13_bool(self):
-
-        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_STORE_RESULTS_IN_ELASTICSEARCH'] = 'False'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
