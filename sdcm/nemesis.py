@@ -408,7 +408,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
-        result = self.target_node.run_nodetool("drain")
+        result = self.target_node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
         self.cluster.check_cluster_health()
         if result is not None:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
@@ -2039,7 +2039,7 @@ class UpgradeNemesis(Nemesis):
     #         node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
     #                          ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
     #     # flush all memtables to SSTables
-    #     node.run_nodetool("drain")
+    #     node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
     #     node.remoter.run('sudo systemctl restart scylla-server.service')
     #     node.wait_db_up(verbose=True)
     #     new_ver = node.remoter.run('rpm -qa scylla-server')
@@ -2090,7 +2090,7 @@ class RollbackNemesis(Nemesis):
         node.remoter.run(
             'sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
-        node.run_nodetool("drain")
+        node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
         node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
