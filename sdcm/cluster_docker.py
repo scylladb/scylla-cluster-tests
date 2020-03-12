@@ -9,7 +9,7 @@ from sdcm import cluster
 from sdcm.utils.common import retrying
 from sdcm.remote import LocalCmdRunner
 from sdcm.log import SDCMAdapter
-from sdcm.utils.docker import get_docker_bridge_gateway
+from sdcm.utils.docker import _docker, get_docker_bridge_gateway
 
 LOGGER = logging.getLogger(__name__)
 LOCALRUNNER = LocalCmdRunner()
@@ -38,15 +38,6 @@ class ScyllaDockerRequirementError(cluster.ScyllaRequirementError, DockerError):
 
 class CannotFindContainers(DockerError):
     pass
-
-
-def _docker(cmd, timeout=10):
-    res = LOCALRUNNER.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout)
-    if res.exit_status:
-        if 'No such container:' in res.stderr:
-            raise DockerContainerNotExists(res.stderr)
-        raise DockerCommandError('command: {}, error: {}, output: {}'.format(cmd, res.stderr, res.stdout))
-    return res
 
 
 class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
@@ -106,6 +97,8 @@ class DockerNode(cluster.BaseNode):  # pylint: disable=abstract-method
     def destroy(self, force=True):  # pylint: disable=arguments-differ
         force_param = '-f' if force else ''
         _docker('rm {} -v {}'.format(force_param, self.name))
+
+        super().destroy()
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
@@ -456,11 +449,6 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
     def destroy(self):
         for node in self.nodes:
             try:
-                self.stop_selenium_remote_webdriver(node)
-                self.log.error(f"Stopping Selenium WebDriver succeded")
-            except Exception as exc:  # pylint: disable=broad-except
-                self.log.error(f"Stopping Selenium WebDriver failed with {str(exc)}")
-            try:
                 self.stop_scylla_monitoring(node)
                 self.log.error(f"Stopping scylla monitoring succeeded")
             except Exception as exc:  # pylint: disable=broad-except
@@ -470,3 +458,4 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
                 self.log.error(f"Cleaning up scylla monitoring succeeded")
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")
+            node.destroy()

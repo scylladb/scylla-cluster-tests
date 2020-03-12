@@ -63,7 +63,7 @@ from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
-from sdcm.rsyslog_daemon import stop_rsyslog
+from sdcm.localhost import LocalHost
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
@@ -202,8 +202,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              self.logdir)
         self.start_time = time.time()
 
+        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=cluster.Setup.test_id())
         if self.params.get("logs_transport") == 'rsyslog':
-            cluster.Setup.configure_rsyslog(enable_ngrok=False)
+            cluster.Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         start_events_device(cluster.Setup.logdir())
         time.sleep(0.5)
@@ -1410,7 +1411,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
                 if self.create_stats:
                     self.update({'test_details': {'log_files': {'job_log': s3_link}}})
-            stop_rsyslog()
+            self.localhost.destroy()
             self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):

@@ -39,20 +39,21 @@ from paramiko.ssh_exception import NoValidConnectionsError
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
-from sdcm.rsyslog_daemon import start_rsyslog
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, NETWORK_EXCEPTIONS
+from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_scylla_repo_file, S3Storage, \
     get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation, cached_property, \
     download_dir_from_cloud
 from sdcm.utils.distro import Distro
+from sdcm.utils.docker import ContainerManager
 from sdcm.utils.thread import raise_event_on_failure
-from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
+from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent
-from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
+from sdcm.utils.auto_ssh import AutoSshContainerMixin
+from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
@@ -81,7 +82,6 @@ INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)
-LOCALRUNNER = LocalCmdRunner()
 
 
 def set_ip_ssh_connections(ip_type):
@@ -200,9 +200,10 @@ class Setup:
         cls.TAGS[key] = value
 
     @classmethod
-    def configure_rsyslog(cls, enable_ngrok=False):
-
-        port = start_rsyslog(cls.test_id(), cls.logdir())
+    def configure_rsyslog(cls, node, enable_ngrok=False):
+        ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
+        port = node.rsyslog_port
+        LOGGER.info("rsyslog listen on port %s (config: %s)", port, node.rsyslog_confpath)
 
         if enable_ngrok:
             requests.delete('http://localhost:4040/api/tunnels/rsyslogd')
@@ -347,7 +348,7 @@ class UserRemoteCredentials():
         pass
 
 
-class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
 
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
@@ -422,6 +423,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._kernel_version = None
         self._cassandra_stress_version = None
         self.lock = threading.Lock()
+
+        self._containers = {}
+
         self._init_port_mapping()
 
     def _init_remoter(self, ssh_login_info):
@@ -430,7 +434,13 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
     def _init_port_mapping(self):
         if (IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION) and Setup.RSYSLOG_ADDRESS:
-            start_auto_ssh(Setup.test_id(), self, Setup.RSYSLOG_ADDRESS[1], RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+            ContainerManager.run_container(self, "auto_ssh:rsyslog",
+                                           local_port=Setup.RSYSLOG_ADDRESS[1],
+                                           remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+
+    @property
+    def tags(self):
+        return {}
 
     @property
     def short_hostname(self):
@@ -1146,7 +1156,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             return None
 
     def destroy(self):
-        raise NotImplementedError('Derived classes must implement destroy')
+        ContainerManager.destroy_all_containers(self)
+        LOGGER.info("%s destroyed", self)
 
     def wait_ssh_up(self, verbose=True, timeout=500):
         text = None
@@ -2701,18 +2712,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
     def destroy(self):
         self.log.info('Destroy nodes')
         for node in self.nodes:
-            if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
-                from sdcm.auto_ssh import stop_auto_ssh
-                stop_auto_ssh(Setup.test_id(), node)
-
             node.destroy()
 
     def terminate_node(self, node):
         self.nodes.remove(node)
-        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
-            from sdcm.auto_ssh import stop_auto_ssh
-            stop_auto_ssh(Setup.test_id(), node)
-
         node.destroy()
 
     def get_db_auth(self):
@@ -3876,8 +3879,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url("http://{}:{}".format(normalize_ipv6_url(node.external_address), self.grafana_port))
-            self.stop_selenium_remote_webdriver(node)
-            self.start_selenium_remote_webdriver(node)
             return
 
         self.install_scylla_monitoring(node)
@@ -3900,8 +3901,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             node.remoter.run('sudo apt-get install screen -y')
         if self.params.get("use_mgmt", default=None):
             self.install_scylla_manager(node, auth_token=self.mgmt_auth_token)
-
-        self.start_selenium_remote_webdriver(node)
 
     def install_scylla_manager(self, node, auth_token):
         if self.params.get('use_mgmt', default=None):
@@ -4168,16 +4167,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self.add_sct_dashboards_to_grafana(node)
         self.save_sct_dashboards_config(node)
         self.save_monitoring_version(node)
-
-    @retrying(n=3, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
-              message="Waiting for restarting selenium remote webdriver")
-    def start_selenium_remote_webdriver(self, node):
-        self.log.debug("Start docker container with selenium chrome driver")
-        RemoteWebDriverContainer(node).run()
-
-    def stop_selenium_remote_webdriver(self, node):
-        self.log.debug("Delete docker container with selenium chrome driver")
-        RemoteWebDriverContainer(node).kill()
 
     def save_monitoring_version(self, node):
         node.remoter.run(

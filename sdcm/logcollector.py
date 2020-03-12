@@ -21,7 +21,7 @@ from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce
                                makedirs, filter_gce_instances_by_type, get_sct_root_path)
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
-from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer, RemoteBrowser
+from sdcm.utils.remotewebbrowser import RemoteBrowser
 from sdcm.utils.docker import get_docker_bridge_gateway
 
 
@@ -383,12 +383,11 @@ class GrafanaScreenShot(GrafanaEntity):
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
         version = monitoring_version.replace('.', '-')
-        webdriver_container = RemoteWebDriverContainer(node)
+
         try:
             screenshots = []
-            if not webdriver_container.is_running():
-                webdriver_container.run()
-            remote_browser = RemoteBrowser(webdriver_container)
+            remote_browser = RemoteBrowser(node)
+
             for screenshot in self.grafana_entity_names:
                 dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
                                                                     uid="-".join([screenshot['name'],
@@ -477,11 +476,9 @@ class GrafanaSnapshot(GrafanaEntity):
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
-        webdriver_container = RemoteWebDriverContainer(node)
+
         try:
-            if not webdriver_container.is_running():
-                webdriver_container.run()
-            remote_browser = RemoteBrowser(webdriver_container)
+            remote_browser = RemoteBrowser(node)
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')

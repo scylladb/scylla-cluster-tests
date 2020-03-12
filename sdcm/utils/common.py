@@ -1051,6 +1051,11 @@ def get_my_ip():
     return ip
 
 
+@retrying(n=60, sleep_time=5, allowed_exceptions=(OSError, ))
+def wait_for_port(host, port):
+    socket.create_connection((host, port)).close()
+
+
 def get_branched_ami(ami_version, region_name):
     """
     Get a list of AMIs, based on version match
