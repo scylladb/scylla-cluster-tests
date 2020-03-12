@@ -63,6 +63,8 @@ class PhysicalMachineNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
 
+        super().destroy()
+
 
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
