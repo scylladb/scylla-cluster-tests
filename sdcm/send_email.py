@@ -276,20 +276,20 @@ class LongevityEmailReporter(BaseEmailReporter):
         return attachments
 
     def _get_last_events(self, report_data):
-        last_events = {}
-        original_last_events = report_data.get('last_events')
-        if original_last_events != "N/A":
-            for severity, events in original_last_events.items():
+        output = {}
+        last_events = report_data.get('last_events')
+        if last_events and isinstance(last_events, dict):
+            for severity, events in last_events.items():
                 if not events:
-                    last_events[severity] = ['No events in this category']
+                    output[severity] = ['No events in this category']
                     continue
-                last_events[severity] = severity_events = []
+                output[severity] = severity_events = []
                 for event in reversed(events):
                     severity_events.insert(0, event[:self.last_events_body_limit])
-                if len(severity_events) > self.last_events_limit:
-                    severity_events.append('There are more events. See log file.')
-                    break
-        return last_events
+                    if len(severity_events) > self.last_events_limit:
+                        severity_events.append('There are more events. See log file.')
+                        break
+        return output
 
 
 class GeminiEmailReporter(BaseEmailReporter):
