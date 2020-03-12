@@ -687,7 +687,8 @@ class AWSNode(cluster.BaseNode):
             client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
             response = client.release_address(AllocationId=self.eip_allocation_id)
             self.log.debug("release elastic ip . Result: %s\n", response)
-        self.log.info('Destroyed')
+
+        super().destroy()
 
     def get_console_output(self):
         """Get instance console Output
