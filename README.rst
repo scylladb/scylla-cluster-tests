@@ -375,12 +375,11 @@ For examples see utilities documentation
 Building Hydra Docker image
 ===========================
 
-Once you have changes in the requirements-python.txt or in hydra Dockerfile::
+Once you have changes in the requirements-python.txt or in Hydra Dockerfile
 
-    # change the version in docker/env/version
+- change the version in docker/env/version
+- run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub
 
-    # this would build and push to dockerhub and to ECR on all regions we are using hydra
-    ./docker/env/build_n_push.sh
 
 FAQ
 ====
