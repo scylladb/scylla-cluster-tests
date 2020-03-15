@@ -2203,7 +2203,7 @@ class MgmtRepair(Nemesis):
 
 
 class AbortRepairMonkey(Nemesis):
-    disruptive = True
+    disruptive = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2251,7 +2251,7 @@ class TopPartitions(Nemesis):
 
 
 class RandomInterruptionNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
@@ -2261,7 +2261,7 @@ class RandomInterruptionNetworkMonkey(Nemesis):
 
 
 class BlockNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
@@ -2271,7 +2271,7 @@ class BlockNetworkMonkey(Nemesis):
 
 
 class RejectInterNodeNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
@@ -2281,7 +2281,7 @@ class RejectInterNodeNetworkMonkey(Nemesis):
 
 
 class RejectNodeExporterNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
@@ -2291,7 +2291,7 @@ class RejectNodeExporterNetworkMonkey(Nemesis):
 
 
 class RejectThriftNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
@@ -2301,7 +2301,7 @@ class RejectThriftNetworkMonkey(Nemesis):
 
 
 class StopStartInterfacesNetworkMonkey(Nemesis):
-    disruptive = False
+    disruptive = True
     networking = True
     run_with_gemini = False
 
