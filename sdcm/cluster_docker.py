@@ -286,12 +286,13 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                                                   **kwargs)
 
     def node_setup(self, node, verbose=False, timeout=3600):
-        self.check_aio_max_nr(node)
-
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = ','.join(self.seed_nodes_ips)
 
         node.wait_ssh_up(verbose=verbose)
+
+        self.check_aio_max_nr(node)
+
         if cluster.Setup.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
