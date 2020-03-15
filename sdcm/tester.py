@@ -50,9 +50,10 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.utils.common import log_run_info, retrying, ScyllaCQLSession, \
-    get_non_system_ks_cf_list, makedirs, format_timestamp, wait_ami_available, tag_ami, update_certificates, \
-    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys
+from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
+    wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
+    get_testrun_status, download_encrypt_keys
+from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
@@ -619,26 +620,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
 
     def get_cluster_docker(self):
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
-        user_credentials = self.params.get('user_credentials_path', None)
-        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-        params = dict(
-            docker_image=self.params.get('docker_image', None),
-            docker_image_tag=self.params.get('scylla_version', None),
-            n_nodes=[self.params.get('n_db_nodes')],
-            user_prefix=self.params.get('user_prefix', None),
-            credentials=self.credentials,
-            params=self.params
-        )
-        self.db_cluster = cluster_docker.ScyllaDockerCluster(**params)
+        container_node_params = dict(docker_image=self.params.get('docker_image'),
+                                     docker_image_tag=self.params.get('scylla_version'),
+                                     node_key_file=self.credentials[0].key_file)
+        common_params = dict(user_prefix=self.params.get('user_prefix', None),
+                             params=self.params)
 
-        params['n_nodes'] = int(self.params.get('n_loaders'))
-        self.loaders = cluster_docker.LoaderSetDocker(**params)
-
-        params['n_nodes'] = int(self.params.get('n_monitor_nodes', default=0))
-        params['targets'] = dict(db_cluster=self.db_cluster, loaders=self.loaders)
-        self.monitors = cluster_docker.MonitorSetDocker(**params)
+        self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
+                                                             **container_node_params, **common_params)
+        self.loaders = cluster_docker.LoaderSetDocker(n_nodes=self.params.get("n_loaders"),
+                                                      **container_node_params, **common_params)
+        self.monitors = cluster_docker.MonitorSetDocker(n_nodes=self.params.get("n_monitor_nodes"),
+                                                        targets=dict(db_cluster=self.db_cluster,
+                                                                     loaders=self.loaders),
+                                                        **common_params)
 
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
@@ -1345,9 +1342,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for db nodes')
                 cluster.Setup.keep_cluster(node_type='db_nodes', val='keep')
-                self.db_cluster.set_keep_tag_on_failure()
+                self.db_cluster.set_keep_alive_on_failure()
                 if self.cs_db_cluster:
-                    self.cs_db_cluster.set_keep_tag_on_failure()
+                    self.cs_db_cluster.set_keep_alive_on_failure()
 
         if self.loaders is not None:
             self.log.info("Action for loader nodes is %s", actions_per_cluster_type['loader_nodes'])
@@ -1358,7 +1355,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for loader nodes')
                 cluster.Setup.keep_cluster(node_type='loader_nodes', val='keep')
-                self.loaders.set_keep_tag_on_failure()
+                self.loaders.set_keep_alive_on_failure()
 
         if self.monitors is not None:
             self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
@@ -1369,7 +1366,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for monitor nodes')
                 cluster.Setup.keep_cluster(node_type='monitor_nodes', val='keep')
-                self.monitors.set_keep_tag_on_failure()
+                self.monitors.set_keep_alive_on_failure()
 
         if self.credentials is not None:
             for credential in self.credentials:

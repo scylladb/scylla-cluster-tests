@@ -18,7 +18,8 @@ from textwrap import dedent
 import zmq
 import dateutil.parser
 
-from sdcm.utils.common import safe_kill, pid_exists, makedirs, retrying, timeout
+from sdcm.utils.common import safe_kill, pid_exists, makedirs
+from sdcm.utils.decorators import retrying, timeout
 
 
 EVENTS_DEVICE_START_TIMEOUT = 30  # seconds

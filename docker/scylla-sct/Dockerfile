@@ -2,35 +2,39 @@ ARG SOURCE_IMAGE
 
 FROM ${SOURCE_IMAGE}
 
-# Install sshd, sudo and collectd:
-RUN yum -y install openssh-server openssh-clients passwd initscripts sudo collectd net-tools rsync openssl file && \
-    yum clean all
-
-# configure ssh
-RUN mkdir /var/run/sshd
-RUN /usr/sbin/sshd-keygen
-RUN useradd scylla-test && echo -e "test\ntest" | passwd --stdin scylla-test
 ENV USER scylla-test
-RUN mkdir -p /home/$USER/.ssh
-ADD scylla-test.pub /home/$USER/.ssh/authorized_keys
-RUN chown $USER /home/$USER/.ssh/authorized_keys
-RUN chown -R $USER:$USER /home/$USER/.ssh/authorized_keys
-RUN chmod 700 /home/$USER/.ssh/authorized_keys
 
-# configure sudo
-RUN usermod -aG wheel $USER
-RUN chmod u+w /etc/sudoers
-RUN echo "scylla-test  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers
-
-EXPOSE 22
-
-# Supervisord configuration:
-ADD etc/sshd.conf /etc/supervisord.conf.d/sshd.conf
-ADD etc/collectd.conf /etc/supervisord.conf.d/collectd.conf
-ADD etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
-RUN echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf
-RUN echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
-
-# replacement of systemctl, since inside docker there is no D-Bus connection available
-RUN curl https://raw.githubusercontent.com/gdraheim/docker-systemctl-replacement/master/files/docker/systemctl.py --output /usr/bin/systemctl
-RUN chmod 777 /usr/bin/systemctl
+# Install sudo, collectd and other tools, disable autostart of scylla-server and scylla-housekeeping services,
+# remove the login banner and add a new user.
+#
+# Password for the user is `test' and encrypted using openssl command:
+#    $ echo -n test | openssl passwd -crypt -stdin -salt 00
+#    00hzYw5m.HyAY
+#
+# For more details see man page for useradd(8)
+RUN yum -y install \
+        sudo \
+        collectd \
+        net-tools \
+        rsync \
+        openssl \
+        file && \
+    yum clean all && \
+    echo $'[program:collectd]\n\
+command=/usr/sbin/collectd\n\
+stdout_logfile=/dev/stdout\n\
+stdout_logfile_maxbytes=0\n\
+stderr_logfile=/dev/stderr\n\
+stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/collectd.conf && \
+    echo $'[program:scylla-manager]\n\
+command=/usr/bin/scylla-manager --developer-mode\n\
+stdout_logfile=/dev/stdout\n\
+stdout_logfile_maxbytes=0\n\
+stderr_logfile=/dev/stderr\n\
+stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/scylla-manager.conf && \
+    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
+    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
+    sed -i "\:/dev/stderr:d" /etc/bashrc && \
+    useradd -G wheel -p 00hzYw5m.HyAY $USER && \
+    echo "$USER  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
+    sudo -Hu $USER sh -c "mkdir -m 700 ~/.ssh"

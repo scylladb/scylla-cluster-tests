@@ -5,7 +5,7 @@ import requests
 
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.utils.alternator import create_table as alternator_create_table
-from sdcm.utils.common import timeout
+from sdcm.utils.decorators import timeout
 from sdcm.utils.docker import running_in_docker
 
 from unit_tests.dummy_remote import LocalLoaderSetDummy

@@ -10,7 +10,7 @@ from pathlib import Path
 from multiprocessing import Event
 
 from sdcm.tester import ClusterTester, teardown_on_exception
-from sdcm.utils.common import timeout
+from sdcm.utils.decorators import timeout
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,

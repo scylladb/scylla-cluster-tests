@@ -19,21 +19,23 @@ from docker import DockerClient  # pylint: disable=wrong-import-order
 from selenium.webdriver import Remote, ChromeOptions
 
 from sdcm.utils.docker import ContainerManager
-from sdcm.utils.common import get_free_port, wait_for_port, cached_property
+from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.ssh_agent import SSHAgent
+from sdcm.utils.decorators import cached_property
 
 
 WEB_DRIVER_IMAGE = "selenium/standalone-chrome:latest"
 WEB_DRIVER_REMOTE_PORT = 4444
+WEB_DRIVER_CONTAINER_START_DELAY = 30  # seconds
 
 LOGGER = logging.getLogger(__name__)
 
 
 class WebDriverContainerMixin:
-    def web_driver_container_run_args(self, remote_port: int = WEB_DRIVER_REMOTE_PORT) -> dict:
+    def web_driver_container_run_args(self) -> dict:
         return dict(image=WEB_DRIVER_IMAGE,
-                    name=f"{self.name}-wedriver",
-                    ports={f"{remote_port}/tcp": remote_port, },
+                    name=f"{self.name}-webdriver",
+                    ports={f"{WEB_DRIVER_REMOTE_PORT}/tcp": None, },
                     privileged=True,
                     volumes={"/dev/shm": {"bind": "/dev/shm"}, })
 
@@ -41,41 +43,44 @@ class WebDriverContainerMixin:
     def web_driver_docker_client(self) -> Optional[DockerClient]:
         if not self.ssh_login_info:
             return None
-        SSHAgent.add_key(self.ssh_login_info["key_file"])
+        SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
         return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{self.ssh_login_info['hostname']}")
 
 
 class RemoteBrowser:
-    def __init__(self, node, use_tunnel=True, remote_port=WEB_DRIVER_REMOTE_PORT):
+    def __init__(self, node, use_tunnel=True):
         self.node = node
         self.use_tunnel = bool(self.node.ssh_login_info and use_tunnel)
-        self.remote_port = remote_port
 
     @cached_property
     def browser(self):
-        ContainerManager.run_container(self.node, "web_driver",
-                                       remote_port=self.remote_port)
+        ContainerManager.run_container(self.node, "web_driver")
 
         LOGGER.debug("Waiting for WebDriver container is up")
         ContainerManager.wait_for_status(self.node, "web_driver", "running")
 
+        port = ContainerManager.get_container_port(self.node, "web_driver", WEB_DRIVER_REMOTE_PORT)
+        LOGGER.debug("WebDriver port is %s", port)
+
         if self.use_tunnel:
             LOGGER.debug("Start auto_ssh for Selenium remote WebDriver")
-            ContainerManager.run_container(self.node, "auto_ssh:webdriver",
-                                           local_port=self.remote_port,
+            ContainerManager.run_container(self.node, "auto_ssh:web_driver",
+                                           local_port=port,
                                            remote_port=get_free_port(),
                                            ssh_mode="-L")
 
             LOGGER.debug("Waiting for SSH tunnel container is up")
-            ContainerManager.wait_for_status(self.node, "auto_ssh:webdriver", status="running")
+            ContainerManager.wait_for_status(self.node, "auto_ssh:web_driver", status="running")
 
             host = "127.0.0.1"
-            port = int(ContainerManager.get_environ(self.node, "auto_ssh:webdriver")["SSH_TUNNEL_REMOTE"])
+            port = int(ContainerManager.get_environ(self.node, "auto_ssh:web_driver")["SSH_TUNNEL_REMOTE"])
         else:
-            host, port = self.node.external_address, self.remote_port
+            host = self.node.external_address
 
         LOGGER.debug("Waiting for port %s:%s is accepting connections", host, port)
         wait_for_port(host, port)
+
+        time.sleep(WEB_DRIVER_CONTAINER_START_DELAY)
 
         return Remote(command_executor=f"http://{host}:{port}/wd/hub", options=ChromeOptions())
 

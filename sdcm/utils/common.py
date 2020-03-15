@@ -12,7 +12,9 @@
 # Copyright (c) 2017 ScyllaDB
 
 # pylint: disable=too-many-lines
+
 from __future__ import absolute_import
+
 import atexit
 import itertools
 import os
@@ -27,12 +29,13 @@ import select
 import shutil
 import copy
 import string
-import sys
 import warnings
-from typing import Iterable, List, Callable
+import getpass
+from typing import Iterable, List, Callable, Optional, Dict, Union
 from urllib.parse import urlparse
+from unittest.mock import Mock
 
-from functools import wraps, partial
+from functools import wraps
 from collections import defaultdict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -40,75 +43,18 @@ from concurrent.futures.thread import _python_exit
 import hashlib
 
 import boto3
+import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from sdcm.utils.ssh_agent import SSHAgent
+from sdcm.utils.decorators import retrying
+
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
-
-
-try:
-    from functools import cached_property  # pylint: disable=unused-import,ungrouped-imports
-except ImportError:
-    # Copy/pasted from https://github.com/python/cpython/blob/3.8/Lib/functools.py#L923
-
-    # TODO: remove this code after switching to Python 3.8+
-
-    ################################################################################
-    # cached_property() - computed once per instance, cached as attribute
-    ################################################################################
-
-    _NOT_FOUND = object()
-
-    class cached_property:  # pylint: disable=invalid-name,too-few-public-methods
-        def __init__(self, func):
-            self.func = func
-            self.attrname = None
-            self.__doc__ = func.__doc__
-            self.lock = threading.RLock()
-
-        def __set_name__(self, owner, name):
-            if self.attrname is None:
-                self.attrname = name
-            elif name != self.attrname:
-                raise TypeError(
-                    "Cannot assign the same cached_property to two different names "
-                    f"({self.attrname!r} and {name!r})."
-                )
-
-        def __get__(self, instance, owner=None):
-            if instance is None:
-                return self
-            if self.attrname is None:
-                raise TypeError(
-                    "Cannot use cached_property instance without calling __set_name__ on it.")
-            try:
-                cache = instance.__dict__
-            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots)
-                msg = (
-                    f"No '__dict__' attribute on {type(instance).__name__!r} "
-                    f"instance to cache {self.attrname!r} property."
-                )
-                raise TypeError(msg) from None
-            val = cache.get(self.attrname, _NOT_FOUND)
-            if val is _NOT_FOUND:
-                with self.lock:
-                    # check if another thread filled cache while we awaited lock
-                    val = cache.get(self.attrname, _NOT_FOUND)
-                    if val is _NOT_FOUND:
-                        val = self.func(instance)
-                        try:
-                            cache[self.attrname] = val
-                        except TypeError:
-                            msg = (
-                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "
-                                f"does not support item assignment for caching {self.attrname!r} property."
-                            )
-                            raise TypeError(msg) from None
-            return val
 
 
 def deprecation(message):
@@ -139,95 +85,6 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
     assert _remote_get_hash(remoter, dst) == hash_expected
-
-
-class retrying():  # pylint: disable=invalid-name,too-few-public-methods
-    """
-        Used as a decorator to retry function run that can possibly fail with allowed exceptions list
-    """
-
-    def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
-                 allowed_exceptions=(Exception,), message="", timeout=0):  # pylint: disable=redefined-outer-name
-        if n:
-            self.n = n  # number of times to retry  # pylint: disable=invalid-name
-        else:
-            self.n = sys.maxsize * 2 + 1
-        self.sleep_time = sleep_time  # number seconds to sleep between retries
-        self.allowed_exceptions = allowed_exceptions  # if Exception is not allowed will raise
-        self.message = message  # string that will be printed between retries
-        self.timeout = timeout  # if timeout is defined it will raise error
-        #   if it is reached even when maximum retries not reached yet
-
-    def __call__(self, func):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            if self.timeout:
-                end_time = time.time() + self.timeout
-            else:
-                end_time = 0
-            if self.n == 1:
-                # there is no need to retry
-                return func(*args, **kwargs)
-            for i in range(self.n):
-                try:
-                    if self.message and i > 0:
-                        LOGGER.info("%s [try #%s]", self.message, i)
-                    return func(*args, **kwargs)
-                except self.allowed_exceptions as ex:
-                    LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
-                    time.sleep(self.sleep_time)
-                    if i == self.n - 1 or (end_time and time.time() > end_time):
-                        LOGGER.error(f"'{func.__name__}': Number of retries exceeded!")
-                        raise
-
-        return inner
-
-
-def log_run_info(arg):
-    """
-        Decorator that prints BEGIN before the function runs and END when function finished running.
-        Uses function name as a name of action or string that can be given to the decorator.
-        If the function is a method of a class object, the class name will be printed out.
-
-        Usage examples:
-            @log_run_info
-            def foo(x, y=1):
-                pass
-            In: foo(1)
-            Out:
-                BEGIN: foo
-                END: foo (ran 0.000164)s
-
-            @log_run_info("Execute nemesis")
-            def disrupt():
-                pass
-            In: disrupt()
-            Out:
-                BEGIN: Execute nemesis
-                END: Execute nemesis (ran 0.000271)s
-    """
-    def _inner(func, msg=None):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            class_name = ""
-            if args and func.__name__ in dir(args[0]):
-                class_name = " <%s>" % args[0].__class__.__name__
-            action = "%s%s" % (msg, class_name)
-            start_time = datetime.datetime.now()
-            LOGGER.debug("BEGIN: %s", action)
-            res = func(*args, **kwargs)
-            end_time = datetime.datetime.now()
-            LOGGER.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
-            return res
-        return inner
-
-    if callable(arg):  # when decorator is used without a string message
-        return _inner(arg, arg.__name__)
-    else:
-        return lambda f: _inner(f, arg)
-
-
-timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
 
 
 def generate_random_string(length):
@@ -569,7 +426,119 @@ def clean_cloud_resources(tags_dict):
     clean_instances_aws(tags_dict)
     clean_elastic_ips_aws(tags_dict)
     clean_instances_gce(tags_dict)
+    clean_resources_docker(tags_dict)
     return True
+
+
+def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = False) -> Dict[str, docker.DockerClient]:
+    log = LOGGER if verbose else Mock()
+    docker_clients = {}
+
+    def get_builder_docker_client(builder: Dict[str, str]) -> None:
+        if not can_connect_to(builder["public_ip"], 22, timeout=5):
+            log.error("%(name)s: can't establish connection to %(public_ip)s:22, port is closed", builder)
+            return
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                client = docker.DockerClient(base_url=f"ssh://{builder['user']}@{builder['public_ip']}")
+            client.ping()
+            log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
+        except:
+            log.error("%(name)s: failed to connect to Docker via SSH", builder)
+            raise
+        docker_clients[builder["name"]] = client
+
+    builders = [item["builder"] for item in list_builders(running=True)]
+    if builder_name:
+        builders = {builder_name: builders[builder_name], } if builder_name in builders else {}
+    if builders:
+        SSHAgent.start(verbose=verbose)
+        SSHAgent.add_keys(set(b["key_file"] for b in builders), verbose)
+        ParallelObject(builders, timeout=20).run(get_builder_docker_client, ignore_exceptions=True)
+        log.info("%d builders from %d available to scan for Docker resources", len(docker_clients), len(builders))
+    elif builder_name != "local":
+        log.warning("No builders found")
+
+    # In case we are not running on a builder add local Docker client.
+    if builder_name == "local" or builder_name is None and getpass.getuser() != "jenkins":
+        docker_clients["local"] = docker.from_env()
+
+    return docker_clients
+
+
+def list_resources_docker(tags_dict: Optional[dict] = None,
+                          builder_name: Optional[str] = None,
+                          running: bool = False,
+                          group_as_builder: bool = False,
+                          verbose: bool = False) -> Dict[str, Union[list, dict]]:
+    log = LOGGER if verbose else Mock()
+    filters = {}
+
+    if tags_dict:
+        filters["label"] = [f"{key}={value}" for key, value in tags_dict.items()]
+
+    containers = {}
+    images = {}
+
+    def get_containers(builder_name: str, docker_client: docker.DockerClient) -> None:
+        log.info("%s: scan for Docker containers", builder_name)
+        containers_list = docker_client.containers.list(filters=filters, sparse=True)
+        if running:
+            containers_list = [container for container in containers_list if container.status == "running"]
+        else:
+            containers_list = [container for container in containers_list if container.status != "removing"]
+        if containers_list:
+            log.info("%s: found %d containers", builder_name, len(containers_list))
+            containers[builder_name] = containers_list
+
+    def get_images(builder_name: str, docker_client: docker.DockerClient) -> None:
+        log.info("%s: scan for Docker images", builder_name)
+        images_list = docker_client.images.list(filters=filters)
+        if images_list:
+            log.info("%s: found %s images", builder_name, len(images_list))
+            images[builder_name] = images_list
+
+    docker_clients = tuple(list_clients_docker(builder_name=builder_name, verbose=verbose).items())
+
+    ParallelObject(docker_clients, timeout=30).run(get_containers, ignore_exceptions=True, unpack_objects=True)
+    ParallelObject(docker_clients, timeout=30).run(get_images, ignore_exceptions=True, unpack_objects=True)
+
+    if not group_as_builder:
+        containers = list(itertools.chain.from_iterable(containers.values()))
+        images = list(itertools.chain.from_iterable(images.values()))
+
+    return dict(containers=containers, images=images)
+
+
+def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None) -> None:
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+
+    def delete_container(container):
+        container.reload()
+        container.remove(v=True, force=True)
+        LOGGER.info("Docker container `%s' on host `%s' deleted", container.name, container.client.info()["Name"])
+
+    def delete_image(image):
+        image.client.images.remove(image=image.id, force=True)
+        LOGGER.info("Docker image tag(s) %s on host `%s' deleted", image.tags, image.client.info()["Name"])
+
+    resources_to_clean = list_resources_docker(tags_dict, builder_name=builder_name, group_as_builder=False)
+    containers = resources_to_clean.get("containers", [])
+    images = resources_to_clean.get("images", [])
+
+    for container in containers:
+        try:
+            delete_container(container)
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Failed to delete container `%s' on host `%s'",
+                         container.name, container.client.info()["Name"])
+
+    for image in images:
+        try:
+            delete_image(image)
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Failed to delete image tag(s) %s on host `%s'", image.tags, image.client.info()["Name"])
 
 
 def aws_tags_to_dict(tags_list):
@@ -1056,6 +1025,15 @@ def wait_for_port(host, port):
     socket.create_connection((host, port)).close()
 
 
+def can_connect_to(ip: str, port: int, timeout: int = 1) -> bool:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.settimeout(timeout)
+    result = sock.connect_ex((ip, port))
+    sock.close()
+    return result == 0
+
+
 def get_branched_ami(ami_version, region_name):
     """
     Get a list of AMIs, based on version match
@@ -1098,31 +1076,6 @@ def get_ami_tags(ami_id, region_name):
         return {i['Key']: i['Value'] for i in test_image.tags}
     else:
         return {}
-
-
-def measure_time(func):
-    """
-    For an input given function, it returns a wrapper function that returns how long it takes to execute, and the function's result.
-
-    Example:
-
-    @measure_time
-    def _run_repair(self, node):
-        result = node.run_nodetool(sub_cmd='repair')
-        return result
-
-    repair_time, res = self._run_repair(node=node3)
-    :param func:
-    :return:
-    """
-    @wraps(func)
-    def wrapped(*args, **kwargs):
-        start = time.time()
-        func_res = func(*args, **kwargs)
-        end = time.time()
-        return end - start, func_res
-
-    return wrapped
 
 
 def tag_ami(ami_id, tags_dict, region_name):
@@ -1407,16 +1360,33 @@ def filter_gce_instances_by_type(instances):
     return filtered_instances
 
 
+def filter_docker_containers_by_type(containers):
+    filtered_containers = {
+        "db_nodes": [],
+        "loader_nodes": [],
+        "monitor_nodes": []
+    }
+
+    for container in containers:
+        if "db-node" in container.name:
+            filtered_containers["db_nodes"].append(container)
+        if "monitor-node" in container.name:
+            filtered_containers["monitor_nodes"].append(container)
+        if "loader-node" in container.name:
+            filtered_containers["loader_nodes"].append(container)
+    return filtered_containers
+
+
 SSH_KEY_DIR = "~/.ssh"
 SSH_KEY_AWS_DEFAULT = "scylla-qa-ec2"
 SSH_KEY_GCE_DEFAULT = "scylla-test"
 
 
-def get_aws_builders(tags=None):
+def get_aws_builders(tags=None, running=False):
     builders = []
     ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_AWS_DEFAULT)
 
-    aws_builders = list_instances_aws(tags_dict=tags)
+    aws_builders = list_instances_aws(tags_dict=tags, running=running)
 
     for aws_builder in aws_builders:
         builder_name = [tag["Value"] for tag in aws_builder["Tags"] if tag["Key"] == "Name"][0]
@@ -1430,11 +1400,11 @@ def get_aws_builders(tags=None):
     return builders
 
 
-def get_gce_builders(tags=None):
+def get_gce_builders(tags=None, running=False):
     builders = []
     ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_GCE_DEFAULT)
 
-    gce_builders = list_instances_gce(tags_dict=tags)
+    gce_builders = list_instances_gce(tags_dict=tags, running=running)
 
     for gce_builder in gce_builders:
         builders.append({"builder": {
@@ -1447,10 +1417,10 @@ def get_gce_builders(tags=None):
     return builders
 
 
-def list_builders():
+def list_builders(running=False):
     builder_tag = {"NodeType": "Builder"}
-    aws_builders = get_aws_builders(builder_tag)
-    gce_builders = get_gce_builders(builder_tag)
+    aws_builders = get_aws_builders(builder_tag, running=running)
+    gce_builders = get_gce_builders(builder_tag, running=running)
 
     return aws_builders + gce_builders
 

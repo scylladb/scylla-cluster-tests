@@ -36,8 +36,8 @@ from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus, update_config_file
-from sdcm.utils.common import retrying, remote_get_file, get_non_system_ks_cf_list, get_db_tables, \
-    generate_random_string
+from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string
+from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
