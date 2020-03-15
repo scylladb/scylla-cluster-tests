@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 import itertools
-from typing import List, Optional
+from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
 import subprocess
@@ -42,12 +42,12 @@ from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
-from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation, cached_property, \
-    download_dir_from_cloud
+from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
+    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker import ContainerManager
 from sdcm.utils.thread import raise_event_on_failure
+from sdcm.utils.decorators import cached_property, retrying, log_run_info
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
@@ -116,7 +116,6 @@ class Setup:
 
     _test_id = None
     _test_name = None
-    TAGS = dict()
     _logdir = None
     _tester_obj = None
 
@@ -186,18 +185,42 @@ class Setup:
     def keep_cluster(cls, node_type, val='destroy'):
         if "db_nodes" in node_type:
             cls.KEEP_ALIVE_DB_NODES = bool(val == 'keep')
-        if "loader_nodes" in node_type:
+        elif "loader_nodes" in node_type:
             cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
-        if "monitor_nodes" in node_type:
+        elif "monitor_nodes" in node_type:
             cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
+
+    @classmethod
+    def should_keep_alive(cls, node_type: Optional[str]) -> bool:
+        if TEST_DURATION >= 24 * 60:
+            return True
+        if node_type is None:
+            return False
+        if "db_nodes" in node_type:
+            return cls.KEEP_ALIVE_DB_NODES
+        if "loader_nodes" in node_type:
+            return cls.KEEP_ALIVE_LOADER_NODES
+        if "monitor_nodes" in node_type:
+            return cls.KEEP_ALIVE_MONITOR_NODES
+        return False
 
     @classmethod
     def mixed_cluster(cls, val=False):
         cls.MIXED_CLUSTER = val
 
     @classmethod
-    def tags(cls, key, value):
-        cls.TAGS[key] = value
+    def common_tags(cls) -> Dict[str, str]:
+        job_name = os.environ.get('JOB_NAME')
+        tags = dict(RunByUser=get_username(),
+                    TestName=str(cls.test_name()),
+                    TestId=str(cls.test_id()),
+                    version=job_name.split('/', 1)[0] if job_name else "unknown")
+
+        build_tag = os.environ.get('BUILD_TAG')
+        if build_tag:
+            tags["JenkinsJobTag"] = build_tag
+
+        return tags
 
     @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):
@@ -283,26 +306,6 @@ def get_username():
     return "linux_user={}".format(current_linux_user)
 
 
-def create_common_tags():
-    build_tag = os.environ.get('BUILD_TAG', None)
-    job_name = os.environ.get('JOB_NAME', None)
-    tags = dict(RunByUser=get_username(),
-                TestName=str(Setup.test_name()),
-                TestId=str(Setup.test_id()))
-
-    if build_tag:
-        tags["JenkinsJobTag"] = build_tag
-
-    # In order to calculate costs by version in AWS, we will use the root dir of the job in jenkins as the version.
-    if job_name:
-        tags["version"] = job_name.split('/')[0]
-    else:
-        tags["version"] = "unknown"
-
-    tags.update(Setup.TAGS)
-    return tags
-
-
 class NodeError(Exception):
 
     def __init__(self, msg=None):
@@ -351,22 +354,20 @@ class UserRemoteCredentials():
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
 
+    log = LOGGER
+
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
-        self.is_seed = False
-        self.remoter = None
-        self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
-        if base_logdir:
-            self.logdir = os.path.join(base_logdir, self.name)
-            makedirs(self.logdir)
-        else:
-            self.logdir = None
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
-        if ssh_login_info:
-            ssh_login_info['hostname'] = self.external_address
-        self._init_remoter(ssh_login_info)
         self.ssh_login_info = ssh_login_info
+        self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
+        self.dc_idx = dc_idx
+
+        self._containers = {}
+        self.is_seed = False
+
+        self.remoter = None
+
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -408,25 +409,37 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         ]
 
         self.termination_event = threading.Event()
+        self.lock = threading.Lock()
+
         self._running_nemesis = None
-        if not Setup.REUSE_CLUSTER:
-            self.set_hostname()
-        self.start_task_threads()
+
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap.
         self.enable_auto_bootstrap = False
+
         self.scylla_version = ''
         self._is_enterprise = None
-        self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
+
+        # If node is a replacement for a dead node, store dead node private ip here
+        self.replacement_node_ip = None
 
         self._kernel_version = None
         self._cassandra_stress_version = None
-        self.lock = threading.Lock()
 
-        self._containers = {}
-
+    def init(self) -> None:
+        if self.logdir:
+            os.makedirs(self.logdir, exist_ok=True)
+        self.log = SDCMAdapter(self.log, extra={"prefix": str(self)})
+        if self.ssh_login_info:
+            self.ssh_login_info["hostname"] = self.external_address
+        self._init_remoter(self.ssh_login_info)
+        if not Setup.REUSE_CLUSTER:
+            self.set_hostname()
+        self.start_task_threads()
         self._init_port_mapping()
+
+        self.set_keep_alive()
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = RemoteCmdRunner(**ssh_login_info)
@@ -438,9 +451,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                            local_port=Setup.RSYSLOG_ADDRESS[1],
                                            remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
 
-    @property
-    def tags(self):
-        return {}
+    @cached_property
+    def tags(self) -> Dict[str, str]:
+        return {**self.parent_cluster.tags,
+                "Name": str(self.name), }
+
+    def _set_keep_alive(self):
+        ContainerManager.set_all_containers_keep_alive(self)
+        return True
+
+    def set_keep_alive(self):
+        node_type = None if self.parent_cluster is None else self.parent_cluster.node_type
+        if Setup.should_keep_alive(node_type) and self._set_keep_alive():
+            self.log.info("Keep this node alive")
 
     @property
     def short_hostname(self):
@@ -2634,6 +2657,11 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
         self.coredumps = dict()
         super(BaseCluster, self).__init__()
 
+    @cached_property
+    def tags(self) -> Dict[str, str]:
+        return {**Setup.common_tags(),
+                "NodeType": str(self.node_type), }
+
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
@@ -2735,10 +2763,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
-    def set_keep_tag_on_failure(self):
+    def set_keep_alive_on_failure(self):
         for node in self.nodes:
-            if hasattr(node, "set_keep_tag"):
-                node.set_keep_tag()
+            if hasattr(node, "set_keep_alive"):
+                node.set_keep_alive()
 
 
 class NodeSetupFailed(Exception):
@@ -3797,7 +3825,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
-        self.remote_webdriver_port = 4444
         self.monitor_branch = self.params.get('monitor_branch')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
@@ -4155,10 +4182,12 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     def start_scylla_monitoring(self, node):
         node.remoter.run("cp {0.monitor_install_path}/prometheus/scylla_manager_servers.example.yml"
                          " {0.monitor_install_path}/prometheus/scylla_manager_servers.yml".format(self))
+        labels = " ".join(f"--label {key}={value}" for key, value in node.tags.items())
         run_script = dedent(f"""
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
             ./start-all.sh \
+            -D "{labels}" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api"

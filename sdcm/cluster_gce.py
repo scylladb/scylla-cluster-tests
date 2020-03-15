@@ -1,27 +1,37 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import os
 import time
+import logging
+from typing import Dict
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 
 from sdcm import cluster
 from sdcm.sct_events import SpotTerminationEvent
+from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
+from sdcm.utils.decorators import cached_property
 
 
 SPOT_TERMINATION_CHECK_DELAY = 1
 SPOT_TERMINATION_METADATA_CHECK_TIMEOUT = 15
 
+LOGGER = logging.getLogger(__name__)
+
 
 class CreateGCENodeError(Exception):
     pass
-
-
-def gce_create_metadata(extra_meta=None):
-    tags = cluster.create_common_tags()
-    tags['startup-script'] = cluster.Setup.get_startup_script()
-    if extra_meta:
-        tags.update(extra_meta)
-    return tags
 
 
 class GCENode(cluster.BaseNode):
@@ -30,16 +40,16 @@ class GCENode(cluster.BaseNode):
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
 
+    log = LOGGER
+
     def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
         name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
+        self.node_index = node_index
         self._instance = gce_instance
         self._gce_service = gce_service
-        self._wait_public_ip()
-        # sleep 10 seconds for waiting users are added to system
-        # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121
-        time.sleep(10)
+
         ssh_login_info = {'hostname': None,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
@@ -51,27 +61,24 @@ class GCENode(cluster.BaseNode):
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
-        if not cluster.Setup.REUSE_CLUSTER:
-            if cluster.TEST_DURATION >= 24 * 60:
-                self.log.info('Test duration set to %s. '
-                              'Tagging node with "keep-alive"',
-                              cluster.TEST_DURATION)
-                self._instance_wait_safe(self._gce_service.ex_set_node_tags, self._instance, ['keep-alive'])
-            self.set_keep_tag()
 
-    def set_keep_tag(self):
-        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
-        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
-        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-            self.log.info('Keep cluster on failure %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
-                                     self._instance, ['keep-alive'])
+    def init(self):
+        self._wait_public_ip()
+
+        # sleep 10 seconds for waiting users are added to system
+        # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121
+        time.sleep(10)
+
+        super().init()
+
+    @cached_property
+    def tags(self) -> Dict[str, str]:
+        return {**super().tags,
+                "NodeIndex": str(self.node_index), }
+
+    def _set_keep_alive(self) -> bool:
+        return self._instance_wait_safe(self._gce_service.ex_set_node_labels, self._instance, {"keep": "alive"}) and \
+            super()._set_keep_alive()
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
@@ -157,8 +164,7 @@ class GCENode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()
         self._instance_wait_safe(self._safe_destroy)
-
-        super().destroy()
+        self.log.info('Destroyed')
 
     def get_console_output(self):
         # TODO adding console output from instance on GCE
@@ -299,10 +305,10 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                   image=self._gce_image,
                                   ex_network=self._gce_network,
                                   ex_disks_gce_struct=gce_disk_struct,
-                                  ex_metadata=gce_create_metadata(
-                                      {'Name': name,
-                                       'NodeIndex': node_index,
-                                       'NodeType': self.node_type}),
+                                  ex_metadata={**self.tags,
+                                               "Name": name,
+                                               "NodeIndex": node_index,
+                                               "startup-script": cluster.Setup.get_startup_script()},
                                   ex_preemptible=spot)
         try:
             instance = self._gce_services[dc_idx].create_node(**create_node_params)
@@ -354,7 +360,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_node(self, instance, node_index, dc_idx):
         try:
-            return GCENode(gce_instance=instance,
+            node = GCENode(gce_instance=instance,
                            gce_service=self._gce_services[dc_idx],
                            credentials=self._credentials[0],
                            parent_cluster=self,
@@ -363,6 +369,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            node_index=node_index,
                            base_logdir=self.logdir,
                            dc_idx=dc_idx)
+            node.init()
+            return node
         except Exception as ex:
             raise CreateGCENodeError('Failed to create node: %s' % ex)
 

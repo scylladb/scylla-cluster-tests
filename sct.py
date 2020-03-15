@@ -12,7 +12,7 @@ from prettytable import PrettyTable
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_monitor import cloud_report
-from sdcm.utils.common import (list_instances_aws, list_instances_gce, clean_cloud_resources,
+from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
                                AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
@@ -208,6 +208,47 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(gce_table.get_string(title="Resources used on GCE"))
     else:
         click.secho("Nothing found for selected filters in GCE!", fg="yellow")
+
+    click.secho("Checking Docker...", fg="green")
+    docker_resources = \
+        list_resources_docker(tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose)
+
+    if any(docker_resources.values()):
+        if docker_resources.get("containers"):
+            docker_table = PrettyTable(["Name", "Builder", "Public IP" if get_all_running else "Status",
+                                        "TestId", "RunByUser", "Created"])
+            docker_table.align = "l"
+            docker_table.sortby = "Created"
+            for builder_name, docker_containers in docker_resources["containers"].items():
+                for container in docker_containers:
+                    container.reload()
+                    docker_table.add_row([
+                        container.name,
+                        builder_name,
+                        container.attrs["NetworkSettings"]["IPAddress"] if get_all_running else container.status,
+                        container.labels.get("TestId", "N/A"),
+                        container.labels.get("RunByUser", "N/A"),
+                        container.attrs.get("Created", "N/A"),
+                    ])
+            click.echo(docker_table.get_string(title="Containers used on Docker"))
+        if docker_resources.get("images"):
+            docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "Created"])
+            docker_table.align = "l"
+            docker_table.sortby = "Created"
+            for builder_name, docker_images in docker_resources["images"].items():
+                for image in docker_images:
+                    image.reload()
+                    for tag in image.tags:
+                        docker_table.add_row([
+                            tag,
+                            builder_name,
+                            image.labels.get("TestId", "N/A"),
+                            image.labels.get("RunByUser", "N/A"),
+                            image.attrs.get("Created", "N/A"),
+                        ])
+            click.echo(docker_table.get_string(title="Images used on Docker"))
+    else:
+        click.secho("Nothing found for selected filters in Docker!", fg="yellow")
 
 
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')

@@ -26,6 +26,7 @@ repos:
     -   id: autopep8
         args:
         - -i
+        - -v
         - --max-line-length=120
         - --ignore=E226,E24,W50,W690,E402
 

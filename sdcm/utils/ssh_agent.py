@@ -15,6 +15,7 @@ import os
 import json
 import atexit
 import logging
+from typing import Iterable
 
 from sdcm.remote import LOCALRUNNER
 
@@ -24,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 class SSHAgent:
     @classmethod
-    def start(cls):
+    def start(cls, verbose: bool = True) -> None:
         if cls.is_running():
             LOGGER.warning("ssh-agent started already:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
                            os.environ["SSH_AUTH_SOCK"], os.environ["SSH_AGENT_PID"])
@@ -32,23 +33,26 @@ class SSHAgent:
 
         res = LOCALRUNNER.run(r"""eval $(ssh-agent -s) && """
                               r"""eval 'echo "{\"SSH_AUTH_SOCK\": \"$SSH_AUTH_SOCK\", """
-                              r"""             \"SSH_AGENT_PID\": \"$SSH_AGENT_PID\"}" >&2'""")
+                              r"""             \"SSH_AGENT_PID\": \"$SSH_AGENT_PID\"}" >&2'""",
+                              verbose=verbose)
         if not res.ok:
             raise RuntimeError()
 
         os.environ.update(json.loads(res.stderr))
-        LOGGER.info("ssh-agent started successfully:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
-                    os.environ["SSH_AUTH_SOCK"], os.environ["SSH_AGENT_PID"])
+        if verbose:
+            LOGGER.info("ssh-agent started successfully:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
+                        os.environ["SSH_AUTH_SOCK"], os.environ["SSH_AGENT_PID"])
 
-        atexit.register(cls.stop)
+        atexit.register(cls.stop, verbose)
 
     @staticmethod
-    def is_running():
+    def is_running() -> bool:
         return bool(os.environ.get("SSH_AUTH_SOCK"))
 
     @staticmethod
-    def stop():
-        LOCALRUNNER.run("ssh-agent -k", ignore_status=True)
+    def stop(verbose: bool = True) -> None:
+        if "SSH_AGENT_PID" in os.environ:
+            LOCALRUNNER.run("ssh-agent -k", ignore_status=True, verbose=verbose)
         try:
             del os.environ["SSH_AUTH_SOCK"]
             del os.environ["SSH_AGENT_PID"]
@@ -56,7 +60,8 @@ class SSHAgent:
             pass
 
     @classmethod
-    def add_key(cls, path):
-        if not cls.is_running():
-            cls.start()
-        LOCALRUNNER.run(f"ssh-add {path}")
+    def add_keys(cls, paths: Iterable[str], verbose: bool = True) -> None:
+        if paths:
+            if not cls.is_running():
+                cls.start(verbose=verbose)
+            LOCALRUNNER.run(f"""ssh-add '{"' '".join(os.path.expanduser(path) for path in paths)}'""", verbose=verbose)

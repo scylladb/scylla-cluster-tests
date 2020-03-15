@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2019 ScyllaDB
+
 from __future__ import print_function
 
 import os

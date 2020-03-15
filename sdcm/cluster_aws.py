@@ -8,6 +8,7 @@ import os
 import tempfile
 import json
 import base64
+from typing import List, Dict
 from textwrap import dedent
 from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
@@ -19,7 +20,8 @@ import boto3
 from sdcm import cluster
 from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
-from sdcm.utils.common import retrying, list_instances_aws, get_ami_tags
+from sdcm.utils.common import list_instances_aws, get_ami_tags
+from sdcm.utils.decorators import retrying, cached_property
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
 from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
@@ -37,12 +39,8 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 # pylint: disable=too-many-lines
 
 
-def create_tags_list():
-    tags_list = [{'Key': k, 'Value': v} for k, v in cluster.create_common_tags().items()]
-    if cluster.TEST_DURATION >= 24 * 60:
-        tags_list.append({'Key': 'keep', 'Value': 'alive'})
-
-    return tags_list
+def _tags_as_ec2_tags(tags: Dict[str, str]) -> List[Dict[str, str]]:
+    return [{"Key": key, "Value": value} for key, value in tags.items()]
 
 
 class PublicIpNotReady(Exception):
@@ -99,7 +97,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
-    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
+    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
         params = dict(ImageId=ami_id,
@@ -109,14 +107,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                       KeyName=self._credentials[dc_idx].key_pair_name,
                       BlockDeviceMappings=self._ec2_block_device_mappings,
                       NetworkInterfaces=interfaces,
-                      InstanceType=self._ec2_instance_type,
-                      TagSpecifications=[
-                          {
-                              'ResourceType': 'instance',
-                              'Tags': tags_list if tags_list else []
-                          },
-                      ]
-                      )
+                      InstanceType=self._ec2_instance_type)
         instance_profile = self.params.get('aws_instance_profile_name')
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
@@ -124,7 +115,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, tags_list=None):  # pylint: disable=too-many-arguments
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
         ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
                                    spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
@@ -137,8 +128,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            user_data=ec2_user_data,
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
-                           aws_instance_profile=self.params.get('aws_instance_profile_name'),
-                           tags_list=tags_list if tags_list else [])
+                           aws_instance_profile=self.params.get('aws_instance_profile_name'))
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
             spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
@@ -169,8 +159,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 if ec2_client.MAX_SPOT_EXCEEDED_ERROR in str(cl_ex):
                     self.log.debug('Cannot create spot instance(-s): %s.'
                                    'Creating on demand instance(-s) instead.', cl_ex)
-                    instances_i = self._create_on_demand_instances(
-                        count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
                     instances.extend(instances_i)
                 else:
                     raise
@@ -180,9 +169,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
         if not count:  # EC2 API fails if we request zero instances.
             return []
-
-        tags_list = create_tags_list()
-        tags_list.append({'Key': 'NodeType', 'Value': self.node_type})
 
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
@@ -200,16 +186,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            'Groups': self._ec2_security_group_ids[dc_idx]}]
 
         if self.instance_provision == 'mixed':
-            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx)
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
         else:
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
 
         return instances
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, tags_list=None):  # pylint: disable=too-many-arguments
-        tags_list = tags_list if tags_list else []
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx):  # pylint: disable=too-many-arguments
         instances = []
         max_num_on_demand = 2
         if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
@@ -231,20 +216,17 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             if count_spot > 0:
                 self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-                instances.extend(self._create_spot_instances(
-                    count_spot, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx))
             if count_on_demand > 0:
                 self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-                instances.extend(self._create_on_demand_instances(
-                    count_on_demand, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx))
             self.instance_provision = 'mixed'
         elif isinstance(self, LoaderSetAWS):
             self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list)
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
         elif isinstance(self, MonitorSetAWS):
             self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-            instances.extend(self._create_on_demand_instances(
-                count, interfaces, ec2_user_data, dc_idx, tags_list=tags_list))
+            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx))
         else:
             raise Exception('Unsuported type of cluster type %s' % self)
         return instances
@@ -385,72 +367,63 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,  # pylint: disable=too-many-arguments
                      base_logdir, dc_idx):
-        return AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
+        node = AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
                        credentials=self._credentials[dc_idx], parent_cluster=self, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, dc_idx=dc_idx, node_type=self.node_type)
+                       base_logdir=base_logdir, dc_idx=dc_idx)
+        node.init()
+        return node
 
 
 class AWSNode(cluster.BaseNode):
-
     """
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
 
+    log = LOGGER
+
     def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, dc_idx=0, node_type=None):
-
-        name = '%s-%s' % (node_prefix, node_index)
+                 base_logdir=None, dc_idx=0):
+        self.node_index = node_index
         self._instance = ec2_instance
         self._ec2_service = ec2_service
-        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
-        self._instance_wait_safe(self._instance.wait_until_running)
         self._eth1_private_ip_address = None
         self.eip_allocation_id = None
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
-        if len(self._instance.network_interfaces) == 2:
-            # first we need to configure the both networks so we'll have public ip
-            self.allocate_and_attach_elastic_ip(parent_cluster, dc_idx, node_type)
-
-        self._wait_public_ip()
-        super(AWSNode, self).__init__(name=name,
+        super(AWSNode, self).__init__(name=f"{node_prefix}-{self.node_index}",
                                       parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
                                       base_logdir=base_logdir,
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
+
+    def init(self):
+        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
+        self._instance_wait_safe(self._instance.wait_until_running)
+
         if not cluster.Setup.REUSE_CLUSTER:
+            resources_to_tag = [self._instance.id, ]
+            if len(self._instance.network_interfaces) == 2:
+                # first we need to configure the both networks so we'll have public ip
+                self.allocate_and_attach_elastic_ip(self.parent_cluster, self.dc_idx)
+                resources_to_tag.append(self.eip_allocation_id)
+            self._ec2_service.create_tags(Resources=resources_to_tag, Tags=_tags_as_ec2_tags(self.tags))
 
-            self.set_node_tags(name, node_index, node_type)
-            self.set_keep_tag()
+        self._wait_public_ip()
 
-    def set_node_tags(self, name=None, node_index=None, node_type=None):
-        tags_list = create_tags_list()
-        tags_list.append({'Key': 'Name', 'Value': name})
-        tags_list.append({'Key': 'NodeIndex', 'Value': str(node_index)})
-        tags_list.append({'Key': 'NodeType', 'Value': node_type})
+        super().init()
 
-        self._ec2_service.create_tags(Resources=[self._instance.id],
-                                      Tags=tags_list)
+    @cached_property
+    def tags(self) -> Dict[str, str]:
+        return {**super().tags,
+                "NodeIndex": str(self.node_index), }
 
-    def set_keep_tag(self):
-        tags_list = []
-        if "db" in self.name and cluster.Setup.KEEP_ALIVE_DB_NODES:
-            self.log.info('Keep db cluster %s', cluster.Setup.KEEP_ALIVE_DB_NODES)
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
-        if "loader" in self.name and cluster.Setup.KEEP_ALIVE_LOADER_NODES:
-            self.log.info('Keep loader cluster %s', cluster.Setup.KEEP_ALIVE_LOADER_NODES)
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
-        if "monitor" in self.name and cluster.Setup.KEEP_ALIVE_MONITOR_NODES:
-            self.log.info('Keep monitor cluster %s', cluster.Setup.KEEP_ALIVE_MONITOR_NODES)
-            tags_list.append({'Key': 'keep', 'Value': 'alive'})
-
-        if tags_list:
-            self._ec2_service.create_tags(Resources=[self._instance.id],
-                                          Tags=tags_list)
+    def _set_keep_alive(self):
+        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": "alive"}])
+        return super()._set_keep_alive()
 
     @retrying(n=10, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
@@ -532,7 +505,7 @@ class AWSNode(cluster.BaseNode):
     def _refresh_instance_state(self):
         raise NotImplementedError()
 
-    def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx, node_type=None):
+    def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx):
         primary_interface = [
             interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
         if primary_interface.association_attribute is None:
@@ -541,15 +514,6 @@ class AWSNode(cluster.BaseNode):
             response = client.allocate_address(Domain='vpc')
 
             self.eip_allocation_id = response['AllocationId']
-            tags_list = create_tags_list()
-            if node_type:
-                tags_list.append({'Key': 'NodeType', 'Value': node_type})
-            client.create_tags(
-                Resources=[
-                    self.eip_allocation_id
-                ],
-                Tags=tags_list
-            )
             client.associate_address(
                 AllocationId=self.eip_allocation_id,
                 NetworkInterfaceId=primary_interface.id,
@@ -687,8 +651,7 @@ class AWSNode(cluster.BaseNode):
             client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
             response = client.release_address(AllocationId=self.eip_allocation_id)
             self.log.debug("release elastic ip . Result: %s\n", response)
-
-        super().destroy()
+        self.log.info('Destroyed')
 
     def get_console_output(self):
         """Get instance console Output

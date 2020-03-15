@@ -28,7 +28,7 @@ from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import retrying
+from sdcm.utils.decorators import retrying
 
 
 LOGGER = logging.getLogger(__name__)

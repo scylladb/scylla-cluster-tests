@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 from __future__ import absolute_import
+
 import glob
 import logging
 import os
@@ -31,7 +32,8 @@ from paramiko import SSHException, RSAKey
 from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
 
 from sdcm.log import SDCMAdapter
-from sdcm.utils.common import retrying
+from sdcm.utils.decorators import retrying
+
 
 LOGGER = logging.getLogger(__name__)
 

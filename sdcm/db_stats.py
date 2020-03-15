@@ -14,7 +14,8 @@ import yaml
 import requests
 
 from sdcm.es import ES
-from sdcm.utils.common import get_job_name, retrying, remove_comments, normalize_ipv6_url
+from sdcm.utils.common import get_job_name, remove_comments, normalize_ipv6_url
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 

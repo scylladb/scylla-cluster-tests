@@ -11,7 +11,8 @@ from email.mime.text import MIMEText
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws, cached_property
+from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker
+from sdcm.utils.decorators import cached_property
 
 
 LOGGER = logging.getLogger(__name__)
@@ -363,7 +364,9 @@ def get_running_instances_for_email_report(test_id):
     """
     nodes = []
 
-    instances = list_instances_aws(tags_dict={'TestId': test_id}, group_as_region=True, running=True)
+    tags = {"TestId": test_id, }
+
+    instances = list_instances_aws(tags_dict=tags, group_as_region=True, running=True)
     for region in instances:
         for instance in instances[region]:
             name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -372,13 +375,28 @@ def get_running_instances_for_email_report(test_id):
                           instance['State']['Name'],
                           "aws",
                           region])
-    instances = list_instances_gce(tags_dict={"TestId": test_id}, running=True)
+    instances = list_instances_gce(tags_dict=tags, running=True)
     for instance in instances:
         nodes.append([instance.name,
                       ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A",
                       instance.state,
                       "gce",
                       instance.extra["zone"].name])
+    resources = list_resources_docker(tags_dict=tags, running=True, group_as_builder=True)
+    for builder_name, containers in resources.get("containers", {}).items():
+        for container in containers:
+            nodes.append([container.name,
+                          container.attrs["NetworkSettings"]["IPAddress"],
+                          container.status,
+                          "docker container",
+                          builder_name])
+    for builder_name, images in resources.get("images", {}).items():
+        for image in images:
+            nodes.append([", ".join(image.tags),
+                          "N/A",
+                          "N/A",
+                          "docker image",
+                          builder_name])
     return nodes
 
 

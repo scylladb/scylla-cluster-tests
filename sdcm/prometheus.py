@@ -12,7 +12,7 @@ except ImportError:
     from socketserver import ThreadingMixIn
 
 import prometheus_client
-from sdcm.utils.common import retrying, log_run_info
+from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.sct_events import PrometheusAlertManagerEvent, EVENTS_PROCESSES
 
 

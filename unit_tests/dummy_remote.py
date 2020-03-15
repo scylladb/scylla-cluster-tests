@@ -1,21 +1,35 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+# pylint: disable=too-few-public-methods
+
 import os
-import logging
 import shutil
-import types
+import logging
 
 from sdcm.remote import LocalCmdRunner
-from sdcm.cluster_docker import send_receive_files
 
 
-class DummeyOutput():  # pylint: disable=too-few-public-methods
+class DummyOutput:
     def __init__(self, stdout):
         self.stdout = stdout
 
 
-class DummyRemote():  # pylint: disable=too-few-public-methods
-    def run(self, *args, **kwargs):  # pylint: disable=no-self-use
+class DummyRemote:
+    @staticmethod
+    def run(*args, **kwargs):
         logging.info(args, kwargs)
-        return DummeyOutput(args[0])
+        return DummyOutput(args[0])
 
     @staticmethod
     def is_up():
@@ -27,19 +41,17 @@ class DummyRemote():  # pylint: disable=too-few-public-methods
         return True
 
 
-class LocalNode:  # pylint: disable=no-init,too-few-public-methods
+class LocalNode:
     def __init__(self):
         self.remoter = LocalCmdRunner()
-        self.remoter.receive_files = types.MethodType(send_receive_files, self.remoter)
-        self.remoter.send_files = types.MethodType(send_receive_files, self.remoter)
         self.ip_address = "127.0.0.1"
         self.logdir = os.path.dirname(__file__)
 
 
-class LocalLoaderSetDummy:  # pylint: disable=no-init,too-few-public-methods
+class LocalLoaderSetDummy:
     def __init__(self):
-        self.name = 'LocalLoaderSetDummy'
-        self.nodes = [LocalNode()]
+        self.name = "LocalLoaderSetDummy"
+        self.nodes = [LocalNode(), ]
 
     @staticmethod
     def get_db_auth():

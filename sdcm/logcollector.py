@@ -16,21 +16,24 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
-                               retrying, ParallelObject, remove_files, get_builder_by_test_id,
+                               ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                makedirs, filter_gce_instances_by_type, get_sct_root_path)
+from sdcm.utils.decorators import retrying
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
-from sdcm.utils.remotewebbrowser import RemoteBrowser
-from sdcm.utils.docker import get_docker_bridge_gateway
+from sdcm.utils.auto_ssh import AutoSshContainerMixin
+from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
+from sdcm.utils.docker import get_docker_bridge_gateway, ContainerManager
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class CollectingNode():  # pylint: disable=too-few-public-methods
+class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-few-public-methods
 
     def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None):  # pylint: disable=too-many-arguments
+        self._containers = {}
         self.name = name
         if ssh_login_info is None:
             self.remoter = LocalCmdRunner()
@@ -43,6 +46,9 @@ class CollectingNode():  # pylint: disable=too-few-public-methods
             self.grafana_address = global_ip
         else:
             self.grafana_address = grafana_ip
+
+    def __del__(self):
+        ContainerManager.destroy_all_containers(self)
 
 
 class PrometheusSnapshotErrorException(Exception):
