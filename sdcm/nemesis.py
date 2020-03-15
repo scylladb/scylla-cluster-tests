@@ -410,7 +410,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
         result = self.target_node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
-        self.cluster.check_cluster_health()
+        self.target_node.run_nodetool("status", ignore_status=True, verbose=True)
+
         if result is not None:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
