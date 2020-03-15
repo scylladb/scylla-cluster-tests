@@ -26,8 +26,8 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     is_enterprise = False
     distro = Distro.CENTOS7
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def init(self):
+        super().init()
         self.remoter.stop()
 
     @property
@@ -66,6 +66,7 @@ class TestBaseNode(unittest.TestCase):
 
         cls.node = DummyNode(name='test_node', parent_cluster=None,
                              base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node.init()
         cls.node.remoter = DummyRemote()
 
     @classmethod

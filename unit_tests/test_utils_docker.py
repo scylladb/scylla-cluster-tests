@@ -12,14 +12,17 @@
 # Copyright (c) 2020 ScyllaDB
 
 # pylint: disable=too-few-public-methods,too-many-statements,protected-access,attribute-defined-outside-init
+# pylint: disable=too-many-public-methods,too-many-instance-attributes
 
 from __future__ import absolute_import
 
+import os
 import unittest
-from unittest.mock import Mock, patch, mock_open, sentinel
+from unittest.mock import Mock, patch, mock_open, sentinel, call
 from collections import namedtuple
 
-from sdcm.utils.docker import _Name, ContainerManager, NotFound
+from sdcm.utils.docker import _Name, ContainerManager, \
+    DockerException, NotFound, ImageNotFound, Retry, ContainerAlreadyRegistered
 
 
 class DummyDockerClient:
@@ -39,6 +42,15 @@ class DummyDockerClient:
             container = DummyContainer()
             container.run_args = args, kwargs
             return container
+
+    class images:  # pylint: disable=invalid-name
+        @staticmethod
+        def build(*args, **kwargs):
+            return (args, kwargs,), [{"stream": "blah"}]
+
+        @staticmethod
+        def get(image_tag):
+            raise ImageNotFound("not found")
 
 
 class DummyContainer:
@@ -76,6 +88,10 @@ class DummyContainer:
     def logs():
         return "container logs"
 
+    @staticmethod
+    def start():
+        pass
+
 
 class DummyNode:
     tags = {"key1": "value1", }
@@ -89,6 +105,23 @@ class DummyNode:
 
 
 class TestName(unittest.TestCase):
+    def test_none(self):
+        name = _Name(None)
+        self.assertIs(name.full, None)
+        self.assertIs(name.family, None)
+        self.assertIs(name.member, None)
+        self.assertEqual(name.member_as_args, ())
+        self.assertEqual(str(name), "None")
+        self.assertFalse(name)
+
+    def test_empty_name(self):
+        name = _Name("")
+        self.assertEqual(name.family, "")
+        self.assertIs(name.member, None)
+        self.assertEqual(name.member_as_args, ())
+        self.assertEqual(str(name), "")
+        self.assertTrue(name)  # Yep, empty name is True too.
+
     def test_name_without_member(self):
         name = _Name("blah")
         self.assertEqual(name.full, "blah")
@@ -96,6 +129,7 @@ class TestName(unittest.TestCase):
         self.assertIs(name.member, None)
         self.assertEqual(name.member_as_args, ())
         self.assertEqual(str(name), "blah")
+        self.assertTrue(name)
 
     def test_name_with_member(self):
         name = _Name("foo:bar")
@@ -104,6 +138,7 @@ class TestName(unittest.TestCase):
         self.assertEqual(name.member, "bar")
         self.assertEqual(name.member_as_args, ("bar", ))
         self.assertEqual(str(name), "foo:bar")
+        self.assertTrue(name)
 
 
 @patch("sdcm.utils.docker.ContainerManager.default_docker_client", DummyDockerClient())
@@ -113,12 +148,18 @@ class TestContainerManager(unittest.TestCase):
         self.node._containers["c1"] = self.container = DummyContainer()
 
     def test_get_docker_client(self):
-        with self.subTest("Docker client from existent container"):
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c1"), sentinel.c1_docker_client)
-
         with self.subTest("Default Docker client"):
             self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"),
                              ContainerManager.default_docker_client)
+
+        with self.subTest("Docker client without name argument"):
+            self.node.None_docker_client = Mock()  # pylint: disable=invalid-name
+            self.node.docker_client = sentinel.none_docker_client
+            self.assertEqual(ContainerManager.get_docker_client(self.node), sentinel.none_docker_client)
+            self.node.None_docker_client.assert_not_called()
+
+        with self.subTest("Docker client from existent container"):
+            self.assertEqual(ContainerManager.get_docker_client(self.node, "c1"), sentinel.c1_docker_client)
 
         with self.subTest("Node-wide Docker client (None)"):
             self.node.docker_client = None
@@ -224,7 +265,7 @@ class TestContainerManager(unittest.TestCase):
             self.assertEqual(status(), "mark2")
 
         with self.subTest("Test too many retries"):
-            self.assertRaises(AssertionError, ContainerManager.wait_for_status, self.node, "c1", status="running")
+            self.assertRaises(Retry, ContainerManager.wait_for_status, self.node, "c1", status="running")
 
     @patch("time.sleep", int)
     def test_get_ip_address(self):
@@ -245,7 +286,7 @@ class TestContainerManager(unittest.TestCase):
             self.assertEqual(attrs(), "mark")
 
         with self.subTest("Test too many retries"):
-            self.assertRaises(AssertionError, ContainerManager.get_ip_address, self.node, "c1")
+            self.assertRaises(Retry, ContainerManager.get_ip_address, self.node, "c1")
 
     def test_get_container_port(self):
         self.container.ports = {"9999/tcp": [{"HostIp": "0.0.0.0", "HostPort": 1111}, ]}
@@ -318,32 +359,159 @@ class TestContainerManager(unittest.TestCase):
             self.assertSetEqual(set1, set2)
             self.assertEqual(len(set1), 5)
 
-    def test_set_keep_alive(self):
+        with self.subTest("Re-run container"):
+            self.container.start = Mock()
+            ContainerManager.run_container(self.node, "c1")
+            self.container.start.assert_called_once_with()
+
+    def test_set_container_keep_alive(self):
         with self.subTest("Set keep alive to non-existent container"):
-            self.assertRaises(NotFound, ContainerManager.set_keep_alive, self.node, "c2")
+            self.assertRaises(NotFound, ContainerManager.set_container_keep_alive, self.node, "c2")
 
         with self.subTest("Set keep alive"):
-            ContainerManager.set_keep_alive(self.node, "c1")
+            ContainerManager.set_container_keep_alive(self.node, "c1")
             self.assertEqual(self.container.name, "dummy---KEEPALIVE")
 
         with self.subTest("Set keep alive again"):
-            ContainerManager.set_keep_alive(self.node, "c1")
+            ContainerManager.set_container_keep_alive(self.node, "c1")
             self.assertEqual(self.container.name, "dummy---KEEPALIVE")
+
+    def test_set_all_containers_keep_alive(self):
+        ContainerManager.set_all_containers_keep_alive(self.node)
+        self.assertEqual(self.container.name, "dummy---KEEPALIVE")
+
+    def test_ssh_copy_id(self):
+        with self.subTest("Copy SSH pub key to non-existent container"):
+            self.assertRaises(NotFound,
+                              ContainerManager.ssh_copy_id, self.node, "c2", user="root", key_file="/root/.ssh/id_rsa")
+
+        with self.subTest("Copy SSH pub key"):
+            self.container.exec_run = Mock()
+            self.container.exec_run.return_value.exit_code = 0
+
+            with patch("paramiko.rsakey.RSAKey.from_private_key_file") as rsa_key_mock:
+                rsa_key_mock.return_value.get_base64.return_value = "0123456789"
+                ContainerManager.ssh_copy_id(self.node, "c1", user=sentinel.ssh_user, key_file="~/lala.key")
+
+            rsa_key_mock.assert_called_once_with(os.path.expanduser("~/lala.key"))
+            rsa_key_mock.return_value.get_base64.assert_called_once_with()
+            self.container.exec_run.assert_called_once()
+
+            # pylint: disable=unsubscriptable-object; disable this message for .call_args[]
+            self.assertIn(" 0123456789 ", " ".join(self.container.exec_run.call_args[0][0]))
+            self.assertEqual(self.container.exec_run.call_args[1]["user"], sentinel.ssh_user)
+
+        with self.subTest("Check exec_run failure"):
+            self.container.exec_run.reset_mock()
+            self.container.exec_run.return_value.exit_code = 126
+            self.container.exec_run.return_value.output = b"blah"
+
+            with patch("paramiko.rsakey.RSAKey.from_private_key_file") as rsa_key_mock:
+                self.assertRaisesRegex(DockerException, "blah",
+                                       ContainerManager.ssh_copy_id,
+                                       self.node, "c1", user=sentinel.ssh_user, key_file="lala.key")
+
+    def test_register_container(self):
+        c2_container = DummyContainer()
+
+        with self.subTest("Try to register registered container"):
+            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
+                                   ContainerManager.register_container,
+                                   self.node, "c2", container=self.container)
+
+        with self.subTest("Try to register registered container with replace=True"):
+            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
+                                   ContainerManager.register_container,
+                                   self.node, "c2", container=self.container, replace=True)
+
+        with self.subTest("Try to replace container"):
+            self.assertRaisesRegex(ContainerAlreadyRegistered, "another container registered",
+                                   ContainerManager.register_container,
+                                   self.node, "c1", container=c2_container)
+
+        with self.subTest("Force container replacement"):
+            ContainerManager.register_container(self.node, "c1", container=c2_container, replace=True)
+            self.assertEqual(ContainerManager.get_container(self.node, "c1"), c2_container)
+
+        with self.subTest("Register container"):
+            ContainerManager.register_container(self.node, "c2", container=self.container)
+            self.assertEqual(ContainerManager.get_container(self.node, "c2"), self.container)
+
+        with self.subTest("Try to force container replacement with container registered with another name"):
+            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
+                                   ContainerManager.register_container,
+                                   self.node, "c1", container=self.container, replace=True)
+
+    def test_unregister_container(self):
+        with self.subTest("Unregister non-existent name"):
+            self.assertRaises(NotFound, ContainerManager.unregister_container, self.node, "c2")
+
+        with self.subTest("Unregister container"):
+            ContainerManager.unregister_container(self.node, "c1")
+            self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
 
     def test_destroy(self):
         with self.subTest("Try to destroy non-existent container"):
             self.assertRaises(NotFound, ContainerManager.destroy_container, self.node, "c2")
 
         with self.subTest("without *_container_logfile hook"):
-            ContainerManager.destroy_container(self.node, "c1")
+            self.assertTrue(ContainerManager.destroy_container(self.node, "c1"))
             self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
             self.assertRaises(NotFound, ContainerManager.destroy_container, self.node, "c1")
+
+    def test_build_container_image(self):
+        with self.subTest("Try to build image for existent container"):
+            self.assertRaises(ContainerAlreadyRegistered, ContainerManager.build_container_image, self.node, "c1")
+
+        with self.subTest("Node-wide container image tag"):
+            self.node.container_image_tag = Mock(return_value="blah")
+            self.assertRaisesRegex(AssertionError, "image tag", ContainerManager.build_container_image, self.node, "c2")
+
+        with self.subTest("Node-wide dockerfile args"):
+            self.node.c2_container_image_tag = Mock(return_value="hello-world:latest")
+            self.node.container_image_dockerfile_args = Mock(return_value="blah")
+            self.assertRaisesRegex(AssertionError, "Dockerfile",
+                                   ContainerManager.build_container_image, self.node, "c2")
+            self.node.c2_container_image_tag.assert_called_once_with()
+
+        with self.subTest("No build args"):
+            self.node.c2_container_image_tag.reset_mock()
+            self.node.c2_container_image_dockerfile_args = Mock(return_value={"path": "."})
+            with patch("sdcm.utils.docker.LOGGER.debug") as logger:
+                image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
+            self.assertEqual(image, ((), dict(tag="hello-world:latest",
+                                              path=".",
+                                              labels=self.node.tags,
+                                              pull=True,
+                                              rm=True,
+                                              arg1="value1",
+                                              arg2="value2")))
+            logger.assert_has_calls([call("blah"), ])
+            self.node.c2_container_image_tag.assert_called_once_with("another")
+            self.node.c2_container_image_dockerfile_args.assert_called_once_with("another")
+
+        with self.subTest("No build args"):
+            self.node.c2_container_image_tag.reset_mock()
+            self.node.c2_container_image_dockerfile_args.reset_mock()
+            self.node.c2_container_image_build_args = lambda **kw: {v: k for k, v in kw.items()}
+            with patch("sdcm.utils.docker.LOGGER.debug") as logger:
+                image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
+            self.assertEqual(image, ((), dict(tag="hello-world:latest",
+                                              path=".",
+                                              labels=self.node.tags,
+                                              pull=True,
+                                              rm=True,
+                                              value1="arg1",
+                                              value2="arg2")))
+            logger.assert_has_calls([call("blah"), ])
+            self.node.c2_container_image_tag.assert_called_once_with("another")
+            self.node.c2_container_image_dockerfile_args.assert_called_once_with("another")
 
     def test_destroy_logfile(self):
         self.node.c1_container_logfile = "container.log"
 
         with patch("builtins.open", mock_open()) as mock_file:
-            ContainerManager.destroy_container(self.node, "c1")
+            self.assertTrue(ContainerManager.destroy_container(self.node, "c1"))
 
         mock_file.assert_called_once_with("container.log", "ab")
         mock_file().write.assert_called_once_with("container logs")
@@ -361,11 +529,11 @@ class TestContainerManager(unittest.TestCase):
         self.node.c1_container_logfile = logfile
 
         c1another = ContainerManager.run_container(self.node, "c1:another")
-        ContainerManager.set_keep_alive(self.node, "c1:another")
+        ContainerManager.set_container_keep_alive(self.node, "c1:another")
 
         with patch("builtins.open", mock_open()) as mock_file:
-            ContainerManager.destroy_container(self.node, "c1")
-            ContainerManager.destroy_container(self.node, "c1:another")
+            self.assertTrue(ContainerManager.destroy_container(self.node, "c1"))
+            self.assertFalse(ContainerManager.destroy_container(self.node, "c1:another"))
 
         mock_file.assert_called_once_with("another", "ab")
         mock_file().write.assert_called_once_with("container logs")
@@ -376,19 +544,19 @@ class TestContainerManager(unittest.TestCase):
         self.assertRaises(NotFound, ContainerManager.destroy_container, self.node, "c1")
 
     def test_destroy_keep_alive(self):
-        ContainerManager.set_keep_alive(self.node, "c1")
+        ContainerManager.set_container_keep_alive(self.node, "c1")
 
         with self.subTest("Try to destroy container with keep-alive tag"):
-            ContainerManager.destroy_container(self.node, "c1")
+            self.assertFalse(ContainerManager.destroy_container(self.node, "c1"))
             self.assertEqual(ContainerManager.get_container(self.node, "c1"), self.container)
 
         with self.subTest("Ignore keep-alive tag"):
-            ContainerManager.destroy_container(self.node, "c1", ignore_keepalive=True)
+            self.assertTrue(ContainerManager.destroy_container(self.node, "c1", ignore_keepalive=True))
             self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
 
     def test_destroy_all(self):
         ContainerManager.run_container(self.node, "c2")
-        ContainerManager.set_keep_alive(self.node, "c1")
+        ContainerManager.set_container_keep_alive(self.node, "c1")
 
         with self.subTest("Destroy all containers without keep-alive tag"):
             ContainerManager.destroy_all_containers(self.node)

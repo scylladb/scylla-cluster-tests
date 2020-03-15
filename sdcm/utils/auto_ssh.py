@@ -13,7 +13,7 @@
 
 import os
 
-from sdcm.utils.common import cached_property
+from sdcm.utils.decorators import cached_property
 
 
 AUTO_SSH_IMAGE = "jnovack/autossh:latest"
@@ -32,7 +32,7 @@ class AutoSshContainerMixin:
         hostname = self.ssh_login_info["hostname"]
         port = self.ssh_login_info.get("port", "22")
         user = self.ssh_login_info["user"]
-        volumes = {self.ssh_login_info["key_file"]: {"bind": "/id_rsa", "mode": "ro"}}
+        volumes = {os.path.expanduser(self.ssh_login_info["key_file"]): {"bind": "/id_rsa", "mode": "ro"}}
 
         return dict(image=AUTO_SSH_IMAGE,
                     name=f"{self.name}-{hostname.replace(':', '-')}-autossh",

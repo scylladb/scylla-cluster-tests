@@ -7,7 +7,7 @@ import base64
 import boto3
 from botocore.exceptions import ClientError, NoRegionError
 
-from sdcm.utils.common import retrying
+from sdcm.utils.decorators import retrying
 
 
 LOGGER = logging.getLogger(__name__)

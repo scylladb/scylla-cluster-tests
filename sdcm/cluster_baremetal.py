@@ -14,6 +14,7 @@ class NodeIpsNotConfiguredError(Exception):
 
 
 class PhysicalMachineNode(cluster.BaseNode):
+    log = LOGGER
 
     def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):  # pylint: disable=too-many-arguments
         ssh_login_info = {'hostname': None,
@@ -26,6 +27,9 @@ class PhysicalMachineNode(cluster.BaseNode):
                                                   base_logdir=base_logdir,
                                                   ssh_login_info=ssh_login_info,
                                                   node_prefix=node_prefix)
+
+    def init(self):
+        super().init()
         self.set_hostname()
         self.run_startup_script()
 
@@ -63,8 +67,6 @@ class PhysicalMachineNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
 
-        super().destroy()
-
 
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
@@ -83,13 +85,15 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
                                                      params=params)
 
     def _create_node(self, name, public_ip, private_ip):
-        return PhysicalMachineNode(name,
+        node = PhysicalMachineNode(name,
                                    parent_cluster=self,
                                    public_ip=public_ip,
                                    private_ip=private_ip,
                                    credentials=self.credentials[0],
                                    base_logdir=self.logdir,
                                    node_prefix=self.node_prefix)
+        node.init()
+        return node
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
         for node_index in range(count):

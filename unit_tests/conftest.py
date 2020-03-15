@@ -8,7 +8,7 @@ import pytest
 from sdcm.prometheus import start_metrics_server
 from sdcm.utils.docker import RemoteDocker
 from sdcm import wait
-from sdcm.utils.common import timeout
+from sdcm.utils.decorators import timeout
 from sdcm.sct_events import (start_events_device, stop_events_device)
 
 from unit_tests.dummy_remote import LocalNode

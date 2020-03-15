@@ -19,7 +19,7 @@ from textwrap import dedent
 import six
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import measure_time, retrying
+from sdcm.utils.decorators import measure_time, retrying
 from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
 THOUSAND = 1000

@@ -9,6 +9,7 @@ n_db_nodes: 1
 
 nemesis_class_name: NonDisruptiveMonkey
 nemesis_interval: 1
+nemesis_filter_seeds: false
 
 user_prefix: 'PR-provision-docker'
 
