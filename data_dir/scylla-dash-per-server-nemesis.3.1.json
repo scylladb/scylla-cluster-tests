@@ -43,6 +43,19 @@
                     "datasource": "-- Grafana --",
                     "enable": false,
                     "hide": false,
+                    "iconColor": "#eab839",
+                    "limit": 100,
+                    "name": "Events[WARNING]",
+                    "showIn": 0,
+                    "tags": [
+                      "WARNING"
+                    ],
+                    "type": "tags"
+                  },
+                  {
+                    "datasource": "-- Grafana --",
+                    "enable": false,
+                    "hide": false,
                     "iconColor": "#ef843c",
                     "limit": 100,
                     "name": "Events[ERROR]",
