@@ -149,7 +149,7 @@ class BaseEmailReporter():
         :return: html string
         """
         self.log.info("Rendering results to html using '%s' template...", self.email_template_fp)
-        loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
+        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
         if template_str is None:
             template = env.get_template(self.email_template_fp)
@@ -270,12 +270,6 @@ class LongevityEmailReporter(BaseEmailReporter):
     email_template_file = "results_longevity.html"
 
     def cut_report_data(self, report_data, attachments_data, reason):
-        if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
-                attachments_data['test_status'][1]) > 101:
-            #  Reduce number of records in test_status[1] to 100
-            attachments_data['test_status'][1] = attachments_data['test_status'][1][:100]
-            attachments_data['test_status'][1].append('List of events has been cut due to the email size limit')
-            return report_data, attachments_data
         if attachments_data is not None:
             return report_data, None
         return None, None

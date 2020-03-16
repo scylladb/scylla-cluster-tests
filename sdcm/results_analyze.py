@@ -250,7 +250,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         """
         email_template_fp = template if template else self._email_template_fp
         self.log.info("Rendering results to html using '%s' template...", email_template_fp)
-        loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(__file__)))
+        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
         print(os.path.dirname(os.path.abspath(__file__)))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=[
                                  'jinja2.ext.loopcontrols', 'jinja2.ext.do'])

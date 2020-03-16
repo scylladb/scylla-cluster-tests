@@ -1834,7 +1834,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
                 "test_id": self.test_id,
                 "test_name": self.id(),
-                "test_status": ("FAILED", critical) if critical else ("No critical errors in critical.log", None),
+                "test_status": "FAILED" if critical else "SUCCESS",
                 "username": get_username(), }
 
     def tag_ami_with_result(self, test_error, test_failure):
