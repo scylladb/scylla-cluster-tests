@@ -314,6 +314,18 @@ class BackupTask(ManagerTask):
     def __init__(self, task_id, cluster_id, scylla_manager):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=scylla_manager)
 
+    def get_snapshot_tag(self, snapshot_index=0):
+        command = f" -c {self.cluster_id} task progress {self.id}"
+        res = self.sctool.run(command, parse_table_res=False, is_verify_errorless_result=True)
+        snapshot_line = [line for line in res.stdout.splitlines() if "snapshot tag" in line.lower()]
+        # Returns the following:
+        # Snapshot Tag:	sm_20200106093455UTC
+        # (when executed manually, the title and value is separated by \t instead
+        if snapshot_index >= len(snapshot_line):
+            snapshot_index = -1
+        snapshot_tag = snapshot_line[snapshot_index].split(":")[1].strip()
+        return snapshot_tag
+
 
 class ManagerCluster(ScyllaManagerBase):
 
@@ -371,6 +383,32 @@ class ManagerCluster(ScyllaManagerBase):
 
         return RepairTask(task_id=task_id, cluster_id=self.id,
                           manager_node=self.manager_node)  # return the manager's object with new repair-task-id
+
+    def get_backup_files_dict(self, snapshot_tag):
+        command = f" -c {self.id} backup files --snapshot-tag {snapshot_tag}"
+        # The sctool backup files command prints the s3 paths of all of the files that are required to restore the
+        # cluster from the backup
+        snapshot_files = self.sctool.run(command)
+        snapshot_file_list = [file_path_list[0] for file_path_list in snapshot_files]
+        # sctool.run returns a list of lists, each of them is a 1 length list that contains the row.
+        # This list comprehension turns the list into a list of strings (rows) instead
+        return self.snapshot_files_to_dict(snapshot_file_list)
+
+    @staticmethod
+    def snapshot_files_to_dict(snapshot_file_lines):
+        per_node_keyspaces_and_tables_backup_files = {}
+        for line in snapshot_file_lines:
+            s3_file_path, keyspace_and_table = [string.strip() for string in line.split(' ')]
+            node_id = s3_file_path[s3_file_path.find("/node/") + len("/node/"):s3_file_path.find("/keyspace")]
+            keyspace, table = keyspace_and_table.split('/')
+            if node_id not in per_node_keyspaces_and_tables_backup_files:
+                per_node_keyspaces_and_tables_backup_files[node_id] = {}
+            if keyspace not in per_node_keyspaces_and_tables_backup_files[node_id]:
+                per_node_keyspaces_and_tables_backup_files[node_id][keyspace] = {}
+            if table not in per_node_keyspaces_and_tables_backup_files[node_id][keyspace]:
+                per_node_keyspaces_and_tables_backup_files[node_id][keyspace][table] = []
+            per_node_keyspaces_and_tables_backup_files[node_id][keyspace][table].append(s3_file_path)
+        return per_node_keyspaces_and_tables_backup_files
 
     def delete(self):
         """
