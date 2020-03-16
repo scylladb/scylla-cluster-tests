@@ -784,7 +784,7 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                     events_level_file.write(msg + '\n')
 
                 # update the summary file
-                self.level_summary[str(Severity(message_data.severity))] += 1
+                self.level_summary[Severity(message_data.severity).name] += 1
                 with open(self.events_summary_filename, 'w') as summary_file:
                     json.dump(dict(self.level_summary), summary_file, indent=4)
 

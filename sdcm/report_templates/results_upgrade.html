@@ -1,0 +1,13 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }} ({{ scylla_ami_id }})</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+{% endblock %}

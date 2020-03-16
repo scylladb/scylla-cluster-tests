@@ -168,8 +168,8 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.wait_for_event_log_change('events.log', log_content_before)
         self.wait_for_event_log_change('summary.log', log_summary_before)
         summary = self.wait_for_event_summary()
-        self.assertIn('Severity.ERROR', summary)
-        self.assertGreaterEqual(summary['Severity.ERROR'], 1)
+        self.assertIn('ERROR', summary)
+        self.assertGreaterEqual(summary['ERROR'], 1)
 
     def test_filter(self):
         log_content_before = self.get_event_log_file('events.log')

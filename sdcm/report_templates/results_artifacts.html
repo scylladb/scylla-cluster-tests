@@ -1,0 +1,25 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>ScyllaDB version: {{ scylla_version }}</li>
+            {% if scylla_repo -%}
+                <li>ScyllaDB repo: {{ scylla_repo }}</li>
+            {% endif -%}
+            <li>Actual {{ backend }} image used: {{ scylla_node_image }}</li>
+            {% if region_name -%}
+                <li>AWS region: {{ region_name }}</li>
+            {% endif -%}
+            <li>Scylla packages installed:
+                <ul>
+                {% for pkg in scylla_packages_installed %}
+                    <li>{{ pkg }}</li>
+                {% endfor %}
+                </ul>
+            </li>
+        </ul>
+    </div>
+{% endblock %}
