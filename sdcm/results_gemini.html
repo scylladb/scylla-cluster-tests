@@ -129,6 +129,20 @@
         </ul>
     </div>
 
+    {% if last_events %}
+        <h3>
+            <span>Last events</span>
+        </h3>
+        {% for severity, events in last_events.items() %}
+            <h4>
+            {{ severity }}
+            </h4>
+            {% for event in events %}
+                {{event}} <br/>
+            {% endfor %}
+        {% endfor %}
+    {% endif %}
+
     <h3>Running instances</h3>
     {% if nodes %}
     <div>

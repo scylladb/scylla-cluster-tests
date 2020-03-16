@@ -122,6 +122,8 @@ class BaseEmailReporter():
                            "username",)
     _fields = ()
     email_template_file = 'results_base.html'
+    last_events_limit = 5
+    last_events_body_limit = 200
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
         self.email_recipients = email_recipients
@@ -226,6 +228,7 @@ class BaseEmailReporter():
 
     def build_report(self, report_data):
         self.log.info("Prepare result to send in email")
+        report_data['last_events'] = self._get_last_events(report_data)
         return self.render_to_html(report_data)
 
     @staticmethod
@@ -237,43 +240,6 @@ class BaseEmailReporter():
         if attachments_data is not None:
             return report_data, None
         return None, None
-
-
-class LongevityEmailReporter(BaseEmailReporter):
-    _fields = ("grafana_screenshots",
-               "grafana_snapshots",
-               "nemesis_details",
-               "nemesis_name",
-               "number_of_db_nodes",
-               "scylla_ami_id",
-               "scylla_instance_type",
-               "scylla_version",)
-    email_template_file = "results_longevity.html"
-    last_events_limit = 5
-    last_events_body_limit = 200
-
-    def cut_report_data(self, report_data, attachments_data, reason):
-        if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
-                attachments_data['test_status'][1]) > 101:
-            #  Reduce number of records in test_status[1] to 100
-            attachments_data['test_status'][1] = attachments_data['test_status'][1][:100]
-            attachments_data['test_status'][1].append('List of events has been cut due to the email size limit')
-            return report_data, attachments_data
-        if attachments_data is not None:
-            return report_data, None
-        return None, None
-
-    def build_report(self, report_data):
-        report_data['short_report'] = True
-        report_data['last_events'] = self._get_last_events(report_data)
-        return super().build_report(report_data)
-
-    def build_report_attachments(self, attachments_data, template_str=None):
-        report_file = os.path.join(self.logdir, 'email_report.html')
-        attachments_data['last_events'] = self._get_last_events(attachments_data)
-        self.save_html_to_file(attachments_data, report_file, template_str=template_str)
-        attachments = (report_file, )
-        return attachments
 
     def _get_last_events(self, report_data):
         output = {}
@@ -290,6 +256,40 @@ class LongevityEmailReporter(BaseEmailReporter):
                         severity_events.append('There are more events. See log file.')
                         break
         return output
+
+
+class LongevityEmailReporter(BaseEmailReporter):
+    _fields = ("grafana_screenshots",
+               "grafana_snapshots",
+               "nemesis_details",
+               "nemesis_name",
+               "number_of_db_nodes",
+               "scylla_ami_id",
+               "scylla_instance_type",
+               "scylla_version",)
+    email_template_file = "results_longevity.html"
+
+    def cut_report_data(self, report_data, attachments_data, reason):
+        if attachments_data and 'test_status' in attachments_data and len(attachments_data['test_status']) > 2 and len(
+                attachments_data['test_status'][1]) > 101:
+            #  Reduce number of records in test_status[1] to 100
+            attachments_data['test_status'][1] = attachments_data['test_status'][1][:100]
+            attachments_data['test_status'][1].append('List of events has been cut due to the email size limit')
+            return report_data, attachments_data
+        if attachments_data is not None:
+            return report_data, None
+        return None, None
+
+    def build_report(self, report_data):
+        report_data['short_report'] = True
+        return super().build_report(report_data)
+
+    def build_report_attachments(self, attachments_data, template_str=None):
+        report_file = os.path.join(self.logdir, 'email_report.html')
+        attachments_data['last_events'] = self._get_last_events(attachments_data)
+        self.save_html_to_file(attachments_data, report_file, template_str=template_str)
+        attachments = (report_file, )
+        return attachments
 
 
 class GeminiEmailReporter(BaseEmailReporter):

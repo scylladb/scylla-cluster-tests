@@ -794,14 +794,27 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
 
     def get_events_by_category(self, limit=0):
         output = {}
+        line_start = re.compile('^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] ')
         for severity, events_file_path in self.level_to_file_mapping.items():
             try:
                 with events_file_path.open() as events_file:
                     output[severity.name] = events_bucket = []
+                    event = ''
                     for event_data in events_file:
-                        if limit and len(events_bucket) > limit:
+                        if not event_data.strip(' \n\t\r'):
+                            continue
+                        if not line_start.match(event_data):
+                            event += '\n' + event_data
+                            continue
+                        if event:
+                            if limit and len(events_bucket) >= limit:
+                                events_bucket.pop(0)
+                            events_bucket.append(event)
+                        event = event_data
+                    if event:
+                        if limit and len(events_bucket) >= limit:
                             events_bucket.pop(0)
-                        events_bucket.append(event_data)
+                        events_bucket.append(event)
             except Exception:  # pylint: disable=broad-except
                 if not output.get(severity.name, None):
                     output[severity.name] = []
