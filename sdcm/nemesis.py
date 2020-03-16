@@ -16,6 +16,7 @@
 """
 Classes that introduce disruption in clusters.
 """
+import concurrent.futures
 
 import inspect
 import logging
@@ -26,6 +27,7 @@ import threading
 import os
 import re
 import traceback
+# from sdcm.utils import query_manager
 
 from typing import List
 from collections import OrderedDict, defaultdict
@@ -415,6 +417,60 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         if result is not None:
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+
+    @staticmethod
+    def scan_table(session, table):
+        prepared_stmt = session.prepare('select * from %s' % table)
+        session.execute(prepared_stmt)
+
+    def disrupt_multishard_combining_reader(self):
+        # Customer issues #1223 and #1234
+        # Patch commit: scylladb/scylla-enterprise: 0cf4fab
+        self._set_current_disruption('Multishard combining reader')
+        system_tables = []
+        with self.tester.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
+            query_result = session.execute('select keyspace_name from system_schema.keyspaces '
+                                           'where keyspace_name=\'multishard_combining_reader\'')
+            if not query_result.current_rows:
+                session.execute("CREATE KEYSPACE IF NOT EXISTS multishard_combining_reader WITH "
+                                "replication = {'class': 'SimpleStrategy',"
+                                "'replication_factor': 3};")
+                columns = ', '.join(['col%d int' % i for i in range(50)])
+                create_table_query = 'create table IF NOT EXISTS multishard_combining_reader.t%d (pk int primary key,' \
+                                     ' {})'.format(columns)
+                for i in range(500):
+                    session.execute(create_table_query % i)
+
+            query_result = session.execute('select keyspace_name, table_name from system_schema.tables')
+            session.default_fetch_size = 0
+            for row in query_result:
+                if row.keyspace_name.lower().startswith("system"):
+                    system_tables.append('"{}"."{}"'.format(row.keyspace_name, row.table_name))
+
+            # for node in self.cluster.nodes:
+            #     with self.tester.cql_connection_patient(node) as session:
+            #         self.log.info('Node {}. Start scan'.format(node.name))
+            #         result = query_manager.scan_tables_multiprocess(session, system_tables)
+            #         self.log.info('Node {}. Scan result: {}'.format(node.name, result))
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(system_tables))
+        result_futures = []
+        for node in self.cluster.nodes:
+            node.stop_scylla()
+            time.sleep(30)
+            node.start_scylla()
+            node.wait_db_up()
+            with self.tester.cql_connection_patient(node) as session:
+                session.default_fetch_size = 0
+                for table in system_tables:
+                    result_futures.append(executor.submit(self.scan_table, session, table))
+
+        for future in concurrent.futures.as_completed(result_futures, timeout=60):
+            result_futures.remove(future)
+            del future
+
+        if result_futures:
+            self.log.debug('There are not completed threads')
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=10800):
@@ -2268,6 +2324,15 @@ class BlockNetworkMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_network_block()
+
+
+class MultishardCombiningReaderMonkey(Nemesis):
+    disruptive = False
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_multishard_combining_reader()
 
 
 class RejectInterNodeNetworkMonkey(Nemesis):

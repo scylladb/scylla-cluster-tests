@@ -1,15 +1,16 @@
-test_duration: 180
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+test_duration: 360
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=360m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]
 
 n_db_nodes: 6
 n_loaders: 2
 n_monitor_nodes: 1
 
+append_scylla_args: '--smp 14 --blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstables-mc-format 1'
 instance_type_db: 'i3.4xlarge'
 
-nemesis_class_name: 'ChaosMonkey'
-nemesis_interval: 5
+nemesis_class_name: 'MultishardCombiningReaderMonkey'
+nemesis_interval: 2
 
-user_prefix: 'longevity-10gb-3h'
+user_prefix: 'longevity-multishard-3h'
 space_node_threshold: 64424

@@ -2581,7 +2581,7 @@ server_encryption_options:
             auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout, connect_timeout=connect_timeout, ssl_params=ssl_params)
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host, port=port)
 
-    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=120, verbose=True, split=False, target_db_node=None, connect_timeout=5):
+    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=120, verbose=True, split=False, target_db_node=None, connect_timeout=60):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
                                   host=self.ip_address if not target_db_node else target_db_node.ip_address,
