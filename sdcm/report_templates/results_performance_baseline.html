@@ -143,6 +143,7 @@
         <tr>
             <td> {{ version }}</td>
             {% for subtest in subtests %}
+            {% if subtest in v_res %}
                 {% set stat=v_res[subtest].res.get(stat_name) %}
             <td>
                 {{ "%.1f" % stat.val }} <br/>
@@ -163,6 +164,7 @@
                 </span>
             </td>
             <td>{{ stat.best_id }}</td>
+            {% endif %}
             {% endfor %}
 
         </tr>
