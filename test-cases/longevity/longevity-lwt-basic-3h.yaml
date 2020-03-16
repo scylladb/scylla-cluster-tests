@@ -11,13 +11,16 @@ experimental: true
 instance_type_db: 'i3.2xlarge'
 cluster_health_check: false
 
+# loader AMI with c-s ver. 4 and fix of NoSuchElementException
 regions_data:
   us-east-1:
-    ami_id_loader: 'ami-0946a8d8159a15b2c' # loader AMI with c-s ver. 4 and fix of NoSuchElementException
+    ami_id_loader: 'ami-0946a8d8159a15b2c'
   eu-west-1:
-    ami_id_loader: 'ami-0dc7edd6fba3da2fb' # loader AMI with c-s ver. 4 and fix of NoSuchElementException
+    ami_id_loader: 'ami-0dc7edd6fba3da2fb'
   us-west-2:
-    ami_id_loader: 'ami-043895fcddca63d1f' # loader AMI with c-s ver. 4 and fix of NoSuchElementException
+    ami_id_loader: 'ami-010284f401d8933a2'
+  eu-west-2:
+    ami_id_loader: 'ami-043895fcddca63d1f'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
