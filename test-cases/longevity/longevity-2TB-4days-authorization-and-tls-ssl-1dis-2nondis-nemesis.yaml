@@ -24,6 +24,7 @@ instance_type_db: 'i3en.3xlarge'
 instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.large'
 
+cluster_health_check: false
 nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2'
 nemesis_interval: 30
 nemesis_during_prepare: false
