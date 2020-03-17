@@ -19,8 +19,6 @@ regions_data:
     ami_id_loader: 'ami-0dc7edd6fba3da2fb'
   us-west-2:
     ami_id_loader: 'ami-010284f401d8933a2'
-  eu-west-2:
-    ami_id_loader: 'ami-043895fcddca63d1f'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5

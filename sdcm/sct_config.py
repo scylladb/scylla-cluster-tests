@@ -896,13 +896,13 @@ class SCTConfiguration(dict):
         files = anyconfig.load(list(backend_config_files))
         anyconfig.merge(self, files)
 
-        regions_data = self.get('regions_data', {})
-        if regions_data:
-            del self['regions_data']
-
         # 2) load the config files
         files = anyconfig.load(list(config_files))
         anyconfig.merge(self, files)
+
+        regions_data = self.get('regions_data', {})
+        if regions_data:
+            del self['regions_data']
 
         # 2.2) load the region data
         region_names = self.get('region_name', '').split()
