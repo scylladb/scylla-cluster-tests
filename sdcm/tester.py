@@ -1307,13 +1307,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('Stopping all resources')
         self.kill_stress_thread()
 
-        db_cluster_errors = None
-        db_cluster_coredumps = None
-
         if self.db_cluster is not None:
-            db_cluster_errors = self.get_critical_events()
-            self.db_cluster.get_backtraces()
-            db_cluster_coredumps = self.db_cluster.coredumps
             for current_nemesis in self.db_cluster.nemesis:
                 current_nemesis.report()
             # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
@@ -1333,18 +1327,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 node.stop_task_threads(timeout=60)
 
         if self.create_stats:
-            self.update_test_details(errors=db_cluster_errors,
+            self.db_cluster.get_backtraces()
+            db_cluster_coredumps = self.db_cluster.coredumps
+            test_failing_events = self.get_test_failing_events()
+            self.update_test_details(errors=test_failing_events,
                                      coredumps=db_cluster_coredumps,
                                      )
-
-        if db_cluster_coredumps:
-            self.fail('Found coredumps on DB cluster nodes: %s' %
-                      db_cluster_coredumps)
-
-        if db_cluster_errors:
-            self.log.error('Error/Critical events found:')
-            self.log.error(db_cluster_errors)
-            self.fail('Error/Critical events found (see test logs)')
 
     def clean_resources(self):
         # pylint: disable=too-many-branches
@@ -1399,13 +1387,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def tearDown(self):
         InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
+
+        with self.subTest("Check for Error/Critical Events"):
+            test_failing_events = self.get_test_failing_events()
+            if test_failing_events:
+                self.log.error('Error/Critical events found:')
+                self.log.error(test_failing_events)
+                self.fail('Error/Critical events found (see test logs)')
+
+        test_result_event, test_error, test_failure = None, None, None
         try:
             test_error, test_failure = self.get_test_failures()
             test_result_event = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
         except Exception:  # pylint: disable=broad-except
             self.log.exception("Unable to get test result")
-        test_result_event.publish()
-        self.tag_ami_with_result(test_error, test_failure)
+
+        if test_result_event:
+            test_result_event.publish()
+            self.tag_ami_with_result(test_error, test_failure)
         try:
             self.finalize_test()
         except Exception as details:
@@ -1823,7 +1822,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
-        critical = self.get_critical_events()
+        critical = self.get_test_failing_events()
 
         return {"build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
@@ -1854,5 +1853,5 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             except Exception:  # pylint: disable=broad-except
                 self.log.exception("Failed to tag ami")
 
-    def get_critical_events(self):
+    def get_test_failing_events(self):
         return get_testrun_status(self.test_id, self.logdir)
