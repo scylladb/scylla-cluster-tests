@@ -1817,6 +1817,41 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._set_current_disruption('RepairStreamingErr')
         self.break_streaming_task_and_rebuild(task='repair')
 
+    def _corrupt_data_file(self):
+        """Randomly corrupt data file by dd"""
+        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                           db_node=self.target_node)
+        if not ks_cfs:
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. Nemesis can\'t be run')
+
+        # Corrupt data file
+        data_file_pattern = self._choose_file_for_destroy(ks_cfs)
+        res = self.target_node.remoter.run('sudo find {}-Data.db'.format(data_file_pattern))
+        for sstable_file in res.stdout.split():
+            result = self.target_node.remoter.run(
+                'sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
+            self.log.debug('File {} was corrupted by dd'.format(sstable_file))
+
+    def disrupt_corrupt_then_scrub(self):
+
+        # Flush data to sstable
+        self.target_node.run_nodetool("flush")
+
+        self.log.debug("Randomly corrupt sstable file")
+        self._corrupt_data_file()
+
+        self.log.debug("Rebuild sstable file by scrub, corrupted data file will be skipped.")
+        for ks_cf in get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0]):
+            scrub_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
+                        '"Accept: application/json" "http://127.0.0.1:10000/storage_service/keyspace_scrub/{}?skip_corrupted=true"'.format(
+                            ks_cf.split('.')[0])
+            self.target_node.remoter.run(scrub_cmd)
+
+        self.log.debug('Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -2531,3 +2566,11 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
                    GeminiChaosMonkey, NetworkMonkey]
+
+
+class CorruptThenScrubMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_corrupt_then_scrub()
