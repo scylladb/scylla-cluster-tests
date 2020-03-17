@@ -67,7 +67,7 @@ def is_error_retriable(err_str):
     """Check that exception can be safely retried"""
     exceptions = ("Authentication timeout", "Error reading SSH protocol banner", "Timeout opening channel",
                   "Unable to open channel", "Key-exchange timed out waiting for key negotiation",
-                  "ssh_exchange_identification: Connection closed by remote host",
+                  "ssh_exchange_identification: Connection closed by remote host", "No existing session",
                   )
     for exception_str in exceptions:
         if exception_str in err_str:
