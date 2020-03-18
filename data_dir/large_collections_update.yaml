@@ -67,20 +67,12 @@ columnspec:
 # Need to populate the list field with big elements and many of them (about 40MB per list).
 # >>> math.sqrt(40 * 1024 * 1024)
 # 6476.344648024841
-# large partition: 16M, large row: 4M, large cell: 1M
-# >>> math.sqrt(16 * 1024 * 1024)
-# 4096.0
-# >>> math.sqrt(4 * 1024 * 1024)
-# 2048.0
-# >>> math.sqrt(1 * 1024 * 1024)
-# 1024.0
 
   - name: users_name
-    size: fixed(5)
+    size: fixed(500)
 
   - name: users_desc
-    size: exp(1..2048)
-    population: exp(1..2048)
+    size: fixed(1000)
 
   - name: users_comment
     size: fixed(1)
@@ -89,7 +81,6 @@ columnspec:
     size: fixed(2)
 
   - name: nums_list
-    size: fixed(2)
     population: exp(1..10000)
 
   - name: nums_set
@@ -97,10 +88,10 @@ columnspec:
     population: exp(1..10000)
 
   - name: names_set
-    size: exp(1..2048)
-    population: exp(1..2048)
+    size: fixed(500)
 
 insert:
+  partitions: fixed(1)
   batchtype: UNLOGGED
 
 queries:
