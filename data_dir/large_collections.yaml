@@ -12,36 +12,13 @@ table_definition: |
     pk_id text PRIMARY KEY,
     init_time timestamp,
     user_name text,
-    device_id text,
-    start_time timestamp,
-    field_id text,
     new_num int,
-    self_desc text,
-    age int,
-    comment text,
-    message1 text,
-    message2 text,
-    message3 text,
-    message4 text,
-    country_id text,
-    area_id text,
-    type_name text,
-    types_num int,
-    process_num int,
     weight decimal,
-    users_name list<text>,
-    users_desc list<text>,
-    users_comment list<text>,
-    pay_num int,
-    question text,
-    messageid text,
-    testflag int,
-    pid text,
-    ppid text,
-    users_task list<text>,
     nums_list list<int>,
+    users_name list<text>,
     nums_set set<int>,
     names_set set<text>,
+    books_set set<text>,
   ) WITH bloom_filter_fp_chance = 0.01
     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
     AND comment = 'Request for unit level UIs'
@@ -59,10 +36,7 @@ table_definition: |
 
 columnspec:
   - name: pk_id
-    population: seq(1..10000000)
-
-  - name: clientappname
-    size: fixed(5)
+    population: seq(1..8000000)
 
 # Need to populate the list field with big elements and many of them (about 40MB per list).
 # >>> math.sqrt(40 * 1024 * 1024)
@@ -70,35 +44,33 @@ columnspec:
 # large partition: 16M, large row: 4M, large cell: 1M
 # >>> math.sqrt(16 * 1024 * 1024)
 # 4096.0
+# >>> math.sqrt(1024 * 1024 * 15.5 / 2)
+# 2850.695353768971
 # >>> math.sqrt(4 * 1024 * 1024)
 # 2048.0
+# >>> math.sqrt(1024 * 1024 * 4 / 2)
+# 1448.1546878700494
 # >>> math.sqrt(1 * 1024 * 1024)
 # 1024.0
+
+  - name: nums_list
+    size: fixed(2)
+    population: uniform(1..10000)
 
   - name: users_name
     size: fixed(5)
 
-  - name: users_desc
-    size: exp(1..2048)
-    population: exp(1..2048)
-
-  - name: users_comment
-    size: fixed(1)
-
-  - name: users_task
-    size: fixed(2)
-
-  - name: nums_list
-    size: fixed(2)
-    population: exp(1..10000)
-
   - name: nums_set
     size: fixed(100)
-    population: exp(1..10000)
+    population: uniform(1..10000)
 
   - name: names_set
-    size: exp(1..2048)
-    population: exp(1..2048)
+    size: fixed(1024)
+    population: uniform(1..1024)
+
+  - name: books_set
+    size: fixed(1024)
+    population: uniform(1..1024)
 
 insert:
   batchtype: UNLOGGED
@@ -108,5 +80,5 @@ queries:
     cql: select * from large_collection_test.table_with_large_collection where pk_id = ?
     fields: samerow
   update1:
-    cql: update large_collection_test.table_with_large_collection set users_name=?,users_desc=?,users_comment=?,users_task=?,nums_list=?,nums_set=?,names_set=? where pk_id = ?
+    cql: update large_collection_test.table_with_large_collection set users_name=?,nums_list=?,nums_set=?,names_set=?,books_set=? where pk_id = ?
     fields: samerow
