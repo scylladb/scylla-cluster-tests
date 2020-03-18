@@ -819,6 +819,9 @@ class SCTConfiguration(dict):
         dict(name="store_perf_results", env="SCT_STORE_PERF_RESULTS", type=bool,
              help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
                 Intended to be used in performance testing"""),
+        dict(name="append_scylla_setup_args", env="SCT_APPEND_SCYLLA_SETUP_ARGS", type=str,
+             help="More arguments to append to scylla_setup command line"),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
@@ -827,7 +830,7 @@ class SCTConfiguration(dict):
     backend_required_params = {
         'aws':  ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
                  "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                 "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor",  "ami_db_scylla_user",
+                 "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                  "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db', 'gce_root_disk_type_db',
