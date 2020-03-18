@@ -18,7 +18,7 @@ user_prefix: 'longevity-5000-tables'
 
 cluster_health_check: false
 
-nemesis_class_name: NoOpMonkey
+nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
 
 store_results_in_elasticsearch: False
