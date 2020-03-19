@@ -631,6 +631,9 @@ class SCTConfiguration(dict):
         dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
              help="Choose a specific compaction strategy to pre-create schema with."),
 
+        dict(name="sstable_size", env="SSTABLE_SIZE", type=int,
+             help="Configure sstable size for the usage of pre-create-schema mode"),
+
         dict(name="cluster_health_check", env="SCT_CLUSTER_HEALTH_CHECK", type=boolean,
              help="When true, start cluster health checker for all nodes"),
 

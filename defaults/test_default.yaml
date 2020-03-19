@@ -53,3 +53,5 @@ send_email: false
 email_recipients: ['qa@scylladb.com']
 
 collect_logs: false
+
+compaction_strategy: 'SizeTieredCompactionStrategy'

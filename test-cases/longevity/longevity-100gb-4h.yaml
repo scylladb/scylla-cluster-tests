@@ -17,3 +17,6 @@ nemesis_interval: 5
 
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
+
+pre_create_schema: True
+sstable_size: 100
