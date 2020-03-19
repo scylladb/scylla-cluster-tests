@@ -425,6 +425,31 @@ class LongevityTest(ClusterTester):
                     AND speculative_retry = '99.0PERCENTILE';
             """)
 
+    @staticmethod
+    def _get_columns_num_of_single_stress(single_stress_cmd):
+        if '-col' not in single_stress_cmd:
+            return None
+        col_num = None
+        params_list = single_stress_cmd.split()
+        col_params_list = []
+        for param in params_list[params_list.index('-col')+1:]:
+            col_params_list.append(param.strip("'"))
+            if param.endswith("'"):
+                break
+        for param in col_params_list:
+            if param.startswith('n='):
+                col_num = int(re.findall(r'\b\d+\b', param)[0])
+                break
+        return col_num
+
+    def _get_prepare_write_cmd_columns_num(self):
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+        if not prepare_write_cmd:
+            return None
+        if isinstance(prepare_write_cmd, str):
+            prepare_write_cmd = [prepare_write_cmd]
+        return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
+
     def _pre_create_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
@@ -432,13 +457,21 @@ class LongevityTest(ClusterTester):
         """
 
         self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
+        compaction_strategy = self.params.get('compaction_strategy')
+        sstable_size = self.params.get('sstable_size')
         for i in range(1, keyspace_num+1):
             keyspace_name = 'keyspace{}'.format(i)
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
             self.log.debug('{} Created'.format(keyspace_name))
+            col_num = self._get_prepare_write_cmd_columns_num() or 5
+            columns = {}
+            for col_idx in range(col_num):
+                cs_key = '"C'+str(col_idx)+'"'
+                columns[cs_key] = 'blob'
             self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0, compact_storage=True,
-                              columns={'"C0"': 'blob', '"C1"': 'blob', '"C2"': 'blob', '"C3"': 'blob', '"C4"': 'blob'},
-                              in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
+                              columns=columns,
+                              in_memory=in_memory, scylla_encryption_options=scylla_encryption_options,
+                              compaction=compaction_strategy, sstable_size=sstable_size)
 
     def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
         # pylint: disable=too-many-locals

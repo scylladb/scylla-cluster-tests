@@ -68,7 +68,6 @@ from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCol
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 
-
 configure_logging()
 
 try:
@@ -1107,7 +1106,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None, compaction=None,
-                     compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None):
+                     compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None,
+                     sstable_size=None):
 
         # pylint: disable=too-many-locals
         additional_columns = ""
@@ -1132,8 +1132,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # will default to lz4 compression
             query += ' AND compression = {}'
 
-        if compaction is not None:
-            query += " AND compaction={'class': '%s'}" % compaction
+        if compaction is not None or sstable_size:
+            compaction = compaction or self.params.get('compaction_strategy')
+            prefix = ' AND compaction={'
+            postfix = '}'
+            compaction_clause = " 'class': '%s'" % compaction
+            if sstable_size:
+                compaction_clause += ", 'sstable_size_in_mb' : '%s'" % sstable_size
+            query += prefix+compaction_clause+postfix
 
         if read_repair is not None:
             query = '%s AND read_repair_chance=%f' % (query, read_repair)
