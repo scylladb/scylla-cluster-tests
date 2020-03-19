@@ -48,6 +48,7 @@ from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_
 from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
+from sdcm.utils.version_utils import get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
@@ -3448,10 +3449,12 @@ class BaseLoaderSet():
     @property
     def gemini_version(self):
         if not self._gemini_version:
-            result = self.nodes[0].remoter.run('cd $HOME; ./gemini --version')
-            # result : gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
-            # take only version number - 1.0.1
-            self._gemini_version = result.stdout.split(',')[0].split(' ')[2]
+            try:
+                result = self.nodes[0].remoter.run('cd $HOME; ./gemini --version', ignore_status=True)
+                if result.ok:
+                    self._gemini_version = get_gemini_version(result.stdout)
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
 
     @property
