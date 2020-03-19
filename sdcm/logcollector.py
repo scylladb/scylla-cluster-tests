@@ -26,6 +26,7 @@ from sdcm.utils.docker import get_docker_bridge_gateway
 
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
 class CollectingNode():  # pylint: disable=too-few-public-methods
@@ -624,8 +625,10 @@ class LogCollector:
                 except Exception as details:  # pylint: disable=unused-variable, broad-except
                     LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
 
+        LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
+
         if not self.nodes:
-            LOGGER.warning(f'No nodes found for in {self.cluster_log_type} cluster')
+            LOGGER.warning(f'No nodes found for {self.cluster_log_type} cluster. Logs will not be collected')
             return None
         try:
             workers_number = int(len(self.nodes) / 2)
