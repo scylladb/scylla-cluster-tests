@@ -71,3 +71,17 @@ def is_enterprise(version):
     :return: True if this version string passed is a scylla enterprise version
     """
     return parse_version(version) > parse_version('2000')
+
+
+GEMINI_VERSION_RE = re.compile(r'\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),')
+# gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
+
+
+def get_gemini_version(output: str):
+
+    # take only version number - 1.0.1
+    result = GEMINI_VERSION_RE.search(output)
+
+    if result:
+        return result.groupdict().get("gemini_version", None)
+    return None
