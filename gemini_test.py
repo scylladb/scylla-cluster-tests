@@ -25,7 +25,7 @@ class GeminiTest(ClusterTester):
     https://github.com/scylladb/gemini
     """
     gemini_results = {
-        "cmd": "N/A",
+        "cmd": ["N/A"],
         "status": "Not Running",
         "results": [],
         'errors': {}
