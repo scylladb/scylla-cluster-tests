@@ -94,6 +94,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
         self.task_used_streaming = None
+        self.filter_seed = self.cluster.params.get('nemesis_filter_seeds')
         self._random_sequence = None
         self._add_drop_column_max_per_drop = 5
         self._add_drop_column_max_per_add = 5
@@ -134,14 +135,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         node.running_nemesis = self.__class__.__name__
 
     def set_target_node(self):
-        """Set node to run nemesis on
-
-        Keyword Arguments:
-            is_running {bool} -- if True, method called upon nemesis start/running (default: {False})
-        """
-        filter_seed = self.cluster.params.get('nemesis_filter_seeds', default=True)
-
-        if filter_seed:
+        """Set node to run nemesis on"""
+        if self.filter_seed:
             non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed and not node.running_nemesis]
             # if non_seed_nodes is empty, nemesis would failed.
             self.log.debug("List of NonSeed nodes: {}".format([node.name for node in non_seed_nodes]))
@@ -1858,6 +1853,31 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    def disrupt_grow_shrink_cluster(self):
+        add_nodes_number = self.tester.params.get('add_node_cnt')
+
+        self._set_current_disruption("GrowCluster")
+        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        for _ in range(add_nodes_number):
+            self.metrics_srv.event_start('add_node')
+            added_node = self._add_and_init_new_cluster_node()
+            added_node.running_nemesis = None
+            self.metrics_srv.event_stop('add_node')
+            self.log.info("New node added %s", added_node.name)
+        self.log.info("Finish cluster grow")
+
+        time.sleep(self.interval)
+
+        self._set_current_disruption("ShrinkCLuster")
+        self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
+        for _ in range(add_nodes_number):
+            self.set_target_node()
+            self.log.info("Next node will be removed %s", self.target_node)
+            self.metrics_srv.event_start('del_node')
+            self.disrupt_nodetool_decommission(add_node=False)
+            self.metrics_srv.event_stop('del_node')
+        self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -1970,6 +1990,14 @@ class NoOpMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         time.sleep(300)
+
+
+class GrowShrinkClusterNemesis(Nemesis):
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_grow_shrink_cluster()
 
 
 class StopWaitStartMonkey(Nemesis):
