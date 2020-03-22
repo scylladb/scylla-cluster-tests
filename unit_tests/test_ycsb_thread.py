@@ -10,7 +10,8 @@ from sdcm.utils.docker import running_in_docker
 
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
-pytestmark = pytest.mark.usefixtures('events', 'create_table')
+pytestmark = [pytest.mark.usefixtures('events', 'create_table'),
+              pytest.mark.skip(reason="those are integration tests only")]
 
 ALTERNATOR_PORT = 8000
 TEST_PARAMS = dict(dynamodb_primarykey_type='HASH_AND_RANGE',
