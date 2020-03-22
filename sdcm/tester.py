@@ -286,22 +286,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 # sync test_start_time with ES
                 self.start_time = self.get_test_start_time()
 
-            if self.db_cluster.nodes and self.params.get("use_mgmt", default=None):
-                pkgs_url = self.params.get('scylla_mgmt_pkg', None)
-                pkg_path = None
-                if pkgs_url:
-                    pkg_path = download_dir_from_cloud(pkgs_url)
-                    self.params['scylla_mgmt_pkg'] = pkg_path
-                mgmt_auth_token = str(uuid4())
-                for node in self.db_cluster.nodes:
-                    repo = self.params.get("scylla_mgmt_agent_repo", self.params.get("scylla_mgmt_repo", None))
-                    if pkgs_url:
-                        node.remoter.run('mkdir -p {}'.format(pkg_path))
-                        node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
-                    node.install_manager_agent(mgmt_auth_token, repo, package_path=pkg_path)
-                self.monitors.wait_for_init(auth_token=mgmt_auth_token)
-            else:
-                self.monitors.wait_for_init()
+            self.monitors.wait_for_init()
 
             # cancel reuse cluster - for new nodes added during the test
             cluster.Setup.reuse_cluster(False)
