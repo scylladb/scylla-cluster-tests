@@ -1575,173 +1575,99 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
 
         with open(yaml_dst_path, 'r') as scylla_yaml_file:
-            scylla_yaml_contents = scylla_yaml_file.read()
+            scylla_yml = yaml.safe_load(scylla_yaml_file)
 
         if seed_address:
             # Set seeds
-            pattern = re.compile('seeds:.*')
-            scylla_yaml_contents = pattern.sub('seeds: "{0}"'.format(seed_address),
-                                               scylla_yaml_contents)
+            scylla_yml['seed_provider'] = [
+                dict(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
+                     parameters=[dict(seeds=seed_address)])]
 
             # NOTICE: the following configuration always have to use private_ip_address for multi-region to work
             # Set listen_address
-            pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.private_ip_address),
-                                               scylla_yaml_contents)
+            scylla_yml['listen_address'] = self.private_ip_address
             # Set rpc_address
-            pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.private_ip_address),
-                                               scylla_yaml_contents)
+            scylla_yml['rpc_address'] = self.private_ip_address
 
         if listen_on_all_interfaces:
             # Set listen_address
-            pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format("0.0.0.0"), scylla_yaml_contents)
+            scylla_yml['listen_address'] = "0.0.0.0"
             # Set rpc_address
-            pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format("0.0.0.0"), scylla_yaml_contents)
+            scylla_yml['rpc_address'] = "0.0.0.0"
 
         if broadcast:
             # Set broadcast_address
-            pattern = re.compile('[# ]*broadcast_address:.*')
-            scylla_yaml_contents = pattern.sub('broadcast_address: {0}'.format(broadcast),
-                                               scylla_yaml_contents)
+            scylla_yml['rpc_address'] = broadcast
 
             # Set broadcast_rpc_address
-            pattern = re.compile('[# ]*broadcast_rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('broadcast_rpc_address: {0}'.format(broadcast),
-                                               scylla_yaml_contents)
+            scylla_yml['broadcast_rpc_address'] = broadcast
 
         if cluster_name:
-            pattern = re.compile('[# ]*cluster_name:.*')
-            scylla_yaml_contents = pattern.sub('cluster_name: {0}'.format(cluster_name),
-                                               scylla_yaml_contents)
+            scylla_yml['cluster_name'] = cluster_name
 
         # disable hinted handoff (it is enabled by default in Scylla). Expected values: "enabled"/"disabled"
         if hinted_handoff == 'disabled':
-            pattern = re.compile('[# ]*hinted_handoff_enabled:.*')
-            scylla_yaml_contents = pattern.sub('hinted_handoff_enabled: false', scylla_yaml_contents, count=1)
+            scylla_yml['hinted_handoff_enabled'] = False
 
         if ip_ssh_connections == 'ipv6':
             self.log.debug('Enable IPv6 DNS lookup')
-            pattern = re.compile('enable_ipv6_dns_lookup:.*')
-            if pattern.findall(scylla_yaml_contents):
-                scylla_yaml_contents = pattern.sub('enable_ipv6_dns_lookup: true', scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nenable_ipv6_dns_lookup: true\n"
+            scylla_yml['enable_ipv6_dns_lookup'] = True
 
-            # Set prometheus_address
-            pattern = re.compile('\n[# ]*prometheus_address:.*')
-            scylla_yaml_contents = pattern.sub('\nprometheus_address: {0}'.format(self.ip_address),
-                                               scylla_yaml_contents)
-
-            # Set broadcast_rpc_address
-            pattern = re.compile('\n[# ]*broadcast_rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nbroadcast_rpc_address: {0}'.format(self.ip_address),
-                                               scylla_yaml_contents)
-
-            # Set listen_address
-            pattern = re.compile('listen_address:.*')
-            scylla_yaml_contents = pattern.sub('listen_address: {0}'.format(self.ip_address),
-                                               scylla_yaml_contents)
-            # Set rpc_address
-            pattern = re.compile('\n[# ]*rpc_address:.*')
-            scylla_yaml_contents = pattern.sub('\nrpc_address: {0}'.format(self.ip_address),
-                                               scylla_yaml_contents)
+            scylla_yml['prometheus_address'] = self.ip_address
+            scylla_yml['broadcast_rpc_address'] = self.ip_address
+            scylla_yml['listen_address'] = self.ip_address
+            scylla_yml['rpc_address'] = self.ip_address
 
         if murmur3_partitioner_ignore_msb_bits:
             self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(
                 murmur3_partitioner_ignore_msb_bits))
-            pattern = re.compile('murmur3_partitioner_ignore_msb_bits:.*')
-            if pattern.findall(scylla_yaml_contents):
-                scylla_yaml_contents = pattern.sub('murmur3_partitioner_ignore_msb_bits: {0}'.format(murmur3_partitioner_ignore_msb_bits),
-                                                   scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nmurmur3_partitioner_ignore_msb_bits: {0}\n".format(
-                    murmur3_partitioner_ignore_msb_bits)
+            scylla_yml['murmur3_partitioner_ignore_msb_bits'] = int(murmur3_partitioner_ignore_msb_bits)
 
         if enable_exp:
-            pattern = re.compile('experimental:.*')
-            if pattern.findall(scylla_yaml_contents):
-                scylla_yaml_contents = pattern.sub('experimental: true', scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nexperimental: true\n"
+            scylla_yml['experimental'] = True
 
         if endpoint_snitch:
-            pattern = re.compile('endpoint_snitch:.*')
-            scylla_yaml_contents = pattern.sub('endpoint_snitch: "{0}"'.format(endpoint_snitch),
-                                               scylla_yaml_contents)
+            scylla_yml['endpoint_snitch'] = endpoint_snitch
+
         if not client_encrypt:
-            pattern = re.compile('.*enabled: true.*# <client_encrypt>.*')
-            scylla_yaml_contents = pattern.sub(
-                '   enabled: false                    # <client_encrypt>', scylla_yaml_contents)
+            scylla_yml['client_encryption_options'] = dict(enabled=False)
 
         if self.enable_auto_bootstrap:
-            if 'auto_bootstrap' in scylla_yaml_contents:
-                if re.findall("auto_bootstrap: False", scylla_yaml_contents):
-                    self.log.debug('auto_bootstrap is not set as expected, update it to `True`.')
-                pattern = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = pattern.sub('auto_bootstrap: True',
-                                                   scylla_yaml_contents)
-            else:
-                self.log.debug('auto_bootstrap is missing, set it `True`.')
-                scylla_yaml_contents += "\nauto_bootstrap: True\n"
+            scylla_yml['auto_bootstrap'] = True
         else:
-            if 'auto_bootstrap' in scylla_yaml_contents:
-                if re.findall("auto_bootstrap: True", scylla_yaml_contents):
-                    self.log.debug('auto_bootstrap is not set as expected, update it to `False`.')
-                pattern = re.compile('auto_bootstrap:.*')
-                scylla_yaml_contents = pattern.sub('auto_bootstrap: False',
-                                                   scylla_yaml_contents)
-            else:
-                self.log.debug('auto_bootstrap is missing, set it `False`.')
-                scylla_yaml_contents += "\nauto_bootstrap: False\n"
+            if 'auto_bootstrap' in scylla_yml:
+                scylla_yml['auto_bootstrap'] = False
 
         if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
-            pattern = re.compile('[# ]*authenticator:.*')
-            scylla_yaml_contents = pattern.sub('authenticator: {0}'.format(authenticator),
-                                               scylla_yaml_contents)
+            scylla_yml['authenticator'] = authenticator
+
         if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
-            pattern = re.compile('[# ]*authorizer:.*')
-            scylla_yaml_contents = pattern.sub('authorizer: {0}'.format(authorizer),
-                                               scylla_yaml_contents)
+            scylla_yml['authorizer'] = authorizer
 
         if server_encrypt or client_encrypt:
             self.config_client_encrypt()
         if server_encrypt:
-            scylla_yaml_contents += """
-server_encryption_options:
-   internode_encryption: all
-   certificate: /etc/scylla/ssl_conf/db.crt
-   keyfile: /etc/scylla/ssl_conf/db.key
-   truststore: /etc/scylla/ssl_conf/cadb.pem
-"""
+            scylla_yml['server_encryption_options'] = dict(internode_encryption='all',
+                                                           certificate='/etc/scylla/ssl_conf/db.crt',
+                                                           keyfile='/etc/scylla/ssl_conf/db.key',
+                                                           truststore='/etc/scylla/ssl_conf/cadb.pem')
 
         if client_encrypt:
-            client_encrypt_conf = dedent("""
-                            client_encryption_options:                               # <client_encrypt>
-                               enabled: true                                         # <client_encrypt>
-                               certificate: /etc/scylla/ssl_conf/client/test.crt   # <client_encrypt>
-                               keyfile: /etc/scylla/ssl_conf/client/test.key       # <client_encrypt>
-                               truststore: /etc/scylla/ssl_conf/client/catest.pem  # <client_encrypt>
-            """)
-            scylla_yaml_contents += client_encrypt_conf
+            scylla_yml['client_encryption_options'] = dict(enabled=True,
+                                                           certificate='/etc/scylla/ssl_conf/client/test.crt',
+                                                           keyfile='/etc/scylla/ssl_conf/client/test.key',
+                                                           truststore='/etc/scylla/ssl_conf/client/catest.pem')
 
         if self.replacement_node_ip:
-            self.log.debug("%s is a replacement node for '%s'.", self.name, self.replacement_node_ip)
-            scylla_yaml_contents += "\nreplace_address_first_boot: %s\n" % self.replacement_node_ip
+            scylla_yml['replace_address_first_boot'] = self.replacement_node_ip
         else:
-            pattern = re.compile('^replace_address_first_boot:')
-            scylla_yaml_contents = pattern.sub('# replace_address_first_boot:',
-                                               scylla_yaml_contents)
+            if 'replace_address_first_boot' in scylla_yml:
+                del scylla_yml['replace_address_first_boot']
 
         if alternator_port:
-            if 'alternator_port' in scylla_yaml_contents:
-                p = re.compile('[# ]*alternator_port:.*')
-                scylla_yaml_contents = p.sub('alternator_port: {0}'.format(alternator_port),
-                                             scylla_yaml_contents)
-            else:
-                scylla_yaml_contents += "\nalternator_port: %s\n" % alternator_port
+            scylla_yml['alternator_port'] = alternator_port
+
+        scylla_yaml_contents = yaml.safe_dump(scylla_yml)
 
         # system_key must be pre-created, kmip keys will be used for kmip server auth
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
