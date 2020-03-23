@@ -26,9 +26,26 @@ from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
 from sdcm.utils.common import FileFollowerThread, makedirs, generate_random_string
 from sdcm.sct_events import CassandraStressLogEvent, Severity
-from sdcm.utils.thread import DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
+
+
+def format_stress_cmd_error(exc):
+    """
+    format nicely the excpetion we get from stress command failures
+
+    :param exc: the exception
+    :return: string to add to the event
+    """
+    if hasattr(exc, 'result') and exc.result.failed:
+        stderr = exc.result.stderr
+        if len(stderr) > 100:
+            stderr = stderr[:100]
+        errors_str = f'Stress command completed with bad status {exc.result.exited}: {stderr}'
+    else:
+        errors_str = f'Stress command execution failed with: {str(exc)}'
+
+    return errors_str
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
@@ -165,7 +182,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                                           timeout=self.timeout,
                                           log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
-                errors_str = DockerBasedStressThread.format_error(exc)
+                errors_str = format_stress_cmd_error(exc)
                 CassandraStressEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
                                      log_file_name=log_file_name, severity=Severity.CRITICAL,
                                      errors=[errors_str])
