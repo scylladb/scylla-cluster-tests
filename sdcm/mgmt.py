@@ -338,6 +338,8 @@ class ManagerCluster(ScyllaManagerBase):
 
     def create_backup_task(self, param_dict):
         arguments = []
+        if 'rate-limit' not in param_dict:
+            param_dict['rate-limit'] = 30
         for arg, value in param_dict.items():
             if isinstance(value, (str, int)) and value:
                 arguments.append('--{} {}'.format(arg, str(value)))
@@ -345,7 +347,6 @@ class ManagerCluster(ScyllaManagerBase):
                 arguments.append('--{}'.format(arg))
             if isinstance(value, list) and value:
                 arguments.append('--{} {}'.format(arg, ','.join(value)))
-
         command = "backup -c {} ".format(self.id) + ' '.join(arguments)
         res = self.sctool.run(cmd=command, parse_table_res=False)
         if not res.stdout:
