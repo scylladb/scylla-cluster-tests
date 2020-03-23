@@ -55,7 +55,6 @@ from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
-
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
                                            "DeleteOnTermination": True,
@@ -3719,6 +3718,11 @@ class BaseLoaderSet():
         _queue = {TASK_QUEUE: queue.Queue(), RES_QUEUE: queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
+
+            # to avoid cyclic dependency
+            # TODO: scylla-bench code should move into it's own code
+            from sdcm.stress_thread import format_stress_cmd_error
+
             _queue[TASK_QUEUE].put(node)
 
             ScyllaBenchEvent(type='start', node=str(node), stress_cmd=stress_cmd)
@@ -3730,14 +3734,17 @@ class BaseLoaderSet():
                                          (loader_idx, uuid.uuid4()))
             # Select first seed node to send the scylla-bench cmds
             ips = node_list[0].private_ip_address
-            bench_log = tempfile.NamedTemporaryFile(prefix='scylla-bench-', suffix='.log').name
 
-            result = node.remoter.run(cmd="/$HOME/go/bin/{name} -nodes {ips} |tee {log}".format(name=stress_cmd.strip(),
-                                                                                                ips=ips,
-                                                                                                log=bench_log),
-                                      timeout=timeout,
-                                      ignore_status=True,
-                                      log_file=log_file_name)
+            try:
+                result = node.remoter.run(
+                    cmd="/$HOME/go/bin/{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
+                    timeout=timeout,
+                    log_file=log_file_name)
+            except Exception as exc:  # pylint: disable=broad-except
+                errors_str = format_stress_cmd_error(exc)
+                ScyllaBenchEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
+                                 log_file_name=log_file_name, severity=Severity.CRITICAL,
+                                 errors=[errors_str])
 
             ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
