@@ -13,6 +13,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.thread import DockerBasedStressThread
 from sdcm.utils.docker import RemoteDocker
 from sdcm.utils.common import generate_random_string
+from sdcm.stress_thread import format_stress_cmd_error
 
 LOGGER = logging.getLogger(__name__)
 
@@ -195,7 +196,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                     watchers=[FailuresWatcher(r'\sERROR|=UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
                 return result
             except Exception as exc:  # pylint: disable=broad-except
-                errors_str = self.format_error(exc)
+                errors_str = format_stress_cmd_error(exc)
                 YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
                                 log_file_name=log_file_name, severity=Severity.ERROR,
                                 errors=[errors_str])
