@@ -28,7 +28,6 @@ import shutil
 import copy
 import string
 from enum import Enum
-import sys
 import warnings
 from typing import Iterable, List, Callable
 from urllib.parse import urlparse
