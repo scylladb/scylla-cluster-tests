@@ -44,7 +44,8 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_scylla_repo_file, S3Storage, \
-    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation, cached_property
+    get_latest_gemini_version, get_my_ip, makedirs, normalize_ipv6_url, deprecation, cached_property, \
+    download_dir_from_cloud
 from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
@@ -1817,11 +1818,14 @@ server_encryption_options:
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
-    def install_manager_agent(self, auth_token, manager_scylla_repo, package_path=None):
+    def install_manager_agent(self, package_path=None):
+        auth_token = Setup.test_id()
         if package_path:
             package_name = '{}scylla-manager-agent*'.format(package_path)
         else:
-            self.download_scylla_manager_repo(manager_scylla_repo)
+            self.download_scylla_manager_repo(
+                self.parent_cluster.params.get("scylla_mgmt_agent_repo",
+                                               self.parent_cluster.params.get("scylla_mgmt_repo", None)))
             package_name = 'scylla-manager-agent'
         install_and_config_agent_command = dedent(r"""
             yum install -y {}
@@ -3330,6 +3334,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
 
             self.log.info('io.conf right after reboot')
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+
+            if self.params.get('use_mgmt', None):
+                pkgs_url = self.params.get('scylla_mgmt_pkg', None)
+                pkg_path = None
+                if pkgs_url:
+                    pkg_path = download_dir_from_cloud(pkgs_url)
+                    node.remoter.run('mkdir -p {}'.format(pkg_path))
+                    node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
+                node.install_manager_agent(package_path=pkg_path)
         else:
             self._reuse_cluster_setup(node)
 
@@ -3922,7 +3935,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 node.create_swap_file(monitor_swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
-        self.mgmt_auth_token = kwargs.get("auth_token", None)  # pylint: disable=attribute-defined-outside-init
+        self.mgmt_auth_token = Setup.test_id()  # pylint: disable=attribute-defined-outside-init
 
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
