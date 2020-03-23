@@ -251,7 +251,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             self.init_resources()
 
-            self.init_nodes(db_cluster=self.db_cluster)
+            if self.db_cluster.nodes:
+                self.init_nodes(db_cluster=self.db_cluster)
+                self.set_system_auth_rf()
+                db_node_address = self.db_cluster.nodes[0].ip_address
+                self.loaders.wait_for_init(db_node_address=db_node_address)
 
             # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
             if self.cs_db_cluster:
