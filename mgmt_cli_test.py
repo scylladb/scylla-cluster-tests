@@ -44,7 +44,7 @@ class MgmtCliTest(ClusterTester):
             1) Run cassandra stress on cluster.
             2) Add cluster to Manager and run full repair via Nemesis
         """
-        self._generate_load()
+        self.generate_load_and_wait_for_results()
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
         mgmt_nemesis = MgmtRepair(tester_obj=self, termination_event=self.db_cluster.termination_event)
         mgmt_nemesis.disrupt()
@@ -282,7 +282,7 @@ class MgmtCliTest(ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
-        self._generate_load()
+        self.generate_load_and_wait_for_results()
         repair_task = mgr_cluster.create_repair_task()
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
