@@ -27,3 +27,4 @@ tcconfig==0.23.0
 selenium==3.141.0
 mysql-connector-python==8.0.19
 docker==4.2.0
+python-jenkins==1.4.0

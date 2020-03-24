@@ -67,6 +67,9 @@ BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 # export all AWS_* env vars into the docker run
 AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
+# export all JENKINS_* env vars into the docker run
+JENKINS_OPTIONS=$(env | grep JENKINS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+
 group_args=()
 for gid in $(id -G); do
     group_args+=(--group-add "$gid")
@@ -93,6 +96,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     ${group_args[@]} \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
+    ${JENKINS_OPTIONS} \
     ${AWS_OPTIONS} \
     --net=host \
     --name=${SCT_TEST_ID} \
