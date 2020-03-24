@@ -1,3 +1,4 @@
+backtrace_decoding: false
 cluster_backend: 'docker'
 docker_image: 'scylladb/scylla'
 logs_transport: 'ssh'
