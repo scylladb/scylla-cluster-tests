@@ -20,8 +20,6 @@ else
     echo "Will build locally and push."
 fi
 
-exit 0
-
 if [[ -n "$(docker images scylladb/hydra:${VERSION} -q)" ]]; then
     echo "Local image exists. Not building."
 else

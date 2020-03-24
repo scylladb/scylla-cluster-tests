@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 import logging
+import glob
 
 import pytest
 import click
@@ -22,6 +23,7 @@ from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_st
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
+from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 LOGGER = setup_stdout_logger()
 
@@ -484,6 +486,35 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
         reporter.send_report(test_results)
     else:
         LOGGER.warning("No reporter found")
+
+
+@cli.command('create_test_release_jobs', help="Create pipeline jobs for a new branch")
+@click.argument('branch', type=str)
+@click.argument('username', envvar='JENKINS_USERNAME', type=str)
+@click.argument('password', envvar='JENKINS_PASSWORD', type=str)
+@click.option('--sct_branch', default='master', type=str)
+@click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
+def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
+    base_job_dir = f'{branch}'
+    server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
+                              sct_branch_name=sct_branch, sct_repo=sct_repo)
+
+    for group_name, group_desc in [
+        ('longevity', 'SCT Longevity Tests'),
+        ('rolling-upgrade', 'SCT Rolling Upgrades'),
+        ('gemini-', 'SCT Gemini Tests'),
+        ('features-', 'SCT Feature Tests'),
+        ('artifacts', 'SCT Artifacts Tests'),
+            ('load-test', 'SCT Load Tests')]:
+
+        server.create_directory(name=group_name, display_name=group_desc)
+
+        for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{group_name}*.jenkinsfile'):
+            server.create_pipeline_job(jenkins_file, group_name)
+
+        if group_name == 'load-test':
+            for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/admission_control_overload*'):
+                server.create_pipeline_job(jenkins_file, group_name)
 
 
 if __name__ == '__main__':

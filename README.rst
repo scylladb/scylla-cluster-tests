@@ -381,6 +381,13 @@ Once you have changes in the requirements-python.txt or in Hydra Dockerfile
 - run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub
 
 
+Creating pipeline jobs for new branch
+=====================================
+
+Once a new branch is create, we could build all the need job for this branch with the following script ::
+
+    JENKINS_USER=[jenkins username] JENKINS_PASS=[token from jenkins] hydra create_test_release_jobs scylla-4.0 --sct_branch branch-4.0
+
 FAQ
 ====
 **Q:** My c-s and memesis metrics are not exposed to the monitor while running locally, why ?
