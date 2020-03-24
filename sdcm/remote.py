@@ -54,7 +54,8 @@ class SSHConnectTimeoutError(Exception):
 
 
 NETWORK_EXCEPTIONS = (NoValidConnectionsError, SSHException, SSHConnectTimeoutError, EOFError, AuthenticationException,
-                      ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError)
+                      ConnectionResetError, ConnectionAbortedError, ConnectionError, ConnectionRefusedError,
+                      socket.timeout)
 
 
 class RetriableNetworkException(Exception):
@@ -68,6 +69,7 @@ def is_error_retriable(err_str):
     exceptions = ("Authentication timeout", "Error reading SSH protocol banner", "Timeout opening channel",
                   "Unable to open channel", "Key-exchange timed out waiting for key negotiation",
                   "ssh_exchange_identification: Connection closed by remote host", "No existing session",
+                  "timed out",
                   )
     for exception_str in exceptions:
         if exception_str in err_str:
