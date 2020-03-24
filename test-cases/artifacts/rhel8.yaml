@@ -1,3 +1,4 @@
+backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image: 'https://www.googleapis.com/compute/v1/projects/rhel-cloud/global/images/family/rhel-8'
 gce_instance_type_db: 'n1-standard-2'
