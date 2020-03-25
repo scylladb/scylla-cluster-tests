@@ -87,7 +87,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.current_disruption = None
         self.duration_list = []
         self.error_list = []
-        self.interval = 0
+        self.interval = 60 * self.tester.params.get('nemesis_interval')  # convert from min to sec
         self.start_time = time.time()
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
@@ -150,12 +150,12 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
-    def run(self, interval=30):
-        interval *= 60
-        self.log.info('Interval: %s s', interval)
-        self.interval = interval
+    def run(self, interval=None):
+        if interval:
+            self.interval = interval * 60
+        self.log.info('Interval: %s s', self.interval)
         while not self.termination_event.isSet():
-            cur_interval = interval
+            cur_interval = self.interval
             self.set_target_node()
             self._set_current_disruption(report=False)
             try:

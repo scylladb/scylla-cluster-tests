@@ -3275,7 +3275,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         self.nemesis = []
 
     @log_run_info("Start nemesis threads on cluster")
-    def start_nemesis(self, interval=30):
+    def start_nemesis(self, interval=None):
         for nemesis in self.nemesis:
             nemesis_thread = threading.Thread(target=nemesis.run,
                                               args=(interval, ))
