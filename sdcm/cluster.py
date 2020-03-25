@@ -1596,7 +1596,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         if broadcast:
             # Set broadcast_address
-            scylla_yml['rpc_address'] = broadcast
+            scylla_yml['broadcast_address'] = broadcast
 
             # Set broadcast_rpc_address
             scylla_yml['broadcast_rpc_address'] = broadcast
