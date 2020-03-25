@@ -1248,7 +1248,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             update_config_file(node=node, region=region[0])
         mgr_task = mgr_cluster.create_backup_task({'location': ['s3:{}'.format(bucket_location_name[0])]})
 
-        succeeded, status = mgr_task.wait_for_task_done_status(timeout=10800)
+        succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
         if succeeded and status == TaskStatus.DONE:
             self.log.info('Task: {} is done.'.format(mgr_task.id))
         if not succeeded:
