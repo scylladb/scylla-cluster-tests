@@ -60,7 +60,7 @@ class GeminiTest(ClusterTester):
         self.log.info('Sleep interval {}'.format(sleep_before_start))
         time.sleep(sleep_before_start)
 
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+        self.db_cluster.start_nemesis()
 
         self.gemini_results = self.verify_gemini_results(queue=test_queue)
 

@@ -155,7 +155,7 @@ class LongevityTest(ClusterTester):
                 # Wait for some data (according to the param in the yal) to be populated, for multi keyspace need to
                 # pay attention to the fact it checks only on keyspace1
                 self.db_cluster.wait_total_space_used_per_node(keyspace=None)
-                self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+                self.db_cluster.start_nemesis()
 
             # Wait on the queue till all threads come back.
             # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
@@ -232,7 +232,7 @@ class LongevityTest(ClusterTester):
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+            self.db_cluster.start_nemesis()
 
         stress_read_cmd = self.params.get('stress_read_cmd', default=None)
         if stress_read_cmd:
@@ -274,7 +274,7 @@ class LongevityTest(ClusterTester):
             self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size,
                                         stress_cmd=prepare_write_cmd)
 
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+        self.db_cluster.start_nemesis()
 
         stress_cmd = self.params.get('stress_cmd', default=None)
         self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
@@ -314,7 +314,7 @@ class LongevityTest(ClusterTester):
                 self.monitors.reconfigure_scylla_monitoring()
                 self.db_cluster.wait_for_init(node_list=new_nodes)
 
-        self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+        self.db_cluster.start_nemesis()
 
         stress_params_list = list()
 

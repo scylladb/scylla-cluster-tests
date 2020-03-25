@@ -106,7 +106,7 @@ class GrowClusterTest(ClusterTester):
         time.sleep(2 * 60)
 
         if self.params.get('nemesis_class_name').lower() != 'noopmonkey':
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
+            self.db_cluster.start_nemesis()
 
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
