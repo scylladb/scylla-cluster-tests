@@ -14,10 +14,16 @@ table_definition: |
     number int,
     starttime timestamp,
     weight decimal,
+    steps float,
+    t_num tinyint,
+    bvalue blob,
+    boy boolean,
+    vname varchar,
+    vage varint,
     nums_set set<int>,
     names_set set<text>
   ) WITH bloom_filter_fp_chance = 0.01
-    AND cdc = {'enabled': true, 'preimage': false, 'ttl': 600}
+    AND cdc = {'enabled': true, 'preimage': false, 'postimage': false, 'ttl': 600}
     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
     AND comment = 'Request for unit level UIs'
     AND compaction = {'class': 'SizeTieredCompactionStrategy'}
