@@ -15,7 +15,7 @@ from sdcm.es import ES
 from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email
 from sdcm.utils.es_queries import query_filter, QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
-    PerformanceFilterCS
+    PerformanceFilterCS, CDCQueryFilterCS
 from test_lib.utils import MagicList, get_data_by_path
 from .test import TestResultClass
 
@@ -328,6 +328,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return PerformanceFilterScyllaBench(test_doc, is_gce)()
         elif test_doc['_source']['test_details'].get('ycsb'):
             return PerformanceFilterYCSB(test_doc, is_gce)()
+        elif "cdc" in test_doc['_source']['test_details'].get('sub_type'):
+            return CDCQueryFilterCS(test_doc, is_gce)()
         else:
             return PerformanceFilterCS(test_doc, is_gce)()
 
@@ -538,7 +540,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = query_filter(doc, is_gce)
+        query = self._query_filter(doc, is_gce)
         self.log.debug(query)
         if not query:
             return False
