@@ -1149,6 +1149,8 @@ def get_db_tables(session, ks, with_compact_storage=True):
 
 # Add @retrying to prevent situation when nemesis failed on connection timeout when try to receive the
 # keyspace and table for the test
+
+
 @retrying(n=5, sleep_time=5)
 def get_non_system_ks_cf_list(db_node, request_timeout=300, filter_out_table_with_counter=False,  # pylint: disable=too-many-arguments
                               filter_out_mv=False, filter_empty_tables=True):

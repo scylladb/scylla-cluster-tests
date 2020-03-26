@@ -470,7 +470,8 @@ class TestStatsMixin(Stats):
         return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
                 'sys_info': self.db_cluster.nodes[0].get_system_info()}
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None, doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None):  # pylint: disable=too-many-arguments
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
+                          doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None):
 
         if not self.create_stats:
             return
