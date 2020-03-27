@@ -630,9 +630,9 @@ class ScyllaBenchEvent(SctEvent):
             super(ScyllaBenchEvent, self).__str__(), self)
 
 
-class YcsbStressEvent(SctEvent):
+class StressEvent(SctEvent):
     def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super(YcsbStressEvent, self).__init__()
+        super(StressEvent, self).__init__()
         self.type = type
         self.node = str(node)
         self.stress_cmd = stress_cmd
@@ -642,14 +642,22 @@ class YcsbStressEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        fmt = f"{super(YcsbStressEvent, self).__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
+        fmt = f"{super(StressEvent, self).__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
         if self.errors:
             errors_str = '\n'.join(self.errors)
             return f"{fmt}\nerrors:\n\n{errors_str}"
         return fmt
 
 
-class NdbenchStressEvent(YcsbStressEvent):
+class YcsbStressEvent(StressEvent):
+    pass
+
+
+class NdbenchStressEvent(StressEvent):
+    pass
+
+
+class CDCReaderStressEvent(YcsbStressEvent):
     pass
 
 
