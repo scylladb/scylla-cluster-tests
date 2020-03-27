@@ -123,7 +123,7 @@ class BaseEmailReporter():
     _fields = ()
     email_template_file = 'results_base.html'
     last_events_limit = 5
-    last_events_body_limit = 200
+    last_events_body_limit = 400
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
         self.email_recipients = email_recipients
@@ -252,7 +252,7 @@ class BaseEmailReporter():
                 output[severity] = severity_events = []
                 for event in reversed(events):
                     severity_events.insert(0, event[:self.last_events_body_limit])
-                    if len(severity_events) > self.last_events_limit:
+                    if len(severity_events) >= self.last_events_limit:
                         severity_events.append('There are more events. See log file.')
                         break
         return output
