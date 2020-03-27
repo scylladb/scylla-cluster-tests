@@ -148,6 +148,10 @@ def get_raw_cmd_params(cmd):
     return cmd_params
 
 
+def get_cdcreader_cmd_params(cmd):
+    return get_gemini_cmd_params(cmd)
+
+
 class PrometheusDBStats():
     def __init__(self, host, port=9090, alternator=None):
         self.host = host
@@ -507,6 +511,10 @@ class TestStatsMixin(Stats):
             cmd_params = get_ycsb_cmd_params(cmd)
         elif stresser in ['gemini', 'ndbench']:
             cmd_params = get_raw_cmd_params(cmd)
+        elif stresser == 'gemini':
+            cmd_params = get_gemini_cmd_params(cmd)
+        elif stresser == 'cdcreader':
+            cmd_params = get_cdcreader_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
