@@ -488,7 +488,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
         LOGGER.warning("No reporter found")
 
 
-@cli.command('create_test_release_jobs', help="Create pipeline jobs for a new branch")
+@cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
 @click.argument('branch', type=str)
 @click.argument('username', envvar='JENKINS_USERNAME', type=str)
 @click.argument('password', envvar='JENKINS_PASSWORD', type=str)
