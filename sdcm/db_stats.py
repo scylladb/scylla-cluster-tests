@@ -532,10 +532,10 @@ class TestStatsMixin(Stats):
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
-    def get_prometheus_stats(self):
+    def get_prometheus_stats(self, alternator=False):
         self.log.info("Calculating throughput stats from PrometheusDB...")
         prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address,
-                                                alternator=self.params.get('alternator_port'))
+                                                alternator=alternator)
         offset = 120  # 2 minutes offset
         start = int(self._stats["test_details"]["start_time"] + offset)
         end = int(time.time() - offset)
@@ -595,7 +595,7 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None, alternator=False):  # pylint: disable=too-many-arguments
         if not self.create_stats:
             return
 
@@ -612,7 +612,7 @@ class TestStatsMixin(Stats):
         if self.monitors and self.monitors.nodes:
             test_start_time = self._stats['test_details']['start_time']
             if self.params.get('store_perf_results'):
-                update_data['results'] = self.get_prometheus_stats()
+                update_data['results'] = self.get_prometheus_stats(alternator=alternator)
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
             self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
             self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
