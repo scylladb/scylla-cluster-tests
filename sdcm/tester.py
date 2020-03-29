@@ -1237,6 +1237,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return [list(row) for row in rows]
 
     def copy_table(self, src_keyspace, src_table, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+        """
+        Create table with same structure as <src_keyspace>.<src_table>.
+        Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
+        """
         result = True
         create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_table, src_keyspace)
@@ -1248,6 +1252,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return result
 
     def copy_view(self, src_keyspace, src_view, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+        """
+        Create table with same structure as <src_keyspace>.<src_view>.
+        Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
+        """
         result = True
         create_statement = "SELECT * FROM system_schema.views where view_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_view, src_keyspace)
