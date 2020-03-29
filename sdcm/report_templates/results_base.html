@@ -171,20 +171,20 @@
 
 {% endblock %}
 
-{% block body %}
-{% endblock %}
-
 {% block test_results %}
     <h3>
         <span>Test results </span>
     </h3>
     {% if test_status == "SUCCESS" %}
         <span class='green'>{{ test_status }}</span>
-    {% elif status == 'FAILED' %}
+    {% elif test_status == 'FAILED' %}
         <span class='red'>{{ test_status }}</span>
     {% else %}
         <span>{{ test_status }}</span>
     {% endif %}
+{% endblock %}
+
+{% block body %}
 {% endblock %}
 
 {% block events_summary %}
