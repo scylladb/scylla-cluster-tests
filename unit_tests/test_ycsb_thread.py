@@ -21,10 +21,11 @@ TEST_PARAMS = dict(dynamodb_primarykey_type='HASH_AND_RANGE',
 @pytest.fixture(scope='session')
 def create_table(docker_scylla):
     if running_in_docker():
-        alternator_create_table(f'http://{docker_scylla.internal_ip_address}:{ALTERNATOR_PORT}', TEST_PARAMS)
+        alternator_create_table(f'http://{docker_scylla.internal_ip_address}:{ALTERNATOR_PORT}', 'HASH_AND_RANGE',
+                                TEST_PARAMS)
     else:
         address = docker_scylla.get_port(f'{ALTERNATOR_PORT}')
-        alternator_create_table(f'http://{address}', TEST_PARAMS)
+        alternator_create_table(f'http://{address}', 'HASH_AND_RANGE', TEST_PARAMS)
 
 
 def test_01_dynamodb_api(request, docker_scylla, prom_address):

@@ -1,8 +1,17 @@
 test_duration: 2950
-prepare_write_cmd: [
-  "bin/ycsb load dynamodb -P workloads/workloada -threads 250 -p recordcount=200200300 -p fieldcount=1 -p fieldlength=1024 -p dataintegrity=true -p hdrhistogram.summary.addstatus=true", ]
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 250 -p recordcount=200200300
+    -p fieldcount=1 -p fieldlength=1024 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=100100150
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 250 -p recordcount=200200300
+    -p fieldcount=1 -p fieldlength=1024 -p dataintegrity=true
+    -p insertstart=100100150 -p insertcount=100100150
+
 stress_cmd: [
-  "bin/ycsb run  dynamodb -P workloads/workloada -threads 250 -p recordcount=200200300 -p fieldcount=1 -p fieldlength=1024 -p operationcount=400400600 -p dataintegrity=true -p hdrhistogram.summary.addstatus=true", ]
+  "bin/ycsb run  dynamodb -P workloads/workloada -threads 250 -p recordcount=200200300 -p fieldcount=1 -p fieldlength=1024 -p operationcount=535000000 -p dataintegrity=true", ]
 
 dynamodb_primarykey_type: HASH_AND_RANGE
 
@@ -13,7 +22,7 @@ n_db_nodes: 4
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
-nemesis_during_prepare: false
+nemesis_during_prepare: true
 
 user_prefix: 'alternator-48h'
 
