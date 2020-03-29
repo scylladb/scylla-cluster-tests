@@ -51,7 +51,6 @@ def call(Map pipelineParams) {
         }
         options {
             timestamps()
-            disableConcurrentBuilds()
             timeout(pipelineParams.timeout)
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
