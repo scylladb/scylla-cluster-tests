@@ -1,3 +1,93 @@
+#
+# This is stress longevity test that runs light weight transactions in parallel with differnt node operations:
+# disruptive and not disruptive
+#
+# Schema definition yaml: data_dir/c-s_lwt_basic.yaml
+#
+# After the test is finished will be performed the data validation.
+#
+# 2 kinds of LWT updated will be run:
+#
+# update one column:
+#    set lwt_indicator=30000000,
+#    condition: for all rows where if lwt_indicator < 0
+#
+# update two columns:
+#    set lwt_indicator=20000000 and author='text',
+#    condition: for all rows where if lwt_indicator > 0 and lwt_indicator <= 1000000 and author != 'text'
+#
+# Additional expected that all rows where lwt_indicator > 1000000 and lwt_indicator < 20000000 won't be updated
+#
+# Based on this 3 types of validation will be performed:
+#
+# - Rows which are expected to stay intact, are not updated
+# - Rows for a certain row range, lwt_indicator is changed to 30000000
+# - Rows for another row range lwt_indicator is changed to 20000000
+#
+#
+# ***Validation implementation***
+#
+# 1. Rows which are expected to stay intact.
+#    To be able to validate that, I added a MV called blogposts_not_updated_lwt_indicator
+#
+#     - create MATERIALIZED VIEW blogposts_not_updated_lwt_indicator as select lwt_indicator, author from blogposts
+#       where domain is not null and published_date is not null and lwt_indicator > 1000000 and lwt_indicator < 20000000
+#       PRIMARY KEY(lwt_indicator, domain, published_date);
+#     This MV hold all rows that shouldn't be updated.
+#
+#     Once the prepare_write_cmd part will be completed, all data from the view
+#     blogposts_not_updated_lwt_indicator will be copied to a side table called
+#     blogposts_not_updated_lwt_indicator_expect (created by test). This table uses as the expected data for this
+#     validation.
+#
+#     When test is finished, the test checks that data in the blogposts_not_updated_lwt_indicator and
+#     blogposts_not_updated_lwt_indicator_expect will be same.
+#
+# 2. For the rows where lwt_indicator was changed to "30000000", the data validation behaves as follow:
+#
+#     Two more Materialized View are added.
+#     First one holds rows that candidates for this update (before the update):
+#
+#     create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator as select domain, lwt_indicator, author
+#     from blogposts where domain is not null and published_date is not null and lwt_indicator < 0
+#     PRIMARY KEY(lwt_indicator, domain, published_date);
+#     Second one holds rows with lwt_indicator=30000000 (means - after update):
+#
+#     create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_upd as select lwt_indicator, author
+#     from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000
+#     PRIMARY KEY(lwt_indicator, domain, published_date);
+#     Ideally, The view blogposts_update_one_column_lwt_indicator should be empty after the update and the view
+#     blogposts_update_one_column_lwt_indicator_upd will hold same amount of data as
+#     blogposts_update_one_column_lwt_indicator had before the update.
+#
+#     However, due to the fact we cannot control the c-s workload to go over all the rows (should visit all the rows
+#     with lwt_indicator negative value), for now it's just validated that blogposts_update_one_column_lwt_indicator_upd
+#     has some records.
+#     (It's unreasonable that the workload won't visit any row with negative value)
+#
+# 3. For the rows where lwt_indicator is changed to "20000000", the data validation the data validation behaves as
+#    follow:
+#
+#     Two more Materialized View are added.
+#     First one holds rows that are candidates for this update (before update):
+#
+#      create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator as select lwt_indicator, author
+#      from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and
+#      lwt_indicator <= 1000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+#     Second one holds rows with lwt_indicator=20000000 (means - after the update):
+#
+#     create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator_upd as select lwt_indicator, author
+#     from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000
+#     PRIMARY KEY(lwt_indicator, domain, published_date);
+
+#     Ideally, the view blogposts_update_two_columns_lwt_indicator should be empty after the update and the view
+#     blogposts_update_two_columns_lwt_indicator_upd will hold the same amount of data that as the view
+#     blogposts_update_two_columns_lwt_indicator had before the update.
+#
+#     However, due to the same reason as above, the current validation is just that
+#     blogposts_update_two_columns_lwt_indicator_upd has some records.
+#
+
 import re
 
 from longevity_test import LongevityTest
@@ -28,6 +118,9 @@ class LWTLongevityTest(LongevityTest):
 
     @property
     def mv_for_not_updated_data(self):
+        """
+        Get MV name that holds rows which are expected to stay intact
+        """
         if not self._mv_for_not_updated_data:
             name_substr = '_not_updated'
             self._mv_for_not_updated_data = self.get_mv_name_from_profile(name_substr)
@@ -37,6 +130,10 @@ class LWTLongevityTest(LongevityTest):
 
     @property
     def expected_data_table_name(self):
+        """
+        Table name for expected data (needs for validate rows which are expected to stay intact - implemented in
+         validate_range_not_expected_to_change function)
+        """
         if not self._expected_data_table:
             self._expected_data_table = '%s_expect' % self.mv_for_not_updated_data
         return self._expected_data_table
@@ -130,6 +227,9 @@ class LWTLongevityTest(LongevityTest):
         """
         In user profile 'data_dir/c-s_lwt_basic.yaml' LWT updates the lwt_indicator and author columns with hard coded
         values. Validate, that we can find these values
+        Two more materialized views are added. The first one holds rows that are candidates for the update
+        (i.e. all rows before the update).
+        The second one holds rows with lwt_indicator=30000000 (i.e. only the updated rows)
         """
         stress_cmd = self.params.get('stress_cmd', default=[])
         stress_read_cmd = self.params.get('stress_read_cmd', default=[])
