@@ -1,5 +1,5 @@
 test_duration: 180
-prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert=1)' cl=SERIAL -mode native cql3 -rate threads=30"]
+prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert=1)' cl=QUORUM -mode native cql3 -rate threads=30"]
 stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=SERIAL duration=160m -mode native cql3 -rate threads=30" ]
 stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' cl=SERIAL duration=160m -mode native cql3 -rate threads=30" ]
 
