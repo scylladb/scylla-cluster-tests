@@ -391,6 +391,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
             DatabaseLogEvent(type='CQL_SERVER_CONN_SYSTEM_ERROR', severity=Severity.WARNING,
                              regex='cql_server - exception while processing connection: std::system_error'),
+            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
             DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
             DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
             DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
@@ -401,7 +402,6 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
             DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
             DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled', severity=Severity.WARNING),
-            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out'),
             DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
             DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
         ]
