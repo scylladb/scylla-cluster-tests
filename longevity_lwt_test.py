@@ -109,6 +109,9 @@ class LWTLongevityTest(LongevityTest):
             prepare_write_cmd = self.params.get('prepare_write_cmd', default=[])
             profiles = [cmd for cmd in prepare_write_cmd if 'c-s_lwt' in cmd]
             if not profiles:
+                self._validate_not_updated_data = False
+                self.log.warning('Keyspace is not recognized. '
+                                 'Data validation of not updated rows won\' be performed')
                 return self._keyspace_name
             cs_profile = profiles[0]
             _, profile = get_profile_content(cs_profile)
@@ -174,18 +177,16 @@ class LWTLongevityTest(LongevityTest):
         return find_mv_name.group(1)
 
     def copy_expected_data(self):
-        self.log.debug('Start copy test data')
-        if not self.copy_view(src_keyspace=self.keyspace_name, src_view=self.mv_for_not_updated_data,
-                              dest_keyspace=self.keyspace_name, dest_table=self.expected_data_table_name,
-                              copy_data=True):
-            self._validate_not_updated_data = False
-            self.log.warning('Problem during copying expected data. '
-                             'Data validation of not updated rows won\' be performed')
-        self.log.debug('Finish copy test data')
+        if self._validate_not_updated_data:
+            if not self.copy_view(src_keyspace=self.keyspace_name, src_view=self.mv_for_not_updated_data,
+                                  dest_keyspace=self.keyspace_name, dest_table=self.expected_data_table_name,
+                                  copy_data=True):
+                self._validate_not_updated_data = False
+                self.log.warning('Problem during copying expected data. '
+                                 'Data validation of not updated rows won\' be performed')
 
     def run_prepare_write_cmd(self):
         super(LWTLongevityTest, self).run_prepare_write_cmd()
-        self.log.info('Before copying data')
         self.copy_expected_data()
 
     def test_lwt_longevity(self):
