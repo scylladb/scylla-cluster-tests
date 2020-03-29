@@ -65,7 +65,7 @@ def docker_scylla():
     entryfile_path = entryfile_path.joinpath('./docker/scylla-sct/entry.sh')
 
     scylla = RemoteDocker(LocalNode(), image_name="scylladb/scylla-nightly:666.development-202002171235",
-                          command_line="--smp 1 --alternator-port 8000 --experimental 1", extra_docker_opts=f'-p 8000 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint /entry.sh')
+                          command_line="--smp 1 --alternator-port 8000 --experimental 1", extra_docker_opts=f'-p 8000 -p 9042 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint /entry.sh')
 
     def db_up():
         try:

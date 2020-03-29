@@ -152,7 +152,12 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
     def build_stress_cmd(self):
-        stress_cmd = f'{self.stress_cmd} -s -P /tmp/dynamodb.properties'
+        stress_cmd = f'{self.stress_cmd} -s '
+        if 'dynamodb' in self.stress_cmd:
+            stress_cmd += ' -P /tmp/dynamodb.properties'
+        if 'cassandra-cql' in self.stress_cmd:
+            hosts = ",".join([i.ip_address for i in self.node_list])
+            stress_cmd += f' -p hosts={hosts} -p cassandra.readconsistencylevel=QUORUM -p cassandra.writeconsistencylevel=QUORUM'
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
         return stress_cmd
@@ -200,7 +205,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                             f'{self.params.get("alternator_port")}',
                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
             dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200211",
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200326",
                               extra_docker_opts=f'{dns_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()
