@@ -783,7 +783,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # }
         # Find best results for each version
 
-        current_tests = SortedDict()
+        current_tests = dict()
         grafana_snapshots = dict()
         grafana_screenshots = dict()
         for row in tests_filtered['hits']['hits']:
@@ -858,7 +858,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if not current_res_list:
             self.log.info('No test results to compare with')
             return False
-        current_res_list = sorted(current_res_list, key=lambda x: x['version_dst'])
         current_prometheus_stats = SortedDict()
         for sub_type in current_tests:
             current_prometheus_stats[sub_type] = {stat: current_tests[sub_type]["results"].get(
