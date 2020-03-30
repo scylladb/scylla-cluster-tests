@@ -14,7 +14,7 @@ stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/com
 stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
 stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(delete_row=1)' cl=ALL n=500000 -mode cql3 native -rate threads=200 -pop seq=1..500000
 
-n_db_nodes: 4
+n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
