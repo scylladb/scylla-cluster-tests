@@ -375,6 +375,9 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
                                        DatabaseLogEvent(type='UNKNOWN_VERB',
                                                         regex='unknown verb exception',
                                                         severity=Severity.WARNING),
+                                       DatabaseLogEvent(
+                                           type='BROKEN_PIPE', severity=Severity.WARNING,
+                                           regex='cql_server - exception while processing connection:.*Broken pipe'),
                                        DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
                                        DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
                                        DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
