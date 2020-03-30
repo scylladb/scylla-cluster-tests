@@ -1244,21 +1244,15 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             update_config_file(node=node, region=region[0])
         mgr_task = mgr_cluster.create_backup_task({'location': ['s3:{}'.format(bucket_location_name[0])]})
 
-        succeeded, status = mgr_task.wait_for_task_success_status(54000)
+        succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
         if succeeded and status == TaskStatus.DONE:
             self.log.info('Task: {} is done.'.format(mgr_task.id))
         if not succeeded:
             if status == TaskStatus.ERROR:
-                assert succeeded, f'Backup task {mgr_task} failed'
+                assert succeeded, f'Backup task {mgr_task.id} failed'
             else:
                 mgr_task.stop()
-                assert succeeded, f'Backup task {mgr_task} timed out - while on status {status}'
-
-        # mgr_task.wait_for_status([TaskStatus.DONE], timeout=43200)  # timeout is 12 hours
-        # task_final_status = mgr_task.wait_and_get_final_status()
-        # assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-        #     mgr_task.id, str(mgr_task.status))
-        # self.log.info('Task: {} is done.'.format(mgr_task.id))
+                assert succeeded, f'Backup task {mgr_task.id} timed out - while on status {status}'
 
     def disrupt_mgmt_repair_cli(self):
         self._set_current_disruption('ManagementRepair')
