@@ -389,8 +389,8 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._database_error_events = [
             DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
             DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
-            DatabaseLogEvent(type='CQL_SERVER_CONN_SYSTEM_ERROR', severity=Severity.WARNING,
-                             regex='cql_server - exception while processing connection: std::system_error'),
+            DatabaseLogEvent(type='BROKEN_PIPE', severity=Severity.WARNING,
+                             regex='cql_server - exception while processing connection:.*Broken pipe'),
             DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
             DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
             DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
