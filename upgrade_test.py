@@ -442,21 +442,25 @@ class UpgradeTest(FillDatabaseData):
         """
 
         # In case the target version >= 3.1 we need to perform test for truncate entries
-        target_upgrade_version = self.params.get('target_upgrade_version', default='')
-        self.truncate_entries_flag = False
-        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
-                not is_enterprise(target_upgrade_version):
-            self.truncate_entries_flag = True
+        # target_upgrade_version = self.params.get('target_upgrade_version', default='')
+        # self.truncate_entries_flag = False
+        # if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
+        #         not is_enterprise(target_upgrade_version):
+        #     self.truncate_entries_flag = True
 
         # write workload during entire test
-        self.log.info('Starting c-s write workload during entire test')
-        write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
-        self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
+        # self.log.info('Starting c-s write workload during entire test')
+        # write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
+        # entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
         # Prepare keyspace and tables for truncate test
-        if self.truncate_entries_flag:
-            self.insert_rows = 10
-            self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+        # if self.truncate_entries_flag:
+        #     self.insert_rows = 10
+        #     self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+
+        # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
+        self.prepare_keyspaces_and_tables()
+        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
@@ -478,6 +482,8 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
+            # self.verify_stress_thread(entire_write_cs_thread_pool)
+            self.fill_and_verify_db_data('after upgraded one node')
 
     def get_email_data(self):
         self.log.info('Prepare data for email')
