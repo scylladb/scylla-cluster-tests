@@ -410,12 +410,12 @@ class UpgradeTest(FillDatabaseData):
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
-    def fill_and_verify_db_data(self, note, pre_fill=False, rewrite_data=True):
+    def fill_and_verify_db_data(self, note, pre_fill=False, rewrite_data=True, use_personal=False):
         if pre_fill:
             self.log.info('Populate DB with many types of tables and data')
             self.fill_db_data()
         self.log.info('Run some Queries to verify data %s', note)
-        self.verify_db_data()
+        self.verify_db_data(use_personal=use_personal)
         if rewrite_data:
             self.log.info('Re-Populate DB with many types of tables and data')
             self.fill_db_data()
@@ -460,7 +460,7 @@ class UpgradeTest(FillDatabaseData):
 
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
-        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
+        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True, use_personal=True)
 
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
@@ -483,7 +483,7 @@ class UpgradeTest(FillDatabaseData):
 
             # wait for the prepare write workload to finish
             # self.verify_stress_thread(entire_write_cs_thread_pool)
-            self.fill_and_verify_db_data('after upgraded one node')
+            self.fill_and_verify_db_data('after upgraded one node', use_personal=True)
 
     def get_email_data(self):
         self.log.info('Prepare data for email')

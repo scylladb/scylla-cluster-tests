@@ -2941,10 +2941,65 @@ class FillDatabaseData(ClusterTester):
                     if 'list<' in item['create_tables'][0]:
                         time.sleep(1)
 
-    def run_db_queries(self, session, default_fetch_size):
+    def run_db_queries(self, session, default_fetch_size, use_personal=False):
         # pylint: disable=too-many-branches,too-many-nested-blocks
-
-        for item in self.all_verification_items:
+        personal_all_verification_items = [
+            {
+                'create_tables': [
+                    """CREATE TABLE composite_row_key_test (
+                    k1 int,
+                    k2 int,
+                    c int,
+                    v int,
+                    PRIMARY KEY ((k1, k2), c)
+                )
+            """],
+                'truncates': ["TRUNCATE composite_row_key_test"],
+                'inserts': [
+                    f"INSERT INTO composite_row_key_test (k1, k2, c, v) VALUES (0, {i}, {i}, {i})" for i
+                    in range(0, 4)
+                ],
+                'queries': [
+                    "SELECT * FROM composite_row_key_test",
+                    "SELECT * FROM composite_row_key_test WHERE k1 = 0 and k2 IN (1, 3)",
+                    "SELECT * FROM composite_row_key_test WHERE token(k1, k2) = token(0, 1)",
+                    "SELECT * FROM composite_row_key_test WHERE token(k1, k2) > " + str(-((2 ** 63) - 1))
+                ],
+                'results': [[[0, 2, 2, 2], [0, 3, 3, 3], [0, 0, 0, 0], [0, 1, 1, 1]],
+                            [[0, 1, 1, 1], [0, 3, 3, 3]],
+                            [[0, 1, 1, 1]],
+                            [[0, 2, 2, 2], [0, 3, 3, 3], [0, 0, 0, 0], [0, 1, 1, 1]]],
+                'invalid_queries': ["SELECT * FROM composite_row_key_test WHERE k2 = 3"],
+                'min_version': '',
+                'max_version': '',
+                'skip': ''},
+            {
+                'create_tables': ["""CREATE TABLE limit_ranges_test (
+                                        userid int,
+                                        url text,
+                                        time bigint,
+                                        PRIMARY KEY (userid, url)
+                                    ) WITH COMPACT STORAGE;"""],
+                'truncates': ['TRUNCATE limit_ranges_test'],
+                'inserts': [
+                    "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
+                                                                                                                tld)
+                    for _id in range(0, 4) for tld in ['com', 'org', 'net']],
+                'queries': [
+                    "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
+                    "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],  # issue ##2574
+                'results': [
+                    [[2, 'http://foo.com', 42]],
+                    [[3, 'http://foo.com', 42]]],
+                'min_version': '3.0',
+                'max_version': '',
+                'skip': ''}
+        ]
+        if use_personal:
+            all_verification_items = personal_all_verification_items
+        else:
+            all_verification_items = self.all_verification_items
+        for item in all_verification_items:
             # Some queries contains statement of switch keyspace, reset keyspace at the beginning
             session.set_keyspace("keyspace_fill_db_data")
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
@@ -3019,10 +3074,10 @@ class FillDatabaseData(ClusterTester):
             # Create all tables according the above list
             self.cql_create_tables(session)
 
-    def verify_db_data(self):
+    def verify_db_data(self, use_personal=False):
         # Prepare connection
         node = self.db_cluster.nodes[0]
         with self.cql_connection_patient(node, keyspace='keyspace_fill_db_data') as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
-            self.run_db_queries(session, session.default_fetch_size)
+            self.run_db_queries(session, session.default_fetch_size, use_personal=use_personal)
