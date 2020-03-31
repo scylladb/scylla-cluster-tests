@@ -555,51 +555,58 @@ class TestStatsMixin(Stats):
         self._stats['results']['stats_total'] = total_stats
 
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None):
-        if self.create_stats:
-            update_data = {}
-            if 'test_details' not in self._stats.keys():
-                self._stats['test_details'] = dict()
-                self._stats['setup_details'] = dict()
-            self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            if self.monitors and self.monitors.nodes:
-                test_start_time = self._stats['test_details']['start_time']
-                if self.params.get('store_perf_results'):
-                    update_data['results'] = self.get_prometheus_stats()
-                grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
-                self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
-                self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
-                self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
-                self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
+        if not self.create_stats:
+            return
 
-            if self.db_cluster:
-                self._stats['setup_details']['db_cluster_node_details'] = self.get_db_cluster_node_details()
+        if not self._stats:
+            self.log.error("Stats was not initialized. Could be error during Setup")
+            return
 
-            if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
-                node = self.db_cluster.nodes[0]
-                res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
-                self._stats['setup_details']['scylla_args'] = res.stdout.strip()
-                res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
-                self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
-                res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
-                self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
+        update_data = {}
+        if 'test_details' not in self._stats.keys():
+            self._stats['test_details'] = dict()
+            self._stats['setup_details'] = dict()
+        self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-            self._stats['status'] = self.status
-            update_data.update(
-                {'status': self._stats['status'],
-                 'setup_details': self._stats['setup_details'],
-                 'test_details': self._stats['test_details']
-                 })
-            if errors:
-                update_data.update({'errors': errors})
-            if coredumps:
-                update_data.update({'coredumps': coredumps})
-            if dict_specific_tested_stats:
-                self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
-                for key, value in dict_specific_tested_stats.items():
-                    self.log.debug("k: {} v: {}".format(key, value))
-                self._stats['results'].update(dict_specific_tested_stats)
-                update_data.update(dict_specific_tested_stats)
-            self.update(update_data)
+        if self.monitors and self.monitors.nodes:
+            test_start_time = self._stats['test_details']['start_time']
+            if self.params.get('store_perf_results'):
+                update_data['results'] = self.get_prometheus_stats()
+            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
+            self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
+            self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
+            self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
+            self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
+
+        if self.db_cluster:
+            self._stats['setup_details']['db_cluster_node_details'] = self.get_db_cluster_node_details()
+
+        if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
+            node = self.db_cluster.nodes[0]
+            res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
+            self._stats['setup_details']['scylla_args'] = res.stdout.strip()
+            res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
+            self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
+            res = node.remoter.run('cat /etc/scylla.d/cpuset.conf', verbose=True)
+            self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
+
+        self._stats['status'] = self.status
+        update_data.update(
+            {'status': self._stats['status'],
+             'setup_details': self._stats['setup_details'],
+             'test_details': self._stats['test_details']
+             })
+        if errors:
+            update_data.update({'errors': errors})
+        if coredumps:
+            update_data.update({'coredumps': coredumps})
+        if dict_specific_tested_stats:
+            self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
+            for key, value in dict_specific_tested_stats.items():
+                self.log.debug("k: {} v: {}".format(key, value))
+            self._stats['results'].update(dict_specific_tested_stats)
+            update_data.update(dict_specific_tested_stats)
+        self.update(update_data)
 
     def get_doc_data(self, key):
         if self.create_stats and self._test_index and self.get_doc_id():
