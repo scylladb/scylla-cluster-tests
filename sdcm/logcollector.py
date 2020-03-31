@@ -286,8 +286,8 @@ class MonitoringStack(BaseLogEntity):
         try:
             monitor_version, scylla_version = result.stdout.strip().split(':')
         except ValueError:
-            monitor_version = "None"
-            scylla_version = "None"
+            monitor_version = None
+            scylla_version = None
         return name, monitor_version, scylla_version
 
     def get_grafana_annotations(self, grafana_ip):  # pylint: disable=inconsistent-return-statements
@@ -388,6 +388,9 @@ class GrafanaScreenShot(GrafanaEntity):
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
+        if not monitoring_version:
+            LOGGER.warning("Monitoring version was not found")
+            return []
         version = monitoring_version.replace('.', '-')
 
         try:
@@ -482,7 +485,9 @@ class GrafanaSnapshot(GrafanaEntity):
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
-
+        if not monitoring_version:
+            LOGGER.warning("Monitoring version was not found")
+            return []
         try:
             remote_browser = RemoteBrowser(node)
             snapshots = []
