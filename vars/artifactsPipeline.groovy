@@ -52,7 +52,7 @@ def call(Map pipelineParams) {
         options {
             timestamps()
             timeout(pipelineParams.timeout)
-            buildDiscarder(logRotator(numToKeepStr: '20'))
+            buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
             stage('Checkout') {
