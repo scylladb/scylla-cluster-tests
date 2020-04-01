@@ -8,6 +8,7 @@ import time
 import datetime
 from enum import Enum
 from textwrap import dedent
+from re import findall
 import yaml
 
 from invoke.exceptions import UnexpectedExit, Failure
@@ -42,16 +43,15 @@ class HostSsl(Enum):
 
     @classmethod
     def from_str(cls, output_str):
-        try:
-            output_str = output_str.upper()
-            return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned host ssl status: {}".format(output_str))
+        if "SSL" in output_str:
+            return HostSsl.ON
+        return HostSsl.OFF
 
 
 class HostStatus(Enum):
     UP = "UP"
     DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
 
     @classmethod
     def from_str(cls, output_str):
@@ -65,6 +65,9 @@ class HostStatus(Enum):
 class HostRestStatus(Enum):
     UP = "UP"
     DOWN = "DOWN"
+    TIMEOUT = "TIMEOUT"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    HTTP = "HTTP"
 
     @classmethod
     def from_str(cls, output_str):
@@ -529,19 +532,22 @@ class ManagerCluster(ScyllaManagerBase):
         # pylint: disable=too-many-locals
 
         # $ sctool status -c bla
-        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-eastscylla_node_east
-        # 19:43:56 [107.23.100.82] [stdout] ╭──────────┬─────┬──────────┬────────────────╮
-        # 19:43:56 [107.23.100.82] [stdout] │ CQL      │ SSL │ REST     │ Host           │
-        # 19:43:56 [107.23.100.82] [stdout] ├──────────┼─────┼──────────┼────────────────┤
-        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 34.205.64.58   │
-        # 19:43:56 [107.23.100.82] [stdout] │ UP (0ms) │ OFF │ UP (0ms) │ 54.159.184.253 │
-        # 19:43:56 [107.23.100.82] [stdout] ╰──────────┴─────┴──────────┴────────────────╯
-        # 19:43:56 [107.23.100.82] [stdout] Datacenter: us-west-2scylla_node_west
-        # 19:43:56 [107.23.100.82] [stdout] ╭────────────┬─────┬───────────┬──────────────╮
-        # 19:43:56 [107.23.100.82] [stdout] │ CQL        │ SSL │ REST      │ Host         │
-        # 19:43:56 [107.23.100.82] [stdout] ├────────────┼─────┼───────────┼──────────────┤
-        # 19:43:56 [107.23.100.82] [stdout] │ UP (151ms) │ OFF │ UP (80ms) │ 34.219.6.187 │
-        # 19:43:56 [107.23.100.82] [stdout] ╰────────────┴─────┴───────────┴──────────────╯
+        # Datacenter: dc1
+        # ╭────┬─────────────────────────┬───────────┬────────────────┬──────────────────────────────────────╮
+        # │    │ CQL                     │ REST      │ Host           │ Host ID                              │
+        # ├────┼─────────────────────────┼───────────┼────────────────┼──────────────────────────────────────┤
+        # │ UN │ UP SSL (58ms)           │ UP (2ms)  │ 192.168.100.11 │ a2b4200a-4157-4b47-9c10-b102246fe7ff │
+        # │ UN │ UP SSL (60ms)           │ UP (3ms)  │ 192.168.100.12 │ aa1d8329-a66e-4500-bb38-ed9c4f236a0d │
+        # │ UN │ DOWN SSL (40ms)         │ UP (11ms) │ 192.168.100.13 │ b583255c-4029-4207-8237-e40996985f29 │
+        # ╰────┴─────────────────────────┴───────────┴────────────────┴──────────────────────────────────────╯
+        # Datacenter: dc2
+        # ╭────┬─────────────────────────┬───────────────────┬────────────────┬──────────────────────────────────────╮
+        # │    │ CQL                     │ REST              │ Host           │ Host ID                              │
+        # ├────┼─────────────────────────┼───────────────────┼────────────────┼──────────────────────────────────────┤
+        # │ UN │ TIMEOUT SSL             │ UP (4ms)          │ 192.168.100.21 │ 9b91b800-f74d-47ed-973c-7a8ef8088c77 │
+        # │ UN │ TIMEOUT SSL             │ TIMEOUT           │ 192.168.100.22 │ 56d2f4c0-9327-487e-b115-c96d3e5c014b │
+        # │ UN │ UP SSL (40ms)           │ HTTP (503) (7ms)  │ 192.168.100.23 │ 08152d3d-ed30-469e-bc19-5ab9f4248e9a │
+        # ╰────┴─────────────────────────┴───────────────────┴────────────────┴──────────────────────────────────────╯
         cmd = "status -c {}".format(self.id)
         dict_status_tables = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, is_multiple_tables=True)
 
@@ -553,22 +559,25 @@ class ManagerCluster(ScyllaManagerBase):
                 list_titles_row = hosts_table[0]
                 host_col_idx = list_titles_row.index("Host")
                 cql_status_col_idx = list_titles_row.index("CQL")
-                ssl_col_idx = list_titles_row.index("SSL")
                 rest_col_idx = list_titles_row.index("REST")
 
                 for line in hosts_table[1:]:
                     host = line[host_col_idx]
                     list_cql = line[cql_status_col_idx].split()
                     status = list_cql[0]
-                    rtt = list_cql[1].strip("()") if len(list_cql) == 2 else "N/A"
-
-                    list_rest = line[rest_col_idx].split()
-                    rest_status = list_rest[0]
-                    rest_rtt = list_rest[1].strip("()") if len(list_rest) == 2 else "N/A"
-
-                    ssl = line[ssl_col_idx]
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(
-                        status), rtt=rtt, rest_status=HostRestStatus.from_str(rest_status), rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl))
+                    rtt = self._extract_value_with_regex(string=list_cql[-1], regex_pattern=r"\(([^)]+ms)")
+                    rest_value = line[rest_col_idx]
+                    rest_status = rest_value[:rest_value.find("(")].strip()
+                    rest_rtt = self._extract_value_with_regex(string=rest_value, regex_pattern=r"\(([^)]+ms)")
+                    rest_http_status_code = self._extract_value_with_regex(string=rest_value,
+                                                                           regex_pattern=r"\(([0-9]*?)\)")
+                    ssl = line[cql_status_col_idx]
+                    # Whether or not SSL is on is now described in the cql column
+                    # If SSL is on the column value will include "SSL" in it, and if not it will not.
+                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt,
+                                                               rest_status=HostRestStatus.from_str(rest_status),
+                                                               rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl),
+                                                               rest_http_status_code=rest_http_status_code)
             LOGGER.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
                 LOGGER.debug("{}: {},{},{},{},{}".format(ip, health.status, health.rtt,
@@ -576,12 +585,20 @@ class ManagerCluster(ScyllaManagerBase):
         return dict_hosts_health
 
     class _HostHealth():  # pylint: disable=too-few-public-methods
-        def __init__(self, status, rtt, ssl, rest_status, rest_rtt):  # pylint: disable=too-many-arguments
+        def __init__(self, status, rtt, ssl, rest_status, rest_rtt, rest_http_status_code=None):  # pylint: disable=too-many-arguments
             self.status = status
             self.rtt = rtt
             self.rest_status = rest_status
             self.rest_rtt = rest_rtt
             self.ssl = ssl
+            self.rest_http_status_code = rest_http_status_code
+
+    @staticmethod
+    def _extract_value_with_regex(string, regex_pattern, default_value="N/A"):
+        value_list = findall(pattern=regex_pattern, string=string)
+        if len(value_list) == 1:
+            return value_list[0]
+        return default_value
 
 
 def verify_errorless_result(cmd, res):
