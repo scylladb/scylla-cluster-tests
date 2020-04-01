@@ -60,6 +60,7 @@ class ArtifactsTest(ClusterTester):
 
         email_data.update({"backend": backend,
                            "region_name": self.params.get("region_name"),
+                           "scylla_instance_type": self.params.get("instance_type_db"),
                            "scylla_node_image": self.node.image,
                            "scylla_packages_installed": self.node.scylla_packages_installed,
                            "scylla_repo": self.params.get("scylla_repo"),
