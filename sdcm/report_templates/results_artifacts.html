@@ -13,6 +13,7 @@
             {% if region_name -%}
                 <li>AWS region: {{ region_name }}</li>
             {% endif -%}
+            <li>Instance type: {{ scylla_instance_type }}</li>
             <li>Scylla packages installed:
                 <ul>
                 {% for pkg in scylla_packages_installed %}

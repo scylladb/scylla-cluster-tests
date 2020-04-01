@@ -316,6 +316,7 @@ class UpgradeEmailReporter(BaseEmailReporter):
 class ArtifactsEmailReporter(BaseEmailReporter):
     _fields = ("backend",
                "region_name",
+               "scylla_instance_type",
                "scylla_node_image",
                "scylla_packages_installed",
                "scylla_repo",
