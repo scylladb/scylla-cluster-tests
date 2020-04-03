@@ -5,6 +5,9 @@ import subprocess
 import logging
 import pickle
 import tempfile
+import json
+import zipfile
+import hashlib
 
 from sdcm.microbenchmarking import MicroBenchmarkingResultsAnalyzer, LargeNumberOfDatasetsException, EmptyResultFolder
 
@@ -14,9 +17,55 @@ LOGGER = logging.getLogger("microbenchmarking-tests")
 # pylint: disable=invalid-name
 
 
+class MicroBenchmarkingResultsAnalyzerMock(MicroBenchmarkingResultsAnalyzer):
+    _mock_returns = None
+    _mock_returns_path = os.path.join(os.path.dirname(
+        __file__), 'test_data/test_microbenchmarking/mock_response/{funct_name}/{hash}.zip')
+
+    def _send_report(self, subject, summary_html, files):
+        return files[0], summary_html
+
+    def _get_prior_tests(self, filter_path, additional_filter=''):
+        return self._mock_function('_get_prior_tests', filter_path, additional_filter)
+
+    def _mock_function(self, target_fn, *args, **kwargs):
+        output = self._load_mock_return('_get_prior_tests', args=args, kwargs=kwargs)
+        if output is None:
+            tmp = super()
+            output = getattr(tmp, target_fn)(*args, **kwargs)
+            file_path = self._save_mock_return(
+                '_get_prior_tests',
+                args=args,
+                kwargs=kwargs,
+                result=output)
+            raise RuntimeError(f'There is no mock response {file_path} for this call ')
+        return output
+
+    def _load_mock_return(self, target_fn, args=None, kwargs=None):
+        params_hash = self._get_hash(args, kwargs)
+        source_file_full_path = self._mock_returns_path.format(funct_name=target_fn, hash=params_hash)
+        if not os.path.exists(source_file_full_path):
+            return None
+        with zipfile.ZipFile(source_file_full_path, 'r') as zip_ref:
+            return json.load(zip_ref.open('return.json'))
+
+    def _save_mock_return(self, target_fn, args=None, kwargs=None, result=None):
+        params_hash = self._get_hash(args, kwargs)
+        source_file_full_path = self._mock_returns_path.format(funct_name=target_fn, hash=params_hash)
+        with zipfile.ZipFile(source_file_full_path, 'w', compression=zipfile.ZIP_DEFLATED) as zip_ref:
+            zip_ref.writestr('return.json', json.dumps(result).encode())
+        return source_file_full_path
+
+    @staticmethod
+    def _get_hash(*args, **kwargs):
+        kwargs = sorted(kwargs.items(), key=lambda x: x[0])
+        params_hash = hashlib.md5(repr({'args': args, 'kwarg': kwargs}).encode()).hexdigest()
+        return params_hash
+
+
 class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
-        self.mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=('alex.bykov@scylladb.com', ))
+        self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=('alex.bykov@scylladb.com', ))
         self.mbra.hostname = 'godzilla.cloudius-systems.com'
         self.cwd = '/sct/sdcm'
         self.mbra.test_run_date = "2019-06-27_11:39:40"
@@ -40,68 +89,71 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(self.mbra._email_recipients, ('alex.bykov@scylladb.com', ))
 
     def test_get_result_with_avg_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         results = self.mbra.get_results(results_path=result_path, update_db=False)
         self.assertTrue(results)
         expected_obj = self.get_result_obj(result_path)
         self.assertDictEqual(results, expected_obj)
 
     def test_get_result_without_avg_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_without_AVGAIO')
         results = self.mbra.get_results(results_path=result_path, update_db=False)
         self.assertTrue(results)
         expected_obj = self.get_result_obj(result_path)
         self.assertDictEqual(results, expected_obj)
 
     def test_get_result_with_new_metrics_avg_cpu(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_new_metric')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_new_metric')
         results = self.mbra.get_results(results_path=result_path, update_db=False)
         self.assertTrue(results)
         expected_obj = self.get_result_obj(result_path)
         self.assertDictEqual(results, expected_obj)
 
     def test_get_result_with_2_datasets(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_2_datasets')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_2_datasets')
         self.assertRaises(LargeNumberOfDatasetsException,
                           self.mbra.get_results,
                           results_path=result_path,
                           update_db=False)
 
     def test_get_result_for_empty_base_folder(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_empty_folder')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_empty_folder')
         self.assertRaises(EmptyResultFolder, self.mbra.get_results, results_path=result_path, update_db=False)
 
     def test_get_result_for_empty_tests_folders(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_empty_tests_folders')
+        result_path = os.path.join(os.path.dirname(
+            __file__), 'test_data/test_microbenchmarking/PFF_empty_tests_folders')
         self.assertRaises(EmptyResultFolder, self.mbra.get_results, results_path=result_path, update_db=False)
 
     def test_get_result_for_empty_dataset_folders(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_empty_dataset_folders')
+        result_path = os.path.join(os.path.dirname(
+            __file__), 'test_data/test_microbenchmarking/PFF_empty_dataset_folders')
         self.assertRaises(EmptyResultFolder, self.mbra.get_results, results_path=result_path, update_db=False)
 
     def test_check_regression_for_results_with_avg_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         result_obj = self.get_result_obj(result_path)
         self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_results_without_avg_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_without_AVGAIO')
         result_obj = self.get_result_obj(result_path)
+#        self.mbra.load_mock_return('_get_prior_tests', 'PFF_without_AVGAIO/_get_prior_tests.zip')
         self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_results_with_new_metrics_cpu_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_new_metric')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_new_metric')
         result_obj = self.get_result_obj(result_path)
         self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
         self.assertTrue(report_results)
 
     def test_check_regression_for_new_metrics_cpu_aio_and_empty_last_and_best(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_new_metric')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_new_metric')
         result_obj = self.get_result_obj(result_path)
         self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         self.mbra.lower_better = ('avg cpu', )
@@ -125,10 +177,10 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
                          ['avg cpu']['Best, commit, date'][0], None)
 
     def test_generate_html_report_file_and_email_body_for_results_with_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         report_obj = self.get_report_obj(result_path)
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        report_file, report_html = self.mbra.send_html_report(report_obj, html_report_path=html_report, send=False)
+        report_file, report_html = self.mbra.send_html_report(report_obj, html_report_path=html_report)
 
         self.assertTrue(os.path.exists(report_file))
         self.assertGreater(os.path.getsize(report_file), 0)
@@ -138,7 +190,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
 
     def verify_html_report_correctness(self, report_results):
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        report_file, report_html = self.mbra.send_html_report(report_results, html_report_path=html_report, send=False)
+        report_file, report_html = self.mbra.send_html_report(report_results, html_report_path=html_report)
 
         self.assertTrue(os.path.exists(report_file))
         self.assertGreater(os.path.getsize(report_file), 0)
@@ -150,13 +202,13 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertIn('Build URL', report_html)
 
     def test_generate_html_report_file_and_email_body_for_results_without_aio(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_without_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_without_AVGAIO')
         report_obj = self.get_report_obj(result_path)
 
         self.verify_html_report_correctness(report_obj)
 
     def test_generate_html_report_for_avg_aio_with_zero_value(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO_0')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO_0')
         result_obj = self.mbra.get_results(results_path=result_path, update_db=False)
         self.mbra.cur_version_info = result_obj[list(result_obj.keys())[0]]['versions']['scylla-server']
         report_results = self.mbra.check_regression(result_obj)
@@ -216,7 +268,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertFalse(stderr)
 
     def test_execute_mbm_from_cli(self):
-        result_path = os.path.join(os.path.dirname(__file__), 'test_data/MBM/PFF_with_AVGAIO')
+        result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
         ps = subprocess.Popen(['./microbenchmarking.py', 'check',
                                '--results-path', result_path,

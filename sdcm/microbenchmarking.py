@@ -78,6 +78,17 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         self.cur_version_info = None
         self.metrics = self.higher_better + self.lower_better
 
+    def _get_prior_tests(self, filter_path, additional_filter=''):
+        query = f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*"
+        if additional_filter:
+            query += " AND " + additional_filter
+        output = self._es.search(
+            index=self._es_index,
+            filter_path=filter_path,
+            size=self._limit,  # pylint: disable=unexpected-keyword-arg
+            q=query)
+        return output
+
     def check_regression(self, current_results):  # pylint: disable=arguments-differ
         # pylint: disable=too-many-locals, too-many-statements
 
@@ -102,11 +113,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         )
 
         self.db_version = self.cur_version_info["version"]
-        tests_filtered = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
-                                         q="hostname:'%s' \
-                                            AND versions.scylla-server.version:%s* \
-                                            AND ((-_exists_:excluded) OR (excluded:false))" % (self.hostname,  # pylint: disable=unexpected-keyword-arg
-                                                                                               self.db_version[:3]))
+        tests_filtered = self._get_prior_tests(
+            filter_path,
+            additional_filter='((-_exists_:excluded) OR (excluded:false))'
+        )
         assert tests_filtered, "No results from DB"
 
         results = []
@@ -265,7 +275,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
         return report_results
 
-    def send_html_report(self, report_results, html_report_path=None, send=True):
+    def send_html_report(self, report_results, html_report_path=None):
 
         subject = "Microbenchmarks - Performance Regression - %s" % self.test_run_date
         dashboard_path = "app/kibana#/dashboard/aee9b370-09db-11e9-a976-2fe0f5890cd0?_g=(filters%3A!())"
@@ -290,10 +300,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         self.render_to_html(for_render, html_file_path=html_file_path)
         for_render["full_report"] = False
         summary_html = self.render_to_html(for_render)
-        if send:
-            return self.send_email(subject, summary_html, files=(html_file_path,))
-        else:
-            return html_file_path, summary_html
+        return self._send_report(subject, summary_html, files=(html_file_path,))
+
+    def _send_report(self, subject, summary_html, files):
+        return self.send_email(subject, summary_html, files=files)
 
     def get_results(self, results_path, update_db):
         # pylint: disable=too-many-locals
@@ -359,10 +369,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
             "hits.hits._source.test_run_date",
         )
-        testrun_results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
-                                          q="hostname:'%s' AND versions.scylla-server.version:%s* AND test_run_date:\"%s\"" % (self.hostname,
-                                                                                                                               self.db_version[:3],
-                                                                                                                               testrun_id))
+
+        testrun_results = self._get_prior_tests(filter_path, f'test_run_date:\"{testrun_id}\"')
+
         if not testrun_results:
             self.log.info("Nothing to exclude")
             return
