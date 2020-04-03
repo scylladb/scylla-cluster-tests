@@ -1812,17 +1812,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
         critical = self.get_test_failing_events()
-
+        test_status = "FAILED" if critical else "SUCCESS"
         return {"build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": get_logger_event_summary(),
                 "last_events": EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].get_events_by_category(100),
                 "nodes": [],
                 "start_time": start_time,
-                "subject": f"Result {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
+                "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
                 "test_id": self.test_id,
                 "test_name": self.id(),
-                "test_status": "FAILED" if critical else "SUCCESS",
+                "test_status": test_status,
                 "username": get_username(), }
 
     def tag_ami_with_result(self, test_error, test_failure):
