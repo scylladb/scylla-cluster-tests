@@ -90,6 +90,7 @@
 
 import re
 
+import time
 from longevity_test import LongevityTest
 
 from sdcm.utils.common import get_profile_content
@@ -187,10 +188,50 @@ class LWTLongevityTest(LongevityTest):
 
     def run_prepare_write_cmd(self):
         super(LWTLongevityTest, self).run_prepare_write_cmd()
+
+        # TODO: Temporary print. Will be removed
+        self.log.debug('Get rows count in {} MV before sleep'.format(self.mv_for_not_updated_data))
+        self.get_rows_count(self.db_cluster.nodes[0])
+
+        # Wait for MVs data will be fully inserted (running on background)
+        time.sleep(300)
+
+        # Run repair on all nodes. We need it to fix the case, when part of data wasn't inserted because of timeouts
+        self.stop_nemesis_and_repair_cluster()
+
         self.copy_expected_data()
+
+        # Run nemesis during stress as it was stopped before copy expected data
+        if self.params.get('nemesis_during_prepare'):
+            self.start_nemesis()
+
+    def start_nemesis(self):
+        self.db_cluster.termination_event.clear()
+        self.db_cluster.start_nemesis()
+
+    def stop_nemesis_and_repair_cluster(self):
+        # Stop nemesis. Repair on all nodes will be run before data validation, so all nodes should be up
+        # and also prevent case to run repair from nemesis in parallel
+        if self.db_cluster.nemesis_threads:
+            self.db_cluster.stop_nemesis()
+
+        # TODO: Temporary print. Will be removed
+        self.log.debug('Get rows count in {} MV after sleep and before repair'.format(self.mv_for_not_updated_data))
+        self.get_rows_count(self.db_cluster.nodes[0])
+
+        for node in self.db_cluster.nodes:
+            self.log.debug('Start nodetool repair on {} node'.format(node.name))
+            node.run_nodetool("repair")
+
+        # TODO: Temporary print. Will be removed
+        self.log.debug('Get rows count in {} MV after repair'.format(self.mv_for_not_updated_data))
+        self.get_rows_count(self.db_cluster.nodes[0])
 
     def test_lwt_longevity(self):
         self.test_custom_time()
+
+        # Run repair on all nodes. We need it to fix the case, when part of data wasn't inserted because of timeouts
+        self.stop_nemesis_and_repair_cluster()
         self.validate_data()
 
     def validate_data(self):

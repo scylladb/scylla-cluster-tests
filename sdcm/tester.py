@@ -1006,6 +1006,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     port=port, ssl_opts=ssl_opts, node_ips=[node.external_address],
                                     connect_timeout=connect_timeout)
 
+    # TODO: Temporary function. Will be removed
+    def get_rows_count(self, node, name='blogposts_not_updated_lwt_indicator'):
+        with self.cql_connection_patient(node, keyspace='cqlstress_lwt_example') as session:
+            try:
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                result = session.execute('select count(*) as cnt from %s' % name)
+                self.log.debug("Rows in {}: {}".format(name, result[0].cnt))
+                return result[0].cnt
+            except:  # pylint: disable=bare-except
+                return None
+
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
                                user=None, password=None,
@@ -1301,11 +1312,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Structure of the tables has to be same
         """
         self.log.debug('Start copying data')
+        # TODO: Temporary print. Will be removed
+        count = self.get_rows_count(self.db_cluster.nodes[0])
+        self.log.debug('Count rows in the {} MV before saving: {}'.format(src_table, count))
+
         with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             # Copy data from source to the destination table
             session.default_fetch_size = 0
             result = session.execute("SELECT * FROM {keyspace}.{table}".format(keyspace=src_keyspace,
                                                                                table=src_table))
+            # TODO: Temporary function. Will be removed
+            self.log.debug('Rows in the {} MV before saving: {}'.format(src_table, len(result.current_rows)))
             columns = list(zip(result.column_names, [typelist.typename for typelist in result.column_types]))
             insert_statement = session.prepare(
                 'insert into {keyspace}.{name} ({columns}) values ({values})'.format(keyspace=dest_keyspace,
@@ -1314,13 +1331,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                                          [c[0] for c in columns]),
                                                                                      values=', '.join(['?' for _ in columns])))
 
-            self.log.debug('Copying {} rows'.format(len(result.current_rows)))
             for row in result.current_rows:
                 session.execute(insert_statement, row)
             source_rows_count = len(result.current_rows)
 
             result = session.execute("SELECT * FROM {keyspace}.{name}".format(keyspace=dest_keyspace, name=dest_table))
-            self.log.debug('Copyied {} rows'.format(len(result.current_rows)))
             if len(result.current_rows) != source_rows_count:
                 self. log.warning('Problem during copying data. '
                                   'Rows in source table: {source}; '
