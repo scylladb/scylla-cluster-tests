@@ -14,7 +14,6 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker
 from sdcm.utils.decorators import cached_property
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -109,7 +108,7 @@ class Email():
         self.conn.quit()
 
 
-class BaseEmailReporter():
+class BaseEmailReporter:
     COMMON_EMAIL_FIELDS = ("build_url",
                            "end_time",
                            "events_summary",
@@ -124,7 +123,8 @@ class BaseEmailReporter():
     _fields = ()
     email_template_file = 'results_base.html'
     last_events_limit = 5
-    last_events_body_limit = 400
+    last_events_body_limit_per_severity = 3000
+    last_events_severities = ['CRITICAL', 'ERROR', 'WARNING']
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
         self.email_recipients = email_recipients
@@ -229,7 +229,12 @@ class BaseEmailReporter():
 
     def build_report(self, report_data):
         self.log.info("Prepare result to send in email")
-        report_data['last_events'] = self._get_last_events(report_data)
+        report_data['last_events'] = self._get_last_events(
+            report_data,
+            self.last_events_body_limit_per_severity,
+            self.last_events_limit,
+            self.last_events_severities
+        )
         return self.render_to_html(report_data)
 
     @staticmethod
@@ -242,21 +247,43 @@ class BaseEmailReporter():
             return report_data, None
         return None, None
 
-    def _get_last_events(self, report_data):
+    @staticmethod
+    def _get_last_events(report_data, category_size_limit, events_in_category_limit, severities):
         output = {}
         last_events = report_data.get('last_events')
         if last_events and isinstance(last_events, dict):
             for severity, events in last_events.items():
+                if severity not in severities:
+                    continue
+                severity_events_length = 0
                 if not events:
-                    output[severity] = ['No events in this category']
+                    output[severity] = ['No events with this severity']
                     continue
                 output[severity] = severity_events = []
                 for event in reversed(events):
-                    severity_events.insert(0, event[:self.last_events_body_limit])
-                    if len(severity_events) >= self.last_events_limit:
+                    if len(event) >= category_size_limit - severity_events_length or \
+                            len(severity_events) >= events_in_category_limit:
                         severity_events.append('There are more events. See log file.')
                         break
+                    severity_events.insert(0, event)
+                    severity_events_length += len(event)
+                if len(severity_events) == 0 and len(events) >= 1:
+                    severity_events.append(events[-1][category_size_limit])
+                    severity_events.append('There are more events. See log file.')
         return output
+
+    @staticmethod
+    def _check_if_last_events_over_the_limit(report_data, category_size_limit, events_in_category_limit):
+        last_events = report_data.get('last_events')
+        if last_events and isinstance(last_events, dict):
+            for events in last_events.values():
+                severity_events_length = 0
+                for event in reversed(events):
+                    if len(event) >= category_size_limit - severity_events_length or \
+                            severity_events_length >= events_in_category_limit:
+                        return True
+                    severity_events_length += len(event)
+        return False
 
 
 class LongevityEmailReporter(BaseEmailReporter):
@@ -269,9 +296,32 @@ class LongevityEmailReporter(BaseEmailReporter):
                "scylla_instance_type",
                "scylla_version",)
     email_template_file = "results_longevity.html"
+    last_events_body_limit_per_severity_in_attachment = 10000
+    last_events_limit_in_attachment = 10
+    last_events_severities_in_attachment = ['CRITICAL', 'ERROR', 'WARNING', 'NORMAL']
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if attachments_data is not None:
+            if self._check_if_last_events_over_the_limit(
+                    attachments_data,
+                    self.last_events_body_limit_per_severity_in_attachment // 3,
+                    self.last_events_limit_in_attachment // 3):
+                attachments_data['last_events'] = self._get_last_events(
+                    attachments_data,
+                    self.last_events_body_limit_per_severity_in_attachment // 3,
+                    self.last_events_limit_in_attachment,
+                    self.last_events_severities_in_attachment)
+                return report_data, attachments_data
+            return report_data, None
+        if self._check_if_last_events_over_the_limit(
+                report_data,
+                self.last_events_body_limit_per_severity // 3,
+                self.last_events_limit // 3):
+            attachments_data['last_events'] = self._get_last_events(
+                report_data,
+                self.last_events_body_limit_per_severity // 3,
+                self.last_events_limit // 3,
+                self.last_events_severities)
             return report_data, None
         return None, None
 
@@ -281,9 +331,13 @@ class LongevityEmailReporter(BaseEmailReporter):
 
     def build_report_attachments(self, attachments_data, template_str=None):
         report_file = os.path.join(self.logdir, 'email_report.html')
-        attachments_data['last_events'] = self._get_last_events(attachments_data)
+        attachments_data['last_events'] = self._get_last_events(
+            attachments_data,
+            self.last_events_body_limit_per_severity_in_attachment,
+            self.last_events_limit_in_attachment,
+            self.last_events_severities_in_attachment)
         self.save_html_to_file(attachments_data, report_file, template_str=template_str)
-        attachments = (report_file, )
+        attachments = (report_file,)
         return attachments
 
 
@@ -334,7 +388,6 @@ class PrivateRepoEmailReporter(BaseEmailReporter):
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:
