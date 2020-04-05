@@ -4232,7 +4232,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             res = requests.get(url=annotations_url.format(node_ip=normalize_ipv6_url(node.grafana_address),
                                                           grafana_port=self.grafana_port))
             if res.ok:
-                return res.text
+                return res.content
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
         return ""
@@ -4296,7 +4296,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 annotations_url = S3Storage().generate_url('annotations.json', Setup.test_id())
                 self.log.info("Uploading 'annotations.json' to {s3_url}".format(
                     s3_url=annotations_url))
-                response = requests.put(annotations_url, data=annotations)
+                response = requests.put(annotations_url, data=annotations, headers={
+                                        'Content-type': 'application/json; charset=utf-8'})
                 response.raise_for_status()
         except Exception:  # pylint: disable=broad-except
             self.log.exception("failed to upload annotations to S3")
