@@ -233,6 +233,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                                  'ServerAliveInterval': 300,
                                  'StrictHostKeyChecking': 'no'})
         self.connect_config = {'pkey': RSAKey(filename=os.path.expanduser(self.key_file))}
+        self.auth_sleep_time = 30  # sleep time between failed authentication attempts
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
 
@@ -326,6 +327,12 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             with self._create_connection() as connection:
                 result = connection.run("true", timeout=30, warn=False, encoding='utf-8', hide=True)
                 return result.ok
+        except AuthenticationException as auth_exception:
+            # in order not to overwhelm SSH server with connection attempts that can cause further connection drops
+            # we will slow down our tries. We need this due to "MaxStartups 10:30:100" that is default for sshd
+            self.log.debug(f"{auth_exception}: sleeping {self.auth_sleep_time} seconds before next retry")
+            self._ssh_up_thread_termination.wait(self.auth_sleep_time)
+            return False
         except Exception as details:  # pylint: disable=broad-except
             self.log.debug(details)
             return False
