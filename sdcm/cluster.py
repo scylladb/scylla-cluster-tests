@@ -2661,8 +2661,11 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
 
     @cached_property
     def tags(self) -> Dict[str, str]:
+        key = self.node_type if "db" not in self.node_type else "db"
+        action = self.params.get(f"post_behavior_{key}_nodes")
         return {**Setup.common_tags(),
-                "NodeType": str(self.node_type), }
+                "NodeType": str(self.node_type),
+                "keep_action": "terminate" if action == "destroy" else "", }
 
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
