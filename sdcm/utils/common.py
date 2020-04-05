@@ -449,20 +449,20 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
             raise
         docker_clients[builder["name"]] = client
 
-    builders = [item["builder"] for item in list_builders(running=True)]
-    if builder_name:
-        builders = {builder_name: builders[builder_name], } if builder_name in builders else {}
-    if builders:
-        SSHAgent.start(verbose=verbose)
-        SSHAgent.add_keys(set(b["key_file"] for b in builders), verbose)
-        ParallelObject(builders, timeout=20).run(get_builder_docker_client, ignore_exceptions=True)
-        log.info("%d builders from %d available to scan for Docker resources", len(docker_clients), len(builders))
-    elif builder_name != "local":
-        log.warning("No builders found")
-
-    # In case we are not running on a builder add local Docker client.
-    if builder_name == "local" or builder_name is None and getpass.getuser() != "jenkins":
+    if builder_name is None or builder_name == "local":
         docker_clients["local"] = docker.from_env()
+
+    if builder_name != "local" and getpass.getuser() != "jenkins":
+        builders = [item["builder"] for item in list_builders(running=True)]
+        if builder_name:
+            builders = {builder_name: builders[builder_name], } if builder_name in builders else {}
+        if builders:
+            SSHAgent.start(verbose=verbose)
+            SSHAgent.add_keys(set(b["key_file"] for b in builders), verbose)
+            ParallelObject(builders, timeout=20).run(get_builder_docker_client, ignore_exceptions=True)
+            log.info("%d builders from %d available to scan for Docker resources", len(docker_clients), len(builders))
+        else:
+            log.warning("No builders found")
 
     return docker_clients
 
