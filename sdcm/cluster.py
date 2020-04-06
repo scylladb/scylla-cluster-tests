@@ -38,7 +38,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
-from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
+from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
@@ -1024,6 +1024,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def start_alert_manager_thread(self):
         self._alert_manager = PrometheusAlertManagerListener(self.external_address, stop_flag=self.termination_event)
         self._alert_manager.start()
+
+    def silence_alert(self, alert_name, duration=None, start=None, end=None):
+        return AlertSilencer(self._alert_manager, alert_name, duration, start, end)
 
     def __str__(self):
         return 'Node %s [%s | %s%s] (seed: %s)' % (self.name,
