@@ -11,6 +11,7 @@ import atexit
 import datetime
 import collections
 from pathlib import Path
+from typing import Optional, Generic, TypeVar, Type
 
 import enum
 from enum import Enum
@@ -118,14 +119,14 @@ class EventsDevice(Process):
 
                     # remove filter objects when log event timestamp on the
                     # specific node is bigger the time filter was canceled
-                    if isinstance(obj, DatabaseLogEvent):
-                        for filter_key, filter_obj in list(filters.items()):
-                            if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
+                    for filter_key, filter_obj in list(filters.items()):
+                        if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
+                            if (isinstance(obj, DatabaseLogEvent) and filter_obj.node == obj.node) or \
+                                    isinstance(filter_obj, EventsFilter):
                                 del filters[filter_key]
 
                     obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
-
-                    if isinstance(obj, DbEventsFilter):
+                    if isinstance(obj, BaseFilter):
                         if not obj.clear_filter:
                             filters[obj.id] = obj
                         else:
@@ -197,10 +198,13 @@ class Severity(enum.Enum):
     CRITICAL = 4
 
 
-class SctEvent():
+EventType = TypeVar('EventType', bound='SctEvent')
+
+
+class SctEvent(Generic[EventType]):
     def __init__(self):
         self.timestamp = time.time()
-        self.severity = Severity.NORMAL
+        self.severity = getattr(self, 'severity', Severity.NORMAL)
 
     @property
     def formatted_timestamp(self):
@@ -295,13 +299,10 @@ class TestResultEvent(SctEvent):
         return ok_msg if self.ok else failed_msg
 
 
-class DbEventsFilter(SystemEvent):
-    def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
-        super(DbEventsFilter, self).__init__()
+class BaseFilter(SystemEvent):
+    def __init__(self):
+        super().__init__()
         self.id = id(self)  # pylint: disable=invalid-name
-        self.type = type
-        self.line = line
-        self.node = str(node) if node else None
         self.clear_filter = False
         self.expire_time = None
         self.publish()
@@ -313,8 +314,6 @@ class DbEventsFilter(SystemEvent):
 
     def cancel_filter(self):
         self.clear_filter = True
-        if self.node:
-            self.expire_time = time.time()
         self.publish()
 
     def __enter__(self):
@@ -322,6 +321,22 @@ class DbEventsFilter(SystemEvent):
 
     def __exit__(self, exception_type, exception_value, traceback):
         self.cancel_filter()
+
+    def eval_filter(self, event):
+        raise NotImplementedError()
+
+
+class DbEventsFilter(BaseFilter):
+    def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
+        self.type = type
+        self.line = line
+        self.node = str(node) if node else None
+        super(DbEventsFilter, self).__init__()
+
+    def cancel_filter(self):
+        if self.node:
+            self.expire_time = time.time()
+        super().cancel_filter()
 
     def eval_filter(self, event):
         line = getattr(event, 'line', '')
@@ -337,6 +352,84 @@ class DbEventsFilter(SystemEvent):
         if self.node:
             result = result and is_node_matching
         return result
+
+
+class EventsFilter(BaseFilter):
+    def __init__(self, event_class: Optional[Type[EventType]] = None, regex: Optional[str] = None,
+                 extra_time_to_expiration: Optional[int] = None):
+        """
+        A filter used to stop events to being raised in `subscribe_events()` calls
+
+        :param event_class: the event class to filter
+        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
+        :param extra_time_to_expiration: extra time to add for the event expriation
+
+        example of usage:
+        >>> events_filter = EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*')
+        >>> CoreDumpEvent("code creating coredump")
+        >>> events_filter.cancel_filter()
+
+        example as context manager, that will last 30sec more after exiting the context:
+        >>> with EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*', extra_time_to_expiration=30):
+        ...     CoreDumpEvent("code creating coredump")
+        """
+
+        assert event_class or regex, "Should call with event_class or regex, or both"
+        if event_class:
+            assert issubclass(event_class, SctEvent), "event_class should be a class inherits from SctEvent"
+            self.event_class = str(event_class.__name__)
+        else:
+            self.event_class = event_class
+        self.regex = regex
+        self.extra_time_to_expiration = extra_time_to_expiration
+        super().__init__()
+
+    def cancel_filter(self):
+        if self.extra_time_to_expiration:
+            self.expire_time = time.time() + self.extra_time_to_expiration
+        super().cancel_filter()
+
+    def eval_filter(self, event):
+        is_class_matching = self.event_class and str(event.__class__.__name__) == self.event_class
+        is_regex_matching = self.regex and re.match(self.regex, str(event), re.MULTILINE | re.DOTALL) is not None
+
+        result = True
+        if self.event_class:
+            result = is_class_matching
+        if self.regex:
+            result = result and is_regex_matching
+        return result
+
+
+class EventsSeverityChangerFilter(EventsFilter):
+    def __init__(self, event_class: Optional[Type[EventType]] = None, regex: Optional[str] = None, extra_time_to_expiration: Optional[int] = None, severity: Optional[Severity] = None):
+        """
+        A filter that if matches, can change the severity of the matched event
+
+        :param event_class: the event class to filter
+        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
+        :param extra_time_to_expiration: extra time to add for the event expriation
+        :param severity: the new sevirity to assign to the matched events
+
+        exmaple of lower all TestFrameworkEvent to WARNING severity
+        >>> severity_filter = EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING)
+        >>> TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
+        >>> severity_filter.cancel_filter()
+
+        example as context manager:
+        >>> with EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING):
+        ...     TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
+        """
+
+        assert severity, "EventsSeverityChangerFilter can't work without severity configured"
+        self.severity = severity
+        super().__init__(event_class=event_class, regex=regex, extra_time_to_expiration=extra_time_to_expiration)
+
+    def eval_filter(self, event):
+        should_change = super().eval_filter(event)
+        if should_change and self.severity:
+            event.severity = self.severity
+        return False
 
 
 class InfoEvent(SctEvent):
