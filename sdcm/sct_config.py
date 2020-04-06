@@ -15,7 +15,7 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 
 import anyconfig
 
-from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami
+from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami, get_ami_tags
 from sdcm.utils.version_utils import get_branch_version
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
@@ -1212,6 +1212,18 @@ class SCTConfiguration(dict):
 
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
+
+        # verify that the AMIs used all have 'user_data_format_version' tag
+        ami_id_db_scylla = self.get('ami_id_db_scylla', default='').split()
+        region_names = self.get('region_name', default='').split()
+        ami_id_db_oracle = self.get('ami_id_db_oracle', default='').split()
+
+        for ami_list in [ami_id_db_scylla, ami_id_db_oracle]:
+            if ami_list:
+                for ami_id, region_name in zip(ami_list, region_names):
+                    tags = get_ami_tags(ami_id, region_name)
+                    assert 'user_data_format_version' in tags.keys(), \
+                        f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting tags: {tags}"
 
     def dump_config(self):
         """

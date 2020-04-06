@@ -48,7 +48,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
         os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
@@ -127,7 +127,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @staticmethod
     def test_10_mananger_regression():
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
@@ -147,7 +147,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_12_scylla_version_ami_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
@@ -171,7 +171,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_12_scylla_version_repo_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
@@ -215,13 +215,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:9'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
-        conf.verify_configuration()
 
         self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-00b5ac462978479c9 ami-0d911e53781d8a542')
+        self.assertRaisesRegex(AssertionError, r".*tag missing.*", conf.verify_configuration)
 
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:latest'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.0:latest'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()
@@ -284,7 +284,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-b4f8b4cb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
@@ -310,6 +310,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "3.0.11"
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
         conf = SCTConfiguration()
@@ -336,6 +337,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "3.0.11"
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
         conf = SCTConfiguration()
