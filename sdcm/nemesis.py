@@ -2000,13 +2000,22 @@ class LimitedChaosMonkey(Nemesis):
         #  - SoftRebootMonkey
         #  - TruncateMonkey
         #  - ToppartitionsMonkey
+        #  - MgmtRepair
+        #  - NoCorruptRepairMonkey
+        #  - SnapshotOperations
+        #  - AbortRepairMonkey
+        #  - MgmtBackup
+        #  - AddDropColumnMonkey
         self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
                                                          'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
                                                          'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
                                                          'disrupt_modify_table', 'disrupt_nodetool_enospc',
                                                          'disrupt_stop_wait_start_scylla_server',
                                                          'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
-                                                         'disrupt_truncate', 'disrupt_show_toppartitions'])
+                                                         'disrupt_truncate', 'disrupt_show_toppartitions',
+                                                         'disrupt_mgmt_repair_cli', 'disrupt_no_corrupt_repair',
+                                                         'disrupt_snapshot_operations', 'disrupt_abort_repair',
+                                                         'disrupt_mgmt_backup', 'disrupt_add_drop_column'])
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
