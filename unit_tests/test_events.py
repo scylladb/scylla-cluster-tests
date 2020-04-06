@@ -15,7 +15,8 @@ from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
-                             ScyllaBenchEvent, TestResultEvent, PrometheusAlertManagerEvent)
+                             ScyllaBenchEvent, TestResultEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
+                             EventsSeverityChangerFilter)
 
 from sdcm.cluster import Setup
 
@@ -199,6 +200,84 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             self.fail("Log file should not be changed")  # Should not reach this point
         except AssertionError:
             pass
+
+    def test_general_filter(self):
+        log_content_before = self.get_event_log_file('events.log')
+
+        with EventsFilter(event_class=CoreDumpEvent):
+            CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
+                          node="node xy",
+                          download_instructions="test_general_filter",
+                          timestamp=time.mktime(datetime.datetime.strptime(
+                              "Tue 2020-01-14 10:40:25 UTC", "%a %Y-%m-%d %H:%M:%S UTC").timetuple())
+                          )
+
+            TestFrameworkEvent(source='', source_method='').publish()
+
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
+        self.assertIn('TestFrameworkEvent', log_content_after)
+        self.assertNotIn('test_general_filter', log_content_after)
+
+    def test_general_filter_regex(self):
+        log_content_before = self.get_event_log_file('events.log')
+
+        with EventsFilter(regex='.*1234567890.*'):
+            CoreDumpEvent(corefile_url='http://', backtrace="asfasdfsdf",
+                          node="node xy",
+                          download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.1234567890.3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db3342153c3e.3968.1566979933000000 .",
+                          timestamp=time.mktime(datetime.datetime.strptime(
+                              "Tue 2020-01-14 10:40:25 UTC", "%a %Y-%m-%d %H:%M:%S UTC").timetuple())
+                          )
+
+            TestFrameworkEvent(source='', source_method='').publish()
+
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
+        self.assertIn('TestFrameworkEvent', log_content_after)
+        self.assertNotIn('1234567890', log_content_after)
+
+    def test_severity_changer(self):
+        log_content_before = self.get_event_log_file('warning.log')
+
+        with EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING, extra_time_to_expiration=10):
+            TestFrameworkEvent(source='critical that should be lowered',
+                               source_method='', severity=Severity.CRITICAL).publish()
+
+        TestFrameworkEvent(source='critical that should be lowered #2',
+                           source_method='', severity=Severity.CRITICAL).publish()
+
+        log_content_after = self.wait_for_event_log_change('warning.log', log_content_before)
+        self.assertIn('TestFrameworkEvent', log_content_after)
+        self.assertIn('critical that should be lowered', log_content_after)
+        self.assertIn('critical that should be lowered #2', log_content_after)
+
+    def test_ycsb_filter(self):
+        log_content_before = self.get_event_log_file('events.log')
+
+        with EventsFilter(event_class=YcsbStressEvent, regex='.*Internal server error: exceptions::unavailable_exception.*'):
+            YcsbStressEvent(severity=Severity.ERROR, type='error', node='Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)',
+                            stress_cmd='ycsb',
+                            errors=['237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient  -com.amazonaws.AmazonServiceException: \
+                                    Internal server error: exceptions::unavailable_exception (Cannot achieve consistency level for \
+                                    cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2; Status Code: 500; Error Code: Int\
+                                    ernal Server Error; Request ID: null)'])
+
+            TestFrameworkEvent(source='', source_method='').publish()
+
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
+        self.assertIn('TestFrameworkEvent', log_content_after)
+        self.assertNotIn('YcsbStressEvent', log_content_after)
+
+        YcsbStressEvent(severity=Severity.ERROR, type='error',
+                        node='Node alternator-3h-silence--loader-node-bb90aa05-2 [34.251.153.122 | 10.0.220.55] (seed: False)',
+                        stress_cmd='ycsb',
+                        errors=['237951 [Thread-47] ERROR site.ycsb.db.DynamoDBClient  -com.amazonaws.AmazonServiceException: \
+                                Internal server error: exceptions::unavailable_exception (Cannot achieve consistency level for \
+                                cl LOCAL_ONE. Requires 1, alive 0) (Service: AmazonDynamoDBv2; Status Code: 500; Error Code: Int\
+                                ernal Server Error; Request ID: null)'])
+        log_content_after = self.wait_for_event_log_change('events.log', log_content_after)
+
+        self.assertIn('TestFrameworkEvent', log_content_after)
+        self.assertIn('YcsbStressEvent', log_content_after)
 
     def test_filter_repair(self):
 
