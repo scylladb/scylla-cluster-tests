@@ -2,16 +2,13 @@ import socket
 import logging
 import threading
 import time
-import requests
-try:
-    from BaseHTTPServer import HTTPServer
-    from SocketServer import ThreadingMixIn
-except ImportError:
-    # Python 3
-    from http.server import HTTPServer
-    from socketserver import ThreadingMixIn
+import datetime
+from http.server import HTTPServer
+from socketserver import ThreadingMixIn
 
+import requests
 import prometheus_client
+
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.sct_events import PrometheusAlertManagerEvent, EVENTS_PROCESSES
 
@@ -188,6 +185,9 @@ class PrometheusAlertManagerListener(threading.Thread):
                     fingerprint = alert.get('fingerprint', None)
                     if not fingerprint:
                         continue
+                    state = alert.get('status', {}).get('state', '')
+                    if state == 'suppressed':
+                        continue
                     existing[fingerprint] = alert
                     if fingerprint in just_left:
                         del just_left[fingerprint]
@@ -200,6 +200,68 @@ class PrometheusAlertManagerListener(threading.Thread):
             if delta > 0:
                 time.sleep(int(delta))
 
+    def silence(self, alert_name: str, duration: int = None, start: datetime.datetime = None, end: datetime.datetime = None) -> str:
+        """
+        Silence an alert for a duration of time
+
+        :param alert_name: name of the alert as it configured in prometheus
+        :param duration: duration time in seconds, if None, start and end must be defined
+        :param start: if None, would be default to current utc time
+        :param end: if None, will be calculated by duration
+        :return: silenceID
+        """
+
+        assert duration or (start and end), "should define duration or (start and end)"
+        if not start:
+            start = datetime.datetime.utcnow()
+        if not end:
+            end = start + datetime.timedelta(seconds=duration)
+        silence_data = {
+            "matchers": [
+                {
+                    "name": "alertname",
+                    "value": alert_name,
+                    "isRegex": True
+                }
+            ],
+            "startsAt": start.isoformat("T") + "Z",
+            "endsAt": end.isoformat("T") + "Z",
+            "createdBy": "SCT",
+            "comment": "Silence by SCT code",
+            "status": {
+                "state": "active"
+            }
+        }
+        res = requests.post(f"{self._alert_manager_url}/silences", timeout=3, json=silence_data)
+        res.raise_for_status()
+        return res.json()['silenceID']
+
+    def delete_silence(self, silence_id: str) -> None:
+        """
+        delete a alert silence
+
+        :param silence_id: silence id returned from `silence()` api call
+        :return:
+        """
+        res = requests.delete(f"{self._alert_manager_url}/silence/{silence_id}", timeout=3)
+        res.raise_for_status()
+
+
+class AlertSilencer:
+    def __init__(self, alert_manager: PrometheusAlertManagerListener, alert_name: str, duration: int = None,  # pylint: disable=too-many-arguments
+                 start: datetime.datetime = None, end: datetime.datetime = None):
+        self.alert_manager = alert_manager
+        self.alert_name = alert_name
+        self.duration = duration or 86400  # 24h
+        self.start = start
+        self.end = end
+        self.silence_id = None
+
+    def __enter__(self):
+        self.silence_id = self.alert_manager.silence(self.alert_name, self.duration, self.start, self.end)
+
+    def __exit__(self, *args):
+        self.alert_manager.delete_silence(self.silence_id)
 
 # This is an example of how we'll send info into Prometheus,
 # Currently it's not in use, since the data we want to show, doesn't fit Prometheus model,
