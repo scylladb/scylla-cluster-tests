@@ -732,12 +732,15 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
         list_additional_params = get_compaction_random_additional_params()
-        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                           db_node=self.target_node)
-        if not ks_cfs:
-            self.log.error('Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
-            return
-        keyspace_table = random.choice(ks_cfs)
+        all_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        non_mview_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
+
+        if not all_ks_cfs:
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
+
+        mview_ks_cfs = list(set(all_ks_cfs) - set(non_mview_ks_cfs))
+        keyspace_table = random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split('.')
         cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace,
                                                           table=table)
@@ -751,7 +754,9 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
             for param in list_additional_params:
                 new_compaction_strategy_as_dict.update(param)
-        cmd = "ALTER TABLE {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
+        alter_command_prefix = 'ALTER TABLE ' if keyspace_table not in mview_ks_cfs else 'ALTER MATERIALIZED VIEW '
+        cmd = alter_command_prefix + \
+            " {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
         self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
         try:
             self.target_node.run_cqlsh(cmd)
