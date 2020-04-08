@@ -1,0 +1,27 @@
+test_duration: 180
+prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert=1)' cl=QUORUM -mode native cql3 -rate threads=50" ]
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=160m -mode native cql3 -rate threads=50" ]
+stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' cl=SERIAL duration=160m -mode native cql3 -rate threads=50" ]
+
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+experimental: true
+
+instance_type_db: 'i3.2xlarge'
+cluster_health_check: false
+
+# loader AMI with c-s ver. 4 and fix of NoSuchElementException
+regions_data:
+  us-east-1:
+    ami_id_loader: 'ami-0946a8d8159a15b2c'
+  eu-west-1:
+    ami_id_loader: 'ami-0dc7edd6fba3da2fb'
+  us-west-2:
+    ami_id_loader: 'ami-010284f401d8933a2'
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 5
+space_node_threshold: 64424
+
+user_prefix: 'longevity-lwt-3h'
