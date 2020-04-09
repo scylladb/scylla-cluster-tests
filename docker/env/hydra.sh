@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -e
 CMD=$@
-DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
+DOCKER_ENV_DIR=$(readlink -f "$0")
+DOCKER_ENV_DIR=$(dirname "${DOCKER_ENV_DIR}")
 DOCKER_REPO=scylladb/hydra
-
-SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
-VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
+SCT_DIR=$(dirname "${DOCKER_ENV_DIR}")
+SCT_DIR=$(dirname "${SCT_DIR}")
+VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
 WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
 
@@ -35,12 +36,12 @@ else
     docker pull ${DOCKER_REPO}:${VERSION}
 fi
 # Check for SSH keys
-${SCT_DIR}/get-qa-ssh-keys.sh
+"${SCT_DIR}/get-qa-ssh-keys.sh"
 
 # change ownership of results directories
 echo "Making sure the ownerships of results directories are of the user"
 sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true
-sudo chown -R `whoami`:`whoami` ${SCT_DIR}/sct-results &> /dev/null || true
+sudo chown -R `whoami`:`whoami` "${SCT_DIR}/sct-results" &> /dev/null || true
 
 subcommand="$1"
 if [[ ${subcommand} == 'bash'* ]] || [[ ${subcommand} == 'python'* ]]; then
@@ -69,21 +70,21 @@ done
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
     -v /var/run:/run \
-    -v ${SCT_DIR}:${WORK_DIR} \
+    -v "${SCT_DIR}:${WORK_DIR}" \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
     -v /tmp:/tmp \
     -v /var/tmp:/var/tmp \
-    -v ${HOME}:${HOME} \
+    -v "${HOME}:${HOME}" \
     -v /etc/passwd:/etc/passwd:ro \
     -v /etc/group:/etc/group:ro \
     -v /etc/sudoers:/etc/sudoers:ro \
     -v /etc/shadow:/etc/shadow:ro \
-    -w ${WORK_DIR} \
-    -e JOB_NAME=${JOB_NAME} \
-    -e BUILD_URL=${BUILD_URL} \
-    -e _SCT_BASE_DIR=${SCT_DIR} \
+    -w "${WORK_DIR}" \
+    -e JOB_NAME="${JOB_NAME}" \
+    -e BUILD_URL="${BUILD_URL}" \
+    -e _SCT_BASE_DIR="${SCT_DIR}" \
     -e GIT_USER_EMAIL \
-    -u $(id -u ${USER}) \
+    -u $(id -u "${USER}") \
     ${group_args[@]} \
     ${SCT_OPTIONS} \
     ${BUILD_OPTIONS} \
