@@ -138,18 +138,17 @@
 
 {% block test_info %}
 
-    <h3>Test: {{ test_name }}</h3>
-
-    <h3>Test-id: {{ test_id }}</h3>
-
     <h3>Test details</h3>
     <div>
         <ul>
+            <li>Test: {{ test_name }}</li>
+            <li>Test-id: {{ test_id }}</li>
             <li>Start time: {{ start_time }}</li>
             <li>End time: {{ end_time }}</li>
-            <li>Build URL: <a href="{{ build_url }}">link</a></li>
-            <li>Test run by User: <b>{{ username }}</b></li>
+            <li>Started by user: {{ username }}</li>
+            {% if scylla_repo %}
             <li>Private repo: {{ scylla_repo }}</li>
+            {% endif %}
             {% if repo_uuid %}
             <li>Private repo UUID: {{ repo_uuid }}</li>
             {% endif %}
@@ -173,7 +172,7 @@
 
 {% block test_results %}
     <h3>
-        <span>Test results </span>
+        <span>Test result</span>
     </h3>
     {% if test_status == "SUCCESS" %}
         <span class='green'>{{ test_status }}</span>
