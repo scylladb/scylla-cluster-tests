@@ -85,7 +85,8 @@ class GeminiTest(ClusterTester):
                            "oracle_instance_type": self.params.get("instance_type_db_oracle"),
                            "results": self.gemini_results["results"],
                            "scylla_ami_id": self.params.get("ami_id_db_scylla"),
-                           "scylla_instance_type": self.params.get("instance_type_db"),
+                           "scylla_instance_type": self.params.get('instance_type_db',
+                                                                   self.params.get('gce_instance_type_db')),
                            "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
                            "status": self.gemini_results["status"], })
 
