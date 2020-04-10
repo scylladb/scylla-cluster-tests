@@ -438,6 +438,7 @@ def get_running_instances_for_email_report(test_id):
     resources = list_resources_docker(tags_dict=tags, running=True, group_as_builder=True)
     for builder_name, containers in resources.get("containers", {}).items():
         for container in containers:
+            container.reload()
             nodes.append([container.name,
                           container.attrs["NetworkSettings"]["IPAddress"],
                           container.status,
