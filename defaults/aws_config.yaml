@@ -34,3 +34,5 @@ ami_db_scylla_user: 'centos'
 ami_loader_user: 'centos'
 ami_monitor_user: 'centos'
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+
+use_preinstalled_scylla: true

@@ -18,4 +18,5 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-
 store_results_in_elasticsearch: False
 system_auth_rf: 1
 test_duration: 60
+use_preinstalled_scylla: false
 user_prefix: 'artifacts-amazon2'

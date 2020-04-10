@@ -751,7 +751,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                                                node_type=node_type,
                                                extra_network_interface=params.get('extra_network_interface'))
         self.version = '2.1'
-        self._need_to_install_scylla = None
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
@@ -808,15 +807,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         node.config_setup(**setup_params)
 
-    def _scylla_pre_install(self, node):
-        # Assume that all nodes in the cluster use the same AMI. So, need to check the availability of Scylla once.
-        if self._need_to_install_scylla is None:
-            self._need_to_install_scylla = not node.is_scylla_installed()
-
-        if self._need_to_install_scylla:
-            self.log.info("Can't find Scylla on the %s (%s), will try to install", node, node.image)
-            return super()._scylla_pre_install(node)
-
+    @staticmethod
+    def _wait_for_preinstalled_scylla(node):
         def scylla_ami_setup_done():
             """
             Scylla-ami-setup will update config files and trigger to start the scylla-server service.
@@ -845,13 +837,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
 
-    def _scylla_install(self, node):
-        if self._need_to_install_scylla:
-            super()._scylla_install(node)
-
-    def _scylla_post_install(self, node):
-        if self._need_to_install_scylla:
-            super()._scylla_post_install(node)
+    def _scylla_post_install(self, node: AWSNode, new_scylla_installed: bool) -> None:
+        super()._scylla_post_install(node, new_scylla_installed)
         if self.params.get('ip_ssh_connections') == 'ipv6':
             node.set_web_listen_address()
 
