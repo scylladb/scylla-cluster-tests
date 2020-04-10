@@ -34,7 +34,7 @@ You should use different parameters for .rpm/.deb tests and for AMI test:
 - For AMI job you need two parameters: `scylla_ami_id` and `region_name`
 - For Docker job you need two parameters: `scylla_docker_image` (e.g., `scylladb/scylla` or `scylladb/scylla-nightly`) and `scylla_version` (it'll be used as Docker image tag)
 
-Optionally, you can override default cloud instance type by providing `instance_type` parameter.
+Optionally, you can override default cloud instance type by providing `instance_type` parameter. This parameter can be a space-separated list of instance types.
 
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.
 
