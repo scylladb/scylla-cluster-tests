@@ -81,8 +81,12 @@
                    percent_abs = best_stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
                         <span class="red fbold">-{{ percent }}</span>
+                    {% elif status == 'Regression' and percent_abs <= 4 %}
+                        <span class="black fbold">-{{ percent }}</span>
                     {% elif status == 'Progress' and percent_abs > 4 %}
                         <span class="green fbold">+{{ percent }}</span>
+                    {% elif status == 'Progress' and percent_abs <= 4 %}
+                        <span class="black fbold">+{{ percent }}</span>
                     {% else %}
                         <span>{{ percent }}</span>
                     {% endif %}
@@ -98,8 +102,12 @@
                    percent_abs = last_stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
                         <span class="red fbold">-{{ percent }}</span>
+                    {% elif status == 'Regression' and percent_abs <= 4 %}
+                        <span class="black fbold">-{{ percent }}</span>
                     {% elif status == 'Progress' and percent_abs > 4 %}
                         <span class="green fbold">+{{ percent }}</span>
+                    {% elif status == 'Progress' and percent_abs <= 4 %}
+                        <span class="black fbold">+{{ percent }}</span>
                     {% else %}
                         <span>{{ percent }}</span>
                     {% endif %}
