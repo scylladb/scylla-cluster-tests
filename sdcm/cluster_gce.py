@@ -35,7 +35,6 @@ class CreateGCENodeError(Exception):
 
 
 class GCENode(cluster.BaseNode):
-
     """
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
