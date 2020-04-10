@@ -3255,9 +3255,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
     def node_setup(self, node, verbose=False, timeout=3600):
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
+        install_scylla = True
+
+        if self.params.get("use_preinstalled_scylla"):
+            if node.is_scylla_installed():
+                install_scylla = False
+            else:
+                raise NodeSetupFailed(f"There is no pre-installed ScyllaDB on {node}")
+
         if not Setup.REUSE_CLUSTER:
-            self._scylla_pre_install(node)
-            self._scylla_install(node)
+            if install_scylla:
+                self._scylla_install(node)
+            else:
+                self._wait_for_preinstalled_scylla(node)
 
             if Setup.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
@@ -3266,7 +3276,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
-            self._scylla_post_install(node)
+            self._scylla_post_install(node, install_scylla)
 
             node.stop_scylla_server(verify_down=False)
             node.start_scylla_server(verify_up=False)
@@ -3290,8 +3300,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
 
         self.clean_replacement_node_ip(node)
 
-    @staticmethod
-    def _scylla_pre_install(node):
+    def _scylla_install(self, node):
         node.update_repo_cache()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
             node.remoter.run('sudo systemctl disable apt-daily.timer')
@@ -3299,17 +3308,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         node.clean_scylla()
-
-    def _scylla_install(self, node):
         node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
     @staticmethod
-    def _scylla_post_install(node):
-        try:
-            disks = node.detect_disks(nvme=True)
-        except AssertionError:
-            disks = node.detect_disks(nvme=False)
-        node.scylla_setup(disks)
+    def _wait_for_preinstalled_scylla(node):
+        pass
+
+    @staticmethod
+    def _scylla_post_install(node: BaseNode, new_scylla_installed: bool) -> None:
+        if new_scylla_installed:
+            try:
+                disks = node.detect_disks(nvme=True)
+            except AssertionError:
+                disks = node.detect_disks(nvme=False)
+            node.scylla_setup(disks)
 
     def _reuse_cluster_setup(self, node):
         pass

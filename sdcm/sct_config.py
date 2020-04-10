@@ -847,9 +847,13 @@ class SCTConfiguration(dict):
 
         dict(name="append_scylla_setup_args", env="SCT_APPEND_SCYLLA_SETUP_ARGS", type=str,
              help="More arguments to append to scylla_setup command line"),
+
+        dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=bool,
+             help="Don't install/update ScyllaDB on DB nodes"),
     ]
 
-    required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'user_credentials_path']
+    required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
+                       'user_credentials_path']
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
