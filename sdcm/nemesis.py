@@ -105,6 +105,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             'alternator_usertable': '*',  # Ignore alternator tables
             'mview': 'users',  # Ignore MV user-profile tables
             'sec_index': 'users',  # Ignore SI user-profile tables
+            'ks_truncate': 'counter1',  # Ignore counter table
+            'keyspace1': 'counter1',  # Ignore counter table
         }
 
     def update_stats(self, disrupt, status=True, data=None):
