@@ -633,7 +633,7 @@ class AWSNode(cluster.BaseNode):
 
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
-                sudo sed -e '/auto_bootstrap:.*/s/False/True/g' -i /etc/scylla/scylla.yaml
+                sudo sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
             """)
             self.remoter.run("sudo bash -cxe '%s'" % clean_script)
             output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
@@ -668,7 +668,7 @@ class AWSNode(cluster.BaseNode):
                 self.start_scylla_server(verify_up=False)
                 self.remoter.run(
                     'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
-                self.remoter.run("sudo sed -e '/auto_bootstrap:.*/s/True/False/g' -i /etc/scylla/scylla.yaml")
+                self.remoter.run("sudo sed -e '/auto_bootstrap:.*/s/true/false/g' -i /etc/scylla/scylla.yaml")
             finally:
                 if event_filters:
                     for event_filter in event_filters:
