@@ -57,6 +57,8 @@ class HostStatus(Enum):
     def from_str(cls, output_str):
         try:
             output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError:
             raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str))
@@ -73,6 +75,8 @@ class HostRestStatus(Enum):
     def from_str(cls, output_str):
         try:
             output_str = output_str.upper()
+            if output_str == "-":
+                return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError:
             raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str))
@@ -567,7 +571,10 @@ class ManagerCluster(ScyllaManagerBase):
                     status = list_cql[0]
                     rtt = self._extract_value_with_regex(string=list_cql[-1], regex_pattern=r"\(([^)]+ms)")
                     rest_value = line[rest_col_idx]
-                    rest_status = rest_value[:rest_value.find("(")].strip()
+                    if rest_value == '-':
+                        rest_status = rest_value
+                    else:
+                        rest_status = rest_value[:rest_value.find("(")].strip()
                     rest_rtt = self._extract_value_with_regex(string=rest_value, regex_pattern=r"\(([^)]+ms)")
                     rest_http_status_code = self._extract_value_with_regex(string=rest_value,
                                                                            regex_pattern=r"\(([0-9]*?)\)")
