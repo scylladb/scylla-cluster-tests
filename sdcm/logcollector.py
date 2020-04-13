@@ -18,8 +18,8 @@ from selenium.webdriver.common.by import By
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               makedirs, filter_gce_instances_by_type, get_sct_root_path)
-from sdcm.utils.decorators import retrying
+                               makedirs, filter_gce_instances_by_type, get_sct_root_path, get_username)
+from sdcm.utils.decorators import retrying, cached_property
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -31,9 +31,10 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
 
-class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-few-public-methods
+class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
+    # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
-    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None):  # pylint: disable=too-many-arguments
+    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None, tags=None):  # pylint: disable=too-many-arguments
         self._containers = {}
         self.name = name
         if ssh_login_info is None:
@@ -47,6 +48,7 @@ class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint:
             self.grafana_address = global_ip
         else:
             self.grafana_address = grafana_ip
+        self.tags = {**(tags or {}), "Name": self.name, }
 
     def __del__(self):
         ContainerManager.destroy_all_containers(self)
@@ -877,6 +879,13 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
     def test_id(self):
         return self._test_id
 
+    @cached_property
+    def tags(self):
+        return {"RunByUser": get_username(),
+                "TestId": self.test_id,
+                "NodeType": "logcollector",
+                "keep_action": "terminate", }
+
     @property
     def sct_result_dir(self):
         return self._test_dir if self._test_dir else os.path.join(self.base_dir, "sct-results")
@@ -897,7 +906,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": self.params['ami_db_scylla_user'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance['PublicIpAddress']))
+                                                  global_ip=instance['PublicIpAddress'],
+                                                  tags=self.tags))
         for instance in filtered_instances['monitor_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -907,7 +917,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                        "user": self.params['ami_monitor_user'],
                                                        "key_file": self.params['user_credentials_path']},
                                                    instance=instance,
-                                                   global_ip=instance['PublicIpAddress']))
+                                                   global_ip=instance['PublicIpAddress'],
+                                                   tags=self.tags))
         for instance in filtered_instances['loader_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -917,7 +928,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": self.params['ami_loader_user'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance['PublicIpAddress']))
+                                                  global_ip=instance['PublicIpAddress'],
+                                                  tags=self.tags))
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -929,7 +941,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": self.params['gce_image_username'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance.public_ips[0]))
+                                                  global_ip=instance.public_ips[0],
+                                                  tags=self.tags))
         for instance in filtered_instances['monitor_nodes']:
             self.monitor_set.append(CollectingNode(name=instance.name,
                                                    ssh_login_info={
@@ -937,7 +950,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                        "user": self.params['gce_image_username'],
                                                        "key_file": self.params['user_credentials_path']},
                                                    instance=instance,
-                                                   global_ip=instance.public_ips[0]))
+                                                   global_ip=instance.public_ips[0],
+                                                   tags=self.tags))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
@@ -945,7 +959,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": self.params['gce_image_username'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance.public_ips[0]))
+                                                  global_ip=instance.public_ips[0],
+                                                  tags=self.tags))
 
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -957,11 +972,13 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": 'scylla-test',
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance.public_ips[0]))
+                                                  global_ip=instance.public_ips[0],
+                                                  tags=self.tags))
         self.monitor_set.append(CollectingNode(
             name=f"monitor-node-{self.test_id}-0",
             global_ip='127.0.0.1',
-            grafana_ip=get_docker_bridge_gateway(LocalCmdRunner())
+            grafana_ip=get_docker_bridge_gateway(LocalCmdRunner()),
+            tags=self.tags
         ))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
@@ -970,7 +987,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "user": 'scylla-test',
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance.public_ips[0]))
+                                                  global_ip=instance.public_ips[0],
+                                                  tags=self.tags))
 
     def get_running_cluster_sets(self):
         if self.backend == 'aws':
