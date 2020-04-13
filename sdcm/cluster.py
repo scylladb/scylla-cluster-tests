@@ -918,6 +918,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             download_instructions = "failed to upload"
             try:
                 self.log.debug('Found coredump file: {}'.format(coredump))
+                CoreDumpEvent(corefile_url="", download_instructions=f"Coredump {coredump} upload in progress",
+                              backtrace=output, node=self, timestamp=timestamp)
                 url, download_instructions = self._upload_coredump(coredump)
                 result = True
             except Exception as exc:  # pylint: disable=broad-except
