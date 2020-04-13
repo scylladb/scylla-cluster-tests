@@ -42,7 +42,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from sdcm.keystore import KeyStore
 from sdcm import cluster, nemesis, cluster_docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
-from sdcm.cluster import UserRemoteCredentials, get_username
+from sdcm.cluster import UserRemoteCredentials
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -52,7 +52,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys
+    get_testrun_status, download_encrypt_keys, get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
@@ -1882,7 +1882,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         email_results_file = os.path.join(self.logdir, "email_data.json")
         email_data = read_email_data_from_file(email_results_file)
 
-        if cluster.get_username() == "jenkins":
+        if get_username() == "jenkins":
             self.log.info("Email will be sent by pipeline stage")
             return
 

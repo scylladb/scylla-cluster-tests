@@ -43,7 +43,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud
+    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, get_username
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker import ContainerManager
 from sdcm.utils.thread import raise_event_on_failure
@@ -275,37 +275,6 @@ class Setup:
                echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
                ''')
         return post_boot_script
-
-
-def get_username():
-
-    def is_email_in_scylladb_domain(email_addr):
-        return bool(email_addr and "@scylladb.com" in email_addr)
-
-    def get_email_user(email_addr):
-        return email_addr.strip().split("@")[0]
-
-    # First check that we running on Jenkins try to get user email
-    email = os.environ.get('BUILD_USER_EMAIL')
-    if is_email_in_scylladb_domain(email):
-        return get_email_user(email)
-    user_id = os.environ.get('BUILD_USER_ID')
-    if user_id:
-        return user_id
-    current_linux_user = getpass.getuser()
-    if current_linux_user == "jenkins":
-        return current_linux_user
-    # We are not on Jenkins and running in Hydra, try to get email from Git
-    # when running in Hydra there are env issues so we pass it using SCT_GIT_USER_EMAIL variable before docker run
-    git_user_email = os.environ.get('GIT_USER_EMAIL')
-    if is_email_in_scylladb_domain(git_user_email):
-        return get_email_user(git_user_email)
-    # we are outside of Hydra
-    res = LOCALRUNNER.run(cmd="git config --get user.email", ignore_status=True)
-    if is_email_in_scylladb_domain(res.stdout):
-        return get_email_user(res.stdout)
-    # we didn't find email, fallback to current user with unknown email user identifier
-    return "linux_user={}".format(current_linux_user)
 
 
 class NodeError(Exception):
