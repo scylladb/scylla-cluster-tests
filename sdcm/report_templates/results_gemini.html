@@ -31,6 +31,7 @@
             <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
         </ul>
     </div>
+    {% if oracle_db_version != "N/A" %}
     <h3>
         <span>Test oracle</span>
     </h3>
@@ -41,6 +42,7 @@
             <li>Number of test oracle db nodes: {{ number_of_oracle_nodes }}</li>
         </ul>
     </div>
+    {% endif %}
 {% endblock %}
 
 {% block test_results %}
