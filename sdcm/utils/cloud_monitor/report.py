@@ -6,6 +6,9 @@ import jinja2
 from sdcm.keystore import KeyStore
 
 
+NA = "N/A"
+
+
 class BaseReport:
 
     def __init__(self, cloud_instances, html_template):
@@ -74,6 +77,7 @@ class PerUserSummaryReport(BaseReport):
                     stats = dict(num_running_instances_spot=0, num_running_instances_on_demand=0,
                                  num_stopped_instances=0)
                     results[user_type][instance.owner] = {cp: deepcopy(stats) for cp in self.report["cloud_providers"]}
+                    results[user_type][instance.owner]["num_instances_keep_alive"] = 0
                 if instance.state == "running":
                     if instance.lifecycle == "spot":
                         results[user_type][instance.owner][cloud]["num_running_instances_spot"] += 1
@@ -81,6 +85,8 @@ class PerUserSummaryReport(BaseReport):
                         results[user_type][instance.owner][cloud]["num_running_instances_on_demand"] += 1
                 if instance.state == "stopped":
                     results[user_type][instance.owner][cloud]["num_stopped_instances"] += 1
+                if instance.keep:
+                    results[user_type][instance.owner]["num_instances_keep_alive"] += 1
         return self.render_template()
 
 
