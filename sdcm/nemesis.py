@@ -1738,6 +1738,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 self._terminate_cluster_node(self.target_node)
                 new_node = self._add_and_init_new_cluster_node()
                 new_node.running_nemesis = None
+                return new_node
+            return None
 
         def streaming_task_thread(nodetool_task='rebuild'):
             """
@@ -1784,7 +1786,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             self.target_node.reboot(hard=True, verify_ssh=True)
         streaming_thread.join(60)
 
-        decommission_post_action()
+        new_node = decommission_post_action()
 
         if self.task_used_streaming:
             err = self.target_node.search_database_log(
@@ -1794,7 +1796,10 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             self.log.debug(
                 'Streaming is not used. In latest Scylla, it is optional to use streaming for rebuild and decommission, and repair will not use streaming.')
         self.log.info('Recover the target node by a final rebuild')
-        self.repair_nodetool_rebuild()
+        if new_node:
+            new_node.run_nodetool('rebuild')
+        else:
+            self.target_node.run_nodetool('rebuild')
 
     def disrupt_decommission_streaming_err(self):
         """
