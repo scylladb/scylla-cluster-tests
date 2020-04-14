@@ -11,6 +11,7 @@
             <th>Instance type</th>
             <th>Owner</th>
             <th>Launch time</th>
+            <th>Keep</th>
         </tr>
         {% for instance in instances %}
         <tr>
@@ -22,6 +23,7 @@
             <td>{{ instance.instance_type }}</td>
             <td>{{ instance.owner }}</td>
             <td>{{ instance.create_time }}</td>
+            <td>{{ instance.keep }}</td>
         </tr>
         {% endfor %}
     </table>

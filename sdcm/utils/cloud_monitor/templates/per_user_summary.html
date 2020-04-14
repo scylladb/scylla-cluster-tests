@@ -14,6 +14,7 @@
             <th>{{ state }}</th>
                 {% endfor %}
             {% endfor %}
+            <th>Keep alive</th>
         </tr>
         {% for user, stat in user_report|dictsort %}
         <tr>
@@ -23,6 +24,7 @@
             <td>{{ stat[cloud_provider].num_running_instances_spot }}</td>
             <td>{{ stat[cloud_provider].num_stopped_instances }}</td>
             {% endfor %}
+            <td>{{ stat["num_instances_keep_alive"] }}</td>
         </tr>
         {% endfor %}
     </table>
