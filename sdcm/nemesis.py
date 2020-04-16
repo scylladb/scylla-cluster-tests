@@ -1906,14 +1906,6 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             'node': str(args[0].target_node),
             'type': 'end',
         }
-        # TODO: Temporary print. Will be removed
-        view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0])
-        table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
-                                                    name='blogposts_not_updated_lwt_indicator_expect')
-        if view_count and table_count and view_count != table_count:
-            args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
-                              'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
-
         try:
             result = method(*args, **kwargs)
         except UnsupportedNemesis as exp:
@@ -1951,13 +1943,6 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             if num_nodes_before != num_nodes_after:
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                   (num_nodes_before, num_nodes_after))
-            # TODO: Temporary print. Will be removed
-            view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0])
-            table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
-                                                        name='blogposts_not_updated_lwt_indicator_expect')
-            if view_count and table_count and view_count != table_count:
-                args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
-                                  'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
         return result
 
     return wrapper
