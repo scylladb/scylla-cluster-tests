@@ -388,7 +388,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap.
-        self.enable_auto_bootstrap = False
+        self.enable_auto_bootstrap = True
 
         self.scylla_version = ''
         self._is_enterprise = None
