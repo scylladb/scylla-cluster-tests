@@ -910,6 +910,17 @@ class SCTConfiguration(dict):
 
         dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=bool,
              help="Don't install/update ScyllaDB on DB nodes"),
+        dict(name="stress_cdclog_reader_cmd", env="SCT_STRESS_CDCLOG_READER_CMD",
+             type=str,
+             help="""cdc-stressor command to read cdc_log table.
+                    You can specify everything but the -node , -keyspace, -table, parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
+        dict(name="update_cdclog_reader_stats", env="SCT_UPDATE_CDCLOG_READER_STATS",
+             type=boolean,
+             help="""Add cdclog reader stats to ES for future performance result calculating"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
