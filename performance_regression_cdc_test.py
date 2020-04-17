@@ -11,6 +11,7 @@ PP = pprint.PrettyPrinter(indent=2)
 class PerformanceRegressionCDCTest(PerformanceRegressionTest):
     keyspace = None
     table = None
+    cdclog_reader_cmd = None
 
     def test_write_with_cdc(self):
         write_cmd = self.params.get("stress_cmd_w")
@@ -75,15 +76,26 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
     def test_write_throughput(self):
-        self.cdc_write_workflow()
+        self.cdc_workflow()
 
     def test_write_latency(self):
-        self.cdc_write_workflow()
+        self.cdc_workflow()
 
-    def cdc_write_workflow(self):  # pylint: disable=unused-variable
+    def test_mixed_throughput(self):
+        self.cdc_workflow(use_cdclog_reader=True)
+
+    def test_mixed_latency(self):
+        self.cdc_workflow(use_cdclog_reader=True)
+
+    def cdc_workflow(self, use_cdclog_reader=False):  # pylint: disable=unused-variable
         self.keyspace = "keyspace1"
         self.table = "standard1"
         write_cmd = self.params.get("stress_cmd_w")
+        update_es = None
+
+        if use_cdclog_reader:
+            self.cdclog_reader_cmd = self.params.get('stress_cdclog_reader_cmd')
+            update_es = self.params.get('update_cdclog_reader_stats', default=False)
 
         self._workload_cdc(write_cmd,
                            stress_num=2,
@@ -100,7 +112,9 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self._workload_cdc(write_cmd,
                            stress_num=2,
                            test_name="test_write",
-                           sub_type="cdc_enabled")
+                           sub_type="cdc_enabled",
+                           read_cdclog_cmd=self.cdclog_reader_cmd,
+                           update_cdclog_stats=update_es)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -111,7 +125,9 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self._workload_cdc(write_cmd,
                            stress_num=2,
                            test_name="test_write",
-                           sub_type="cdc_preimage_enabled")
+                           sub_type="cdc_preimage_enabled",
+                           read_cdclog_cmd=self.cdclog_reader_cmd,
+                           update_cdclog_stats=update_es)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -122,27 +138,36 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self._workload_cdc(write_cmd,
                            stress_num=2,
                            test_name="test_write",
-                           sub_type="cdc_postimage_enabled")
+                           sub_type="cdc_postimage_enabled",
+                           read_cdclog_cmd=self.cdclog_reader_cmd,
+                           update_cdclog_stats=update_es)
 
         self.wait_no_compactions_running()
 
         self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
-    def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1,  # pylint: disable=too-many-arguments
-                      prefix='', debug_message='', save_stats=True):
-
-        if debug_message:
-            self.log.debug(debug_message)
+    def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None,  # pylint: disable=too-many-arguments
+                      save_stats=True, read_cdclog_cmd=None, update_cdclog_stats=False):
+        cdc_stress_queue = None
 
         if save_stats:
             self.create_test_stats(sub_type=sub_type,
                                    doc_id_with_timestamp=True,
                                    append_sub_test_to_name=False)
 
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
-                                              prefix=prefix, stats_aggregate_cmds=False)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num,
+                                              stats_aggregate_cmds=False)
+
+        if read_cdclog_cmd:
+            cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=read_cdclog_cmd,
+                                                             stress_num=2,
+                                                             keyspace_name=self.keyspace,
+                                                             base_table_name=self.table)
 
         results = self.get_stress_results(queue=stress_queue, store_results=True)
+        if cdc_stress_queue:
+            cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_cdclog_stats)
+            self.log.debug(cdc_stress_results)
 
         if save_stats:
             self.update_test_details(scylla_conf=True)
