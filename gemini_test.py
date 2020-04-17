@@ -42,8 +42,7 @@ class GeminiTest(ClusterTester):
 
         self.gemini_results = self.verify_gemini_results(queue=test_queue)
 
-        if self.gemini_results['status'] == 'FAILED':
-            self.fail(self.gemini_results['results'])
+        self.verify_results()
 
     def test_load_random_with_nemesis(self):
 
@@ -66,6 +65,31 @@ class GeminiTest(ClusterTester):
 
         self.db_cluster.stop_nemesis(timeout=1600)
 
+        self.verify_results()
+
+    def test_gemini_and_cdc_reader(self):
+        gemini_cmd = self.params.get('gemini_cmd')
+        cdc_stress = self.params.get('stress_cdclog_reader_cmd')
+        update_es = self.params.get('update_cdclog_reader_stats')
+
+        gemini_queue = self.run_gemini(cmd=gemini_cmd)
+
+        # waite gemini create schema
+        time.sleep(10)
+
+        cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=cdc_stress,
+                                                         keyspace_name="ks1",
+                                                         base_table_name="table1")
+
+        self.gemini_results = self.verify_gemini_results(queue=gemini_queue)
+
+        cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_es)
+
+        self.log.debug(cdc_stress_results)
+
+        self.verify_results()
+
+    def verify_results(self):
         if self.gemini_results['status'] == 'FAILED':
             self.fail(self.gemini_results['results'])
 

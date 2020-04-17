@@ -98,7 +98,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         return result
 
     @staticmethod
-    def _parse_cdcreaderstressor_results(lines: List(str)) -> Dict:
+    def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:
         """parse result of cdcreader results
         lines:
             Results:
@@ -157,7 +157,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         LOGGER.debug(result)
         return result
 
-    def get_results(self) -> List(Dict):
+    def get_results(self) -> List[Dict]:
         """Return results of cdclog readers
 
         return list of dicts:

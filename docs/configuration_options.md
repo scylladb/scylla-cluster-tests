@@ -196,3 +196,5 @@
 | **<a name="store_perf_results">store_perf_results</a>**  | A flag that indicates whether or not to gather the prometheus stats at the end of the run.<br>Intended to be used in performance testing | N/A | SCT_STORE_PERF_RESULTS
 | **<a name="append_scylla_setup_args">append_scylla_setup_args</a>**  | More arguments to append to scylla_setup command line |  | SCT_APPEND_SCYLLA_SETUP_ARGS
 | **<a name="use_preinstalled_scylla">use_preinstalled_scylla</a>**  | Don't install/update ScyllaDB on DB nodes | False | SCT_USE_PREINSTALLED_SCYLLA
+| **<a name="stress_cdclog_reader_cmd">stress_cdclog_reader_cmd</a>**  | cdc-stressor command to read cdc_log table.<br>You can specify everything but the -node , -keyspace, -table, parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CDCLOG_READER_CMD
+| **<a name="update_cdclog_reader_stats">update_cdclog_reader_stats</a>**  | Add cdclog reader stats to ES for future performance result calculating | N/A | SCT_UPDATE_CDCLOG_READER_STATS
