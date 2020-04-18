@@ -47,23 +47,25 @@ class CDCLogReaderThread(DockerBasedStressThread):
         self.cdc_log_table = kwargs.pop("base_table_name") + CDC_LOGTABLE_SUFFIX
         super().__init__(*args, **kwargs)
 
-    def build_stress_command(self):
+    def build_stress_command(self, worker_id, worker_count):
         node_ips = ",".join([node.ip_address for node in self.node_list])
-        self.stress_cmd = f"{self.stress_cmd} -keyspace {self.keyspace} -table {self.cdc_log_table} -nodes {node_ips}"
+        self.stress_cmd = f"{self.stress_cmd} -keyspace {self.keyspace} -table {self.cdc_log_table} \
+                            -nodes {node_ips} -worker-id {worker_id} -worker-count {worker_count}"
 
-    def _run_stress(self, loader_node, loader_idx, *args):  # pylint: disable=unused-argument,arguments-differ
-        loader_node_logdir = Path(loader_node.logdir)
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=unused-argument
+        loader_node_logdir = Path(loader.logdir)
         if not loader_node_logdir.exists():
             loader_node_logdir.mkdir()
-        log_file_name = loader_node_logdir.joinpath(f'cdclogreader-l{loader_idx}-{uuid.uuid4()}.log')
+
+        worker_count = self.max_workers
+        worker_id = loader_idx * self.stress_num + cpu_idx
+        log_file_name = loader_node_logdir.joinpath(f'cdclogreader-l{loader_idx}-{worker_id}-{uuid.uuid4()}.log')
         LOGGER.debug('cdc-stressor local log: %s', log_file_name)
 
-        LOGGER.debug("running: %s", self.stress_cmd)
-
-        self.build_stress_command()
+        self.build_stress_command(worker_id, worker_count)
 
         LOGGER.info(self.stress_cmd)
-        docker = RemoteDocker(loader_node, CDCLOG_READER_IMAGE,
+        docker = RemoteDocker(loader, CDCLOG_READER_IMAGE,
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         # update cdc-stressor with last changes
@@ -72,9 +74,9 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'
 
-        CDCReaderStressEvent('start', node=loader_node, stress_cmd=self.stress_cmd)
+        CDCReaderStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
 
-        with CDCLogReaderStatsPublisher(loader_node, loader_idx, cdclogreader_filename=log_file_name):
+        with CDCLogReaderStatsPublisher(loader, loader_idx, cdclogreader_filename=log_file_name):
             try:
                 result = docker.run(cmd=node_cmd,
                                     timeout=self.timeout + self.shutdown_timeout,
@@ -82,18 +84,18 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                     log_file=log_file_name,
                                     verbose=True)
                 if not result.ok:
-                    CDCReaderStressEvent(type='failure', node=str(loader_node), stress_cmd=self.stress_cmd,
+                    CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
                                          severity=Severity.ERROR,
                                          errors=result.stderr.split("\n"))
 
                 return result
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
-                CDCReaderStressEvent(type='failure', node=str(loader_node), stress_cmd=self.stress_cmd,
+                CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
                                      severity=Severity.ERROR,
                                      errors=errors_str)
             finally:
-                CDCReaderStressEvent('finish', node=loader_node, stress_cmd=self.stress_cmd)
+                CDCReaderStressEvent('finish', node=loader, stress_cmd=self.stress_cmd)
 
         return result
 
@@ -192,5 +194,5 @@ class CDCLogReaderThread(DockerBasedStressThread):
                 continue
 
             res_stats.append(res)
-
+        self.kill()
         return res_stats
