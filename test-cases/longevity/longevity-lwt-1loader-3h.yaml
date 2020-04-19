@@ -9,19 +9,21 @@ n_monitor_nodes: 1
 experimental: true
 
 instance_type_db: 'i3.2xlarge'
-cluster_health_check: false
 
-# loader AMI with c-s ver. 4 and fix of NoSuchElementException
+# loader AMI with c-s ver. 4 and few fixes:
+#  - fix NoSuchElementException
+#  - enable control over both consistency levels: regular and serial
+#  - bring shard awareness
 regions_data:
   us-east-1:
-    ami_id_loader: 'ami-0946a8d8159a15b2c'
+    ami_id_loader: 'ami-0b94f0e897d884b1b'
   eu-west-1:
-    ami_id_loader: 'ami-0dc7edd6fba3da2fb'
+    ami_id_loader: 'ami-0ea704a8c9ec08e57'
   us-west-2:
-    ami_id_loader: 'ami-010284f401d8933a2'
+    ami_id_loader: 'ami-063a97bde47353690'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
 space_node_threshold: 64424
 
-user_prefix: 'longevity-lwt-3h'
+user_prefix: 'longevity-lwt-1loader-3h'
