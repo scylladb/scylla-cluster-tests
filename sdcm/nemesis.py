@@ -1887,6 +1887,18 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
     :return: Wrapped method.
     """
 
+    # TODO: Temporary function. Will be removed later
+    def data_validation_prints(args):
+        view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
+                                                   keyspace_name='cqlstress_lwt_example',
+                                                   table_name='blogposts_not_updated_lwt_indicator')
+        table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
+                                                    keyspace_name='cqlstress_lwt_example',
+                                                    table_name='blogposts_not_updated_lwt_indicator_expect')
+        if view_count and table_count and view_count != table_count:
+            args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
+                              'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
+
     def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         # pylint: disable=too-many-locals
         args[0].cluster.check_cluster_health()
@@ -1906,6 +1918,9 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             'node': str(args[0].target_node),
             'type': 'end',
         }
+        # TODO: Temporary print. Will be removed later
+        data_validation_prints(args=args)
+
         try:
             result = method(*args, **kwargs)
         except UnsupportedNemesis as exp:
@@ -1943,6 +1958,8 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             if num_nodes_before != num_nodes_after:
                 args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                   (num_nodes_before, num_nodes_after))
+            # TODO: Temporary print. Will be removed later
+            data_validation_prints(args=args)
         return result
 
     return wrapper
