@@ -189,9 +189,11 @@ class LWTLongevityTest(LongevityTest):
     def run_prepare_write_cmd(self):
         super(LWTLongevityTest, self).run_prepare_write_cmd()
 
-        # TODO: Temporary print. Will be removed
+        # TODO: Temporary print. Will be removed later
         self.log.debug('Get rows count in {} MV before sleep'.format(self.mv_for_not_updated_data))
-        self.get_rows_count(self.db_cluster.nodes[0])
+        self.get_rows_count(self.db_cluster.nodes[0],
+                            keyspace_name='cqlstress_lwt_example',
+                            table_name='blogposts_not_updated_lwt_indicator')
 
         # Wait for MVs data will be fully inserted (running on background)
         time.sleep(300)
@@ -215,17 +217,21 @@ class LWTLongevityTest(LongevityTest):
         if self.db_cluster.nemesis_threads:
             self.db_cluster.stop_nemesis()
 
-        # TODO: Temporary print. Will be removed
+        # TODO: Temporary print. Will be removed later
         self.log.debug('Get rows count in {} MV after sleep and before repair'.format(self.mv_for_not_updated_data))
-        self.get_rows_count(self.db_cluster.nodes[0])
+        self.get_rows_count(self.db_cluster.nodes[0],
+                            keyspace_name='cqlstress_lwt_example',
+                            table_name='blogposts_not_updated_lwt_indicator')
 
         for node in self.db_cluster.nodes:
             self.log.debug('Start nodetool repair on {} node'.format(node.name))
             node.run_nodetool("repair")
 
-        # TODO: Temporary print. Will be removed
+        # TODO: Temporary print. Will be removed later
         self.log.debug('Get rows count in {} MV after repair'.format(self.mv_for_not_updated_data))
-        self.get_rows_count(self.db_cluster.nodes[0])
+        self.get_rows_count(self.db_cluster.nodes[0],
+                            keyspace_name='cqlstress_lwt_example',
+                            table_name='blogposts_not_updated_lwt_indicator')
 
     def test_lwt_longevity(self):
         self.test_custom_time()

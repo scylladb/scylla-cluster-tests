@@ -1008,15 +1008,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     connect_timeout=connect_timeout)
 
     # TODO: Temporary function. Will be removed
-    def get_rows_count(self, node, name='blogposts_not_updated_lwt_indicator'):
-        with self.cql_connection_patient(node, keyspace='cqlstress_lwt_example') as session:
-            try:
+    def get_rows_count(self, node, keyspace_name, table_name):
+        try:
+            with self.cql_connection_patient(node, keyspace=keyspace_name) as session:
                 session.default_consistency_level = ConsistencyLevel.QUORUM
-                result = session.execute('select count(*) as cnt from %s' % name)
-                self.log.debug("Rows in {}: {}".format(name, result[0].cnt))
+                result = session.execute('select count(*) as cnt from %s' % table_name)
+                self.log.debug("Rows in {}: {}".format(table_name, result[0].cnt))
                 return result[0].cnt
-            except:  # pylint: disable=bare-except
-                return None
+        except:  # pylint: disable=bare-except
+            return None
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
@@ -1307,7 +1307,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """
         self.log.debug('Start copying data')
         # TODO: Temporary print. Will be removed
-        count = self.get_rows_count(self.db_cluster.nodes[0])
+        count = self.get_rows_count(self.db_cluster.nodes[0], keyspace_name=src_keyspace,
+                                    table_name=src_table)
         self.log.debug('Count rows in the {} MV before saving: {}'.format(src_table, count))
 
         with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
