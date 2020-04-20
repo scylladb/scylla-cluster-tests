@@ -751,7 +751,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 else:
                     to_be_skipped = to_be_skipped.split(',') + to_be_skipped_default
                 tables = get_db_tables(session, ks, with_compact_storage=False)
-                if not to_be_skipped:
+                if to_be_skipped:
                     tables = [table for table in tables if table not in to_be_skipped]
                 if not tables:
                     continue
