@@ -179,7 +179,9 @@ class LongevityTest(ClusterTester):
         if alternator_port:
             endpoint_url = 'http://{}:{}'.format(normalize_ipv6_url(self.db_cluster.nodes[0].external_address),
                                                  alternator_port)
-            alternator_create_table(endpoint_url, test_params=self.params)
+            alternator_create_table(endpoint_url, test_params=self.params, table_name='usertable')
+            params = dict(self.params, alternator_write_isolation='forbid')
+            alternator_create_table(endpoint_url, test_params=params, table_name='usertable_no_lwt')
 
         if prepare_write_cmd:
             self.run_prepare_write_cmd()
@@ -206,9 +208,10 @@ class LongevityTest(ClusterTester):
 
                     self._run_all_stress_cmds(stress_queue, params)
 
-            # The old method when we run all stress_cmds for all keyspace on the same loader
+            # The old method when we run all stress_cmds for all keyspace on the same loader, or in round-robin if defined in test yaml
             else:
-                params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd}
+                params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
+                          'round_robin': self.params.get('round_robin')}
                 self._run_all_stress_cmds(stress_queue, params)
 
         customer_profiles = self.params.get('cs_user_profiles', default=[])
