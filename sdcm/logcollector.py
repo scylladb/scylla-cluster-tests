@@ -18,7 +18,7 @@ from selenium.webdriver.common.by import By
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               makedirs, filter_gce_instances_by_type, get_sct_root_path, get_username)
+                               filter_gce_instances_by_type, get_sct_root_path, get_username)
 from sdcm.utils.decorators import retrying, cached_property
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
@@ -139,7 +139,7 @@ class FileLog(CommandLog):
         return False
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        makedirs(local_dst)
+        os.makedirs(local_dst, exist_ok=True)
         if self.search_locally and local_search_path:
             search_pattern = self.name if not node else "/".join([node.name, self.name])
             local_logfiles = self.find_local_files(local_search_path, search_pattern)
@@ -152,7 +152,6 @@ class FileLog(CommandLog):
         return local_dst
 
     def collect_from_builder(self, builder, local_dst, search_in_dir):
-
         file_path = self.find_on_builder(builder, self.name, search_in_dir)
         if not file_path:
             return None
@@ -215,10 +214,6 @@ class PrometheusSnapshots(BaseLogEntity):
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        """
-
-        :type node: CollectingNode
-        """
         self.setup_monitor_data_dir(node)
         remote_snapshot_archive = self.get_prometheus_snapshot_remote(node)
         LogCollector.receive_log(
@@ -415,8 +410,6 @@ class GrafanaScreenShot(GrafanaEntity):
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
-                if not os.path.exists(local_dst):
-                    os.makedirs(local_dst, exist_ok=True)
                 screenshot_path = os.path.join(local_dst,
                                                "%s-%s-%s-%s.png" % (self.name,
                                                                     screenshot['name'],
@@ -434,6 +427,7 @@ class GrafanaScreenShot(GrafanaEntity):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         node.logdir = local_dst
+        os.makedirs(local_dst, exist_ok=True)
         return self.get_grafana_screenshot(node, local_dst)
 
 
@@ -521,8 +515,7 @@ class GrafanaSnapshot(GrafanaEntity):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         node.logdir = local_dst
-        if not os.path.exists(local_dst):
-            os.makedirs(local_dst, exist_ok=True)
+        os.makedirs(local_dst, exist_ok=True)
         snapshots = self.get_grafana_snapshot(node)
         snapshots_file = os.path.join(local_dst, "grafana_snapshots")
         with open(snapshots_file, "w") as f:  # pylint: disable=invalid-name
@@ -614,7 +607,7 @@ class LogCollector:
 
     @staticmethod
     def receive_log(node, remote_log_path, local_dir):
-        makedirs(local_dir)
+        os.makedirs(local_dir, exist_ok=True)
         if node.remoter:
             node.remoter.receive_files(src=remote_log_path, dst=local_dir)
         return local_dir
@@ -1030,8 +1023,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         date_time_formatted = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         log_dir = os.path.basename(test_dir) if test_dir else date_time_formatted
         self.storage_dir = os.path.join(self.sct_result_dir, log_dir, 'collected_logs')
-        if not os.path.exists(self.storage_dir):
-            os.makedirs(self.storage_dir)
+        os.makedirs(self.storage_dir, exist_ok=True)
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
             with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
                 f.write(self.test_id)

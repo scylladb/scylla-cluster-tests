@@ -14,6 +14,7 @@
 import os
 import re
 import logging
+import traceback
 from pprint import pformat
 from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple
@@ -25,6 +26,7 @@ from docker.models.images import Image
 from docker.models.containers import Container
 
 from sdcm.remote import LOCALRUNNER
+from sdcm.sct_events import TestFrameworkEvent, Severity
 from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying, Retry
 
@@ -202,9 +204,19 @@ class ContainerManager:
         container = cls.get_container(instance, name)
         logfile = cls._get_attr_for_name(instance, _Name(name), "container_logfile", name_only_lookup=True)
         if logfile:
-            with open(logfile, "ab") as log:
-                log.write(container.logs())
-            LOGGER.info("Container %s logs written to %s", container, logfile)
+            try:
+                with open(logfile, "ab") as log:
+                    log.write(container.logs())
+            except Exception as exc:  # pylint: disable=broad-except
+                message = f"Unable to write container logs to {logfile}"
+                LOGGER.error(message, exc_info=exc)
+                TestFrameworkEvent(source=cls.__name__,
+                                   source_method="destroy_container",
+                                   exception=traceback.format_exc(),
+                                   message=message,
+                                   severity=Severity.ERROR).publish()
+            else:
+                LOGGER.info("Container %s logs written to %s", container, logfile)
         if ignore_keepalive or not container.name.endswith(cls.keep_alive_suffix):
             cls.unregister_container(instance, name)
             container.remove(v=True, force=True)
@@ -216,7 +228,16 @@ class ContainerManager:
     @classmethod
     def destroy_all_containers(cls, instance: object, ignore_keepalive: bool = False) -> None:
         for name in tuple(instance._containers.keys()):
-            cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
+            try:
+                cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
+            except Exception as exc:  # pylint: disable=broad-except
+                message = f"{instance}: some exception raised during container `{name}' destroying"
+                LOGGER.error(message, exc_info=exc)
+                TestFrameworkEvent(source=cls.__name__,
+                                   source_method="destroy_all_containers",
+                                   exception=traceback.format_exc(),
+                                   message=message,
+                                   severity=Severity.ERROR).publish()
 
     @classmethod
     def is_running(cls, instance: object, name: str) -> bool:
