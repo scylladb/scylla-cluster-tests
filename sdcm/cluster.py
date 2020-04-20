@@ -2511,7 +2511,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                           .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(ex)))
 
         if errors:
-            ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.ERROR,
+            ClusterHealthValidatorEvent(type='warning', name='NodeSchemaVersion', status=Severity.WARNING,
                                         node=self.name, error='\n'.join(errors))
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
