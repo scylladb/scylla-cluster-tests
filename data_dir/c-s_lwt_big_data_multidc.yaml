@@ -1,0 +1,126 @@
+# LWT test: create and update data using LWT.
+### DML ###
+
+# Keyspace Name
+keyspace: cqlstress_lwt_example
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS cqlstress_lwt_example WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': 3, 'us-west-2scylla_node_west': 2, 'us-eastscylla_node_east': 1};
+
+# Table name
+table: blogposts
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE IF NOT EXISTS blogposts (
+        domain int,
+        published_date int,
+        lwt_indicator int,
+        url blob,
+        url1 blob,
+        url2 blob,
+        url3 blob,
+        url4 blob,
+        author text,
+        title text,
+        c ascii,
+        d varchar,
+        e boolean,
+        f inet,
+        g int,
+        h bigint,
+        char ascii,
+        vchar varchar,
+        finished boolean,
+        osirisjson blob,
+        ip inet,
+        size int,
+        imagebase bigint,
+        small_num smallint,
+        tiny_num tinyint,
+        vint varint,
+        decimal_num decimal,
+        double_num double,
+        float_num float,
+        start_date date,
+        start_time time,
+        check_date timestamp,
+        pass_date timestamp,
+        upload_time timeuuid,
+        user_uid uuid,
+        name_set set<text>,
+        name_list list<text>,
+        PRIMARY KEY(domain, published_date)
+  ) WITH compaction = { 'class':'LeveledCompactionStrategy' }
+    AND comment='A table to hold blog posts'
+
+extra_definitions:
+  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator as select domain, lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator >=-2000 and lwt_indicator < 0 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 2000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_not_updated_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 1000000 and lwt_indicator < 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_deletions as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 10000 and lwt_indicator < 100000 PRIMARY KEY(lwt_indicator, domain, published_date);
+
+### Column Distribution Specifications ###
+
+columnspec:
+  - name: domain
+    population: seq(1..500000000)  #500M possible domains to pick from
+
+  - name: published_date
+    cluster: uniform(1..2000)         #under each domain we will have max 2000 posts
+
+  - name: lwt_indicator
+    population: seq(1..1001000)
+
+  - name: url
+    size: fixed(200)
+
+  - name: url1
+    size: fixed(200)
+
+  - name: url2
+    size: fixed(200)
+
+  - name: url3
+    size: fixed(200)
+
+  - name: url4
+    size: fixed(200)
+
+  - name: title                  #titles shouldn't go beyond 20 chars
+    size: gaussian(10..20)
+
+  - name: author
+    size: uniform(5..20)         #author names should be short
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+
+  select:    fixed(1)/2000        # We have 2000 posts per domain so 1/2000 will allow 1 post per batch
+
+  batchtype: UNLOGGED             # Unlogged batches
+
+  condition: IF title = NULL       # LWT: Do not override
+
+
+#
+# A list of queries you wish to run against the schema
+#
+queries:
+   select:
+      cql: select * from blogposts where domain = ? LIMIT 1
+      fields: samerow
+   lwt_update_one_column:
+      cql: update blogposts set lwt_indicator = 30000000 where domain = ? and published_date = ? if lwt_indicator >=-2000 and lwt_indicator < 0
+      fields: samerow
+   lwt_update_two_columns:
+      cql: update blogposts set lwt_indicator = 20000000, author = 'text' where domain = ? and published_date = ? if lwt_indicator > 0 and lwt_indicator <= 2000 and author != 'text'
+      fields: samerow
+   lwt_deletes:
+     cql: delete from blogposts where domain = ? and published_date = ? if lwt_indicator > 10000 and lwt_indicator < 100000
+     fields: samerow
