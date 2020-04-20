@@ -1362,20 +1362,16 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._set_current_disruption('SnapshotOperations')
         result = self.target_node.run_nodetool('snapshot')
         self.log.debug(result)
-        if result.stderr:
-            self.tester.fail(result.stderr)
         snapshot_name = re.findall(r'(\d+)', result.stdout, re.MULTILINE)[0]
         result = self.target_node.run_nodetool('listsnapshots')
         self.log.debug(result)
-        if snapshot_name in result.stdout and not result.stderr:
+        if snapshot_name in result.stdout:
             self.log.info('Snapshot %s created' % snapshot_name)
         else:
-            self.tester.fail('Snapshot %s creating failed %s' % (snapshot_name, result.stderr))
+            raise Exception(f"Snapshot {snapshot_name} wasn't found in: \n{result.stdout}")
 
         result = self.target_node.run_nodetool('clearsnapshot')
         self.log.debug(result)
-        if result.stderr:
-            self.tester.fail(result.stderr)
 
     def disrupt_show_toppartitions(self):
         def _parse_toppartitions_output(output):
