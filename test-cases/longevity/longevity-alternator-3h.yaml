@@ -1,26 +1,39 @@
 test_duration: 180
 prepare_write_cmd:
   - >-
-    bin/ycsb load dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520
-    -p fieldcount=1 -p fieldlength=512 -p dataintegrity=true
-    -p insertstart=0 -p insertcount=10485760
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
+    -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=3495250
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520
-    -p fieldcount=1 -p fieldlength=512 -p dataintegrity=true
-    -p insertstart=10485760 -p insertcount=10485760
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
+    -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=3495250 -p insertcount=3495250
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
+    -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=3495250 -p table=usertable_no_lwt
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
+    -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true
+    -p insertstart=3495250 -p insertcount=3495250 -p table=usertable_no_lwt
+
+  - cassandra-stress write cl=QUORUM n=6990500 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5
 
 stress_cmd: [
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
-  "bin/ycsb run  dynamodb -P workloads/workloadc -threads 100 -p recordcount=20971520 -p fieldcount=1 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+  "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+  # with lwt table
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  # no lwt table
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p table=usertable_no_lwt",
 ]
+
 round_robin: true
 
-n_loaders: 2
+n_loaders: 4
 instance_type_db: 'i3.4xlarge'
 n_monitor_nodes: 1
 n_db_nodes: 6
@@ -30,13 +43,11 @@ nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'alternator-3h'
+space_node_threshold: 64424
 
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
-# cause of example like https://github.com/scylladb/scylla/issues/5802
-# I would rather  not use the DNS for now
 alternator_use_dns_routing: true
 
 store_results_in_elasticsearch: false
-
 use_mgmt: true

@@ -6,14 +6,14 @@ from botocore.errorfactory import ClientError
 LOGGER = logging.getLogger(__name__)
 
 
-def create_table(endpoint_url, test_params):
+def create_table(endpoint_url, test_params, table_name=None):
     dynamodb_primarykey_type = test_params.get('dynamodb_primarykey_type', 'HASH')
     write_isolation = test_params.get('alternator_write_isolation')
 
     try:
         dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
 
-        name = 'usertable'
+        name = table_name or 'usertable'
         params = dict()
 
         if dynamodb_primarykey_type == 'HASH_AND_RANGE':
