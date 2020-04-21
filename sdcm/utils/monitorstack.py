@@ -244,8 +244,11 @@ def restore_sct_dashboards(monitoring_dockers_dir, scylla_version):
                                       sct_dashboard_file_name)
 
     if not os.path.exists(sct_dashboard_file):
-        LOGGER.info('There is no dashboard %s. Skip load dashboard', sct_dashboard_file_name)
-        return False
+        LOGGER.warning('There is no dashboard %s. defaults to master dashboard', sct_dashboard_file_name)
+        sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format('master')
+        sct_dashboard_file = os.path.join(monitoring_dockers_dir,
+                                          'sct_monitoring_addons',
+                                          sct_dashboard_file_name)
 
     dashboard_url = f'http://localhost:{GRAFANA_DOCKER_PORT}/api/dashboards/db'
     with open(sct_dashboard_file, "r") as f:  # pylint: disable=invalid-name
