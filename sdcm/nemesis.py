@@ -1724,7 +1724,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         Stop streaming task in middle and rebuild the data on the node.
         """
         def decommission_post_action():
-            decommission_done = self.target_node.search_database_log('DECOMMISSIONING: done', start_from_beginning=True)
+            decommission_done = self.target_node.search_database_log('DECOMMISSIONING: done', start_from_beginning=True, publish_events=False)
 
             ips = []
             seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
@@ -1762,13 +1762,13 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         def is_streaming_started():
             stream_pattern = "range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"
-            streaming_logs = self.target_node.search_database_log(stream_pattern, start_from_beginning=False)
+            streaming_logs = self.target_node.search_database_log(stream_pattern, start_from_beginning=False, publish_events=False)
             self.log.debug(streaming_logs)
             if streaming_logs:
                 self.task_used_streaming = True
 
             # In latest master, repair always won't use streaming
-            repair_logs = self.target_node.search_database_log('repair - Repair 1 out of', start_from_beginning=False)
+            repair_logs = self.target_node.search_database_log('repair - Repair 1 out of', start_from_beginning=False, publish_events=False)
             self.log.debug(repair_logs)
             return len(streaming_logs) > 0 and len(repair_logs) > 0
 
