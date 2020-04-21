@@ -22,7 +22,7 @@ from unittest.mock import Mock, patch, mock_open, sentinel, call
 from collections import namedtuple
 
 from sdcm.utils.docker import _Name, ContainerManager, \
-    DockerException, NotFound, ImageNotFound, Retry, ContainerAlreadyRegistered
+    DockerException, NotFound, ImageNotFound, NullResource, Retry, ContainerAlreadyRegistered
 
 
 class DummyDockerClient:
@@ -33,9 +33,11 @@ class DummyDockerClient:
 
         @staticmethod
         def get(c_id):
-            if c_id == "not_found":
-                raise NotFound("No such container")
-            return namedtuple("_", "name")(f"{c_id}-blah")
+            if c_id is None:
+                raise NullResource("Resource ID was not provided")
+            if c_id == "deadbeef":
+                return namedtuple("_", "name")("deadbeef-blah")
+            raise NotFound("No such container")
 
         @staticmethod
         def run(*args, **kwargs):

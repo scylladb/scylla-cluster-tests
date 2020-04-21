@@ -24,7 +24,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
-from sdcm.utils.docker import get_docker_bridge_gateway, ContainerManager
+from sdcm.utils.docker import get_docker_bridge_gateway
 
 
 LOGGER = logging.getLogger(__name__)
@@ -49,9 +49,6 @@ class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
         else:
             self.grafana_address = grafana_ip
         self.tags = {**(tags or {}), "Name": self.name, }
-
-    def __del__(self):
-        ContainerManager.destroy_all_containers(self)
 
 
 class PrometheusSnapshotErrorException(Exception):
@@ -876,7 +873,6 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
     def tags(self):
         return {"RunByUser": get_username(),
                 "TestId": self.test_id,
-                "NodeType": "logcollector",
                 "keep_action": "terminate", }
 
     @property
@@ -900,7 +896,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance['PublicIpAddress'],
-                                                  tags=self.tags))
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
         for instance in filtered_instances['monitor_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -911,7 +907,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                        "key_file": self.params['user_credentials_path']},
                                                    instance=instance,
                                                    global_ip=instance['PublicIpAddress'],
-                                                   tags=self.tags))
+                                                   tags={**self.tags, "NodeType": "monitor", }))
         for instance in filtered_instances['loader_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -922,7 +918,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance['PublicIpAddress'],
-                                                  tags=self.tags))
+                                                  tags={**self.tags, "NodeType": "loader", }))
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -935,7 +931,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
-                                                  tags=self.tags))
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
         for instance in filtered_instances['monitor_nodes']:
             self.monitor_set.append(CollectingNode(name=instance.name,
                                                    ssh_login_info={
@@ -944,7 +940,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                        "key_file": self.params['user_credentials_path']},
                                                    instance=instance,
                                                    global_ip=instance.public_ips[0],
-                                                   tags=self.tags))
+                                                   tags={**self.tags, "NodeType": "monitor", }))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
@@ -953,7 +949,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
-                                                  tags=self.tags))
+                                                  tags={**self.tags, "NodeType": "loader", }))
 
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -966,13 +962,11 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
-                                                  tags=self.tags))
-        self.monitor_set.append(CollectingNode(
-            name=f"monitor-node-{self.test_id}-0",
-            global_ip='127.0.0.1',
-            grafana_ip=get_docker_bridge_gateway(LocalCmdRunner()),
-            tags=self.tags
-        ))
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
+        self.monitor_set.append(CollectingNode(name=f"monitor-node-{self.test_id}-0",
+                                               global_ip='127.0.0.1',
+                                               grafana_ip=get_docker_bridge_gateway(LocalCmdRunner()),
+                                               tags={**self.tags, "NodeType": "monitor", }))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
@@ -981,7 +975,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
-                                                  tags=self.tags))
+                                                  tags={**self.tags, "NodeType": "loader", }))
 
     def get_running_cluster_sets(self):
         if self.backend == 'aws':
