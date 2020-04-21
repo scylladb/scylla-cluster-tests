@@ -189,6 +189,11 @@ class LWTLongevityTest(LongevityTest):
     def run_prepare_write_cmd(self):
         super(LWTLongevityTest, self).run_prepare_write_cmd()
 
+        # Stop nemesis. Prefer all nodes will be run before collect data for validation
+        # Increase timeout to wait for nemesis finish
+        if self.db_cluster.nemesis_threads:
+            self.db_cluster.stop_nemesis(timeout=300)
+
         # TODO: Temporary print. Will be removed later
         self.log.debug('Get rows count in {} MV before sleep'.format(self.mv_for_not_updated_data))
         self.get_rows_count(self.db_cluster.nodes[0],
@@ -197,9 +202,6 @@ class LWTLongevityTest(LongevityTest):
 
         # Wait for MVs data will be fully inserted (running on background)
         time.sleep(300)
-
-        # Run repair on all nodes. We need it to fix the case, when part of data wasn't inserted because of timeouts
-        self.stop_nemesis_and_repair_cluster()
 
         self.copy_expected_data()
 
@@ -211,33 +213,14 @@ class LWTLongevityTest(LongevityTest):
         self.db_cluster.termination_event.clear()
         self.db_cluster.start_nemesis()
 
-    def stop_nemesis_and_repair_cluster(self):
-        # Stop nemesis. Repair on all nodes will be run before data validation, so all nodes should be up
-        # and also prevent case to run repair from nemesis in parallel
-        if self.db_cluster.nemesis_threads:
-            self.db_cluster.stop_nemesis()
-
-        # TODO: Temporary print. Will be removed later
-        self.log.debug('Get rows count in {} MV after sleep and before repair'.format(self.mv_for_not_updated_data))
-        self.get_rows_count(self.db_cluster.nodes[0],
-                            keyspace_name='cqlstress_lwt_example',
-                            table_name='blogposts_not_updated_lwt_indicator')
-
-        for node in self.db_cluster.nodes:
-            self.log.debug('Start nodetool repair on {} node'.format(node.name))
-            node.run_nodetool("repair")
-
-        # TODO: Temporary print. Will be removed later
-        self.log.debug('Get rows count in {} MV after repair'.format(self.mv_for_not_updated_data))
-        self.get_rows_count(self.db_cluster.nodes[0],
-                            keyspace_name='cqlstress_lwt_example',
-                            table_name='blogposts_not_updated_lwt_indicator')
-
     def test_lwt_longevity(self):
         self.test_custom_time()
 
-        # Run repair on all nodes. We need it to fix the case, when part of data wasn't inserted because of timeouts
-        self.stop_nemesis_and_repair_cluster()
+        # Stop nemesis. Prefer all nodes will be run before data validation
+        # Increase timeout to wait for nemesis finish
+        if self.db_cluster.nemesis_threads:
+            self.db_cluster.stop_nemesis(timeout=300)
+
         self.validate_data()
 
     def validate_data(self):
