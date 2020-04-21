@@ -20,7 +20,7 @@ from typing import List, Optional, Union, Any, Tuple
 
 import docker
 import paramiko  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
-from docker.errors import DockerException, NotFound, ImageNotFound
+from docker.errors import DockerException, NotFound, ImageNotFound, NullResource
 from docker.models.images import Image
 from docker.models.containers import Container
 
@@ -183,10 +183,16 @@ class ContainerManager:
             run_args = {"detach": True,
                         "labels": instance.tags, }
             run_args.update(getattr(instance, f"{name.family}_container_run_args", cls._run_args)(**extra_run_args))
+            docker_client = cls._get_docker_client_for_new_container(instance, name)
             if name.member and "name" in run_args:
                 run_args["name"] += f"-{name.member}"
-            container = instance._containers[name.full] = \
-                cls._get_docker_client_for_new_container(instance, name).containers.run(**run_args)
+            try:
+                container = docker_client.containers.get(run_args.get("name"))
+                LOGGER.info("Found container %s, re-use it and re-run", container)
+                container.start()
+            except (NotFound, NullResource, ):
+                container = docker_client.containers.run(**run_args)
+            instance._containers[name.full] = container
             LOGGER.info("Container %s started.", container)
         else:
             LOGGER.warning("Re-run container %s", container)
@@ -202,9 +208,13 @@ class ContainerManager:
         container = cls.get_container(instance, name)
         logfile = cls._get_attr_for_name(instance, _Name(name), "container_logfile", name_only_lookup=True)
         if logfile:
-            with open(logfile, "ab") as log:
-                log.write(container.logs())
-            LOGGER.info("Container %s logs written to %s", container, logfile)
+            try:
+                with open(logfile, "ab") as log:
+                    log.write(container.logs())
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.error("Unable to write container logs to %s", logfile, exc_info=exc)
+            else:
+                LOGGER.info("Container %s logs written to %s", container, logfile)
         if ignore_keepalive or not container.name.endswith(cls.keep_alive_suffix):
             cls.unregister_container(instance, name)
             container.remove(v=True, force=True)
@@ -216,7 +226,10 @@ class ContainerManager:
     @classmethod
     def destroy_all_containers(cls, instance: object, ignore_keepalive: bool = False) -> None:
         for name in tuple(instance._containers.keys()):
-            cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
+            try:
+                cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.error("%s: some exception raised during container `%s' destroying", instance, name, exc_info=exc)
 
     @classmethod
     def is_running(cls, instance: object, name: str) -> bool:

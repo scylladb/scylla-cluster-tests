@@ -164,7 +164,7 @@ class GCENode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()
         self._instance_wait_safe(self._safe_destroy)
-        self.log.info('Destroyed')
+        super().destroy()
 
     def get_console_output(self):
         # TODO adding console output from instance on GCE

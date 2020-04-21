@@ -66,6 +66,7 @@ class PhysicalMachineNode(cluster.BaseNode):
 
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
+        super().destroy()
 
 
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
@@ -101,11 +102,6 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
             self.nodes.append(self._create_node(node_name,
                                                 self._node_public_ips[node_index],
                                                 self._node_private_ips[node_index]))
-
-    def destroy(self):
-        LOGGER.info('Destroy nodes')
-        for node in self.nodes:
-            node.destroy()
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
