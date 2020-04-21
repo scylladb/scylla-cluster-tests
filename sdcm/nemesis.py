@@ -1839,6 +1839,9 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 'sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
             self.log.debug('File {} was corrupted by dd'.format(sstable_file))
 
+    """
+    disable scrub nemesis, it's unstable
+
     def disrupt_corrupt_then_scrub(self):
 
         # Flush data to sstable
@@ -1857,6 +1860,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.log.debug('Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+    """   # pylint: disable=pointless-string-statement
 
 
 class NotSpotNemesis(Nemesis):
@@ -2601,9 +2605,13 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    GeminiChaosMonkey, NetworkMonkey]
 
 
+"""
+disable scrub nemesis, it's unstable
+
 class CorruptThenScrubMonkey(Nemesis):
     disruptive = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_corrupt_then_scrub()
+"""
