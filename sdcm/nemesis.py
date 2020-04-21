@@ -1839,7 +1839,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
                 'sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
             self.log.debug('File {} was corrupted by dd'.format(sstable_file))
 
-    def disrupt_corrupt_then_scrub(self):
+    def disable_disrupt_corrupt_then_scrub(self):
 
         # Flush data to sstable
         self.target_node.run_nodetool("flush")
@@ -2601,9 +2601,10 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    GeminiChaosMonkey, NetworkMonkey]
 
 
-class CorruptThenScrubMonkey(Nemesis):
-    disruptive = False
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_corrupt_then_scrub()
+# TODO: https://trello.com/c/vwedwZK2/1881-corrupt-the-scrub-fails
+# class CorruptThenScrubMonkey(Nemesis):
+#     disruptive = False
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disable_disrupt_corrupt_then_scrub()
