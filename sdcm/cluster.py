@@ -1351,12 +1351,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             log_file.seek(0, os.SEEK_END)
             return log_file.tell()
 
-    def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True):
+    def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True, severity=Severity.ERROR):
         """
         Search for all known patterns listed in  `_database_error_events`
 
         :param start_from_beginning: if True will search log from first line
         :param publish_events: if True will publish events
+        :param severity: event severity if search_pattern is assigned
         :return: list of (line, error) tuples
         """
         # pylint: disable=too-many-branches,too-many-locals,too-many-statements
@@ -1368,7 +1369,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         index = 0
         # prepare/compile all regexes
         if search_pattern:
-            expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=Severity.CRITICAL)
+            expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=severity)
             patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
         else:
             for expression in self._database_error_events:

@@ -42,7 +42,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import mgmt, wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
@@ -1724,7 +1724,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         Stop streaming task in middle and rebuild the data on the node.
         """
         def decommission_post_action():
-            decommission_done = self.target_node.search_database_log('DECOMMISSIONING: done', start_from_beginning=True, publish_events=False)
+            decommission_done = self.target_node.search_database_log(
+                'DECOMMISSIONING: done', start_from_beginning=True, publish_events=False, severity=Severity.WARNING)
 
             ips = []
             seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
@@ -1762,13 +1763,15 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
         def is_streaming_started():
             stream_pattern = "range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"
-            streaming_logs = self.target_node.search_database_log(stream_pattern, start_from_beginning=False, publish_events=False)
+            streaming_logs = self.target_node.search_database_log(
+                stream_pattern, start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
             self.log.debug(streaming_logs)
             if streaming_logs:
                 self.task_used_streaming = True
 
             # In latest master, repair always won't use streaming
-            repair_logs = self.target_node.search_database_log('repair - Repair 1 out of', start_from_beginning=False, publish_events=False)
+            repair_logs = self.target_node.search_database_log(
+                'repair - Repair 1 out of', start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
             self.log.debug(repair_logs)
             return len(streaming_logs) > 0 and len(repair_logs) > 0
 
@@ -1789,7 +1792,8 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         decommission_post_action()
 
         if self.task_used_streaming:
-            err = self.target_node.search_database_log('streaming.*err', start_from_beginning=False)
+            err = self.target_node.search_database_log(
+                'streaming.*err', start_from_beginning=False, severity=Severity.ERROR)
             self.log.debug(err)
         else:
             self.log.debug(
