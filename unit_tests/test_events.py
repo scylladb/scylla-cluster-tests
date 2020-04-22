@@ -353,7 +353,7 @@ class TesterFailure(BaseEventsTest):
     def tearDown(self) -> None:
         test_error, test_failure = ClusterTester.get_test_failures(self)
         tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.CRITICAL
+        assert tre.severity == Severity.ERROR
         tre.publish(guaranteed=True)
         print(str(tre))
         assert test_failure
@@ -372,7 +372,7 @@ class TesterError(BaseEventsTest):
     def tearDown(self) -> None:
         test_error, test_failure = ClusterTester.get_test_failures(self)
         tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.CRITICAL
+        assert tre.severity == Severity.ERROR
         tre.publish(guaranteed=True)
         print(str(tre))
         assert not test_failure
@@ -413,7 +413,7 @@ class TesterErrorDuringSetUp(unittest.TestCase):
         assert test_failure is None
         assert test_error is not None
         tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.CRITICAL
+        assert tre.severity == Severity.ERROR
 
 
 class TesterMultiSubTest(unittest.TestCase):
