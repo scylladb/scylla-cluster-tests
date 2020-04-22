@@ -9,7 +9,6 @@ from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.utils.decorators import retrying
 
-
 LOGGER = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
@@ -40,16 +39,16 @@ class CreateSpotFleetError(ClientError):
     pass
 
 
-class EC2Client():
+class EC2Client:
 
-    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
+    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=1.0):
         self._client = self._get_ec2_client(region_name)
         self._resource = boto3.resource('ec2', region_name=region_name)
         self.region_name = region_name
         self._timeout = timeout  # request timeout in seconds
         self._price_index = 1.5
         self._wait_interval = 5  # seconds
-        self.spot_max_price_percentage = spot_max_price_percentage
+        self.spot_max_price_percentage = 1.0 if spot_max_price_percentage > 1.0 else spot_max_price_percentage
 
     def _get_ec2_client(self, region_name=None):
         try:
@@ -61,7 +60,8 @@ class EC2Client():
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
 
-    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments
+    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
                                aws_instance_profile=None):
         """
@@ -78,7 +78,7 @@ class EC2Client():
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
                                            },
-                      ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
+                      ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout / 60.0 + 5)
                       )
         if aws_instance_profile:
             params['LaunchSpecification']['IamInstanceProfile'] = {'Name': aws_instance_profile}
@@ -101,7 +101,8 @@ class EC2Client():
         LOGGER.debug('Spot requests: %s', request_ids)
         return request_ids
 
-    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments
+    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                             block_device_mappings=None, tags_list=None, aws_instance_profile=None):
 
         tags_list = tags_list if tags_list else []
@@ -234,7 +235,7 @@ class EC2Client():
         """
         resp = self._client.describe_spot_fleet_requests(SpotFleetRequestIds=[request_id])
         for req in resp['SpotFleetRequestConfigs']:
-            if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
+            if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or \
                     req['ActivityStatus'] != STATUS_FULFILLED:
                 if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
                     current_time = datetime.datetime.now().timetuple()
@@ -294,8 +295,10 @@ class EC2Client():
         tags = tags if tags else []
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
-    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
-                              count=1, duration=0, block_device_mappings=None, tags_list=None, aws_instance_profile=None):
+    # pylint: disable=too-many-arguments
+    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
+                              count=1, duration=0, block_device_mappings=None, tags_list=None,
+                              aws_instance_profile=None):
         """
         Create spot instances
 
@@ -314,10 +317,11 @@ class EC2Client():
 
         # pylint: disable=too-many-locals
 
-        tags_list = tags_list if tags_list else []
+        tags_list = tags_list or []
         spot_price = self._get_spot_price(instance_type)
 
-        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
+        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if,
+                                                  spot_price['desired'],
                                                   key_pair, user_data, count, duration,
                                                   block_device_mappings=block_device_mappings,
                                                   aws_instance_profile=aws_instance_profile)
@@ -328,14 +332,15 @@ class EC2Client():
 
         LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, [{'Key': 'Name', 'Value': 'spot_{}_{}'.format(instance_id, ind)}])
+            self.add_tags(instance_id, tags_list + [{'Key': 'Name', 'Value': 'spot_{}_{}'.format(instance_id, ind)}])
 
         self._client.cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
 
         instances = [self.get_instance(instance_id) for instance_id in instance_ids]
         return instances
 
-    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments
+    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                           block_device_mappings=None, tags_list=None, aws_instance_profile=None):
         """
         Create spot fleet

@@ -702,6 +702,40 @@ class AWSNode(cluster.BaseNode):
     def ena_support(self) -> bool:
         return self._instance.ena_support
 
+    def create_and_attach_new_volume(self, volume_name_char, availability_zone, size, volume_type, tags=None,
+                                     is_dry_run=False):
+        _ec2_client = self._ec2_service.meta.client
+        volume_path = f"/dev/sd{volume_name_char}"
+        instance_id = self._instance.id
+        response = self._ec2_service.meta.client.create_volume(
+            AvailabilityZone=availability_zone, Size=size, VolumeType=volume_type, DryRun=is_dry_run)
+        volume_id = response["VolumeId"]
+        volume = self._ec2_service.Volume(id=volume_id)
+        if tags:
+            volume.create_tags(Tags=tags)
+        volume.attach_to_instance(Device=volume_path, InstanceId=instance_id, DryRun=is_dry_run)
+        waiter = _ec2_client.get_waiter('volume_in_use')
+        waiter.wait(VolumeIds=[volume_id])
+        self.remoter.run(f"sudo file -s /dev/xv{volume_name_char}", ignore_status=True)
+        self.log.info(f"The volume '{volume_id}' created and attached to instance '{instance_id}' and the volume path"
+                      f" is '{volume_path}'")
+        return volume_id
+
+    def delete_and_detach_volume(self, volume_id, volume_name_char, is_force=False, is_dry_run=False):
+        _ec2_client = self._ec2_service.meta.client
+        volume_path = f"/dev/sd{volume_name_char}"
+        instance_id = self._instance.id
+        volume = self._ec2_service.Volume(id=volume_id).attach_to_instance(
+            Device=volume_path, InstanceId=instance_id, DryRun=is_dry_run)
+        if volume.state.lower() != 'available':
+            volume.detach_from_instance(Device=volume_path, Force=is_force, InstanceId=instance_id)
+            waiter = _ec2_client.get_waiter('volume_available')
+            waiter.wait(VolumeIds=[volume_id])
+        _ec2_client.delete_volume(VolumeId=volume_id)
+        waiter = _ec2_client.get_waiter('volume_deleted')
+        waiter.wait(VolumeIds=[volume_id])
+        self.log.info(f"The volume '{volume_id}' detached and removed from instance '{instance_id}'")
+
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 

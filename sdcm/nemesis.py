@@ -68,7 +68,7 @@ class NoMandatoryParameter(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
 
 
-class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
     run_with_gemini = True
@@ -2636,3 +2636,38 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
 #         self.disable_disrupt_corrupt_then_scrub()
+
+
+class SlowHddNemesis(Nemesis):
+    def disrupt(self):
+        if self.cluster.params.get('cluster_backend') != 'aws':
+            raise UnsupportedNemesis("The nemesis works only on AWS cluster")
+        volume_name_char, size, volume_type = "f", 500, "st1"
+        io_config_path = os.path.join("etc", "scylla.d", "io.conf")
+        copy_io_config_path = os.path.join("tmp", "io.conf.old")
+        num_io_queues_key, new_io_queues_value = '--num-io-queues', 18
+        target_node = self.target_node
+        self.log.info(f"Stopping node '{target_node}'")
+        target_node.stop_scylla_server()
+        self.log.debug(
+            f"Creating copy for original file '{io_config_path}' in following path '{copy_io_config_path}'")
+        target_node.remoter.run(f"sudo cp {io_config_path} {copy_io_config_path}")
+        self.log.debug(f"Changing variable '{num_io_queues_key}' to {num_io_queues_key}")
+        target_node.remoter.run(f'sudo echo \'SEASTAR_IO="{num_io_queues_key}={num_io_queues_key}"\' > '
+                                f'{io_config_path}')
+        target_node.remoter.run(f"sudo chown root.root {io_config_path}")
+        volume_id = target_node.create_and_attach_new_volume(
+            volume_name_char=volume_name_char, availability_zone="eu-west-1a", size=size, volume_type=volume_type)
+        try:
+
+            target_node.remoter.run("sudo umount --l /var/lib/scylla")
+            target_node.remoter.run(f"sudo /usr/lib/scylla/scylla_setup --disk /dev/xvd{volume_name_char}")
+            target_node.start_scylla_server(verify_up=True, verify_down=False)
+            yield
+        finally:
+            target_node.stop_scylla_server()
+            target_node.delete_and_detach_volume(volume_id=volume_id, volume_name_char=volume_name_char)
+            target_node.remoter.run("sudo umount --l /var/lib/scylla")
+            target_node.remoter.run(f"sudo /usr/lib/scylla/scylla_setup")
+            target_node.start_scylla_server(verify_up=True, verify_down=False)
+
