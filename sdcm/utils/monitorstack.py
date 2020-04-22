@@ -23,6 +23,7 @@ ALERT_DOCKER_NAME = "aalert"
 GRAFANA_DOCKER_PORT = get_free_port()
 ALERT_DOCKER_PORT = get_free_port()
 PROMETHEUS_DOCKER_PORT = get_free_port()
+COMMAND_TIMEOUT = 1800
 
 
 class ErrorUploadSCTDashboard(Exception):
@@ -144,7 +145,7 @@ def create_monitoring_data_dir(base_dir, archive):
         """.format(data_dir=monitoring_data_base_dir,
                    archive=archive,
                    archive_name=os.path.basename(archive)))
-    result = LocalCmdRunner().run(cmd, ignore_status=True)
+    result = LocalCmdRunner().run(cmd, timeout=COMMAND_TIMEOUT, ignore_status=True)
     if result.exited > 0:
         LOGGER.error("Error during extracting prometheus snapshot. Switch to next archive")
         return False
@@ -161,7 +162,7 @@ def create_monitoring_stack_dir(base_dir, archive):
                    archive_name=os.path.basename(archive),
                    archive=archive))
 
-    result = LocalCmdRunner().run(cmd, ignore_status=True)
+    result = LocalCmdRunner().run(cmd, timeout=COMMAND_TIMEOUT, ignore_status=True)
     if result.exited > 0:
         LOGGER.error("Error during extracting monitoring stack")
         return False

@@ -376,7 +376,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments
-                      preserve_perm=True, preserve_symlinks=False):
+                      preserve_perm=True, preserve_symlinks=False, timeout=300):
         """
         Copy files from the remote host to a local path.
 
@@ -418,8 +418,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 remote_source = self._encode_remote_paths(src)
                 local_dest = quote(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
-                                             delete_dst, preserve_symlinks)
-                result = LocalCmdRunner().run(rsync)
+                                             delete_dst, preserve_symlinks, timeout)
+                result = LocalCmdRunner().run(rsync, timeout=timeout)
                 self.log.info(result.exited)
                 try_scp = False
             except (Failure, UnexpectedExit) as ex:
@@ -441,7 +441,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
                 local_dest = quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 try:
-                    result = LocalCmdRunner().run(scp)
+                    result = LocalCmdRunner().run(scp, timeout=timeout)
                 except UnexpectedExit as ex:
                     if is_error_retriable(ex.result.stderr):
                         raise RetriableNetworkException(ex.result.stderr)
@@ -701,7 +701,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         else:
             set_file_privs(dest)
 
-    def _make_rsync_cmd(self, src, dst, delete_dst, preserve_symlinks):
+    def _make_rsync_cmd(self, src, dst, delete_dst, preserve_symlinks, timeout=300):  # pylint: disable=too-many-arguments
         """
         Given a list of source paths and a destination path, produces the
         appropriate rsync command for copying them. Remote paths must be
@@ -720,8 +720,8 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=300 --rsh='%s' -az %s %s"
-        return command % (symlink_flag, delete_flag, ssh_cmd,
+        command = "rsync %s %s --timeout=%s --rsh='%s' -az %s %s"
+        return command % (symlink_flag, delete_flag, timeout, ssh_cmd,
                           " ".join(src), dst)
 
 
