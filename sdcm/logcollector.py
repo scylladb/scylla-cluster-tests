@@ -61,6 +61,7 @@ class BaseLogEntity():  # pylint: disable=too-few-public-methods
     which require to be logged, stored locally, uploaded to
     S3 storage
     """
+    collect_timeout = 300
 
     def __init__(self, name, command="", search_locally=False):
         self.name = name
@@ -89,7 +90,10 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
         archive_logfile = LogCollector.archive_log_remotely(node=node, log_filename=remote_logfile)
-        LogCollector.receive_log(node=node, remote_log_path=archive_logfile, local_dir=local_dst)
+        LogCollector.receive_log(node=node,
+                                 remote_log_path=archive_logfile,
+                                 local_dir=local_dst,
+                                 timeout=self.collect_timeout)
         return os.path.join(local_dst, os.path.basename(archive_logfile))
 
 
@@ -153,7 +157,7 @@ class FileLog(CommandLog):
         if not file_path:
             return None
         archive = LogCollector.archive_log_remotely(builder, file_path)
-        builder.remoter.receive_files(archive, local_dst)
+        builder.remoter.receive_files(archive, local_dst, timeout=self.collect_timeout)
         return os.path.join(local_dst, os.path.basename(file_path))
 
 
@@ -167,6 +171,7 @@ class PrometheusSnapshots(BaseLogEntity):
         BaseLogEntity
     """
     monitoring_data_dir_name = "scylla-monitoring-data"
+    collect_timeout = 3000
 
     def __init__(self, *args, **kwargs):
         self.monitoring_data_dir = kwargs.pop('monitoring_data_dir', None)
@@ -220,7 +225,8 @@ class PrometheusSnapshots(BaseLogEntity):
         LogCollector.receive_log(
             node,
             remote_log_path=remote_snapshot_archive,
-            local_dir=local_dst)
+            local_dir=local_dst,
+            timeout=self.collect_timeout)
         return os.path.join(local_dst, os.path.basename(remote_snapshot_archive))
 
 
@@ -236,6 +242,7 @@ class MonitoringStack(BaseLogEntity):
         grafana_port {number} -- Grafana server port
     """
     grafana_port = 3000
+    collect_timeout = 1800
 
     @staticmethod
     def get_monitoring_base_dir(node):
@@ -266,7 +273,7 @@ class MonitoringStack(BaseLogEntity):
                                                           monitor_install_dir_name),
                          ignore_status=True)
         node.remoter.receive_files(src=os.path.join(monitor_base_dir, archive_name),
-                                   dst=local_dist)
+                                   dst=local_dist, timeout=self.collect_timeout)
         local_archive_path = os.path.join(local_dist, archive_name)
         return local_archive_path
 
@@ -546,6 +553,7 @@ class LogCollector:
     cluster_log_type = 'base'
     log_entities = []
     node_remote_dir = '/tmp'
+    collect_timeout = 300
 
     @property
     def current_run(self):
@@ -610,10 +618,12 @@ class LogCollector:
         return "{}.tar.gz".format(archive_name)
 
     @staticmethod
-    def receive_log(node, remote_log_path, local_dir):
+    def receive_log(node, remote_log_path, local_dir, timeout=300):
         makedirs(local_dir)
         if node.remoter:
-            node.remoter.receive_files(src=remote_log_path, dst=local_dir)
+            node.remoter.receive_files(src=remote_log_path,
+                                       dst=local_dir,
+                                       timeout=timeout)
         return local_dir
 
     @staticmethod
@@ -638,7 +648,7 @@ class LogCollector:
         try:
             workers_number = int(len(self.nodes) / 2)
             workers_number = len(self.nodes) if workers_number < 2 else workers_number
-            ParallelObject(self.nodes, num_workers=workers_number, timeout=300).run(
+            ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                 collect_logs_per_node, ignore_exceptions=True)
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error('Error occured during collecting logs %s', details)
@@ -725,6 +735,7 @@ class ScyllaLogCollector(LogCollector):
                                command='sudo coredumpctl info')
                     ]
     cluster_log_type = "db-cluster"
+    collect_timeout = 600
 
     def collect_logs(self, local_search_path=None):
         self.collect_logs_for_inactive_nodes(local_search_path)
@@ -768,6 +779,7 @@ class MonitorLogCollector(LogCollector):
         GrafanaSnapshot(name='grafana-snapshot')
     ]
     cluster_log_type = "monitor-set"
+    collect_timeout = 3600
 
 
 class SCTLogCollector(LogCollector):
