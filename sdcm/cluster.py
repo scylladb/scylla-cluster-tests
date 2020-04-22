@@ -2434,7 +2434,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # and they will remain in the gossipinfo 3 days.
             # It's expected behaviour and we won't send the error in this case
             if schema and ip and status:
-                if status not in ['LEFT', 'removed', 'BOOT']:
+                if status not in ['LEFT', 'removed', 'BOOT', 'shutdown']:
                     gossip_node_schemas[ip] = {'schema': schema, 'status': status}
                 schema, ip, status = '', '', ''
 
