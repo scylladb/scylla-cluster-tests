@@ -1781,6 +1781,14 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         if random.randint(0, 1) == 0:
             self.log.debug('Interrupt the task by pkill')
             self.target_node.remoter.run('sudo pkill -9 -f %s' % task, ignore_status=True)
+            self.log.debug("Stop background repair task by storage_service/force_terminate_repair API")
+            with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
+                                node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
+                self.target_node.remoter.run(
+                    'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
         else:
             self.log.debug('Interrupt the task by hard reboot')
             self.target_node.reboot(hard=True, verify_ssh=True)
