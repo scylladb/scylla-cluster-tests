@@ -115,6 +115,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 dynamodb.endpoint = http://{0}:{1}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
+                dynamodb.consistentReads = true
             '''.format(target_address,
                        self.params.get('alternator_port')))
 
