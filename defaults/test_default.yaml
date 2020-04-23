@@ -63,3 +63,5 @@ monitor_swap_size: 8192 # Size of swap file for monitor node in bytes 8192 * 1MB
 compaction_strategy: 'SizeTieredCompactionStrategy'
 
 use_preinstalled_scylla: false
+
+dynamodb_primarykey_type: 'HASH'
