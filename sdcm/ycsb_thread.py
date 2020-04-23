@@ -119,7 +119,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             '''.format(target_address,
                        self.params.get('alternator_port')))
 
-            dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type', 'HASH')
+            dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type')
 
             if dynamodb_primarykey_type == 'HASH_AND_RANGE':
                 dynamodb_teample += dedent('''
