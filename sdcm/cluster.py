@@ -405,6 +405,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.ssh_login_info:
             self.ssh_login_info["hostname"] = self.external_address
         self._init_remoter(self.ssh_login_info)
+        # Start task threads after ssh is up, otherwise the dense ssh attempts from task
+        # threads will make SCT builder to be blocked by sshguard of gce instance.
+        self.wait_ssh_up(verbose=True)
         if not Setup.REUSE_CLUSTER:
             self.set_hostname()
 
