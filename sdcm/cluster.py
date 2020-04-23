@@ -414,6 +414,10 @@ class BaseNode(object):  # pylint: disable=too-many-instance-attributes,too-many
 
         self.log.debug(self.remoter.ssh_debug_cmd())
 
+        # Start task threads after ssh is up, otherwise the dense ssh attempts from task
+        # threads will make SCT builder to be blocked by sshguard of gce instance.
+        self.wait_ssh_up(verbose=True)
+
         self._journal_thread = None
         self.n_coredumps = 0
         self.last_line_no = 1
