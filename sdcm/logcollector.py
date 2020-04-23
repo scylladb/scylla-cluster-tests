@@ -382,6 +382,7 @@ class GrafanaScreenShot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
+    collect_timeout = 150
 
     @retrying(n=5)
     def get_grafana_screenshot(self, node, local_dst):
@@ -420,7 +421,9 @@ class GrafanaScreenShot(GrafanaEntity):
                                                                     datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
                                                                     node.name))
                 LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
-                remote_browser.get_screenshot(grafana_url, screenshot_path, screenshot['resolution'])
+                remote_browser.get_screenshot(grafana_url, screenshot_path,
+                                              screenshot['resolution'],
+                                              load_page_screenshot_delay=self.collect_timeout)
                 screenshots.append(screenshot_path)
 
             return screenshots
