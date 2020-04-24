@@ -326,7 +326,15 @@ class TestStatsMixin(Stats):
     """
     This mixin is responsible for saving test details and statistics in database.
     """
-    KEYS = ['test_details', 'setup_details', 'versions', 'results', 'nemesis', 'errors', 'coredumps']
+    KEYS = {
+        'test_details': dict(),
+        'setup_details': dict(),
+        'versions': dict(),
+        'results': dict(),
+        'nemesis': dict(),
+        'errors': list(),
+        'coredumps': dict(),
+    }
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
     STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
@@ -353,7 +361,7 @@ class TestStatsMixin(Stats):
         return doc_id
 
     def _init_stats(self):
-        return {k: {} for k in self.KEYS}
+        return {k: v.copy() for k, v in self.KEYS.items()}
 
     def get_scylla_versions(self):
         versions = {}
