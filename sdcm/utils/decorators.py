@@ -93,7 +93,7 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
     """
 
     def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
-                 allowed_exceptions=(Exception,), message="", timeout=0):  # pylint: disable=redefined-outer-name
+                 allowed_exceptions=(Exception,), message="", timeout=0, raise_on_exceeded=True):  # pylint: disable=redefined-outer-name
         if n:
             self.n = n  # number of times to retry  # pylint: disable=invalid-name
         else:
@@ -103,6 +103,8 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
         self.message = message  # string that will be printed between retries
         self.timeout = timeout  # if timeout is defined it will raise error
         #   if it is reached even when maximum retries not reached yet
+        self.raise_on_exceeded = raise_on_exceeded  # if True - raise exception when number of retries exceeded,
+        # otherwise - return None
 
     def __call__(self, func):
         @wraps(func)
@@ -124,7 +126,9 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
                     time.sleep(self.sleep_time)
                     if i == self.n - 1 or (end_time and time.time() > end_time):
                         LOGGER.error(f"'{func.__name__}': Number of retries exceeded!")
-                        raise
+                        if self.raise_on_exceeded:
+                            raise
+                        return None
 
         return inner
 
