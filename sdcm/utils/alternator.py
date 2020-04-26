@@ -1,7 +1,11 @@
 import logging
+from contextlib import contextmanager
 
 import boto3
 from botocore.errorfactory import ClientError
+
+from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, PrometheusAlertManagerEvent, Severity
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,3 +63,24 @@ def set_write_isolation(table, isolation):
         }
     ]
     table.meta.client.tag_resource(ResourceArn=arn, Tags=tags)
+
+
+@contextmanager
+def ignore_alternator_client_errors():
+    """
+    Suppress errors and alerts related to alternator YCSB client errors
+
+    Ref: https://github.com/scylladb/scylla/issues/5802, since we don't control which client connected to each
+    node (using DNS now), e might have client connect to a non working node in some cases (like when internal
+    port 7000 is disconnected, which make this not to not be able to do LWT ops)
+
+    :return: context manager of all those filter
+    """
+    with EventsSeverityChangerFilter(event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyErrors.*",
+                                     severity=Severity.WARNING, extra_time_to_expiration=60), \
+        EventsSeverityChangerFilter(event_class=PrometheusAlertManagerEvent,
+                                    regex=".*YCSBTooManyVerifyErrors.*",
+                                    severity=Severity.WARNING, extra_time_to_expiration=60), \
+        EventsSeverityChangerFilter(event_class=YcsbStressEvent, regex=r".*Cannot achieve consistency level.*",
+                                    severity=Severity.WARNING, extra_time_to_expiration=30):
+        yield

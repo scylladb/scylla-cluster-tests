@@ -44,6 +44,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import mgmt, wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.alternator import ignore_alternator_client_errors
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -1559,19 +1560,22 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
                                      'inter node communication connections (port=7000 and 7001) will be'
                                      f' {textual_pkt_action} for {wait_time}s')
-        return self._run_commands_wait_and_cleanup(
-            self.target_node,
-            name=name,
-            start_commands=[
-                f'sudo iptables -t filter -A INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
-                f'sudo iptables -t filter -A INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
-            ],
-            cleanup_commands=[
-                f'sudo iptables -t filter -D INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
-                f'sudo iptables -t filter -D INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
-            ],
-            wait_time=wait_time
-        )
+
+        # because of https://github.com/scylladb/scylla/issues/5802, we ignore YCSB client errors here
+        with ignore_alternator_client_errors():
+            return self._run_commands_wait_and_cleanup(
+                self.target_node,
+                name=name,
+                start_commands=[
+                    f'sudo iptables -t filter -A INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                    f'sudo iptables -t filter -A INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+                ],
+                cleanup_commands=[
+                    f'sudo iptables -t filter -D INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                    f'sudo iptables -t filter -D INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+                ],
+                wait_time=wait_time
+            )
 
     def disrupt_network_reject_node_exporter(self):
         """
