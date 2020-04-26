@@ -25,12 +25,15 @@ from uuid import uuid4
 from functools import wraps
 import traceback
 import signal
+import sys
 
 import boto3.session
+
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
 
+from cassandra.concurrent import execute_concurrent_with_args
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.auth import PlainTextAuthProvider
@@ -52,7 +55,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys, get_username
+    get_testrun_status, download_encrypt_keys, get_username, PageFetcher, rows_to_list
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
@@ -1018,17 +1021,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     port=port, ssl_opts=ssl_opts, node_ips=[node.external_address],
                                     connect_timeout=connect_timeout, verbose=verbose)
 
-    # TODO: Temporary function. Will be removed
-    def get_rows_count(self, node, keyspace_name, table_name):
-        try:
-            with self.cql_connection_patient(node, keyspace=keyspace_name) as session:
-                session.default_consistency_level = ConsistencyLevel.QUORUM
-                result = session.execute('select count(*) as cnt from %s' % table_name)
-                self.log.debug("Rows in {}: {}".format(table_name, result[0].cnt))
-                return result[0].cnt
-        except:  # pylint: disable=bare-except
-            return None
-
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
                                user=None, password=None,
@@ -1252,57 +1244,91 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
-    def copy_table(self, src_keyspace, src_table, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+    def copy_table(self, node, src_keyspace, src_table, dest_keyspace, dest_table, columns_list=None, copy_data=False):  # pylint: disable=too-many-arguments
         """
         Create table with same structure as <src_keyspace>.<src_table>.
+        If columns_list is supplied, the table with create with the columns that in the columns_list
         Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
         """
         result = True
         create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_table, src_keyspace)
-        self.create_table_as(src_keyspace, src_table, dest_keyspace, dest_table, create_statement)
+        if not self.create_table_as(node, src_keyspace, src_table, dest_keyspace,
+                                    dest_table, create_statement, columns_list):
+            return False
 
         if copy_data:
-            result = self.copy_data_between_tables(src_keyspace, src_table, dest_keyspace, dest_table)
+            try:
+                result = self.copy_data_between_tables(node, src_keyspace, src_table,
+                                                       dest_keyspace, dest_table, columns_list)
+            except Exception as error:  # pylint: disable=broad-except
+                self.log. error(f'Copying data from {src_table} to {dest_table} failed with error: {error}')
+                return False
 
         return result
 
-    def copy_view(self, src_keyspace, src_view, dest_keyspace, dest_table, copy_data=False):  # pylint: disable=too-many-arguments
+    def copy_view(self, node, src_keyspace, src_view, dest_keyspace, dest_table, columns_list=None, copy_data=False):  # pylint: disable=too-many-arguments
         """
         Create table with same structure as <src_keyspace>.<src_view>.
+        If columns_list is supplied, the table with create with the columns that in the columns_list
         Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
         """
         result = True
         create_statement = "SELECT * FROM system_schema.views where view_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_view, src_keyspace)
         self.log.debug('Start create table with statement: {}'.format(create_statement))
-        self.create_table_as(src_keyspace, src_view, dest_keyspace, dest_table, create_statement)
+        if not self.create_table_as(node, src_keyspace, src_view, dest_keyspace,
+                                    dest_table, create_statement, columns_list):
+            return False
         self.log.debug('Finish create table')
         if copy_data:
-            result = self.copy_data_between_tables(src_keyspace, src_view, dest_keyspace, dest_table)
+            try:
+                result = self.copy_data_between_tables(node, src_keyspace, src_view,
+                                                       dest_keyspace, dest_table, columns_list)
+            except Exception as error:  # pylint: disable=broad-except
+                self.log. error(f'Copying data from {src_view} to {dest_table} failed with error {error}')
+                return False
 
         return result
 
-    def create_table_as(self, src_keyspace, src_table, dest_keyspace, dest_table, create_statement):  # pylint: disable=too-many-arguments
-        """ Create table with same structure as another table or view """
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+    def create_table_as(self, node, src_keyspace, src_table, dest_keyspace, dest_table, create_statement,  # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
+                        columns_list=None):
+        """ Create table with same structure as another table or view
+            If columns_list is supplied, the table with create with the columns that in the columns_list
+        """
+        with self.cql_connection_patient(node) as session:
 
-            result = self.rows_to_list(session.execute(create_statement))
+            result = rows_to_list(session.execute(create_statement))
             if result:
                 result = session.execute("SELECT * FROM {keyspace}.{table} LIMIT 1".format(keyspace=src_keyspace,
                                                                                            table=src_table))
 
+                primary_keys = []
                 # Create table with table/view structure
                 columns = list(zip(result.column_names, [typelist.typename for typelist in result.column_types]))
 
-                primary_keys = []
-                for column in result.column_names:
+                # if columns list was supplied, create the table with those columns only
+                if columns_list:
+                    column_types = []
+                    for column in columns_list:
+                        column_types.extend(column_type for column_type in columns if column == column_type[0])
+                    columns = column_types
+
+                if not columns:
+                    self.log.error(f'Wrong supplied columns list: {columns}. '
+                                   f'The columns do not exist in the {src_keyspace}.{src_table} table')
+                    return False
+
+                for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
                                                   "and table_name='{name}' and column_name='{column}'".format(ks=src_keyspace,
                                                                                                               name=src_table,
                                                                                                               column=column))
                     if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
                         primary_keys.append(column)
+
+                if not primary_keys:
+                    primary_keys.append(columns[0][0])
 
                 create_cql = 'create table {keyspace}.{name} ({columns}, PRIMARY KEY ({pk}))' \
                     .format(keyspace=dest_keyspace,
@@ -1311,47 +1337,81 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                             pk=', '.join(primary_keys))
                 self.log.debug('Create new table with cql: {}'.format(create_cql))
                 session.execute(create_cql)
+                return True
 
-    def copy_data_between_tables(self, src_keyspace, src_table, dest_keyspace, dest_table):
+    @retrying(n=4, sleep_time=5, message='Fetch all rows', raise_on_exceeded=False)
+    def fetch_all_rows(self, session, default_fetch_size, statement, verbose=True):
+        """
+        ******* Caution *******
+        All data from table will be read to the memory
+        BE SURE that the builder has enough memory and your dataset will be less then 2Gb.
+        """
+        if verbose:
+            self.log.debug(f"Fetch all rows by statement: {statement}")
+        session.default_fetch_size = default_fetch_size
+        session.default_consistency_level = ConsistencyLevel.QUORUM
+        result = session.execute_async(statement)
+        fetcher = PageFetcher(result).request_all()
+        current_rows = fetcher.all_data()
+        if verbose and current_rows:
+            dataset_size = sum(sys.getsizeof(e) for e in current_rows[0])*len(current_rows)
+            self.log.debug(f"Size of fetched rows: {dataset_size} bytes")
+        return current_rows
+
+    def copy_data_between_tables(self, node, src_keyspace, src_table, dest_keyspace,  # pylint: disable=too-many-arguments,too-many-locals
+                                 dest_table, columns_list=None):
         """ Copy all data from one table/view to another table
             Structure of the tables has to be same
         """
         self.log.debug('Start copying data')
-        # TODO: Temporary print. Will be removed
-        count = self.get_rows_count(self.db_cluster.nodes[0], keyspace_name=src_keyspace,
-                                    table_name=src_table)
-        self.log.debug('Count rows in the {} MV before saving: {}'.format(src_table, count))
-
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+        with self.cql_connection_patient(node, verbose=False) as session:
             # Copy data from source to the destination table
-            session.default_fetch_size = 0
-            result = session.execute("SELECT * FROM {keyspace}.{table}".format(keyspace=src_keyspace,
-                                                                               table=src_table))
-            # TODO: Temporary function. Will be removed
-            self.log.debug('Rows in the {} MV before saving: {}'.format(src_table, len(result.current_rows)))
-            columns = list(zip(result.column_names, [typelist.typename for typelist in result.column_types]))
-            insert_statement = session.prepare(
-                'insert into {keyspace}.{name} ({columns}) values ({values})'.format(keyspace=dest_keyspace,
-                                                                                     name=dest_table,
-                                                                                     columns=', '.join(
-                                                                                         [c[0] for c in columns]),
-                                                                                     values=', '.join(['?' for _ in columns])))
+            statement = "SELECT {columns} FROM {keyspace}.{table}".format(keyspace=src_keyspace,
+                                                                          table=src_table,
+                                                                          columns=','.join(
+                                                                              columns_list) if columns_list else '*')
+            # Get table columns list
+            result = session.execute(statement + ' LIMIT 1')
+            columns = result.column_names
 
-            for row in result.current_rows:
-                session.execute(insert_statement, row)
-            source_rows_count = len(result.current_rows)
-
-            result = session.execute("SELECT * FROM {keyspace}.{name}".format(keyspace=dest_keyspace, name=dest_table))
-            if len(result.current_rows) != source_rows_count:
-                self. log.warning('Problem during copying data. '
-                                  'Rows in source table: {source}; '
-                                  'Rows in destination table: {destination}.'.format(source=source_rows_count,
-                                                                                     destination=len(result.current_rows))
-                                  )
+            # Fetch all rows from view / table
+            source_table_rows = self.fetch_all_rows(session=session, default_fetch_size=5000, statement=statement)
+            if not source_table_rows:
+                self.log.error(f"Can't copy data from {src_table}. Fetch all rows failed, see error above")
                 return False
-            self.log.debug('All rows have been copied from {from_name} to {to_name}'.format(from_name=src_table,
-                                                                                            to_name=dest_table))
-        self.log.debug('Finish copying data')
+
+            # TODO: Temporary function. Will be removed
+            self.log.debug('Rows in the {} MV before saving: {}'.format(src_table, len(source_table_rows)))
+
+            insert_statement = session.prepare(
+                'insert into {keyspace}.{name} ({columns}) '
+                'values ({values})'.format(keyspace=dest_keyspace,
+                                           name=dest_table,
+                                           columns=', '.join(columns),
+                                           values=', '.join(['?' for _ in columns])))
+
+            # Save all rows
+            # Workers = Parallel queries = (nodes in cluster) ✕ (cores in node) ✕ 3
+            # (from https://www.scylladb.com/2017/02/13/efficient-full-table-scans-with-scylla-1-6/)
+            cores = self.db_cluster.nodes[0].cpu_cores
+            if not cores:
+                # If CPU core didn't find, put 8 as default
+                cores = 8
+            max_workers = len(self.db_cluster.nodes) * cores * 3
+
+            session.default_consistency_level = ConsistencyLevel.QUORUM
+
+            execute_concurrent_with_args(session=session, statement=insert_statement, parameters=source_table_rows,
+                                         concurrency=max_workers)
+
+            result = session.execute(f"SELECT count(*) FROM {dest_keyspace}.{dest_table}")
+            if result:
+                if result.current_rows[0].count != len(source_table_rows):
+                    self. log.warning(f'Problem during copying data. '
+                                      f'Rows in source table: {len(source_table_rows)}; '
+                                      f'Rows in destination table: {len(result.current_rows)}.')
+                    return False
+        self.log.debug(f'All rows have been copied from {src_table} to {dest_table}')
         return True
 
     def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):

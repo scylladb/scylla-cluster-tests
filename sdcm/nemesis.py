@@ -1757,17 +1757,15 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
     :return: Wrapped method.
     """
 
-    # TODO: Temporary function. Will be removed later
     def data_validation_prints(args):
-        view_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
-                                                   keyspace_name='cqlstress_lwt_example',
-                                                   table_name='blogposts_not_updated_lwt_indicator')
-        table_count = args[0].tester.get_rows_count(args[0].cluster.nodes[0],
-                                                    keyspace_name='cqlstress_lwt_example',
-                                                    table_name='blogposts_not_updated_lwt_indicator_expect')
-        if view_count and table_count and view_count != table_count:
-            args[0].log.error('One or more rows are not as expected, suspected LWT wrong update. '
-                              'Actual dataset length: {}, Expected dataset length: {}'.format(view_count, table_count))
+        try:
+            if hasattr(args[0].tester, 'data_validator') and args[0].tester.data_validator:
+                with args[0].tester.cql_connection_patient(args[0].cluster.nodes[0], keyspace=args[0].tester.data_validator.keyspace_name) as session:
+                    args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
+                    args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
+                    args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
+        except Exception as err:  # pylint: disable=broad-except
+            args[0].log.debug(f'Data validator error: {err}')
 
     def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         # pylint: disable=too-many-locals

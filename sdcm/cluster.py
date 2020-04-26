@@ -502,6 +502,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return 'true' in result.stdout.lower()
 
     @property
+    def cpu_cores(self):
+        result = self.remoter.run("nproc", ignore_status=True)
+        cores = result.stdout.lower()
+        cores = int(cores) if cores else None
+        return cores
+
+    @property
     def is_server_encrypt(self):
         result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
         return 'server_encryption_options' in result.stdout.lower()
