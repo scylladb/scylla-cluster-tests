@@ -1,7 +1,11 @@
 from __future__ import absolute_import
+
+from collections import namedtuple
 import unittest
 
 from sdcm.utils.common import get_non_system_ks_cf_list
+
+RemoterResult = namedtuple('RemoterResult', ['stdout', 'stderr'])
 
 
 class DummyNode():  # pylint: disable=too-few-public-methods
@@ -48,6 +52,7 @@ class DummyNode():  # pylint: disable=too-few-public-methods
                       'keyspace1 |                       standard1 |                    text',
                       'keyspace1 |                       standard1 |                    blob',
                       'keyspace1 |                       standard1 |                    blob',
+                      'keyspace1 |                       empty_table |                    blob',
                       'mview |                           users |                    text',
                       'mview |                           users |                    text',
                       'mview |                           users |                timeuuid',
@@ -67,6 +72,10 @@ class DummyNode():  # pylint: disable=too-few-public-methods
                       'mview |              users_by_last_name |                    text',
                       'mview |              users_by_last_name |                    text',
                       '', '(293 rows)']
+        elif 'empty_table' in cmd:
+            return RemoterResult(stdout='(0 rows)', stderr='')
+        elif 'SELECT * FROM' in cmd:
+            return RemoterResult(stdout='(2 rows)', stderr='')
         return result
 
 

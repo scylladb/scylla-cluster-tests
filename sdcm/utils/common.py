@@ -1124,8 +1124,8 @@ def get_db_tables(session, ks, with_compact_storage=True):
     return output
 
 
-def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,
-                              filter_out_mv=False):
+def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,  # pylint: disable=too-many-arguments
+                              filter_out_mv=False, filter_empty_tables=True):
     """Get all not system keyspace.tables pairs
 
     Arguments:
@@ -1179,6 +1179,16 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         for ks_cf, column_types in list(avaialable_ks_cf.items()):
             if 'counter' in column_types:
                 avaialable_ks_cf.pop(ks_cf)
+
+    if filter_empty_tables:
+        for ks_cf in list(avaialable_ks_cf.keys()):
+            cmd = f'SELECT * FROM {ks_cf} LIMIT 1'
+            # TODO: make this work with cql python driver, but would need to refactor the session of of tester class
+            result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
+                                           split=False, connect_timeout=request_timeout)
+            if '(0 rows)' in result.stdout:
+                avaialable_ks_cf.pop(ks_cf)
+
     return list(avaialable_ks_cf.keys())
 
 
