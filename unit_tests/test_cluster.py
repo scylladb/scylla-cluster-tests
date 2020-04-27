@@ -34,6 +34,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def database_log(self, x):
         self._database_log = x
 
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        pass
+
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
