@@ -475,7 +475,8 @@ class SCTConfiguration(dict):
         # GCE config options
 
         dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str,
-             help=""),
+             help="Supported: us-east1 - means that the zone will be selected automatically or "
+                  "you can mention the zone explicitly, for example: us-east1-b"),
 
         dict(name="gce_network", env="SCT_GCE_DATACENTER", type=str,
              help=""),
