@@ -91,12 +91,19 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
 
 
 def get_profile_content(stress_cmd):
+    """
+    Looking profile yaml in data_dir or the path as is to get the user profile
+    and loading it's yaml
+
+    :return: (profile_filename, dict with yaml)
+    """
+
     cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
     sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
-    if not os.path.exists(sct_cs_profile):
-        raise FileNotFoundError('User profile file {} not found'.format(sct_cs_profile))
-
-    cs_profile = sct_cs_profile
+    if os.path.exists(sct_cs_profile):
+        cs_profile = sct_cs_profile
+    elif not os.path.exists(cs_profile):
+        raise FileNotFoundError('User profile file {} not found'.format(cs_profile))
 
     with open(cs_profile, 'r') as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
