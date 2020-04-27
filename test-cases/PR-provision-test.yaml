@@ -23,7 +23,8 @@ gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/globa
 
 use_mgmt: true
 
-scylla_version: 3.3.rc0
+scylla_version: "3.3"
+workaround_kernel_bug_for_iotune: true
 
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
