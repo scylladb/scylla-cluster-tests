@@ -59,7 +59,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES
+    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.ycsb_thread import YcsbStressThread
@@ -1499,6 +1499,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def tearDown(self):
         InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
+
+        with self.subTest("Stop EventsAnalyzer"):
+            stop_events_analyzer()
 
         with self.subTest("Check for Error/Critical Events"):
             test_failing_events = self.get_test_failing_events()

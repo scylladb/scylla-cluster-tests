@@ -973,4 +973,11 @@ def get_logger_event_summary():
     return output
 
 
+def stop_events_analyzer():
+    analyzer = EVENTS_PROCESSES.get('EVENTS_ANALYZER')
+    if analyzer:
+        analyzer.terminate()
+        analyzer.join(timeout=60)
+
+
 atexit.register(stop_events_device)
