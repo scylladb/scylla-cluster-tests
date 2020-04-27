@@ -387,15 +387,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
 
         user_prefix = self.params.get('user_prefix', None)
-        gce_datacenter = self.params.get('gce_datacenter', None).split()
+        regions = self.params.get('gce_datacenter', None).split()
         service_cls = get_driver(Provider.GCE)
         key_store = KeyStore()
         gcp_credentials = key_store.get_gcp_credentials()
         services = []
-        for i in gce_datacenter:
+        gce_datacenter = []
+        for region_az in regions:
+            # dc can be "us-east1-b" or "us-east1"
+            assert "us-east1" in region_az, "only 'us-east1' region is supported"
+            if region_az.count("-") == 1:
+                # Available zones: b,c,d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
+                zone = random.choice("bccdd")  # make zone 'c' and 'd' selectable with higher probability than 'b'
+                region_az = f"{region_az}-{zone}"
+
+            gce_datacenter.append(region_az)
             services.append(service_cls(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                        gcp_credentials["private_key"], datacenter=i,
+                                        gcp_credentials["private_key"], datacenter=region_az,
                                         project=gcp_credentials["project_id"]))
+        TEST_LOG.info(f"Using GCE AZs: {gce_datacenter}")
         if len(services) > 1:
             assert len(services) == len(db_info['n_nodes'])
         user_credentials = self.params.get('user_credentials_path', None)
