@@ -19,8 +19,7 @@ class EventsAnalyzer(threading.Thread):
 
     def __init__(self):
         self.stop_event = threading.Event()
-        self.signal_sent = False
-        super(EventsAnalyzer, self).__init__()
+        super().__init__()
 
     @raise_event_on_failure
     def run(self):
@@ -51,9 +50,7 @@ class EventsAnalyzer(threading.Thread):
         if not Setup.tester_obj():
             LOGGER.error("no test was register using 'Setup.set_tester_obj()', not killing")
             return
-        if not self.signal_sent:
-            _test_pid = os.getpid()
-            Setup.tester_obj().result.addFailure(Setup.tester_obj(), backtrace_with_reason)
-            os.kill(_test_pid, signal.SIGUSR2)
-        else:
-            raise Exception(f"stop test signal already sent once, ignoreing: {str(backtrace_with_reason[1])}")
+        test_pid = os.getpid()
+        Setup.tester_obj().result.addFailure(Setup.tester_obj(), backtrace_with_reason)
+        os.kill(test_pid, signal.SIGUSR2)
+        self.terminate()
