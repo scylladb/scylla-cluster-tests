@@ -53,6 +53,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def set_hostname(self):
         pass
 
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        pass
+
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
