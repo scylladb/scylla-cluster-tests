@@ -52,24 +52,24 @@ def cli():
     pass
 
 
-'''
-Work in progress
+# '''
+# Work in progress
 
-from sdcm.tester import ClusterTester
+# from sdcm.tester import ClusterTester
 
-@cli.command()
-@click.option('--scylla-version', type=str, default='3.0.3')
-@sct_option('--db-nodes', 'n_db_nodes')
-@sct_option('--loader-nodes', 'n_loaders')
-@sct_option('--monitor-nodes', 'n_monitor_nodes')
-def provision(**kwargs):
-    logging.basicConfig(level=logging.INFO)
-    # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
-    # TODO: find a better way for ctrl+c to kill this process
-    test = ClusterTester(methodName='setUp')
-    test._setup_environment_variables()
-    test.setUp()
-'''  # pylint: disable=pointless-string-statement
+# @cli.command()
+# @click.option('--scylla-version', type=str, default='3.0.3')
+# @sct_option('--db-nodes', 'n_db_nodes')
+# @sct_option('--loader-nodes', 'n_loaders')
+# @sct_option('--monitor-nodes', 'n_monitor_nodes')
+# def provision(**kwargs):
+#     logging.basicConfig(level=logging.INFO)
+#     # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
+#     # TODO: find a better way for ctrl+c to kill this process
+#     test = ClusterTester(methodName='setUp')
+#     test._setup_environment_variables()
+#     test.setUp()
+# '''  # pylint: disable=pointless-string-statement
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
@@ -518,7 +518,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     test_results = read_email_data_from_file(email_results_file)
     if not test_results:
         LOGGER.warning("File with email results data not found")
-        return
+        sys.exit(1)
 
     email_recipients = email_recipients.split(',')
     reporter = build_reporter(test_results.get("reporter", ""), email_recipients, testrun_dir)
@@ -527,6 +527,7 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
         reporter.send_report(test_results)
     else:
         LOGGER.warning("No reporter found")
+        sys.exit(1)
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
