@@ -237,7 +237,7 @@ def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, s
         return False
 
 
-@retrying(n=3, sleep_time=3, message='Uploading sct dashboard')
+@retrying(n=3, sleep_time=20, message='Uploading sct dashboard')
 def restore_sct_dashboards(monitoring_dockers_dir, scylla_version):
     sct_dashboard_file_name = "scylla-dash-per-server-nemesis.{}.json".format(scylla_version)
     sct_dashboard_file = os.path.join(monitoring_dockers_dir,
@@ -272,7 +272,7 @@ def restore_sct_dashboards(monitoring_dockers_dir, scylla_version):
         raise
 
 
-@retrying(n=3, sleep_time=3, message='Uploading annotations data')
+@retrying(n=3, sleep_time=20, message='Uploading annotations data')
 def restore_annotations_data(monitoring_stack_dir):
     annotations_file = os.path.join(monitoring_stack_dir,
                                     'sct_monitoring_addons',
@@ -299,14 +299,14 @@ def restore_annotations_data(monitoring_stack_dir):
         raise
 
 
-@retrying(n=3, sleep_time=1, message='Start docker containers')
+@retrying(n=3, sleep_time=5, message='Start docker containers')
 def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):  # pylint: disable=unused-argument
     graf_port = GRAFANA_DOCKER_PORT
     alert_port = ALERT_DOCKER_PORT
     prom_port = PROMETHEUS_DOCKER_PORT
     lr = LocalCmdRunner()  # pylint: disable=invalid-name
     lr.run('cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}'.format(**locals()),
-           ignore_status=True)
+           ignore_status=True, verbose=False)
     cmd = dedent("""cd {monitoring_dockers_dir};
             ./start-all.sh \
             -g {graf_port} -m {alert_port} -p {prom_port} \
