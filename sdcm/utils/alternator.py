@@ -91,5 +91,7 @@ def ignore_alternator_client_errors():
                                     regex=".*YCSBTooManyVerifyErrors.*",
                                     severity=Severity.WARNING, extra_time_to_expiration=60), \
         EventsSeverityChangerFilter(event_class=YcsbStressEvent, regex=r".*Cannot achieve consistency level.*",
+                                    severity=Severity.WARNING, extra_time_to_expiration=30), \
+        EventsSeverityChangerFilter(event_class=YcsbStressEvent, regex=r".*Operation timed out.*",
                                     severity=Severity.WARNING, extra_time_to_expiration=30):
         yield
