@@ -1,5 +1,6 @@
 import os
 import time
+from textwrap import dedent
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
@@ -18,7 +19,6 @@ class CreateGCENodeError(Exception):
 
 def gce_create_metadata(extra_meta=None):
     tags = cluster.create_common_tags()
-    tags['startup-script'] = cluster.Setup.get_startup_script()
     if extra_meta:
         tags.update(extra_meta)
     return tags
@@ -293,6 +293,13 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
+        startup_script = cluster.Setup.get_startup_script()
+        if self.params.get("scylla_linux_distro", "") in ("ubuntu-bionic", "ubuntu-xenial"):
+            # we need to disable sshguard to prevent blocking connections from the builder
+            startup_script += dedent("""
+                systemctl disable sshguard
+                systemctl stop sshguard
+            """)
         create_node_params = dict(name=name,
                                   size=self._gce_instance_type,
                                   image=self._gce_image,
@@ -301,7 +308,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                   ex_metadata=gce_create_metadata(
                                       {'Name': name,
                                        'NodeIndex': node_index,
-                                       'NodeType': self.node_type}),
+                                       'NodeType': self.node_type,
+                                       'startup-script': startup_script}),
                                   ex_preemptible=spot)
         try:
             instance = self._gce_services[dc_idx].create_node(**create_node_params)
