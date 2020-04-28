@@ -1131,7 +1131,7 @@ def get_db_tables(session, ks, with_compact_storage=True):
     return output
 
 
-def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,  # pylint: disable=too-many-arguments
+def get_non_system_ks_cf_list(db_node, request_timeout=300, filter_out_table_with_counter=False,  # pylint: disable=too-many-arguments
                               filter_out_mv=False, filter_empty_tables=True):
     """Get all not system keyspace.tables pairs
 
@@ -1146,8 +1146,8 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
             cmd = "paging off; SELECT keyspace_name, view_name FROM system_schema.views"
         else:
             cmd = "paging off; SELECT keyspace_name, table_name, type FROM system_schema.columns"
-        result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
-                                       split=True, connect_timeout=request_timeout)
+        result = db_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False,
+                                   split=True, connect_timeout=request_timeout)
         if not result:
             return []
 
@@ -1191,8 +1191,8 @@ def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_
         for ks_cf in list(avaialable_ks_cf.keys()):
             cmd = f'SELECT * FROM {ks_cf} LIMIT 1'
             # TODO: make this work with cql python driver, but would need to refactor the session of of tester class
-            result = loader_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False, target_db_node=db_node,
-                                           split=False, connect_timeout=request_timeout)
+            result = db_node.run_cqlsh(cmd=cmd, timeout=request_timeout, verbose=False,
+                                       split=False, connect_timeout=request_timeout)
             if '(0 rows)' in result.stdout:
                 avaialable_ks_cf.pop(ks_cf)
 

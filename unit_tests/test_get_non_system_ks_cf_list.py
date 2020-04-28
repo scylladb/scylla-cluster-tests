@@ -9,7 +9,7 @@ RemoterResult = namedtuple('RemoterResult', ['stdout', 'stderr'])
 
 
 class DummyNode():  # pylint: disable=too-few-public-methods
-    def run_cqlsh(self, cmd, timeout, verbose, target_db_node, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
+    def run_cqlsh(self, cmd, timeout, verbose, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
         result = None
         if 'system_schema.views' in cmd:
             result = ['Disabled Query paging.', '',
@@ -81,13 +81,13 @@ class DummyNode():  # pylint: disable=too-few-public-methods
 
 class DummyNodeEmpty():  # pylint: disable=too-few-public-methods
 
-    def run_cqlsh(self, cmd, timeout, verbose, target_db_node, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
+    def run_cqlsh(self, cmd, timeout, verbose, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
         return ['Disabled Query paging.', '', '', '(2 rows)']
 
 
 class DummyNodeNone():  # pylint: disable=too-few-public-methods
 
-    def run_cqlsh(self, cmd, timeout, verbose, target_db_node, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
+    def run_cqlsh(self, cmd, timeout, verbose, split, connect_timeout):  # pylint: disable=too-many-arguments,unused-argument,no-self-use
         return None
 
 
@@ -97,38 +97,38 @@ class TestNonSystemEntityList(unittest.TestCase):
         dummy_node = DummyNode()
         expected_result = set(['mview.users', 'mview.users_by_first_name', 'keyspace1.standard1',
                                'mview.users_by_last_name', 'keyspace1.counter1'])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node)), expected_result)
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node)), expected_result)
 
     def test_filter_out_counter(self):
         dummy_node = DummyNode()
         expected_result = set(['mview.users', 'mview.users_by_first_name', 'keyspace1.standard1',
                                'mview.users_by_last_name'])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node,
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node,
                                                        filter_out_table_with_counter=True)), expected_result)
 
     def test_filter_out_mv(self):
         dummy_node = DummyNode()
         expected_result = set(['mview.users', 'keyspace1.standard1', 'keyspace1.counter1'])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node,
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node,
                                                        filter_out_mv=True)), expected_result)
 
     def test_filter_table_only_no_counter(self):  # pylint: disable=invalid-name
         dummy_node = DummyNode()
         expected_result = set(['mview.users', 'keyspace1.standard1'])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node,
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node,
                                                        filter_out_table_with_counter=True,
                                                        filter_out_mv=True)), expected_result)
 
     def test_empty_result(self):
         dummy_node = DummyNodeEmpty()
         expected_result = set([])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node,
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node,
                                                        filter_out_table_with_counter=True,
                                                        filter_out_mv=True)), expected_result)
 
     def test_none_result(self):
         dummy_node = DummyNodeNone()
         expected_result = set([])
-        self.assertEqual(set(get_non_system_ks_cf_list(loader_node=dummy_node, db_node=dummy_node,
+        self.assertEqual(set(get_non_system_ks_cf_list(db_node=dummy_node,
                                                        filter_out_table_with_counter=True,
                                                        filter_out_mv=True)), expected_result)

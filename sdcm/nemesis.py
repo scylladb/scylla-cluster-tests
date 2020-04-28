@@ -359,8 +359,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
 
     def _destroy_data_and_restart_scylla(self):
 
-        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                           db_node=self.target_node)
+        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
@@ -706,8 +705,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
-        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                           db_node=self.target_node,
+        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node,
                                            filter_out_table_with_counter=filter_out_table_with_counter,
                                            filter_out_mv=True)  # not allowed to modify MV
 
@@ -1078,8 +1076,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
         list_additional_params = get_compaction_random_additional_params()
-        ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
-                                           db_node=self.target_node)
+        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
@@ -1443,7 +1440,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             return toppartitions
 
         def generate_random_parameters_values():  # pylint: disable=invalid-name
-            ks_cf_list = get_non_system_ks_cf_list(self.loaders.nodes[0], self.cluster.nodes[0])
+            ks_cf_list = get_non_system_ks_cf_list(self.target_node)
             if not ks_cf_list:
                 raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
             try:
