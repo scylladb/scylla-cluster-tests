@@ -1008,7 +1008,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
             # "Error decoding response from Cassandra":
             # failure like: Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
-            if 'timed out' in details.message or 'unpack requires' in details.message or db_node.running_nemesis:
+            if 'timed out' in str(details) or 'unpack requires' in str(details) or 'timeout' in str(details)\
+                    or db_node.running_nemesis:
                 severity = Severity.WARNING
             else:
                 severity = Severity.ERROR
