@@ -11,5 +11,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-large-collections-12h.yaml',
 
-    timeout: [time: 780, unit: 'MINUTES']
+    timeout: [time: 870, unit: 'MINUTES']
 )
