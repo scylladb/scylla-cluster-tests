@@ -858,7 +858,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan(self, ks_cf, loader_node, db_node, page_size=100000):
+    def run_fullscan(self, ks_cf, db_node, page_size=100000):
         """Run cql select count(*) request
 
         if ks_cf is not random, use value from config
@@ -871,7 +871,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Returns:
             object -- object with result of remoter.run command
         """
-        ks_cf_list = get_non_system_ks_cf_list(loader_node, db_node)
+        ks_cf_list = get_non_system_ks_cf_list(db_node)
         if ks_cf not in ks_cf_list:
             ks_cf = 'random'
 
@@ -927,9 +927,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         def run_in_thread():
             start = current = time.time()
             while current - start < duration:
-                loader_node = random.choice(self.loaders.nodes)
                 db_node = random.choice(self.db_cluster.nodes)
-                self.run_fullscan(ks_cf, loader_node, db_node)
+                self.run_fullscan(ks_cf, db_node)
                 time.sleep(interval)
                 current = time.time()
 
@@ -1589,7 +1588,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             table, scylla_encryption_options="{'key_provider': 'none'}", upgradesstables=upgradesstables)
 
     def alter_test_tables_encryption(self, scylla_encryption_options=None, upgradesstables=True):
-        for table in get_non_system_ks_cf_list(self.loaders.nodes[0], self.db_cluster.nodes[0], filter_out_mv=True):
+        for table in get_non_system_ks_cf_list(self.db_cluster.nodes[0], filter_out_mv=True):
             self.alter_table_encryption(
                 table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
 
