@@ -917,7 +917,7 @@ class SCTConfiguration(dict):
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="update_cdclog_reader_stats", env="SCT_UPDATE_CDCLOG_READER_STATS",
+        dict(name="store_cdclog_reader_stats_in_es", env="SCT_STORE_CDCLOG_READER_STATS_IN_ES",
              type=boolean,
              help="""Add cdclog reader stats to ES for future performance result calculating"""),
 

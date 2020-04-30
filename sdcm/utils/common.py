@@ -1788,3 +1788,13 @@ class PageFetcher:
         Returns bool indicating if there are any pages not retrieved.
         """
         return self.future.has_more_pages
+
+
+def get_docker_stress_image_name(tool_name=None):
+    if not tool_name:
+        return None
+    base_path = os.path.dirname(os.path.dirname((os.path.dirname(__file__))))
+    with open(os.path.join(base_path, "docker", tool_name, "image"), "r") as image_file:
+        result = image_file.read()
+
+    return result.strip()

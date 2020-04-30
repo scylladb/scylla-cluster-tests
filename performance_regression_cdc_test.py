@@ -95,7 +95,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         if use_cdclog_reader:
             self.cdclog_reader_cmd = self.params.get('stress_cdclog_reader_cmd')
-            update_es = self.params.get('update_cdclog_reader_stats', default=False)
+            update_es = self.params.get('store_cdclog_reader_stats_in_es')
 
         self._workload_cdc(write_cmd,
                            stress_num=2,
