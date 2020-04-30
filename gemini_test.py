@@ -70,7 +70,7 @@ class GeminiTest(ClusterTester):
     def test_gemini_and_cdc_reader(self):
         gemini_cmd = self.params.get('gemini_cmd')
         cdc_stress = self.params.get('stress_cdclog_reader_cmd')
-        update_es = self.params.get('update_cdclog_reader_stats')
+        update_es = self.params.get('store_cdclog_reader_stats_in_es')
 
         gemini_queue = self.run_gemini(cmd=gemini_cmd)
 

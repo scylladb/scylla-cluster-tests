@@ -1,4 +1,3 @@
-import time
 import logging
 import uuid
 import pprint
@@ -7,7 +6,7 @@ from pathlib import Path
 from typing import List, Dict
 
 from sdcm.sct_events import CDCReaderStressEvent, Severity
-from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.common import get_docker_stress_image_name
 from sdcm.utils.thread import DockerBasedStressThread
 from sdcm.utils.docker import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error
@@ -15,28 +14,8 @@ from sdcm.stress_thread import format_stress_cmd_error
 LOGGER = logging.getLogger(__name__)
 
 CDC_LOGTABLE_SUFFIX = "_scylla_cdc_log"
-CDCLOG_READER_IMAGE = 'scylladb/hydra-loaders:cdc-stresser-v1'
+CDCLOG_READER_IMAGE = get_docker_stress_image_name(tool_name="cdcstressor")
 PP = pprint.PrettyPrinter(indent=2)
-
-
-class CDCLogReaderStatsPublisher(FileFollowerThread):
-    def __init__(self, loader_node, loader_idx, cdclogreader_filename):
-        super().__init__()
-        self.loader_node = loader_node
-        self.loader_idx = loader_idx
-        self.cdcreader_filename = Path(cdclogreader_filename)
-
-    def run(self):
-        while True:
-            if self.cdcreader_filename.exists():
-                time.sleep(0.5)
-                continue
-
-            for _, line in enumerate(self.follow_file(self.cdcreader_filename)):
-                LOGGER.debug(line)
-
-            if self.stopped():
-                break
 
 
 class CDCLogReaderThread(DockerBasedStressThread):
@@ -76,28 +55,25 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
         CDCReaderStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
 
-        with CDCLogReaderStatsPublisher(loader, loader_idx, cdclogreader_filename=log_file_name):
-            try:
-                result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + self.shutdown_timeout,
-                                    ignore_status=True,
-                                    log_file=log_file_name,
-                                    verbose=True)
-                if not result.ok:
-                    CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                         severity=Severity.ERROR,
-                                         errors=result.stderr.split("\n"))
-
-                return result
-            except Exception as exc:  # pylint: disable=broad-except
-                errors_str = format_stress_cmd_error(exc)
+        try:
+            result = docker.run(cmd=node_cmd,
+                                timeout=self.timeout + self.shutdown_timeout,
+                                ignore_status=True,
+                                log_file=log_file_name,
+                                verbose=True)
+            if not result.ok:
                 CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
                                      severity=Severity.ERROR,
-                                     errors=errors_str)
-            finally:
-                CDCReaderStressEvent('finish', node=loader, stress_cmd=self.stress_cmd)
+                                     errors=result.stderr.split("\n"))
 
-        return result
+            return result
+        except Exception as exc:  # pylint: disable=broad-except
+            errors_str = format_stress_cmd_error(exc)
+            CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
+                                 severity=Severity.ERROR,
+                                 errors=errors_str)
+        finally:
+            CDCReaderStressEvent('finish', node=loader, stress_cmd=self.stress_cmd)
 
     @staticmethod
     def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:
@@ -128,7 +104,8 @@ class CDCLogReaderThread(DockerBasedStressThread):
         """
         cdcreader_cs_keys_map = {
             # {"num rows read": ["num rows read"]},
-            "rows read/s": ["op rate", "partition rate", "row rate"],
+            "rows read/s": ["partition rate", "row rate"],
+            "polls/s": ["op rate"],
             "latency min": ["latency min"],
             "latency avg": ["latency mean"],
             "latency median": ["latency median"],
@@ -150,7 +127,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
             name = res[0].strip()
             value = res[1].strip()
             if name in cdcreader_cs_keys_map:
-                if name == "rows read/s":
+                if name in ["rows read/s", "polls/s"]:
                     for replace_name in cdcreader_cs_keys_map[name]:
                         result[replace_name] = value.split("/")[0]
                 else:

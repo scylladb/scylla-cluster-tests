@@ -148,8 +148,12 @@ def get_raw_cmd_params(cmd):
     return cmd_params
 
 
+def get_gemini_cmd_params(cmd):
+    return get_raw_cmd_params(cmd)
+
+
 def get_cdcreader_cmd_params(cmd):
-    return get_gemini_cmd_params(cmd)
+    return get_raw_cmd_params(cmd)
 
 
 class PrometheusDBStats():
