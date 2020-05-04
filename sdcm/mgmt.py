@@ -633,14 +633,20 @@ class ScyllaManagerTool(ScyllaManagerBase):
         """
         Returns Manager Cluster object by a given name if exist, else returns none.
         """
-        # ╭──────────────────────────────────────┬──────────┬─────────────┬────────────────╮
-        # │ cluster id                           │ name     │ host        │ ssh user       │
-        # ├──────────────────────────────────────┼──────────┼─────────────┼────────────────┤
-        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ Dev_Test │ 10.142.0.25 │ scylla-manager │
-        # │ bf6571ef-21d9-4cf1-9f67-9d05bc07b32e │ Prod     │ 10.142.0.26 │ scylla-manager │
-        # ╰──────────────────────────────────────┴──────────┴─────────────┴────────────────╯
+        # ╭──────────────────────────────────────┬──────────╮
+        # │ cluster id                           │ name     │
+        # ├──────────────────────────────────────┼──────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ Dev_Test │
+        # │ bf6571ef-21d9-4cf1-9f67-9d05bc07b32e │ Prod     │
+        # ╰──────────────────────────────────────┴──────────╯
         try:
-            cluster_id = self.sctool.get_table_value(parsed_table=self.cluster_list, column_name="cluster id",
+            cluster_list = self.cluster_list
+            column_names = cluster_list[0]
+            if "ID" in column_names:
+                column_to_search = "ID"
+            else:
+                column_to_search = "cluster id"
+            cluster_id = self.sctool.get_table_value(parsed_table=cluster_list, column_name=column_to_search,
                                                      identifier=cluster_name)
         except ScyllaManagerError as ex:
             LOGGER.warning("Cluster name not found in Scylla-Manager: {}".format(ex))
