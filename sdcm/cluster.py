@@ -1759,6 +1759,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def install_manager_agent(self, package_path=None):
         auth_token = Setup.test_id()
+        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port", 5090)
         if package_path:
             package_name = '{}scylla-manager-agent*'.format(package_path)
         else:
@@ -1772,9 +1773,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+            sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             systemctl restart scylla-manager-agent
             systemctl enable scylla-manager-agent
-        """.format(package_name, auth_token))
+        """.format(package_name, auth_token, manager_prometheus_port))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
         version = self.remoter.run('scylla-manager-agent --version').stdout
         self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
@@ -2099,13 +2101,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo systemctl restart scylla-manager.service')
             res = self.remoter.run('sudo systemctl status scylla-manager.service')
 
+        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port", 5090)
         if self.is_rhel_like():  # TODO: Add debian and ubuntu support
             configuring_manager_command = dedent("""
             scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
+            sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager/scylla-manager.yaml
             systemctl restart scylla-manager
-            """.format(auth_token))  # pylint: disable=too-many-format-args
+            """.format(manager_prometheus_port))  # pylint: disable=too-many-format-args
             self.remoter.run('sudo bash -cxe "%s"' % configuring_manager_command)
 
         if not res or "Active: failed" in res.stdout:
