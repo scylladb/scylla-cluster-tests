@@ -952,7 +952,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _create_session(self, node, keyspace, user, password, compression,  # pylint: disable=too-many-arguments, too-many-locals
                         protocol_version, load_balancing_policy=None,
-                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None):
+                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
+                        verbose=True):
         if not port:
             port = node.CQL_PORT
 
@@ -992,29 +993,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # override driver default consistency level of LOCAL_QUORUM
         session.default_consistency_level = ConsistencyLevel.ONE
 
-        return ScyllaCQLSession(session, cluster_driver)
+        return ScyllaCQLSession(session, cluster_driver, verbose)
 
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
-                       port=None, ssl_opts=None, connect_timeout=100):
+                       port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         # TODO: ask Bentsi why it was reverted (PR #1236)
         node_ips = self.db_cluster.get_node_external_ips()
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout)
+                                    connect_timeout=connect_timeout, verbose=verbose)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
-                                 ssl_opts=None, connect_timeout=100):
+                                 ssl_opts=None, connect_timeout=100, verbose=True):
 
         wlrr = WhiteListRoundRobinPolicy([node.external_address])
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
                                     port=port, ssl_opts=ssl_opts, node_ips=[node.external_address],
-                                    connect_timeout=connect_timeout)
+                                    connect_timeout=connect_timeout, verbose=verbose)
 
     # TODO: Temporary function. Will be removed
     def get_rows_count(self, node, keyspace_name, table_name):
@@ -1031,7 +1032,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
                                user=None, password=None,
                                compression=True, protocol_version=None,
-                               port=None, ssl_opts=None, connect_timeout=100):
+                               port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
@@ -1047,7 +1048,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                          user=None, password=None, timeout=30,
                                          compression=True,
                                          protocol_version=None,
-                                         port=None, ssl_opts=None, connect_timeout=100):
+                                         port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
