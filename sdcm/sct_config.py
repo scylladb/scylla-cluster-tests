@@ -207,6 +207,9 @@ class SCTConfiguration(dict):
         dict(name="mgmt_segments_per_repair", env="MGMT_SEGMENTS_PER_REPAIR", type=int,
              help="the number of segments per repair used for the manager's repair"),
 
+        dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
+             help="Port to be used by the manager to contact Prometheus"),
+
         dict(name="update_db_packages", env="SCT_UPDATE_DB_PACKAGES", type=str,
              help="""A local directory of rpms to install a custom version on top of
                      the scylla installed (or from repo or from ami)"""),
