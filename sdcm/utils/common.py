@@ -952,9 +952,10 @@ class FileFollowerThread():
 
 
 class ScyllaCQLSession:
-    def __init__(self, session, cluster):
+    def __init__(self, session, cluster, verbose=True):
         self.session = session
         self.cluster = cluster
+        self.verbose = verbose
 
     def __enter__(self):
         execute_orig = self.session.execute
@@ -967,7 +968,8 @@ class ScyllaCQLSession:
             LOGGER.debug(f"Executing CQL '{query}'...")
             return execute_orig(*args, **kwargs)
 
-        self.session.execute = execute_verbose
+        if self.verbose:
+            self.session.execute = execute_verbose
         return self.session
 
     def __exit__(self, exc_type, exc_val, exc_tb):
