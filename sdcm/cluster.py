@@ -2360,7 +2360,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             return
 
-        resharding_finished = wait.wait_for(func=self._resharding_status, step=5,
+        # Decrease nodetool compactionstats calls from 5sec to 1min to avoid the noise
+        resharding_finished = wait.wait_for(func=self._resharding_status, step=60,
                                             text="Wait for re-sharding to be finished", status='finish')
 
         if not resharding_finished:
