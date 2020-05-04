@@ -354,6 +354,11 @@ class SCTConfiguration(dict):
         dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=boolean,
              help="""Run nemesis during prepare stage of the test"""),
 
+        dict(name="nemesis_add_node_cnt",
+             env="SCT_NEMESIS_ADD_NODE_CNT",
+             type=int,
+             help="""Add/remove nodes during GrowShrinkCluster nemesis"""),
+
         dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
              help="""Used for scale test: max size of the cluster"""),
 

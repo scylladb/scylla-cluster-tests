@@ -69,7 +69,11 @@ class NoMandatoryParameter(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
 
 
-class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class NodeStayInClusterAfterDecommission(Exception):
+    """ raise after decommission finished but node stay in cluster"""
+
+
+class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
     run_with_gemini = True
@@ -440,41 +444,46 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
-    def disrupt_nodetool_decommission(self, add_node=True):
-        # pylint: disable=too-many-locals
-
-        def get_node_info_list(verification_node):
+    def _decommission_cluster_node(self, node):
+        def get_node_ip_list(verification_node):
             try:
-                return self.cluster.get_node_info_list(verification_node)
+                ip_node_list = []
+                status = self.cluster.get_nodetool_status(verification_node)
+                for nodes_ips in status.values():
+                    ip_node_list.extend(nodes_ips.keys())
+                return ip_node_list
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error(str(details))
                 return None
 
-        self._set_current_disruption('Decommission %s' % self.target_node)
-        target_node_ip = self.target_node.ip_address
-        self.target_node.run_nodetool("decommission")
+        target_node_ip = node.ip_address
+        node.run_nodetool("decommission")
         verification_node = random.choice(self.cluster.nodes)
-        node_info_list = get_node_info_list(verification_node)
-        while verification_node == self.target_node or node_info_list is None:
+        node_ip_list = get_node_ip_list(verification_node)
+        while verification_node == node or node_ip_list is None:
             verification_node = random.choice(self.cluster.nodes)
-            node_info_list = get_node_info_list(verification_node)
+            node_ip_list = get_node_ip_list(verification_node)
 
-        nodetool_ips = [node_info['ip'] for node_info in node_info_list]
-        error_msg = ('Node that was decommissioned %s still in the cluster. '
-                     'Cluster status info: %s' % (self.target_node,
-                                                  node_info_list))
-        if target_node_ip in nodetool_ips:
-            self.log.info('Decommission %s FAIL', self.target_node)
+        if target_node_ip in node_ip_list:
+            cluster_status = self.cluster.get_nodetool_status(verification_node)
+            error_msg = ('Node that was decommissioned %s still in the cluster. '
+                         'Cluster status info: %s' % (node,
+                                                      cluster_status))
+
+            self.log.error('Decommission %s FAIL', node)
             self.log.error(error_msg)
-        else:
-            self.log.info('Decommission %s PASS', self.target_node)
-            self._terminate_cluster_node(self.target_node)
-            # Replace the node that was terminated.
-            new_node = None
-            if add_node:
-                # When adding node after decommission the node is declared as up only after it completed bootstrapping,
-                # increasing the timeout for now
-                new_node = self._add_and_init_new_cluster_node()
+            raise NodeStayInClusterAfterDecommission(error_msg)
+
+        self.log.info('Decommission %s PASS', node)
+        self._terminate_cluster_node(node)
+
+    def disrupt_nodetool_decommission(self, add_node=True):
+        self._set_current_disruption('Decommission %s' % self.target_node)
+        self._decommission_cluster_node(self.target_node)
+        if add_node:
+            # When adding node after decommission the node is declared as up only after it completed bootstrapping,
+            # increasing the timeout for now
+            new_node = self._add_and_init_new_cluster_node()
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -1872,7 +1881,7 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt_grow_shrink_cluster(self):
-        add_nodes_number = self.tester.params.get('add_node_cnt')
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
 
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
@@ -1892,8 +1901,11 @@ class Nemesis():  # pylint: disable=too-many-instance-attributes,too-many-public
             self.set_target_node()
             self.log.info("Next node will be removed %s", self.target_node)
             self.metrics_srv.event_start('del_node')
-            self.disrupt_nodetool_decommission(add_node=False)
-            self.metrics_srv.event_stop('del_node')
+            try:
+                self._decommission_cluster_node(self.target_node)
+            finally:
+                self.metrics_srv.event_stop('del_node')
+
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
 
