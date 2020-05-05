@@ -250,6 +250,35 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertIn('critical that should be lowered', log_content_after)
         self.assertIn('critical that should be lowered #2', log_content_after)
 
+    def test_severity_changer_db_log(self):
+        """
+        https://github.com/scylladb/scylla-cluster-tests/issues/2115
+        """
+        # 1) lower DatabaseLogEvent to warning for 1sec
+        log_content_before = self.get_event_log_file('warning.log')
+        with EventsSeverityChangerFilter(event_class=DatabaseLogEvent, severity=Severity.WARNING, extra_time_to_expiration=1):
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                    line='critical that should be lowered')
+
+        DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                line='critical that should be lowered #2')
+
+        log_content_after = self.wait_for_event_log_change('warning.log', log_content_before)
+        self.assertIn('DatabaseLogEvent', log_content_after)
+        self.assertIn('critical that should be lowered', log_content_after)
+        self.assertIn('critical that should be lowered #2', log_content_after)
+
+        # 2) one of the next DatabaseLogEvent event should expire the EventsSeverityChangerFilter
+        # (and not crash all subscribers)
+        log_content_before = self.get_event_log_file('error.log')
+        for _ in range(2):
+            time.sleep(1)
+            DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
+                                                                                    line='critical that should be lowered #2')
+
+        log_content_after = self.wait_for_event_log_change('error.log', log_content_before)
+        self.assertIn('critical that should be lowered #2', log_content_after)
+
     def test_ycsb_filter(self):
         log_content_before = self.get_event_log_file('events.log')
 
