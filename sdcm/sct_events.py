@@ -121,7 +121,7 @@ class EventsDevice(Process):
                     # specific node is bigger the time filter was canceled
                     for filter_key, filter_obj in list(filters.items()):
                         if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
-                            if (isinstance(obj, DatabaseLogEvent) and filter_obj.node == obj.node) or \
+                            if (isinstance(obj, DatabaseLogEvent) and getattr(filter_obj, 'node', '') == obj.node) or \
                                     isinstance(filter_obj, EventsFilter):
                                 del filters[filter_key]
 
