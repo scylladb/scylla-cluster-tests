@@ -2897,6 +2897,9 @@ class FillDatabaseData(ClusterTester):
         for item in self.all_verification_items:
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for create_table in item['create_tables']:
+                    # wait a while before creating index, there is a delay of create table for waiting the schema agreement
+                    if 'CREATE INDEX' in create_table.upper():
+                        time.sleep(10)
                     session.execute(create_table)
                 for truncate in item['truncates']:
                     truncates.append(truncate)
