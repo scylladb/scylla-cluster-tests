@@ -641,11 +641,11 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # ╰──────────────────────────────────────┴──────────╯
         try:
             cluster_list = self.cluster_list
-            column_names = cluster_list[0]
-            if "ID" in column_names:
-                column_to_search = "ID"
-            else:
-                column_to_search = "cluster id"
+            column_to_search = "ID"
+            if cluster_list:
+                column_names = cluster_list[0]
+                if "cluster id" in column_names:
+                    column_to_search = "cluster id"
             cluster_id = self.sctool.get_table_value(parsed_table=cluster_list, column_name=column_to_search,
                                                      identifier=cluster_name)
         except ScyllaManagerError as ex:
