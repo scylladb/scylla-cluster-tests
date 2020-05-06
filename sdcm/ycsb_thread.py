@@ -106,9 +106,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             target_address = 'alternator'
         else:
             if getattr(self.node_list[0], 'parent_cluster'):
-                target_address = self.node_list[0].parent_cluster.get_node().private_ip_address
+                target_address = self.node_list[0].parent_cluster.get_node().ip_address
             else:
-                target_address = self.node_list[0].private_ip_address
+                target_address = self.node_list[0].ip_address
 
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
