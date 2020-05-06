@@ -1882,6 +1882,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_grow_shrink_cluster(self):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        self.target_node.running_nemesis = None
 
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
