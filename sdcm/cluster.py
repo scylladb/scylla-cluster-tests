@@ -299,6 +299,10 @@ class ScyllaRequirementError(Exception):
     pass
 
 
+class NodeStayInClusterAfterDecommission(Exception):
+    """ raise after decommission finished but node stay in cluster"""
+
+
 def prepend_user_prefix(user_prefix, base_name):
     if not user_prefix:
         user_prefix = DEFAULT_USER_PREFIX
@@ -3460,6 +3464,40 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
 
         for node in self.nodes:
             node.run_nodetool('repair')
+
+    def decommission(self, node):
+        def get_node_ip_list(verification_node):
+            try:
+                ip_node_list = []
+                status = self.get_nodetool_status(verification_node)
+                for nodes_ips in status.values():
+                    ip_node_list.extend(nodes_ips.keys())
+                return ip_node_list
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error(str(details))
+                return None
+
+        target_node_ip = node.ip_address
+        node.run_nodetool("decommission")
+        verification_node = random.choice(self.nodes)
+        node_ip_list = get_node_ip_list(verification_node)
+        while verification_node == node or node_ip_list is None:
+            verification_node = random.choice(self.nodes)
+            node_ip_list = get_node_ip_list(verification_node)
+
+        if target_node_ip in node_ip_list:
+            cluster_status = self.get_nodetool_status(verification_node)
+            error_msg = ('Node that was decommissioned %s still in the cluster. '
+                         'Cluster status info: %s' % (node,
+                                                      cluster_status))
+
+            LOGGER.error('Decommission %s FAIL', node)
+            LOGGER.error(error_msg)
+            raise NodeStayInClusterAfterDecommission(error_msg)
+
+        LOGGER.info('Decommission %s PASS', node)
+        self.terminate_node(node)  # pylint: disable=no-member
+        Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
 
 
 class BaseLoaderSet():
