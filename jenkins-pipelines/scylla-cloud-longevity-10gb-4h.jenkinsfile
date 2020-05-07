@@ -7,8 +7,8 @@ scyllaCloudLongevityPipeline(
     params: params,
 
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
-    n_db_nodes: '3',
-    db_instance_type: 'i3.xlarge',
+    test_config: 'test-cases/longevity/longevity-10gb-4h.yaml',
+    n_db_nodes: '6',
+    db_instance_type: 'i3.x2large',
     timeout: [time: 260, unit: 'MINUTES']
 )
