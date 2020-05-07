@@ -2854,7 +2854,17 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
 
 
 class NodeSetupFailed(Exception):
-    pass
+    def __init__(self, node, error_msg, traceback_str=""):
+        super(NodeSetupFailed, self).__init__(error_msg)
+        self.node = node
+        self.error_msg = error_msg
+        self.traceback_str = "\n" + traceback_str if traceback_str else ""
+
+    def __str__(self):
+        return f"[{self.node}] NodeSetupFailed: {self.error_msg}{self.traceback_str}"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class NodeSetupTimeout(Exception):
