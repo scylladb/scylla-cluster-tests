@@ -22,6 +22,7 @@ import re
 import tempfile
 import threading
 import time
+import traceback
 import uuid
 import itertools
 from typing import List, Optional, Dict
@@ -2784,7 +2785,17 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
 
 
 class NodeSetupFailed(Exception):
-    pass
+    def __init__(self, node, error_msg, traceback_str=""):
+        super(NodeSetupFailed, self).__init__(error_msg)
+        self.node = node
+        self.error_msg = error_msg
+        self.traceback_str = "\n" + traceback_str if traceback_str else ""
+
+    def __str__(self):
+        return f"[{self.node}] NodeSetupFailed: {self.error_msg}{self.traceback_str}"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class NodeSetupTimeout(Exception):
@@ -2808,15 +2819,13 @@ def wait_for_init_wrap(method):
         _queue = queue.Queue()
 
         @raise_event_on_failure
-        def node_setup(node):
-            status = True
+        def node_setup(_node):
+            exception_details = None
             try:
-                cl_inst.node_setup(node, **setup_kwargs)
-            except Exception:  # pylint: disable=broad-except
-                cl_inst.log.exception('Node setup failed: %s', str(node))
-                status = False
-
-            _queue.put((node, status))
+                cl_inst.node_setup(_node, **setup_kwargs)
+            except Exception as ex:  # pylint: disable=broad-except
+                exception_details = (str(ex), traceback.format_exc())
+            _queue.put((_node, exception_details))
             _queue.task_done()
 
         start_time = time.time()
@@ -2832,9 +2841,9 @@ def wait_for_init_wrap(method):
         while len(results) != len(node_list):
             time_elapsed = time.time() - start_time
             try:
-                node, node_status = _queue.get(block=True, timeout=5)
-                if not node_status:
-                    raise NodeSetupFailed(f"{node}:{node_status}")
+                node, setup_exception = _queue.get(block=True, timeout=5)
+                if setup_exception:
+                    raise NodeSetupFailed(node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
@@ -3297,7 +3306,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             if node.is_scylla_installed():
                 install_scylla = False
             else:
-                raise NodeSetupFailed(f"There is no pre-installed ScyllaDB on {node}")
+                raise Exception("There is no pre-installed ScyllaDB")
 
         if not Setup.REUSE_CLUSTER:
             if install_scylla:
