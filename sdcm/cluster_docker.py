@@ -229,7 +229,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         node.wait_ssh_up(verbose=verbose)
 
         if not node.is_scylla_installed():
-            raise cluster.NodeSetupFailed(f"There is no pre-installed ScyllaDB on {node}")
+            raise Exception(f"There is no pre-installed ScyllaDB")
 
         self.check_aio_max_nr(node)
 
