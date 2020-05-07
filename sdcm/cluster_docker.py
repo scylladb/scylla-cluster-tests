@@ -292,6 +292,12 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         seed_address = ','.join(self.seed_nodes_ips)
 
         node.wait_ssh_up(verbose=verbose)
+
+        if not node.is_scylla_installed():
+            raise Exception(f"There is no pre-installed ScyllaDB")
+
+        self.check_aio_max_nr(node)
+
         if cluster.Setup.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
