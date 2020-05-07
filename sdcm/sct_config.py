@@ -137,6 +137,9 @@ class SCTConfiguration(dict):
         dict(name="cloud_credentials_path", env="SCT_CLOUD_CREDENTIALS_PATH", type=str,
              help="""Path to your user credentials. qa key are downloaded automatically from S3 bucket"""),
 
+        dict(name="cloud_cluster_id", env="SCT_CLOUD_CLUSTER_ID", type=int,
+             help="""scylla cloud cluster id"""),
+
         dict(name="cloud_prom_bearer_token", env="SCT_CLOUD_PROM_BEARER_TOKEN", type=str,
              help="""scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance"""),
 
@@ -944,8 +947,8 @@ class SCTConfiguration(dict):
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "security_group_ids", "subnet_id",
-                      "cloud_credentials_path", "authenticator_user", "authenticator_password", "db_nodes_public_ip",
-                      "db_nodes_private_ip", "nemesis_filter_seeds"]
+                      "cloud_credentials_path", "authenticator_user", "authenticator_password", "cloud_cluster_id",
+                      "nemesis_filter_seeds"]
     }
 
     defaults_config_files = {
