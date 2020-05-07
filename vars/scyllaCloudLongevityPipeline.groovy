@@ -1,5 +1,13 @@
 #!groovy
 
+def getSirenTestConfig(Map pipelineParams) {
+    def arrayfy = {[] + it ?: [it]}
+    def test_config = arrayfy(pipelineParams.test_config)
+    def cloud_config = sh(returnStdout: true, script:"realpath ../siren-tests/test_results/scylla_cloud.yaml").trim()
+    test_config.add(1, cloud_config) // TODO: change back to append in the end, using only cloud_cluster_id
+    return groovy.json.JsonOutput.toJson(test_config)
+}
+
 def call(Map pipelineParams) {
     pipeline {
         agent {
@@ -12,6 +20,10 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
         }
         parameters {
+            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+               description: 'us-east-1|eu-west-1',
+               name: 'aws_region')
+
             string(defaultValue: "${pipelineParams.get('db_instance_type', 'i3.xlarge')}",
                    description: 'any type support by scylla cloud',
                    name: 'db_instance_type')
@@ -62,8 +74,11 @@ def call(Map pipelineParams) {
             }
             stage('Create Cluster with siren-tests') {
                 steps {
+                    script {
                         wrap([$class: 'BuildUser']) {
                             dir('siren-tests') {
+                                def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                Integer cluster_keep = (pipelineParams.timeout.time / 60) + 1
                                 sh """
                                 #!/bin/bash
                                 set -xe
@@ -74,43 +89,49 @@ def call(Map pipelineParams) {
                                 # update the environment
                                 ~/.local/bin/pipenv --bare install
 
-                                export SIRENADA_REGION=eu-west-1
+                                export SIRENADA_REGION=${aws_region}
                                 export SIRENADA_NUMBER_OF_NODES=${params.n_db_nodes}
-                                export SIRENADA_CLUSTER_KEEP=50
+                                export SIRENADA_CLUSTER_KEEP=${cluster_keep}
                                 export SIRENADA_INSTANCE_TYPE=${params.db_instance_type}
 
                                 ~/.local/bin/pipenv run ./runtests.py --sct-conf
                                 """
                             }
                         }
+                    }
                 }
             }
             stage('Run SCT Test') {
                 steps {
-                    catchError(stageResult: 'FAILURE') {
-                        wrap([$class: 'BuildUser']) {
-                            dir('scylla-cluster-tests') {
-                                sh """
-                                #!/bin/bash
-                                set -xe
-                                env
+                    script {
+                        catchError(stageResult: 'FAILURE') {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def test_config = getSirenTestConfig(pipelineParams)
 
-                                export SCT_CLUSTER_BACKEND=aws-siren
-                                export SCT_INTRA_NODE_COMM_PUBLIC=true
-                                export SCT_REGION_NAME=eu-west-1
-                                export SCT_CONFIG_FILES="['${pipelineParams.test_config}', '`realpath ../siren-tests/test_results/scylla_cloud.yaml`']"
+                                    sh """
+                                    #!/bin/bash
+                                    set -xe
+                                    env
 
-                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
-                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+                                    export SCT_CLUSTER_BACKEND=aws-siren
+                                    export SCT_INTRA_NODE_COMM_PUBLIC=true
+                                    export SCT_REGION_NAME=${aws_region}
+                                    export SCT_CONFIG_FILES='${test_config}'
 
-                                echo "start test ......."
-                                ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend aws-siren --logdir /sct
-                                echo "end test ....."
-                               """
+                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                    export SCT_INSTANCE_PROVISION=${pipelineParams.params.get('provision_type', '')}
+                                    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+
+                                    echo "start test ......."
+                                    ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend aws-siren --logdir /sct
+                                    echo "end test ....."
+                                   """
+                                }
                             }
                         }
                     }
@@ -122,7 +143,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                    def test_config = getSirenTestConfig(pipelineParams)
 
                                     sh """
                                     #!/bin/bash
@@ -130,7 +151,7 @@ def call(Map pipelineParams) {
                                     set -xe
                                     env
 
-                                    export SCT_CONFIG_FILES=${test_config}
+                                    export SCT_CONFIG_FILES='${test_config}'
 
                                     echo "start collect logs ..."
                                     ./docker/env/hydra.sh collect-logs --logdir /sct --backend aws
@@ -149,7 +170,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
-                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                    def test_config = getSirenTestConfig(pipelineParams)
 
                                     sh """
                                     #!/bin/bash
@@ -157,7 +178,7 @@ def call(Map pipelineParams) {
                                     set -xe
                                     env
 
-                                    export SCT_CONFIG_FILES=${test_config}
+                                    export SCT_CONFIG_FILES='${test_config}'
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
