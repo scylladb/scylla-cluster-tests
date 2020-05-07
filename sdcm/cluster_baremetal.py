@@ -70,21 +70,16 @@ class PhysicalMachineNode(cluster.BaseNode):
 
 
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
-
     def __init__(self, **kwargs):
         self.nodes = []
-        self.credentials = kwargs.get('credentials')
-        params = kwargs.get('params')
+        self.credentials = kwargs.pop('credentials')
         n_nodes = kwargs.get('n_nodes')
         self._node_public_ips = kwargs.get('public_ips', None) or []
         self._node_private_ips = kwargs.get('private_ips', None) or []
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
-        super(PhysicalMachineCluster, self).__init__(node_prefix=kwargs.get('node_prefix'),
-                                                     n_nodes=n_nodes,
-                                                     params=params,
-                                                     node_type=kwargs.get('node_type'))
+        super(PhysicalMachineCluster, self).__init__(**kwargs)
 
     def _create_node(self, name, public_ip, private_ip):
         node = PhysicalMachineNode(name,
@@ -108,11 +103,13 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
-        self._user_prefix = kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX)
-        self._node_prefix = '%s-%s' % (self._user_prefix, BASE_NAME)
-        super(ScyllaPhysicalCluster, self).__init__(node_prefix=kwargs.get('node_prefix', self._node_prefix),
-                                                    node_type='scylla-db',
-                                                    **kwargs)
+        user_prefix = kwargs.pop('user_prefix')
+        kwargs.update(dict(
+            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
+            node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
+            node_type='scylla-db'
+        ))
+        super(ScyllaPhysicalCluster, self).__init__(**kwargs)
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
@@ -126,8 +123,13 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
-        self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), LOADER_NAME)
-        super(LoaderSetPhysical, self).__init__(node_prefix=self._node_prefix, node_type='loader', **kwargs)
+        user_prefix = kwargs.pop('user_prefix')
+        kwargs.update(dict(
+            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-set'),
+            node_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-node'),
+            node_type='loader'
+        ))
+        super(LoaderSetPhysical, self).__init__(**kwargs)
 
     @classmethod
     def _get_node_ips_param(cls, ip_type='public'):
@@ -137,8 +139,13 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylin
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
-        self._node_prefix = '%s-%s' % (kwargs.get('user_prefix', cluster.DEFAULT_USER_PREFIX), MONITOR_NAME)
+        user_prefix = kwargs.pop('user_prefix')
+        kwargs.update(dict(
+            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-set'),
+            node_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-node'),
+            node_type='monitor'
+        ))
         cluster.BaseMonitorSet.__init__(self,
                                         targets=kwargs["targets"],
                                         params=kwargs["params"])
-        PhysicalMachineCluster.__init__(self, node_prefix=self._node_prefix, node_type='monitor', **kwargs)
+        PhysicalMachineCluster.__init__(self, **kwargs)

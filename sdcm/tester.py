@@ -75,6 +75,11 @@ from sdcm.send_email import build_reporter, read_email_data_from_file, get_runni
     save_email_data_to_file
 from sdcm.utils.alternator import create_table as alternator_create_table
 
+try:
+    import cluster_cloud
+except ImportError:
+    cluster_cloud = None
+
 configure_logging()
 
 try:
@@ -676,15 +681,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
                 credentials = [UserRemoteCredentials(key_file=cloud_credentials)]
                 params = dict(
-                    n_nodes=[self.params.get('n_db_nodes')],
-                    public_ips=self.params.get('db_nodes_public_ip', None),
-                    private_ips=self.params.get('db_nodes_private_ip', None),
+                    n_nodes=[0],
                     user_prefix=self.params.get('user_prefix', None),
                     credentials=credentials,
                     params=self.params,
-                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
                 )
-                return cluster_baremetal.ScyllaPhysicalCluster(**params)
+                if not cluster_cloud:
+                    raise ImportError("cluster_cloud isn't installed")
+                return cluster_cloud.ScyllaCloudCluster(**params)
             return None
 
         db_type = self.params.get('db_type')
