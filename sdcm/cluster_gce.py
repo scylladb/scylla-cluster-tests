@@ -115,6 +115,10 @@ class GCENode(cluster.BaseNode):
         ip_tuple = (instance.public_ips, instance.private_ips)
         return ip_tuple
 
+    @property
+    def region(self):
+        return self._gce_service.region.name
+
     def set_hostname(self):
         self.log.debug("Hostname for node %s left as is", self.name)
 
