@@ -25,6 +25,7 @@ import time
 import traceback
 import uuid
 import itertools
+from collections import defaultdict
 from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
@@ -2628,7 +2629,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self.remoter.run(cmd).stdout.splitlines()
 
 
-class BaseCluster:  # pylint: disable=too-many-instance-attributes
+class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """
     Cluster of Node objects.
     """
@@ -2685,6 +2686,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
         assert '_SCT_TEST_LOGDIR' in os.environ
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
         makedirs(self.logdir)
+
+    def nodes_by_region(self, nodes=None) -> dict:
+        """:returns {region_name: [list of nodes]}"""
+        nodes = nodes if nodes else self.nodes
+        grouped_by_region = defaultdict(list)
+        for node in nodes:
+            grouped_by_region[node.region].append(node)
+        return grouped_by_region
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
