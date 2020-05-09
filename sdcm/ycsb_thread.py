@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import logging
 import time
@@ -196,11 +197,23 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         output = {k: str(v) for k, v in output.items()}
         return output
 
+    def db_node_to_query(self, loader):
+        """Select DB node in the same region as loader node to query"""
+        if self.params.get("region_aware_loader"):
+            nodes_in_region = self.loader_set.nodes_by_region(self.node_list).get(loader.region)
+            assert nodes_in_region, f"No DB nodes found in {loader.region}"
+            db_nodes = [db_node for db_node in nodes_in_region if not db_node.running_nemesis]
+            assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
+            node_to_query = random.choice(db_nodes)
+            LOGGER.debug(f"Selected '{node_to_query}' to query for local nodes")
+            return node_to_query.ip_address
+        return self.node_list[0].ip_address
+
     def _run_stress(self, loader, loader_idx, cpu_idx):
         dns_options = ""
         if self.params.get('alternator_use_dns_routing'):
             dns = RemoteDocker(loader, "scylladb/hydra-loaders:alternator-dns-0.2",
-                               command_line=f'python3 /dns_server.py {self.node_list[0].ip_address} '
+                               command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
                                             f'{self.params.get("alternator_port")}',
                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
             dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'

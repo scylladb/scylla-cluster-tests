@@ -564,7 +564,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
+            n_loader_nodes = self.params.get('n_loaders')
+            if isinstance(n_loader_nodes, int):  # legacy type
+                loader_info['n_nodes'] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if loader_info['disk_size'] is None:
