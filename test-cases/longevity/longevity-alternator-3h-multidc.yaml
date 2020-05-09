@@ -1,4 +1,4 @@
-test_duration: 180
+test_duration: 200
 prepare_write_cmd:
   - >-
     bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
@@ -33,10 +33,11 @@ stress_cmd: [
 
 round_robin: true
 
-n_loaders: '2 2'
-instance_type_db: 'i3.4xlarge'
-n_monitor_nodes: 1
 n_db_nodes: '3 3'
+instance_type_db: 'i3.4xlarge'
+n_loaders: '2 2'
+region_aware_loader: true
+n_monitor_nodes: 1
 
 nemesis_class_name: ChaosMonkey
 nemesis_interval: 5
