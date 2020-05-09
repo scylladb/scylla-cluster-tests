@@ -428,6 +428,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                            local_port=Setup.RSYSLOG_ADDRESS[1],
                                            remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
 
+    @property
+    def region(self):
+        raise NotImplementedError()
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**self.parent_cluster.tags,
