@@ -368,6 +368,9 @@ class SCTConfiguration(dict):
         dict(name="alternator_secret_access_key", env="SCT_ALTERNATOR_SECRET_ACCESS_KEY", type=str,
              help="the aws_secret_access_key that would be used for alternator"),
 
+        dict(name="region_aware_loader", env="SCT_REGION_AWARE_LOADER", type=bool,
+             help="When in multi region mode, run stress on loader that is located in the same region as db node"),
+
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS", type=str,
              help="More arguments to append to scylla command line"),
 
