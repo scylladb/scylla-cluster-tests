@@ -426,6 +426,10 @@ class AWSNode(cluster.BaseNode):
         self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": "alive"}])
         return super()._set_keep_alive()
 
+    @property
+    def region(self):
+        return self._ec2_service.meta.client.meta.region_name
+
     @retrying(n=10, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
