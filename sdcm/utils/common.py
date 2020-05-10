@@ -44,6 +44,8 @@ from concurrent.futures.thread import _python_exit
 import hashlib
 
 import boto3
+from mypy_boto3_s3 import S3Client, S3ServiceResource
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
@@ -170,7 +172,7 @@ class S3Storage():
     def __init__(self, bucket=None):
         if bucket:
             self.bucket_name = bucket
-        self._bucket = boto3.resource("s3").Bucket(name=self.bucket_name)
+        self._bucket: S3ServiceResource.Bucket = boto3.resource("s3").Bucket(name=self.bucket_name)
         self.transfer_config = boto3.s3.transfer.TransferConfig(multipart_threshold=self.enable_multipart_threshold_size,
                                                                 multipart_chunksize=self.multipart_chunksize,
                                                                 num_download_attempts=self.num_download_attempts)
@@ -211,7 +213,7 @@ class S3Storage():
             return ""
 
     def set_public_access(self, key):
-        acl_obj = boto3.resource('s3').ObjectAcl(self.bucket_name, key)
+        acl_obj: S3ServiceResource = boto3.resource('s3').ObjectAcl(self.bucket_name, key)
 
         grants = copy.deepcopy(acl_obj.grants)
         grantees = {
@@ -290,7 +292,7 @@ def list_logs_by_test_id(test_id):
 
 
 def all_aws_regions():
-    client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
+    client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
     return [region['RegionName'] for region in client.describe_regions()['Regions']]
 
 
@@ -591,7 +593,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
             custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
@@ -633,7 +635,7 @@ def clean_instances_aws(tags_dict):
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
 
     for region, instance_list in aws_instances.items():
-        client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
             tags = aws_tags_to_dict(instance.get('Tags'))
             name = tags.get("Name", "N/A")
@@ -661,7 +663,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
             custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
@@ -693,7 +695,7 @@ def clean_elastic_ips_aws(tags_dict):
     aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
 
     for region, eip_list in aws_instances.items():
-        client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client('ec2', region_name=region)
         for eip in eip_list:
             association_id = eip.get('AssociationId', None)
             if association_id:
@@ -811,8 +813,8 @@ def get_scylla_ami_versions(region):
     if _SCYLLA_AMI_CACHE[region]:
         return _SCYLLA_AMI_CACHE[region]
 
-    ec2 = boto3.client('ec2', region_name=region)
-    response = ec2.describe_images(
+    client: EC2Client = boto3.client('ec2', region_name=region)
+    response = client.describe_images(
         Owners=['797456418907'],  # ScyllaDB
         Filters=[
             {'Name': 'name', 'Values': ['ScyllaDB *']},
@@ -842,7 +844,7 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
         return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
-    s3_client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
+    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
     bucket = 'downloads.scylladb.com'
 
     if dist_type == 'centos':
@@ -1068,7 +1070,7 @@ def get_branched_ami(ami_version, region_name):
     :return: list of ec2.images
     """
     branch, build_id = ami_version.split(':')
-    ec2 = boto3.resource('ec2', region_name=region_name)
+    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
 
     LOGGER.info("Looking for AMI match [%s]", ami_version)
     if build_id in ('latest', 'all'):
@@ -1076,7 +1078,7 @@ def get_branched_ami(ami_version, region_name):
     else:
         filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
 
-    amis = list(ec2.images.filter(Filters=filters))
+    amis = list(ec2_resource.images.filter(Filters=filters))
 
     amis = sorted(amis, key=lambda x: x.creation_date, reverse=True)
 
@@ -1095,8 +1097,8 @@ def get_ami_tags(ami_id, region_name):
     :param region_name: the region to look AMIs in
     :return: dict of tags
     """
-    ec2 = boto3.resource('ec2', region_name=region_name)
-    test_image = ec2.Image(ami_id)
+    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    test_image = ec2_resource.Image(ami_id)
     if test_image.tags:
         return {i['Key']: i['Value'] for i in test_image.tags}
     else:
@@ -1106,8 +1108,8 @@ def get_ami_tags(ami_id, region_name):
 def tag_ami(ami_id, tags_dict, region_name):
     tags = [{'Key': key, 'Value': value} for key, value in tags_dict.items()]
 
-    ec2 = boto3.resource('ec2', region_name=region_name)
-    test_image = ec2.Image(ami_id)
+    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    test_image = ec2_resource.Image(ami_id)
     tags += test_image.tags
     test_image.create_tags(Tags=tags)
 
@@ -1274,7 +1276,7 @@ def s3_download_dir(bucket, path, target):
     :param target: the local directory to download the files to.
     """
 
-    client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
+    client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
 
     # Handle missing / at end of prefix
     if not path.endswith('/'):

@@ -16,6 +16,7 @@ from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,
 import yaml
 from botocore.exceptions import WaiterError, ClientError
 import boto3
+from mypy_boto3_ec2 import EC2Client
 
 from sdcm import cluster
 from sdcm import ec2_client
@@ -117,8 +118,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
-                                   spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
+        ec2 = ec2_client.EC2ClientWarpper(region_name=self.region_names[dc_idx],
+                                          spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -237,8 +238,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        ec2 = ec2_client.EC2Client(region_name=self.region_names[dc_idx],
-                                   spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
+        ec2 = ec2_client.EC2ClientWarpper(region_name=self.region_names[dc_idx],
+                                          spot_max_price_percentage=self.params.get('spot_max_price', default=0.60))
         results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type},
                                      region_name=self.region_names[dc_idx], group_as_region=True)
         instances = results[self.region_names[dc_idx]]
@@ -510,7 +511,7 @@ class AWSNode(cluster.BaseNode):
             interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
         if primary_interface.association_attribute is None:
             # create and attach EIP
-            client = boto3.client('ec2', region_name=parent_cluster.region_names[dc_idx])
+            client: EC2Client = boto3.client('ec2', region_name=parent_cluster.region_names[dc_idx])
             response = client.allocate_address(Domain='vpc')
 
             self.eip_allocation_id = response['AllocationId']
@@ -648,9 +649,8 @@ class AWSNode(cluster.BaseNode):
         self.stop_task_threads()
         self._instance.terminate()
         if self.eip_allocation_id:
-            client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
-            response = client.release_address(AllocationId=self.eip_allocation_id)
-            self.log.debug("release elastic ip . Result: %s\n", response)
+            client: EC2Client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
+            client.release_address(AllocationId=self.eip_allocation_id)
         super().destroy()
 
     def get_console_output(self):

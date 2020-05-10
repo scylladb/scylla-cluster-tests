@@ -2,6 +2,7 @@ import logging
 from contextlib import contextmanager
 
 import boto3
+from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from botocore.errorfactory import ClientError
 
 from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, PrometheusAlertManagerEvent, Severity
@@ -15,10 +16,12 @@ def create_table(endpoint_url, test_params, table_name=None):
     write_isolation = test_params.get('alternator_write_isolation')
 
     try:
-        dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url,
-                                  aws_access_key_id=test_params.get('alternator_access_key_id'),
-                                  aws_secret_access_key=test_params.get('alternator_secret_access_key')
-                                  )
+        aws_params = dict(endpoint_url=endpoint_url,
+                          aws_access_key_id=test_params.get('alternator_access_key_id'),
+                          aws_secret_access_key=test_params.get('alternator_secret_access_key')
+                          )
+        dynamodb_resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
+        dynamodb_client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
 
         name = table_name or 'usertable'
         params = dict()
@@ -41,9 +44,9 @@ def create_table(endpoint_url, test_params, table_name=None):
                           AttributeDefinitions=[
                               {'AttributeName': 'p', 'AttributeType': 'S'}])
 
-        table = dynamodb.create_table(**params)
+        table = dynamodb_resource.create_table(**params)
 
-        waiter = table.meta.client.get_waiter('table_exists')
+        waiter = dynamodb_client.get_waiter('table_exists')
         waiter.config.delay = 1
         waiter.config.max_attempts = 100
         waiter.wait(TableName=name)
@@ -57,12 +60,12 @@ def create_table(endpoint_url, test_params, table_name=None):
 
 
 def set_table_write_isolation(table_name='usertable', isolation=None, endpoint_url=None):
-    dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
-    table = dynamodb.Table(table_name)
+    dynamodb_resource: DynamoDBServiceResource = boto3.resource('dynamodb', endpoint_url=endpoint_url)
+    table = dynamodb_resource.Table(table_name)
     set_write_isolation(table, isolation)
 
 
-def set_write_isolation(table, isolation):
+def set_write_isolation(table: DynamoDBServiceResource.Table, isolation):
     got = table.meta.client.describe_table(TableName=table.name)['Table']
     arn = got['TableArn']
     tags = [
