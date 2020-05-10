@@ -92,7 +92,6 @@ class YcsbStatsPublisher(FileFollowerThread):
                                     try:
                                         value = float(value) / 1000.0
                                     except ValueError:
-                                        LOGGER.exception("value isn't a number, default to 0")
                                         value = float(0)
                                 self.set_metric(operation, key, float(value))
 
