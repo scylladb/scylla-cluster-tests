@@ -5,6 +5,8 @@ import json
 import base64
 
 import boto3
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
+from mypy_boto3_pricing import PricingClient
 from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.utils.decorators import retrying
@@ -40,18 +42,18 @@ class CreateSpotFleetError(ClientError):
     pass
 
 
-class EC2Client():
+class EC2ClientWarpper():
 
     def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
-        self._resource = boto3.resource('ec2', region_name=region_name)
+        self._resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
         self.region_name = region_name
         self._timeout = timeout  # request timeout in seconds
         self._price_index = 1.5
         self._wait_interval = 5  # seconds
         self.spot_max_price_percentage = spot_max_price_percentage
 
-    def _get_ec2_client(self, region_name=None):
+    def _get_ec2_client(self, region_name=None) -> EC2Client:
         try:
             return boto3.client(service_name='ec2', region_name=region_name)
         except NoRegionError:
@@ -162,8 +164,8 @@ class EC2Client():
             'sa-east-1': 'South America (Sao Paulo)'
         }
 
-        pricing = boto3.client('pricing', region_name='us-east-1')
-        response = pricing.get_products(
+        pricing_client: PricingClient = boto3.client('pricing', region_name='us-east-1')
+        response = pricing_client.get_products(
             ServiceCode='AmazonEC2',
             Filters=[
                 {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
