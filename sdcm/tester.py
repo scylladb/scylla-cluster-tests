@@ -43,9 +43,9 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 from sdcm.keystore import KeyStore
-from sdcm import cluster, nemesis, cluster_docker, cluster_baremetal, db_stats, wait
-from sdcm.cluster import NoMonitorSet, SCYLLA_DIR
-from sdcm.cluster import UserRemoteCredentials
+from sdcm import nemesis, cluster_docker, cluster_baremetal, db_stats, wait
+from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
+    set_ip_ssh_connections as set_cluster_ip_ssh_connections
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -141,6 +141,73 @@ def teardown_on_exception(method):
     return wrapper
 
 
+class silence:  # pylint: disable=invalid-name
+    """
+    A decorator and context manager that catch, log and store any exception that
+        happened within wrapped function or within context clause.
+    Two ways of using it:
+    1) as decorator
+        class someclass:
+            @silence(verbose=True)
+            def my_method(self):
+                ...
+
+    2) as context manager
+        class someclass:
+            def my_method(self):
+                with silence(parent=self, name='Step #1'):
+                    ...
+                with silence(parent=self, name='Step #2'):
+                    ...
+    """
+    test = None
+    name: str = None
+
+    def __init__(self, parent=None, source: str = 'framework', name: str = None, verbose: bool = False):
+        self.parent = parent
+        self.source = source
+        self.name = name
+        self.verbose = verbose
+        self.log = logging.getLogger(self.__class__.__name__)
+
+    def __enter__(self):
+        pass
+
+    def __call__(self, funct):
+        def decor(*args, **kwargs):
+            if self.name is None:
+                name = funct.__name__
+            else:
+                name = self.name
+            try:
+                self.log.debug(f"Silently running '{name}'")
+                funct(*args, **kwargs)
+                self.log.debug(f"Finished '{name}'. No errors were silenced.")
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.debug(f"Finished '{name}'. {str(type(exc))} exception was silenced.")
+                self._store_test_result(args[0], exc, exc.__traceback__, name)
+        return decor
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is None:
+            self.log.debug(f"Finished '{self.name}'. No errors were silenced.")
+        else:
+            self.log.debug(f"Finished '{self.name}'. {str(exc_type)} exception was silenced.")
+            self._store_test_result(self.parent, exc_val, exc_tb, self.name)
+        return True
+
+    def _store_test_result(self, parent, exc_val, exc_tb, name):
+        if exc_tb.tb_next:
+            exc_tb = exc_tb.tb_next
+        parent.store_test_result(
+            source=self.source,
+            message=f'==== {name} ====',
+            exception=exc_val,
+            severity=getattr(exc_val, 'severity', Severity.ERROR),
+            trace=exc_tb.tb_frame
+        )
+
+
 def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
     raise AssertionError("Critical Error has failed the test")
 
@@ -152,6 +219,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
         self.result = None
+        self._results = []
         self.setup_failure = None  # is set when exception occurs during setUp
         self.status = "RUNNING"
         self.params = SCTConfiguration()
@@ -159,43 +227,43 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.params.check_required_files()
         reuse_cluster_id = self.params.get('reuse_cluster', default=False)
         if reuse_cluster_id:
-            cluster.Setup.reuse_cluster(True)
-            cluster.Setup.set_test_id(reuse_cluster_id)
+            Setup.reuse_cluster(True)
+            Setup.set_test_id(reuse_cluster_id)
         else:
             # Test id is set by Hydra or generated if running without Hydra
-            cluster.Setup.set_test_id(self.params.get('test_id', default=uuid4()))
-        cluster.Setup.set_test_name(self.id())
-        cluster.Setup.set_tester_obj(self)
+            Setup.set_test_id(self.params.get('test_id', default=uuid4()))
+        Setup.set_test_name(self.id())
+        Setup.set_tester_obj(self)
         self.log = logging.getLogger(__name__)
-        self.logdir = cluster.Setup.logdir()
+        self.logdir = Setup.logdir()
 
         ip_ssh_connections = self.params.get(key='ip_ssh_connections')
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
-        cluster.set_ip_ssh_connections(ip_ssh_connections)
+        set_cluster_ip_ssh_connections(ip_ssh_connections)
         self._duration = self.params.get(key='test_duration', default=60)
         post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
         self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
-        cluster.Setup.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
+        Setup.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
         post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
         self.log.debug('Post behavior for loader nodes %s', post_behavior_monitor_nodes)
-        cluster.Setup.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
+        Setup.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
         post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
         self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
-        cluster.Setup.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
+        Setup.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
 
-        cluster.set_duration(self._duration)
+        set_cluster_duration(self._duration)
         cluster_backend = self.params.get('cluster_backend', default='')
         if cluster_backend == 'aws':
-            cluster.Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
+            Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
         elif cluster_backend == 'gce':
-            cluster.Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
+            Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
-        cluster.Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
-        if cluster.Setup.BACKTRACE_DECODING:
-            cluster.Setup.set_decoding_queue()
-        cluster.Setup.set_intra_node_comm_public(self.params.get(
-            'intra_node_comm_public') or cluster.Setup.MULTI_REGION)
+        Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        if Setup.BACKTRACE_DECODING:
+            Setup.set_decoding_queue()
+        Setup.set_intra_node_comm_public(self.params.get(
+            'intra_node_comm_public') or Setup.MULTI_REGION)
 
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
@@ -207,13 +275,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              self.logdir)
         self.start_time = time.time()
 
-        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=cluster.Setup.test_id())
+        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
         if self.params.get("logs_transport") == 'rsyslog':
-            cluster.Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
+            Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
-        start_events_device(cluster.Setup.logdir())
+        start_events_device(Setup.logdir())
         time.sleep(0.5)
-        InfoEvent('TEST_START test_id=%s' % cluster.Setup.test_id())
+        InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
     def run(self, result=None):
         self.result = self.defaultTestResult() if result is None else result
@@ -222,7 +290,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @property
     def test_id(self):
-        return cluster.Setup.test_id()
+        return Setup.test_id()
 
     @property
     def test_duration(self):
@@ -295,7 +363,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors.wait_for_init()
 
             # cancel reuse cluster - for new nodes added during the test
-            cluster.Setup.reuse_cluster(False)
+            Setup.reuse_cluster(False)
             if self.monitors.nodes:
                 self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
             self.start_time = time.time()
@@ -312,7 +380,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def set_system_auth_rf(self):
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf')
-        if system_auth_rf > 1 and not cluster.Setup.REUSE_CLUSTER:
+        if system_auth_rf > 1 and not Setup.REUSE_CLUSTER:
             self.log.info('change RF of system_auth to %s', system_auth_rf)
             node = self.db_cluster.nodes[0]
             credentials = self.db_cluster.get_db_auth()
@@ -592,7 +660,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     ec2_ami_username=self.params.get('ami_db_cassandra_user'),
                     **cl_params)
             elif db_type == 'mixed_scylla':
-                cluster.Setup.mixed_cluster(True)
+                Setup.mixed_cluster(True)
                 n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes', 1)
                 cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
                                       user_prefix=user_prefix + '-oracle',
@@ -728,7 +796,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
+            if Setup.INTRA_NODE_COMM_PUBLIC:
                 ip = ','.join(self.db_cluster.get_node_public_ips())
             else:
                 ip = self.db_cluster.get_node_private_ips()[0]
@@ -1500,46 +1568,75 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
 
-    def finalize_test(self):
-        try:
-            self.stop_resources()
-        finally:
-            self.save_email_data()
-            self.collect_logs()
-            self.clean_resources()
-            self.send_email()
-
-    def stop_resources(self):
-        self.log.debug('Stopping all resources')
-        self.kill_stress_thread()
-
-        if self.db_cluster is not None:
-            for current_nemesis in self.db_cluster.nemesis:
+    def get_nemesis_report(self, cluster):
+        for current_nemesis in cluster.nemesis:
+            try:
                 current_nemesis.report()
-            # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
-            self.db_cluster.stop_nemesis(timeout=1800)
-            # TODO: this should be run in parallel
-            for node in self.db_cluster.nodes:
+            except Exception as exc:  # pylint: disable=broad-except
+                self.store_test_result(
+                    source='framework',
+                    message='failed to generate nemesis report',
+                    exception=exc,
+                    severity=Severity.ERROR)
+
+    @silence()
+    def stop_nemesis(self, cluster):  # pylint: disable=no-self-use
+        cluster.stop_nemesis(timeout=1800)
+
+    @silence()
+    def stop_resources_stop_tasks_threads(self, cluster):  # pylint: disable=no-self-use
+        # TODO: this should be run in parallel
+        for node in cluster.nodes:
+            try:
                 node.stop_task_threads(timeout=60)
+            except Exception as exc:  # pylint: disable=broad-except
+                self.store_test_result(
+                    source='framework',
+                    message=f'failed to stop_task_threads on {node}',
+                    exception=exc,
+                    severity=Severity.ERROR)
 
-        if self.loaders is not None:
-            self.loaders.get_backtraces()
-            for node in self.loaders.nodes:
-                node.stop_task_threads(timeout=60)
+    @silence()
+    def get_backtraces(self, cluster):  # pylint: disable=no-self-use
+        cluster.get_backtraces()
 
-        if self.monitors is not None:
-            self.monitors.get_backtraces()
-            for node in self.monitors.nodes:
-                node.stop_task_threads(timeout=60)
+    @silence()
+    def stop_resources(self):  # pylint: disable=no-self-use
+        self.log.debug('Stopping all resources')
+        with silence(parent=self, name="Kill Stress Threads"):
+            self.kill_stress_thread()
 
-        if self.create_stats:
-            self.db_cluster.get_backtraces()
-            db_cluster_coredumps = self.db_cluster.coredumps
-            test_failing_events = self.get_test_failing_events()
-            self.update_test_details(errors=test_failing_events,
-                                     coredumps=db_cluster_coredumps,
-                                     )
+        # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
+        if self.db_cluster:
+            self.get_nemesis_report(self.db_cluster)
+            self.stop_nemesis(self.db_cluster)
+            self.stop_resources_stop_tasks_threads(self.db_cluster)
+            self.get_backtraces(self.db_cluster)
 
+        if self.loaders:
+            self.get_backtraces(self.loaders)
+            self.stop_resources_stop_tasks_threads(self.loaders)
+
+        if self.monitors:
+            self.get_backtraces(self.monitors)
+            self.stop_resources_stop_tasks_threads(self.monitors)
+
+    @silence()
+    def destroy_cluster(self, cluster):  # pylint: disable=no-self-use
+        cluster.destroy()
+
+    @silence()
+    def set_keep_alive_on_failure(self, cluster):  # pylint: disable=no-self-use
+        cluster.set_keep_alive_on_failure()
+
+    @silence()
+    def destroy_credentials(self):  # pylint: disable=no-self-use
+        if self.credentials is not None:
+            for credential in self.credentials:
+                credential.destroy()
+            self.credentials = []
+
+    @silence()
     def clean_resources(self):
         # pylint: disable=too-many-branches
         if not self.params.get('execute_post_behavior', False):
@@ -1547,89 +1644,111 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
-        critical_events = get_testrun_status(test_id=cluster.Setup.test_id(), logdir=self.logdir)
+        critical_events = self.get_test_results(source='test')
         if self.db_cluster is not None:
             self.log.info("Action for db nodes is %s", actions_per_cluster_type['db_nodes'])
             if (actions_per_cluster_type['db_nodes'] == 'destroy') or \
                (actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and not critical_events):
-                self.db_cluster.destroy()
+                self.destroy_cluster(self.db_cluster)
                 self.db_cluster = None
                 if self.cs_db_cluster:
-                    self.cs_db_cluster.destroy()
+                    self.destroy_cluster(self.cs_db_cluster)
             elif actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for db nodes')
-                cluster.Setup.keep_cluster(node_type='db_nodes', val='keep')
-                self.db_cluster.set_keep_alive_on_failure()
+                Setup.keep_cluster(node_type='db_nodes', val='keep')
+                self.set_keep_alive_on_failure(self.db_cluster)
                 if self.cs_db_cluster:
-                    self.cs_db_cluster.set_keep_alive_on_failure()
+                    self.set_keep_alive_on_failure(self.cs_db_cluster)
 
         if self.loaders is not None:
             self.log.info("Action for loader nodes is %s", actions_per_cluster_type['loader_nodes'])
             if (actions_per_cluster_type['loader_nodes'] == 'destroy') or \
                (actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and not critical_events):
-                self.loaders.destroy()
+                self.destroy_cluster(self.loaders)
                 self.loaders = None
             elif actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for loader nodes')
-                cluster.Setup.keep_cluster(node_type='loader_nodes', val='keep')
-                self.loaders.set_keep_alive_on_failure()
+                Setup.keep_cluster(node_type='loader_nodes', val='keep')
+                self.set_keep_alive_on_failure(self.loaders)
 
         if self.monitors is not None:
             self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
             if (actions_per_cluster_type['monitor_nodes'] == 'destroy') or \
                (actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and not critical_events):
-                self.monitors.destroy()
+                self.destroy_cluster(self.monitors)
                 self.monitors = None
             elif actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for monitor nodes')
-                cluster.Setup.keep_cluster(node_type='monitor_nodes', val='keep')
-                self.monitors.set_keep_alive_on_failure()
+                Setup.keep_cluster(node_type='monitor_nodes', val='keep')
+                self.set_keep_alive_on_failure(self.monitors)
 
-        if self.credentials is not None:
-            for credential in self.credentials:
-                credential.destroy()
-            self.credentials = []
+        self.destroy_credentials()
 
     def tearDown(self):
-        InfoEvent('TEST_END')
+        with silence(parent=self, name='Sending test end event'):
+            InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
+        self.stop_event_analyzer()
+        self.get_test_failing_events()
+        self.get_test_failures()
+        self.tag_ami_with_result()
+        self.stop_resources()
+        self.save_email_data()
+        if self.params.get('collect_logs'):
+            self.collect_logs()
+        self.clean_resources()
+        if self.create_stats:
+            self.update_test_with_errors()
+        self.publish_final_event()
+        self.stop_event_device()
+        self.destroy_localhost()
+        self.send_email()
+        if self.params.get('collect_logs'):
+            self.collect_sct_logs()
+        framework_errors = self.get_test_results('framework')
+        if framework_errors:
+            framework_errors = "\n".join(framework_errors)
+            self.log.info('%s\nFRAMEWORK ERRORS:\n%s\n%s', (">" * 70), framework_errors, (">" * 70))
+        self.log.info('Test ID: {}'.format(Setup.test_id()))
 
-        with self.subTest("Stop EventsAnalyzer"):
-            stop_events_analyzer()
-
-        with self.subTest("Check for Error/Critical Events"):
-            test_failing_events = self.get_test_failing_events()
-            if test_failing_events:
-                self.log.error('Error/Critical events found:')
-                self.log.error(test_failing_events)
-                self.fail('Error/Critical events found (see test logs)')
-
-        test_result_event, test_error, test_failure = None, None, None
-        try:
-            test_error, test_failure = self.get_test_failures()
-            test_result_event = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        except Exception:  # pylint: disable=broad-except
-            self.log.exception("Unable to get test result")
-
-        if test_result_event:
-            test_result_event.publish()
-            self.tag_ami_with_result(test_error, test_failure)
-        try:
-            self.finalize_test()
-        except Exception as details:
-            self.log.exception('Exception in finalize_test method {}'.format(details))
-            raise
-        finally:
-            stop_events_device()
-            if self.params.get('collect_logs'):
-                storage_dir = os.path.join(self.logdir, "collected_logs")
-                s3_link = SCTLogCollector([], cluster.Setup.test_id(), storage_dir).collect_logs(self.logdir)
-                self.log.info(s3_link)
-
-                if self.create_stats:
-                    self.update({'test_details': {'log_files': {'job_log': s3_link}}})
+    @silence()
+    def destroy_localhost(self):
+        if self.localhost:
             self.localhost.destroy()
-            self.log.info('Test ID: {}'.format(cluster.Setup.test_id()))
+
+    @silence()
+    def stop_event_analyzer(self):  # pylint: disable=no-self-use
+        stop_events_analyzer()
+
+    @silence()
+    def collect_sct_logs(self):
+        s3_link = SCTLogCollector(
+            [], Setup.test_id(), os.path.join(self.logdir, "collected_logs")
+        ).collect_logs(self.logdir)
+        if s3_link:
+            self.log.info(s3_link)
+            if self.create_stats:
+                self.update({'test_details': {'log_files': {'job_log': s3_link}}})
+
+    @silence()
+    def stop_event_device(self):  # pylint: disable=no-self-use
+        stop_events_device()
+
+    @silence()
+    def update_test_with_errors(self):
+        coredumps = []
+        if self.db_cluster:
+            coredumps = self.db_cluster.coredumps
+        self.update_test_details(
+            errors=self.get_test_results('test'),
+            coredumps=coredumps)
+
+    @silence()
+    def publish_final_event(self):
+        test_result_event = TestResultEvent(
+            test_name=self.id(),
+            errors=self.get_test_results('test'))
+        test_result_event.publish()
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
 
@@ -1776,7 +1895,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
-                                                                    base_test_id=cluster.Setup.test_id(),
+                                                                    base_test_id=Setup.test_id(),
                                                                     subtest_baseline=subtest_baseline,
                                                                     is_gce=is_gce)
         except Exception as ex:  # pylint: disable=broad-except
@@ -1834,6 +1953,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
 
+    @silence()
     def collect_logs(self):
         do_collect = self.params.get('collect_logs', False)
         if not do_collect:
@@ -1854,27 +1974,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.log.info("Storage dir is {}".format(storage_dir))
         if self.db_cluster:
-            db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, cluster.Setup.test_id(), storage_dir)
-            s3_link = db_log_collector.collect_logs(self.logdir)
-            self.log.info(s3_link)
-            logs_dict["db_cluster_log"] = s3_link
+            with silence(parent=self, name="Collect and publish db cluster logs"):
+                db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, Setup.test_id(), storage_dir)
+                s3_link = db_log_collector.collect_logs(self.logdir)
+                self.log.info(s3_link)
+                logs_dict["db_cluster_log"] = s3_link
         if self.loaders:
-            loader_log_collector = LoaderLogCollector(self.loaders.nodes, cluster.Setup.test_id(), storage_dir)
-            s3_link = loader_log_collector.collect_logs(self.logdir)
-            self.log.info(s3_link)
-            logs_dict["loader_log"] = s3_link
+            with silence(parent=self, name="Collect and publish loaders cluster logs"):
+                loader_log_collector = LoaderLogCollector(self.loaders.nodes, Setup.test_id(), storage_dir)
+                s3_link = loader_log_collector.collect_logs(self.logdir)
+                self.log.info(s3_link)
+                logs_dict["loader_log"] = s3_link
         if self.monitors.nodes:
-            monitor_log_collector = MonitorLogCollector(self.monitors.nodes, cluster.Setup.test_id(), storage_dir)
-            s3_link = monitor_log_collector.collect_logs(self.logdir)
-            self.log.info(s3_link)
-            logs_dict["monitoring_log"] = s3_link
+            with silence(parent=self, name="Collect and publish monitor cluster logs"):
+                monitor_log_collector = MonitorLogCollector(self.monitors.nodes, Setup.test_id(), storage_dir)
+                s3_link = monitor_log_collector.collect_logs(self.logdir)
+                self.log.info(s3_link)
+                logs_dict["monitoring_log"] = s3_link
 
         if self.create_stats:
-            self.update({'test_details': {'log_files': logs_dict}})
+            with silence(parent=self, name="Publish log links"):
+                self.update({'test_details': {'log_files': logs_dict}})
 
         self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
-                      format(cluster.Setup.test_id()))
+                      format(Setup.test_id()))
 
+    @silence()
     def get_test_failures(self):
         """
             Print to logging in case of failure or error in unittest
@@ -1885,7 +2010,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """
 
         if self.setup_failure:
-            return self.setup_failure, None
+            self.store_test_result(
+                source='test',
+                message=self.setup_failure,
+                severity=Severity.CRITICAL
+            )
+            return
 
         def list2reason(exc_list):
             """
@@ -1903,9 +2033,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self._feedErrorsToResult(result, self._outcome.errors)  # pylint: disable=no-member
         else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
             result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)  # pylint: disable=no-member
-        error = list2reason(result.errors)
-        test_failure = list2reason(result.failures)
-        return error, test_failure
+        error = list2reason(result.errors)  # Python exceptions during tests
+        test_failure = list2reason(result.failures)  # Assertion errors
+        if error:
+            self.store_test_result(
+                source='test',
+                message=error,
+                severity=Severity.CRITICAL
+            )
+        if test_failure:
+            self.store_test_result(
+                source='test',
+                message=test_failure,
+                severity=Severity.CRITICAL
+            )
 
     def stop_all_nodes_except_for(self, node):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
@@ -2008,6 +2149,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     failure['end'] = format_timestamp(float(failure['end']))
         return nemesis_stats
 
+    @silence()
     def save_email_data(self):
         email_data = self.get_email_data()
         json_file_path = os.path.join(self.logdir, "email_data.json")
@@ -2017,6 +2159,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('Save email data to file %s', json_file_path)
             save_email_data_to_file(email_data, json_file_path)
 
+    @silence()
     def send_email(self):
         """Send email with test results on teardown
 
@@ -2078,22 +2221,58 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "test_status": test_status,
                 "username": get_username(), }
 
-    def tag_ami_with_result(self, test_error, test_failure):
-        if self.params.get('cluster_backend', '') == 'aws' and self.params.get('tag_ami_with_result', False):
-            try:
-                test_result = 'PASSED'
-                if test_error:
-                    test_result = 'ERROR'
-                if test_failure:
-                    test_result = 'FAILURE'
+    @silence()
+    def tag_ami_with_result(self):
+        if self.params.get('cluster_backend', '') != 'aws' or not self.params.get('tag_ami_with_result', False):
+            return
+        test_result = 'ERROR' if self.get_test_results('test') else 'PASSED'
+        job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
+        ami_id = self.params.get('ami_id_db_scylla').split()[0]
+        region_name = self.params.get('aws_region').split()[0]
 
-                job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
-                ami_id = self.params.get('ami_id_db_scylla').split()[0]
-                region_name = self.params.get('aws_region').split()[0]
+        tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
 
-                tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
-            except Exception:  # pylint: disable=broad-except
-                self.log.exception("Failed to tag ami")
-
+    @silence(source='test')
     def get_test_failing_events(self):
-        return get_testrun_status(self.test_id, self.logdir)
+        failing_events = get_testrun_status(self.test_id, self.logdir)
+        if failing_events:
+            self.store_test_result(
+                source='test',
+                message='Found following critical errors:\n' + ''.join(failing_events),
+                severity=Severity.CRITICAL)
+
+    def store_test_result(  # pylint: disable=too-many-arguments
+            self,
+            source,
+            message='',
+            exception: Exception = '',
+            trace='',
+            severity=Severity.ERROR):
+        if exception:
+            exception = repr(exception)
+            if exception[0] != '\n' and message[-1] != '\n':
+                message += '\n'
+            message += repr(exception)
+        if trace:
+            if message[0] != '\n':
+                message += '\n'
+            message += ('Traceback (most recent call last):\n' + ''.join(traceback.format_stack(trace)))
+        results = getattr(self, '_results', None)
+        if results is None:
+            results = []
+            setattr(self, '_results', results)
+        results.append({
+            'source': source,
+            'message': message,
+            'severity': severity,
+        })
+
+    def get_test_results(self, source, severity=None):
+        output = []
+        for result in getattr(self, '_results', []):
+            if result.get('source', None) != source:
+                continue
+            if severity is not None and severity != result['severity']:
+                continue
+            output.append(result['message'])
+        return output

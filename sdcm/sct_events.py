@@ -272,13 +272,12 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
 class TestResultEvent(SctEvent):
     __test__ = False  # Mark this class to be not collected by pytest.
 
-    def __init__(self, test_name, error, failure):
+    def __init__(self, test_name, errors):
         super().__init__()
         self.test_name = test_name
-        self.error = error
-        self.failure = failure
-        self.ok = not error and not failure
-        self.severity = Severity.NORMAL if self.ok else Severity.ERROR
+        self.errors = errors
+        self.ok = not errors
+        self.severity = Severity.NORMAL if self.ok else Severity.CRITICAL
 
     def __str__(self):
         header = dedent(f"""
@@ -286,10 +285,10 @@ class TestResultEvent(SctEvent):
             {self.test_name}
             {"-" * 70}""")
         footer = f"\n{'-' * 70}\n"
-        err_type, err_text = ('ERROR', self.error) if self.error else ('FAILURE', self.failure)
+        test_status, err_text = ('ERROR', '\n'.join(self.errors)) if self.errors else ('PASSED', '')
         failed_msg = dedent(f"""
             {header}
-            \n{err_type}:
+            \n{test_status}:
             \n{err_text}
             {footer}
         """)
