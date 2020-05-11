@@ -49,6 +49,9 @@ from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager
+
+from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
+    check_schema_version, check_nulls_in_peers
 from sdcm.utils.decorators import cached_property, retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
@@ -343,6 +346,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     CQL_PORT = 9042
 
     log = LOGGER
+
+    GOSSIP_STATUSES_FILTER_OUT = ['LEFT',    # in case the node was decommissioned
+                                  'removed',  # in case the node was removed by nodetool removenode
+                                  'BOOT',    # node during boot and not exists in the cluster yet and they will remain
+                                             # in the gossipinfo 3 days.
+                                             # It's expected behaviour and we won't send the error in this case
+                                  'shutdown'  # when node was removed it may take more time to update the gossip info
+                                  ]
 
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
@@ -2471,25 +2482,53 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not self.parent_cluster.params.get('cluster_health_check'):
             return
 
-        self.check_nodes_status()
-        self.check_schema_version()
+        nodes_status = self.get_nodes_status()
+        peers_details = self.get_peers_info() or {}
+        gossip_info = self.get_gossip_info() or {}
 
-    def check_nodes_status(self):
-        # Validate nodes health
-        node_type = 'target' if self.running_nemesis else 'regular'
-        # TODO: improve this part (using get_nodetool_status function from ScyllaCluster)
+        check_nodes_status(nodes_status, current_node=self)
+        check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node=self)
+        check_schema_version(gossip_info, peers_details, nodes_status, current_node=self)
+        check_nulls_in_peers(gossip_info, peers_details, current_node=self)
+
+    def get_nodes_status(self):
+        nodes_status = {}
         try:
-            self.log.info('Status for %s node %s: %s' % (node_type, self.name, self.run_nodetool('status')))
+            statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
+
+            for dc, dc_status in statuses.items():
+                for node_ip, node_properties in dc_status.items():
+                    nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
 
         except Exception as ex:  # pylint: disable=broad-except
-            ClusterHealthValidatorEvent(type='error', name='NodesStatus', status=Severity.ERROR,
+            ClusterHealthValidatorEvent(type='warning', name='NodesStatus', status=Severity.WARNING,
                                         node=self.name,
-                                        error="Unable to get nodetool status from '{node}': {ex}".format(ex=ex,
-                                                                                                         node=self.name))
+                                        message=f"Unable to get nodetool status from '{self.name}': {ex}")
+        return nodes_status
 
-    def validate_gossip_nodes_info(self, gossip_info):
+    @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
+    def get_peers_info(self):
+        cql_result = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
+                                    'rpc_address, schema_version, supported_features from system.peers',
+                                    split=True, verbose=False)
+        peers_details = {}
+        for line in cql_result[3:-2]:
+            line_splitted = line.split('|')
+            peers_details[line_splitted[0].strip()] = {'data_center': line_splitted[1].strip(),
+                                                       'host_id': line_splitted[2].strip(),
+                                                       'rack': line_splitted[3].strip(),
+                                                       'release_version': line_splitted[4].strip(),
+                                                       'rpc_address': line_splitted[5].strip(),
+                                                       'schema_version': line_splitted[6].strip(),
+                                                       'supported_features': line_splitted[7].strip()}
+
+        return peers_details
+
+    @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
+    def get_gossip_info(self):
+        gossip_info = self.run_nodetool('gossipinfo', verbose=False)
         gossip_node_schemas = {}
-        schema, ip, status = '', '', ''
+        schema = ip = status = dc = ''
         for line in gossip_info.stdout.split():
             if line.startswith('SCHEMA:'):
                 schema = line.replace('SCHEMA:', '')
@@ -2497,85 +2536,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 ip = line.replace('RPC_ADDRESS:', '')
             elif line.startswith('STATUS:'):
                 status = line.replace('STATUS:', '').split(',')[0]
-            # STATUS is "LEFT": in case the node was decommissioned
-            # STATUS is "removed": in case the node was removed by nodetool removenode
-            # STATUS is "BOOT": node during boot and not exists in the cluster yet
-            # and they will remain in the gossipinfo 3 days.
-            # It's expected behaviour and we won't send the error in this case
+            elif line.startswith('DC:'):
+                dc = line.replace('DC:', '').split(',')[0]
+
             if schema and ip and status:
-                if status not in ['LEFT', 'removed', 'BOOT', 'shutdown']:
-                    gossip_node_schemas[ip] = {'schema': schema, 'status': status}
-                schema, ip, status = '', '', ''
-
-        self.log.info('Gossipinfo schema version and status of all nodes: {}'.format(gossip_node_schemas))
-
-        # Validate that ALL initiated nodes in the gossip
-        cluster_nodes = [node.ip_address for node in self.parent_cluster.nodes if node.db_init_finished]
-
-        not_in_gossip = list(set(cluster_nodes) - set(gossip_node_schemas.keys()))
-        if not_in_gossip:
-            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
-                                        node=self.name,
-                                        error='Node(s) %s exists in the cluster, but doesn\'t exist in the gossip'
-                                              % ', '.join(ip for ip in not_in_gossip))
-
-        # Validate that JUST existent nodes in the gossip
-        not_in_cluster = list(set(gossip_node_schemas.keys()) - set(cluster_nodes))
-        if not_in_cluster:
-            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
-                                        node=self.name,
-                                        error='Node(s) %s exists in the gossip, but doesn\'t exist in the cluster'
-                                              % ', '.join(ip for ip in not_in_cluster))
-            for ip in not_in_cluster:
-                gossip_node_schemas.pop(ip)
-
-        # Validate that same schema on all nodes
-        if len(set(node_info['schema'] for node_info in gossip_node_schemas.values())) > 1:
-            ClusterHealthValidatorEvent(type='error', name='GossipNodeSchemaVersion', status=Severity.ERROR,
-                                        node=self.name,
-                                        error='Schema version is not same on all nodes in gossip info: {}'
-                                        .format('\n'.join('{}: {}'.format(ip, schema_version['schema'])
-                                                          for ip, schema_version in gossip_node_schemas.items())))
+                gossip_node_schemas[ip] = {'schema': schema, 'status': status, 'dc': dc}
+                schema = ip = status = dc = ''
 
         return gossip_node_schemas
 
-    def check_schema_version(self):
-        # Get schema version
-        errors = []
-        peers_details = ''
-        try:
-            gossip_info = self.run_nodetool('gossipinfo', verbose=False)
-            peers_details = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
-                                           'rpc_address, schema_version, supported_features from system.peers',
-                                           split=True, verbose=False)
-            gossip_node_schemas = self.validate_gossip_nodes_info(gossip_info)
-            status = gossip_node_schemas[self.ip_address]['status']
-            if status != 'NORMAL':
-                self.log.debug('Node status is {status}. Schema version can\'t be validated'. format(status=status))
-                return
+    def print_node_running_nemesis(self, node_ip):
+        node = self.parent_cluster.get_node_by_ip(node_ip)
+        if not node:
+            return ''
 
-            # Search for nulls in system.peers
-
-            for line in peers_details[3:-2]:
-                line_splitted = line.split('|')
-                current_node_ip = line_splitted[0].strip()
-                nulls = [column for column in line_splitted[1:] if column.strip() == 'null']
-
-                if nulls:
-                    errors.append('Found nulls in system.peers on the node %s: %s' % (current_node_ip, peers_details))
-
-                peer_schema_version = line_splitted[6].strip()
-                gossip_node_schema_version = gossip_node_schemas[self.ip_address]['schema']
-                if gossip_node_schema_version and peer_schema_version != gossip_node_schema_version:
-                    errors.append('Expected schema version: %s. Wrong schema version found on the '
-                                  'node %s: %s' % (gossip_node_schema_version, current_node_ip, peer_schema_version))
-        except Exception as ex:  # pylint: disable=broad-except
-            errors.append('Validate schema version failed.{} Error: {}'
-                          .format(' SYSTEM.PEERS content: {}\n'.format(peers_details) if peers_details else '', str(ex)))
-
-        if errors:
-            ClusterHealthValidatorEvent(type='error', name='NodeSchemaVersion', status=Severity.ERROR,
-                                        node=self.name, error='\n'.join(errors))
+        return f' ({node.running_nemesis} nemesis target node)' if node.running_nemesis else ' (not target node)'
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
@@ -2822,6 +2797,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             if hasattr(node, "set_keep_alive"):
                 node.set_keep_alive()
 
+    def get_node_by_ip(self, node_ip, datacenter=None):
+        full_node_ip = f"{datacenter}.{node_ip}" if datacenter else node_ip
+        for node in self.nodes:
+            region_ip = f"{node.datacenter}.{node.ip_address}" if datacenter else node.ip_address
+            if region_ip == full_node_ip:
+                return node
+        return None
+
 
 class NodeSetupFailed(Exception):
     def __init__(self, node, error_msg, traceback_str=""):
@@ -2905,12 +2888,13 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
-class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
+class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes
 
     def __init__(self, *args, **kwargs):
         self.termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
+        self.nemesis_count = 0
         self._seed_nodes_ips = []
         self._seed_nodes = []
         self._non_seed_nodes = []
@@ -3140,6 +3124,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     pass
         return node_info_list
 
+    @retrying(n=3, sleep_time=5)
     def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
@@ -3206,11 +3191,31 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             self.log.debug('Cluster health check disabled')
             return
 
-        for node in self.nodes:
-            node.check_node_health()
+        # Don't run health check in case parallel nemesis.
+        # TODO: find how to recognize, that nemesis on the node is running
+        if self.nemesis_count == 1:
+            for node in self.nodes:
+                node.check_node_health()
+        else:
+            ClusterHealthValidatorEvent(type='info', name='ClusterHealthCheck', status=Severity.NORMAL,
+                                        message='Test runs with parallel nemesis. Nodes health is disables')
+
+        self.check_nodes_running_nemesis_count()
 
         ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=Severity.NORMAL,
                                     message='Cluster health check finished')
+
+    def check_nodes_running_nemesis_count(self):
+        nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]
+
+        # Support parallel nemesis: nemesis_count is amount of nemesises that runs in parallel
+        if len(nodes_running_nemesis) <= self.nemesis_count:
+            return
+
+        message = "; ".join(f"{node.ip_address} ({'seed' if node.is_seed else 'non-seed'}): {node.running_nemesis}"
+                            for node in nodes_running_nemesis)
+        ClusterHealthValidatorEvent(type='warning', name='NodesNemesis', status=Severity.WARNING,
+                                    message=f"There are more then expected nodes running nemesis: {message}")
 
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
@@ -3296,6 +3301,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             for _ in range(nem['num_threads']):
                 self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
                                                    termination_event=self.termination_event))
+        self.nemesis_count = sum(nem['num_threads'] for nem in nemesis)
 
     def clean_nemesis(self):
         self.nemesis = []
@@ -3380,7 +3386,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             self._reuse_cluster_setup(node)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.check_nodes_status()
+        nodes_status = node.get_nodes_status()
+        check_nodes_status(nodes_status=nodes_status, current_node=node)
 
         self.clean_replacement_node_ip(node)
 
