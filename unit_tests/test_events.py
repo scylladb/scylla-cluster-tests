@@ -26,7 +26,6 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class BaseEventsTest(unittest.TestCase):
-
     @classmethod
     def get_event_log_file(cls, name):
         log_file = Path(cls.temp_dir, 'events_log', name)
@@ -73,6 +72,42 @@ class BaseEventsTest(unittest.TestCase):
             process.terminate()
             process.join()
         stop_events_device()
+
+    def store_test_result(  # pylint: disable=too-many-arguments
+            self,
+            source,
+            message='',
+            exception: Exception = '',
+            trace='',
+            severity=Severity.ERROR):
+        if exception:
+            exception = repr(exception)
+            if exception[0] != '\n' and message[-1] != '\n':
+                message += '\n'
+            message += repr(exception)
+        if trace:
+            if message[0] != '\n':
+                message += '\n'
+            message += ('Traceback (most recent call last):\n' + ''.join(traceback.format_stack(trace)))
+        results = getattr(self, '_results', None)
+        if results is None:
+            results = []
+            setattr(self, '_results', results)
+        results.append({
+            'source': source,
+            'message': message,
+            'severity': severity,
+        })
+
+    def get_test_results(self, source, severity=None):
+        output = []
+        for result in getattr(self, '_results', []):
+            if result.get('source', None) != source:
+                continue
+            if severity is not None and severity != result['severity']:
+                continue
+            output.append(result['message'])
+        return output
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
@@ -459,34 +494,15 @@ class TesterFailure(BaseEventsTest):
         self.assertTrue(1 == 0)
 
     def tearDown(self) -> None:
-        test_error, test_failure = ClusterTester.get_test_failures(self)
-        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.ERROR
+        ClusterTester.get_test_failures(self)
+        test_errors = ClusterTester.get_test_results(self, source='test')
+        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        assert tre.severity == Severity.CRITICAL
         tre.publish(guaranteed=True)
         print(str(tre))
-        assert test_failure
-        assert not test_error
+        assert test_errors
         events_log = self.get_event_logs()
-        assert "ERROR" not in events_log
-        self._outcome.errors = []  # we don't want to fail test
-
-
-class TesterError(BaseEventsTest):
-    setup_failure = None
-
-    def test_error_found(self):  # pylint: disable=no-self-use
-        raise Exception("error in during test")
-
-    def tearDown(self) -> None:
-        test_error, test_failure = ClusterTester.get_test_failures(self)
-        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.ERROR
-        tre.publish(guaranteed=True)
-        print(str(tre))
-        assert not test_failure
-        assert test_error
-        events_log = self.get_event_logs()
-        assert "FAILURE" not in events_log
+        assert "ERROR" in events_log
         self._outcome.errors = []  # we don't want to fail test
 
 
@@ -497,18 +513,18 @@ class TesterNoErrors(BaseEventsTest):
         print("happy test")
 
     def tearDown(self) -> None:
-        test_error, test_failure = ClusterTester.get_test_failures(self)
-        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        ClusterTester.get_test_failures(self)
+        test_errors = ClusterTester.get_test_results(self, source='test')
+        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
         assert tre.severity == Severity.NORMAL
         tre.publish(guaranteed=True)
         print(str(tre))
-        assert not test_failure
-        assert not test_error
+        assert not test_errors
         events_log = self.get_event_logs()
         assert "FAILURE" not in events_log and "ERROR" not in events_log
 
 
-class TesterErrorDuringSetUp(unittest.TestCase):
+class TesterErrorDuringSetUp(BaseEventsTest):
     __unittest_expecting_failure__ = True
 
     @teardown_on_exception
@@ -517,11 +533,11 @@ class TesterErrorDuringSetUp(unittest.TestCase):
 
     def tearDown(self) -> None:
         assert self.setup_failure is not None, "setup_failure should contain traceback"  # pylint: disable=no-member
-        test_error, test_failure = ClusterTester.get_test_failures(self)
-        assert test_failure is None
-        assert test_error is not None
-        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
-        assert tre.severity == Severity.ERROR
+        ClusterTester.get_test_failures(self)
+        test_errors = ClusterTester.get_test_results(self, source='test')
+        assert test_errors is not None
+        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        assert tre.severity == Severity.CRITICAL
 
 
 class TesterMultiSubTest(unittest.TestCase):
@@ -540,11 +556,11 @@ class TesterMultiSubTest(unittest.TestCase):
             assert 1 == 0
 
     def tearDown(self) -> None:
-        test_error, test_failure = ClusterTester.get_test_failures(self)
-        assert "test3" in test_failure
-        assert "test2" in test_failure
-        assert test_error is None
-        tre = TestResultEvent(test_name=self.id(), error=test_error, failure=test_failure)
+        ClusterTester.get_test_failures(self)
+        test_errors = ClusterTester.get_test_results(self, source='test')
+        assert "test3" in test_errors
+        assert "test2" in test_errors
+        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
         assert tre.severity == Severity.CRITICAL
         self._outcome.errors = []  # we don't want to fail test
 
