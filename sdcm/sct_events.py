@@ -539,7 +539,7 @@ class ClusterHealthValidatorEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        if self.severity == Severity.NORMAL:
+        if self.severity in (Severity.NORMAL, Severity.WARNING):
             return "{0}: type={1.type} name={1.name} node={1.node} message={1.message}".format(
                 super(ClusterHealthValidatorEvent, self).__str__(), self)
         elif self.severity in (Severity.CRITICAL, Severity.ERROR):

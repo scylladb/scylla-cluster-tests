@@ -24,7 +24,7 @@ from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.decorators import cached_property
-
+from sdcm.utils.health_checker import check_nodes_status
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"
@@ -243,7 +243,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.check_nodes_status()
+        nodes_status = node.get_nodes_status()
+        check_nodes_status(nodes_status=nodes_status, current_node=node)
         self.clean_replacement_node_ip(node)
 
     @staticmethod
