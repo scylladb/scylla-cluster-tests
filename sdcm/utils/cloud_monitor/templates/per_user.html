@@ -4,26 +4,30 @@
     <table id="results_table">
         <tr>
             <th>Cloud</th>
-            <th>Name</th>
             <th>Region-AZ</th>
+            <th>Name</th>
+            <th>ID</th>
             <th>State</th>
             <th>Lifecycle</th>
             <th>Instance type</th>
             <th>Owner</th>
             <th>Launch time</th>
             <th>Keep</th>
+            <th>Estimated total cost</th>
         </tr>
         {% for instance in instances %}
         <tr>
             <td>{{ instance.cloud }}</td>
-            <td>{{ instance.name }}</td>
             <td>{{ instance.region_az }}</td>
+            <td>{{ instance.name }}</td>
+            <td>{{ instance.instance_id }}</td>
             <td>{{ instance.state }}</td>
-            <td>{{ instance.lifecycle }}</td>
+            <td>{{ instance.lifecycle.value }}</td>
             <td>{{ instance.instance_type }}</td>
             <td>{{ instance.owner }}</td>
             <td>{{ instance.create_time }}</td>
             <td>{{ instance.keep }}</td>
+            <td>{{ instance.total_cost }}</td>
         </tr>
         {% endfor %}
     </table>

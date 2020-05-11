@@ -1,16 +1,14 @@
 import logging
 import datetime
 import time
-import json
 import base64
 
 import boto3
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
-from mypy_boto3_pricing import PricingClient
 from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.utils.decorators import retrying
-
+from sdcm.utils.pricing import AWSPricing
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,56 +133,14 @@ class EC2ClientWarpper():
         LOGGER.debug('Spot fleet request: %s', request_id)
         return request_id
 
-    @staticmethod
-    def get_instance_price(region_name, instance_type):
-        regions_names_map = {
-            'us-east-2': 'US East (Ohio)',
-            'us-east-1': 'US East (N. Virginia)',
-            'us-west-1': 'US West (N. California)',
-            'us-west-2': 'US West (Oregon)',
-            'ap-south-1': 'Asia Pacific (Mumbai)',
-            'ap-northeast-3': 'Asia Pacific (Osaka-Local)',
-            'ap-northeast-2': 'Asia Pacific (Seoul)',
-            'ap-southeast-1': 'Asia Pacific (Singapore)',
-            'ap-southeast-2': 'Asia Pacific (Sydney)',
-            'ap-northeast-1': 'Asia Pacific (Tokyo)',
-            'ca-central-1': 'Canada (Central)',
-            'eu-central-1': 'EU (Frankfurt)',
-            'eu-west-1': 'EU (Ireland)',
-            'eu-west-2': 'EU (London)',
-            'eu-west-3': 'EU (Paris)',
-            'eu-north-1': 'EU (Stockholm)',
-            'sa-east-1': 'South America (Sao Paulo)'
-        }
-
-        pricing_client: PricingClient = boto3.client('pricing', region_name='us-east-1')
-        response = pricing_client.get_products(
-            ServiceCode='AmazonEC2',
-            Filters=[
-                {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
-                {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
-                {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw', 'Value': 'NA'},
-                {'Type': 'TERM_MATCH', 'Field': 'tenancy', 'Value': 'Shared'},
-                {'Type': 'TERM_MATCH', 'Field': 'capacitystatus', 'Value': 'Used'},
-                {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': regions_names_map[region_name]}
-            ],
-            MaxResults=10
-        )
-        assert response['PriceList'], "failed to get price for {instance_type} in {region_name}".format(
-            region_name=region_name, instance_type=instance_type)
-        price = response['PriceList'][0]
-        price_dimensions = next(iter(json.loads(price)['terms']['OnDemand'].values()))['priceDimensions']
-        instance_price = next(iter(price_dimensions.values()))['pricePerUnit']['USD']
-        return instance_price
-
     def _get_spot_price(self, instance_type):
         """
         Calculate spot price for bidding
         :return: spot bid price
         """
         LOGGER.info('Calculating spot price based on OnDemand price')
-
-        on_demand_price = float(self.get_instance_price(self.region_name, instance_type))
+        aws_pricing = AWSPricing()
+        on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
 
         price = dict(max=on_demand_price, desired=on_demand_price * self.spot_max_price_percentage)
         LOGGER.info('Spot bid price: %s', price)

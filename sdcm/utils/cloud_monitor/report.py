@@ -78,11 +78,15 @@ class PerUserSummaryReport(BaseReport):
                                  num_stopped_instances=0)
                     results[user_type][instance.owner] = {cp: deepcopy(stats) for cp in self.report["cloud_providers"]}
                     results[user_type][instance.owner]["num_instances_keep_alive"] = 0
+                    results[user_type][instance.owner]["total_cost"] = 0
+                    results[user_type][instance.owner]["projected_daily_cost"] = 0
                 if instance.state == "running":
                     if instance.lifecycle == "spot":
                         results[user_type][instance.owner][cloud]["num_running_instances_spot"] += 1
                     else:
                         results[user_type][instance.owner][cloud]["num_running_instances_on_demand"] += 1
+                    results[user_type][instance.owner]["total_cost"] += instance.total_cost
+                    results[user_type][instance.owner]["projected_daily_cost"] += instance.projected_daily_cost
                 if instance.state == "stopped":
                     results[user_type][instance.owner][cloud]["num_stopped_instances"] += 1
                 if instance.keep:

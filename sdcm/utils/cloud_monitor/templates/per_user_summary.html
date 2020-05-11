@@ -15,6 +15,7 @@
                 {% endfor %}
             {% endfor %}
             <th>Keep alive</th>
+            <th>Projected daily cost</th>
         </tr>
         {% for user, stat in user_report|dictsort %}
         <tr>
@@ -25,6 +26,13 @@
             <td>{{ stat[cloud_provider].num_stopped_instances }}</td>
             {% endfor %}
             <td>{{ stat["num_instances_keep_alive"] }}</td>
+            {% if stat["projected_daily_cost"] > 50 %}
+                <td><span class="red fbold">{{ "%.1f"|format(stat["projected_daily_cost"]) }}</span></td>
+            {% elif stat["projected_daily_cost"] == 0 %}
+                <td>{{ stat["projected_daily_cost"] }}</td>
+            {% else %}
+                <td>{{  "%.1f"|format(stat["projected_daily_cost"]) }}</td>
+            {% endif %}
         </tr>
         {% endfor %}
     </table>
