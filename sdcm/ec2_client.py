@@ -102,9 +102,8 @@ class EC2Client():
         return request_ids
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                            block_device_mappings=None, tags_list=None, aws_instance_profile=None):
+                            block_device_mappings=None, aws_instance_profile=None):
 
-        tags_list = tags_list if tags_list else []
         spot_price = self._get_spot_price(instance_type)
         fleet_config = {'LaunchSpecifications':
                         [
@@ -112,12 +111,6 @@ class EC2Client():
                              'InstanceType': instance_type,
                              'NetworkInterfaces': network_if,
                              'Placement': {'AvailabilityZone': region_name},
-                             'TagSpecifications': [
-                                 {
-                                     'ResourceType': 'instance',
-                                     'Tags': tags_list
-                                 }
-                             ]
                              },
                         ],
                         'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
@@ -295,7 +288,7 @@ class EC2Client():
         self._client.create_tags(Resources=[instance_id], Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
-                              count=1, duration=0, block_device_mappings=None, tags_list=None, aws_instance_profile=None):
+                              count=1, duration=0, block_device_mappings=None, aws_instance_profile=None):
         """
         Create spot instances
 
@@ -307,14 +300,13 @@ class EC2Client():
         :param user_data: user data to be passed to instances
         :param count: number of instances to launch
         :param duration: (optional) instance life time in minutes(multiple of 60)
-        :param tags_list: list of tags to assign to fleet instances
+        :param aws_instance_profile: instance profile granting access to S3 objects
 
         :return: list of instance id-s
         """
 
         # pylint: disable=too-many-locals
 
-        tags_list = tags_list if tags_list else []
         spot_price = self._get_spot_price(instance_type)
 
         request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
@@ -336,7 +328,7 @@ class EC2Client():
         return instances
 
     def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                          block_device_mappings=None, tags_list=None, aws_instance_profile=None):
+                          block_device_mappings=None, aws_instance_profile=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -347,16 +339,15 @@ class EC2Client():
         :param user_data: user data to be passed to instances
         :param count: number of instances to launch
         :param block_device_mappings:
-        :param tags_list: list of tags to assign to fleet instances
+        :param aws_instance_profile: instance profile granting access to S3 objects
+
         :return: list of instance id-s
         """
         # pylint: disable=too-many-locals
 
-        tags_list = tags_list if tags_list else []
-
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
                                               user_data, count, block_device_mappings=block_device_mappings,
-                                              tags_list=tags_list, aws_instance_profile=aws_instance_profile)
+                                              aws_instance_profile=aws_instance_profile)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR
