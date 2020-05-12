@@ -1342,6 +1342,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             during short stop of one of the nodes in cluster
         """
         self._set_current_disruption("ValidateHintedHandoffShortDowntime")
+        if self.cluster.params.get('hinted_handoff', 'enabled') == 'disabled':
+            raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
+
         start_time = time.time()
         self.target_node.stop_scylla()
         time.sleep(10)
