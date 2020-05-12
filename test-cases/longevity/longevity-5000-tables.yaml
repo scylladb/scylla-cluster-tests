@@ -1,6 +1,6 @@
 test_duration: 4320
 
-cs_duration: '2m'
+cs_duration: '55m'
 cs_user_profiles:
     - scylla-qa-internal/cust_d/templated_tables_mv.yaml
 
