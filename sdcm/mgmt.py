@@ -372,8 +372,10 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
 
-    def create_repair_task(self):
+    def create_repair_task(self, fail_fast=False):
         cmd = "repair -c {}".format(self.id)
+        if fail_fast:
+            cmd += " --fail-fast"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res:
             raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
