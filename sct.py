@@ -5,6 +5,8 @@ import unittest
 import logging
 import glob
 import time
+import subprocess
+
 import pytest
 import click
 import click_completion
@@ -45,9 +47,19 @@ def install_callback(ctx, _, value):
     return sys.exit(0)
 
 
+def install_package_from_dir(ctx, _, directories):
+    if directories or not ctx.resilient_parsing:
+        for directory in directories:
+            subprocess.check_call(["sudo", sys.executable, "-m", "pip", "install", directory])
+    return directories
+
+
 @click.group()
 @click.option('--install-bash-completion', is_flag=True, callback=install_callback, expose_value=False,
               help="Install completion for the current shell. Make sure to have psutil installed.")
+@click.option('--install-package-from-directory', callback=install_package_from_dir, multiple=True, envvar='PACKAGES_PATHS',
+              type=click.Path(), expose_value=False,
+              help="Install paths for extra python pacakges to install, scylla-cluster-plugins for example")
 def cli():
     pass
 
