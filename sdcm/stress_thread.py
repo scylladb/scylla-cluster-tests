@@ -129,6 +129,8 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             first_node = first_node[0] if first_node else self.node_list[0]
             stress_cmd += " -node {}".format(first_node.ip_address)
 
+        stress_cmd += ' -errors skip-unsupported-columns'
+
         return stress_cmd
 
     def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):
