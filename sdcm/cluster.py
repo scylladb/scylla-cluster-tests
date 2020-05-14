@@ -1804,6 +1804,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         version = self.remoter.run('scylla-manager-agent --version').stdout
         self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
 
+    def upgrade_manager_agent(self, scylla_mgmt_repo, start_agent_after_upgrade=True):
+        self.download_scylla_manager_repo(scylla_mgmt_repo)
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum update scylla-manager-agent -y')
+        else:
+            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+            self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager-agent')
+        self.remoter.run("sudo scyllamgr_agent_setup -y")
+        if start_agent_after_upgrade:
+            if self.is_docker():
+                self.remoter.run('sudo supervisorctl start scylla-manager-agent')
+            else:
+                self.remoter.run("sudo systemctl start scylla-manager-agent")
+
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -2046,7 +2060,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
-    def upgrade_mgmt(self, scylla_mgmt_repo):
+    def upgrade_mgmt(self, scylla_mgmt_repo, start_manager_after_upgrade=True):
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         self.log.debug('Upgrade scylla-manager via repo: {}'.format(scylla_mgmt_repo))
         if self.is_rhel_like():
@@ -2059,11 +2073,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 3) scylla-manager-server
             self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager*')
         time.sleep(3)
-        if self.is_docker():
-            self.remoter.run('sudo supervisorctl start scylla-manager')
-        else:
-            self.remoter.run('sudo systemctl restart scylla-manager.service')
-        time.sleep(5)
+        if start_manager_after_upgrade:
+            if self.is_docker():
+                self.remoter.run('sudo supervisorctl start scylla-manager')
+            else:
+                self.remoter.run('sudo systemctl restart scylla-manager.service')
+            time.sleep(5)
 
     # pylint: disable=too-many-branches,too-many-statements
     def install_mgmt(self, scylla_mgmt_repo, auth_token, segments_per_repair, package_url=None):

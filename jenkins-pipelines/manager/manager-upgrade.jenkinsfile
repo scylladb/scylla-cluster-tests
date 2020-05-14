@@ -1,0 +1,20 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    params: params,
+    manager: true,
+    backend: 'aws',
+    aws_region: 'us-east-1',
+
+    new_scylla_mgmt_repo: '',
+    scylla_mgmt_repo: 'https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo',
+    scylla_mgmt_agent_repo: 'https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo',
+
+    test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
+    test_config: 'test-cases/upgrades/manager-upgrade.yaml',
+
+    timeout: [time: 360, unit: 'MINUTES']
+)
