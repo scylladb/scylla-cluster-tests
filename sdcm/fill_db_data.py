@@ -2899,8 +2899,10 @@ class FillDatabaseData(ClusterTester):
                 for create_table in item['create_tables']:
                     # wait a while before creating index, there is a delay of create table for waiting the schema agreement
                     if 'CREATE INDEX' in create_table.upper():
-                        time.sleep(10)
+                        time.sleep(15)
                     session.execute(create_table)
+                    if 'CREATE TYPE' in create_table.upper():
+                        time.sleep(15)
                 for truncate in item['truncates']:
                     truncates.append(truncate)
         # Sleep a while after creating test tables to avoid schema disagreement.
