@@ -69,6 +69,8 @@ done
 
 docker run --rm ${TTY_STDIN} --privileged \
     -h ${HOST_NAME} \
+    -l "TestId=${SCT_TEST_ID}" \
+    -l "RunByUser=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")" \
     -v /var/run:/run \
     -v "${SCT_DIR}:${WORK_DIR}" \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \

@@ -55,7 +55,8 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys, get_username, PageFetcher, rows_to_list, normalize_ipv6_url
+    get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
+from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging
 from sdcm.db_stats import PrometheusDBStats
