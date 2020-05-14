@@ -271,7 +271,7 @@ class UpgradeTest(FillDatabaseData):
 
             node.remoter.run('sudo systemctl daemon-reload')
 
-        result = node.remoter.run('sudo find /var/lib/scylla/data/system')
+        result = node.remoter.run('sudo find /var/lib/scylla/data/system |grep -v paxos')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
         # cmd = r"DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
         # recover the system tables
