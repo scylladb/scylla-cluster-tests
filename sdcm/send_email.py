@@ -385,9 +385,32 @@ class PrivateRepoEmailReporter(BaseEmailReporter):
     email_template_file = "results_private_repo.html"
 
 
+class TestAbortedEmailReporter(BaseEmailReporter):
+    def send_report(self, results):
+        smtp = Email()
+        report_data = self.build_data_for_report(results)
+        report = self._generate_report(report_data)
+        email = smtp.prepare_email(
+            subject=report_data['subject'],
+            recipients=self.email_recipients,
+            content=report,
+        )
+        # Sending prepared email
+        if email is None:
+            self.log.error("Failed to prepare email", exc_info=True)
+            return
+        self.send_email(email)
+
+    def _generate_report(self, report_data):
+        return """
+        <html><body>Something went wrong during the run.<br>Please check following jenkins job: <a href='{build_url}'>link</a></body></html>
+        """.format(**report_data)
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
+    #  pylint: disable=too-many-return-statements
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:
@@ -398,6 +421,8 @@ def build_reporter(name: str,
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PrivateRepo" in name:
         return PrivateRepoEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "TestAborted" in name:
+        return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

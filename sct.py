@@ -4,7 +4,7 @@ import sys
 import unittest
 import logging
 import glob
-
+import time
 import pytest
 import click
 import click_completion
@@ -18,7 +18,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior,
-                               search_test_id_in_latest, get_testrun_dir)
+                               search_test_id_in_latest, get_testrun_dir, format_timestamp)
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
@@ -513,17 +513,25 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
+    if testrun_dir:
+        email_results_file = os.path.join(testrun_dir, "email_data.json")
+        test_results = read_email_data_from_file(email_results_file)
+    else:
+        test_results = None
 
-    email_results_file = os.path.join(testrun_dir, "email_data.json")
-    test_results = read_email_data_from_file(email_results_file)
-    if not test_results:
-        LOGGER.warning("File with email results data not found")
-        sys.exit(1)
-
-    email_recipients = email_recipients.split(',')
-    reporter = build_reporter(test_results.get("reporter", ""), email_recipients, testrun_dir)
-    if reporter:
+    if test_results:
+        reporter = test_results.get("reporter", "")
         test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
+    else:
+        reporter = "TestAborted"
+        test_results = {
+            "build_url": os.environ.get("BUILD_URL"),
+            "end_time": format_timestamp(time.time()),
+            "subject": f"FAILED: {os.environ.get('JOB_NAME')}:",
+        }
+    email_recipients = email_recipients.split(',')
+    reporter = build_reporter(reporter, email_recipients, testrun_dir)
+    if reporter:
         reporter.send_report(test_results)
     else:
         LOGGER.warning("No reporter found")
