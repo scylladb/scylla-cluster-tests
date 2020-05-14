@@ -2618,31 +2618,33 @@ class GeminiNonDisruptiveChaosMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
-class DecommissionStreamingErrMonkey(Nemesis):
-
-    disruptive = True
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_decommission_streaming_err()
-
-
-class RebuildStreamingErrMonkey(Nemesis):
-
-    disruptive = True
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_rebuild_streaming_err()
-
-
-class RepairStreamingErrMonkey(Nemesis):
-
-    disruptive = True
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_repair_streaming_err()
+# Disable unstable streaming err nemesises
+#
+# class DecommissionStreamingErrMonkey(Nemesis):
+#
+#     disruptive = True
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_decommission_streaming_err()
+#
+#
+# class RebuildStreamingErrMonkey(Nemesis):
+#
+#     disruptive = True
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_rebuild_streaming_err()
+#
+#
+# class RepairStreamingErrMonkey(Nemesis):
+#
+#     disruptive = True
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_repair_streaming_err()
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
