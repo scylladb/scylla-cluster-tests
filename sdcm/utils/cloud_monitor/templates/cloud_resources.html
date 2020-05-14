@@ -5,12 +5,20 @@
             <th>Cloud</th>
             <th>Instances running</th>
             <th>Instances stopped</th>
+            <th>Unused static IPs</th>
+            <th>Total static IPs</th>
         </tr>
         {% for cloud_provider in report %}
         <tr>
             <td>{{ cloud_provider }}</td>
             <td>{{ report[cloud_provider].num_running_instances }}</td>
             <td>{{ report[cloud_provider].num_stopped_instances }}</td>
+            {% if report[cloud_provider].num_unused_static_ips > 0 %}
+            <td><span class="red fbold">{{ report[cloud_provider].num_unused_static_ips }}</span></td>
+            {% else %}
+            <td>0</td>
+            {% endif %}
+            <td>{{ report[cloud_provider].num_used_static_ips }}</td>
         </tr>
         {% endfor %}
     </table>

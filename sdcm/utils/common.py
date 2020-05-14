@@ -709,14 +709,20 @@ def clean_elastic_ips_aws(tags_dict):
             LOGGER.debug("Done. Result: %s\n", response)
 
 
-def get_all_gce_regions():
+def get_gce_driver():
+    # avoid cyclic dependency issues, since too many things import utils.py
     from sdcm.keystore import KeyStore
+
     gcp_credentials = KeyStore().get_gcp_credentials()
     gce_driver = get_driver(Provider.GCE)
 
-    compute_engine = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                gcp_credentials["private_key"],
-                                project=gcp_credentials["project_id"])
+    return gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                      gcp_credentials["private_key"], project=gcp_credentials["project_id"])
+
+
+def get_all_gce_regions():
+
+    compute_engine = get_gce_driver()
     all_gce_regions = [region_obj.name for region_obj in compute_engine.region_list]
     return all_gce_regions
 
@@ -751,15 +757,7 @@ def list_instances_gce(tags_dict=None, running=False, verbose=False):
     :return: None
     """
 
-    # avoid cyclic dependency issues, since too many things import utils.py
-    from sdcm.keystore import KeyStore
-
-    gcp_credentials = KeyStore().get_gcp_credentials()
-    gce_driver = get_driver(Provider.GCE)
-
-    compute_engine = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                gcp_credentials["private_key"],
-                                project=gcp_credentials["project_id"])
+    compute_engine = get_gce_driver()
 
     if verbose:
         LOGGER.info("Going to get all instances from GCE")
@@ -778,6 +776,22 @@ def list_instances_gce(tags_dict=None, running=False, verbose=False):
     if verbose:
         LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
+
+
+def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False):
+    compute_engine = get_gce_driver()
+    if verbose:
+        LOGGER.info("Getting all GCE static IPs...")
+    all_static_ips = compute_engine.ex_list_addresses(region_name)
+    if verbose:
+        LOGGER.info("Found total %s GCE static IPs.", len(all_static_ips))
+
+    if group_by_region:
+        ips_grouped_by_region = defaultdict(list)
+        for ip in all_static_ips:
+            ips_grouped_by_region[ip.region.name].append(ip)
+        return ips_grouped_by_region
+    return all_static_ips
 
 
 def clean_instances_gce(tags_dict):
