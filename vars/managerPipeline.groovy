@@ -46,7 +46,14 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-            string(defaultValue: '', description: 'If empty - the default manager version will be taken', name: 'scylla_mgmt_repo')
+
+            string(defaultValue: '',
+                   description: 'If empty - the default manager version will be taken',
+                   name: 'scylla_mgmt_repo')
+
+            string(defaultValue: '',
+                   description: 'If empty - the latest manager version will be taken',  // TODO: apply
+                   name: 'new_scylla_mgmt_repo')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -125,6 +132,18 @@ def call(Map pipelineParams) {
 
                                     if [[ ! -z "${params.scylla_mgmt_repo}" ]] ; then
                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                    fi
+
+                                    if [[ ! -z "${params.new_scylla_mgmt_repo}" ]] ; then
+                                        export SCT_NEW_SCYLLA_MGMT_REPO="${params.new_scylla_mgmt_repo}"
+                                    fi
+
+                                    if [[ ! -z "${params.ami_id_monitor}" ]] ; then
+                                        export SCT_AMI_ID_MONITOR="${params.ami_id_monitor}"
+                                    fi
+
+                                    if [[ ! -z "${params.ami_monitor_user}" ]] ; then
+                                        export SCT_AMI_MONITOR_USER="${params.ami_monitor_user}"
                                     fi
 
                                     if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then

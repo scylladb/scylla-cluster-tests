@@ -1,0 +1,23 @@
+stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
+
+instance_type_db: 'i3.large'
+instance_type_loader: 'c4.large'
+
+region_name: 'us-east-1'
+n_db_nodes: '3'
+n_loaders: 1
+n_monitor_nodes: 1
+scylla_mgmt_repo: "https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo"
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-upgrade
+space_node_threshold: 6442
+ip_ssh_connections: 'private'
+
+use_mgmt: true
+mgmt_port: 10090
+
+aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
