@@ -1,4 +1,26 @@
-    <h2>Cloud resources</h2>
+    <h1>Cloud resources</h1>
+    <h2>Static IPs</h2>
+    <table id="results_table">
+        <tr>
+            <th>Cloud</th>
+            <th>Region</th>
+            <th>Name</th>
+            <th>Address</th>
+            <th>Used by</th>
+            <th>Owner</th>
+        </tr>
+        {% for static_ip in static_ips.all %}
+        <tr>
+            <td>{{ static_ip.cloud }}</td>
+            <td>{{ static_ip.region }}</td>
+            <td>{{ static_ip.name }}</td>
+            <td>{{ static_ip.address }}</td>
+            <td>{{ static_ip.used_by }}</td>
+            <td>{{ static_ip.owner }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>Instances</h2>
     {% for user, instances in report|dictsort %}
     <h3>{{ user }}</h3>
     <table id="results_table">
