@@ -1785,7 +1785,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             repair_logs = self.target_node.search_database_log(
                 'repair - Repair 1 out of', start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
             self.log.debug(repair_logs)
-            return len(streaming_logs) > 0 and len(repair_logs) > 0
+            return len(streaming_logs) > 0 or len(repair_logs) > 0
 
         wait.wait_for(func=is_streaming_started, timeout=200, step=1,
                       text='Wait for streaming starts', throw_exc=False)
