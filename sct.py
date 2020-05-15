@@ -516,9 +516,11 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 
 @cli.command('send-email', help='Send email with results for testrun')
 @click.option('--test-id', help='Test-id of run')
+@click.option('--test-status', help='Override test status FAILED|ABORTED')
+@click.option('--start-time', help='Override test start time')
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, email_recipients=None, logdir=None):
+def send_email(test_id=None, test_status=None, start_time=None, email_recipients=None, logdir=None):
     from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 
     if not email_recipients:
@@ -527,30 +529,41 @@ def send_email(test_id=None, email_recipients=None, logdir=None):
     LOGGER.info('Email will be sent to next recipients: %s', email_recipients)
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
-    testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
-    if testrun_dir:
-        email_results_file = os.path.join(testrun_dir, "email_data.json")
-        test_results = read_email_data_from_file(email_results_file)
+    test_results = None
+    testrun_dir = None
+    if start_time is None:
+        start_time = format_timestamp(time.time())
     else:
-        test_results = None
+        start_time = format_timestamp(int(start_time))
+    if not test_status:
+        testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
+        if testrun_dir:
+            email_results_file = os.path.join(testrun_dir, "email_data.json")
+            test_results = read_email_data_from_file(email_results_file)
 
     if test_results:
         reporter = test_results.get("reporter", "")
         test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
     else:
         reporter = "TestAborted"
+        if not test_status:
+            test_status = 'FAILED'
         test_results = {
             "build_url": os.environ.get("BUILD_URL"),
-            "end_time": format_timestamp(time.time()),
-            "subject": f"FAILED: {os.environ.get('JOB_NAME')}:",
+            "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
         }
     email_recipients = email_recipients.split(',')
     reporter = build_reporter(reporter, email_recipients, testrun_dir)
-    if reporter:
-        reporter.send_report(test_results)
-    else:
+    if not reporter:
         LOGGER.warning("No reporter found")
         sys.exit(1)
+    try:
+        reporter.send_report(test_results)
+    except Exception:  # pylint: disable=broad-except
+        build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
+            "build_url": os.environ.get("BUILD_URL"),
+            "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+        })
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
