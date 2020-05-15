@@ -1,5 +1,6 @@
 import os
 import time
+from textwrap import dedent
 
 from libcloud.common.google import ResourceNotFoundError
 
@@ -10,9 +11,10 @@ class CreateGCENodeError(Exception):
     pass
 
 
-def gce_create_metadata():
+def gce_create_metadata(extra_meta=None):
     tags = cluster.create_common_tags()
-    tags['startup-script'] = cluster.Setup.get_startup_script()
+    if extra_meta:
+        tags.update(extra_meta)
     return tags
 
 
@@ -246,12 +248,19 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
+        startup_script = cluster.Setup.get_startup_script()
+        if self.params.get("scylla_linux_distro", "") in ("ubuntu-bionic", "ubuntu-xenial"):
+            # we need to disable sshguard to prevent blocking connections from the builder
+            startup_script += dedent("""
+                systemctl disable sshguard
+                systemctl stop sshguard
+            """)
         instance = self._gce_services[dc_idx].create_node(name=name,
                                                           size=self._gce_instance_type,
                                                           image=self._gce_image,
                                                           ex_network=self._gce_network,
                                                           ex_disks_gce_struct=gce_disk_struct,
-                                                          ex_metadata=gce_create_metadata())
+                                                          ex_metadata=gce_create_metadata({'startup-script': startup_script}))
         self.log.info('Created instance %s', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
