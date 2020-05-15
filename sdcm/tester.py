@@ -748,7 +748,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
                       stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
 
-        if stress_cmd.startswith('cassandra-stress'):
+        if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             return self.run_stress_cassandra_thread(**params)
         elif stress_cmd.startswith('scylla-bench'):
             return self.run_stress_thread_bench(**params)
