@@ -1712,7 +1712,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @retrying(n=3, sleep_time=15, allowed_exceptions=(AssertionError,))
     def hints_sending_in_progress(self):
-        query = "sum(rate(scylla_hints_manager_sent{}[15s]))"
+        query = "sum(rate(scylla_hints_manager_sent{}[1m]))"
         now = time.time()
         # check status of sending hints during last minute range
         results = self.prometheus_db.query(query=query, start=now - 60, end=now)
@@ -1731,8 +1731,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert self.hints_sending_in_progress() is False, "Waiting until Prometheus hints counter will not change"
 
     def verify_no_drops_and_errors(self, starting_from):
-        q_dropped = "sum(rate(scylla_hints_manager_dropped{}[15s]))"
-        q_errors = "sum(rate(scylla_hints_manager_errors{}[15s]))"
+        q_dropped = "sum(rate(scylla_hints_manager_dropped{}[1m]))"
+        q_errors = "sum(rate(scylla_hints_manager_errors{}[1m]))"
         queries_to_check = [q_dropped, q_errors]
         for query in queries_to_check:
             results = self.prometheus_db.query(query=query, start=starting_from, end=time.time())
