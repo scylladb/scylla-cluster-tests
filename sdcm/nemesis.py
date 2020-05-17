@@ -1820,8 +1820,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'Streaming is not used. In latest Scylla, it is optional to use streaming for rebuild and decommission, and repair will not use streaming.')
         self.log.info('Recover the target node by a final rebuild')
         if new_node:
+            new_node.wait_db_up(verbose=True, timeout=300)
             new_node.run_nodetool('rebuild')
         else:
+            self.target_node.wait_db_up(verbose=True, timeout=300)
             self.target_node.run_nodetool('rebuild')
 
     def disrupt_decommission_streaming_err(self):
