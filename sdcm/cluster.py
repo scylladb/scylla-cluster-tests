@@ -146,17 +146,27 @@ class Setup:
             cls._tester_obj = tester_obj
 
     @classmethod
-    def logdir(cls):
-        if not cls._logdir:
-            sct_base = os.path.expanduser(os.environ.get('_SCT_LOGDIR', '~/sct-results'))
-            date_time_formatted = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-            cls._logdir = os.path.join(sct_base, str(date_time_formatted))
-            makedirs(cls._logdir)
+    def base_logdir(cls) -> str:
+        return os.path.expanduser(os.environ.get("_SCT_LOGDIR", "~/sct-results"))
 
-            latest_symlink = os.path.join(sct_base, 'latest')
+    @classmethod
+    def make_new_logdir(cls, update_latest_symlink: bool, postfix: str = "") -> str:
+        base = cls.base_logdir()
+        logdir = os.path.join(base, datetime.now().strftime("%Y%m%d-%H%M%S-%f") + postfix)
+        os.makedirs(logdir, exist_ok=True)
+        LOGGER.info("New directory created: %s", logdir)
+        if update_latest_symlink:
+            latest_symlink = os.path.join(base, "latest")
             if os.path.islink(latest_symlink):
                 os.remove(latest_symlink)
-            os.symlink(os.path.relpath(cls._logdir, sct_base), latest_symlink)
+            os.symlink(os.path.relpath(logdir, base), latest_symlink)
+            LOGGER.info("Symlink `%s' updated to `%s'", latest_symlink, logdir)
+        return logdir
+
+    @classmethod
+    def logdir(cls) -> str:
+        if not cls._logdir:
+            cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
             os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
         return cls._logdir
 

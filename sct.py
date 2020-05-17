@@ -54,6 +54,14 @@ def install_package_from_dir(ctx, _, directories):
     return directories
 
 
+def add_file_logger(level: int = logging.DEBUG) -> None:
+    cmd_path = "-".join(click.get_current_context().command_path.split()[1:])
+    logdir = Setup.make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
+    handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
+    handler.setLevel(level)
+    LOGGER.addHandler(handler)
+
+
 @click.group()
 @click.option('--install-bash-completion', is_flag=True, callback=install_callback, expose_value=False,
               help="Install completion for the current shell. Make sure to have psutil installed.")
@@ -91,12 +99,13 @@ def cli():
 @click.option('--config-file', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
 @click.pass_context
 def clean_resources(ctx, user, test_id, logdir, config_file):  # pylint: disable=too-many-arguments,too-many-branches
+    add_file_logger()
+
     params = dict()
 
     if config_file or logdir:
-
         if not logdir:
-            logdir = os.path.expandvars("$HOME/sct-results")
+            logdir = Setup.base_logdir()
 
         if logdir and not test_id:
             test_id = (search_test_id_in_latest(logdir), )
@@ -145,6 +154,8 @@ def clean_resources(ctx, user, test_id, logdir, config_file):  # pylint: disable
 @click.pass_context
 def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
     # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
+
+    add_file_logger()
 
     params = dict()
 
@@ -268,6 +279,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
 @click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
 def list_ami_versions(region):
+    add_file_logger()
 
     amis = get_scylla_ami_versions(region)
 
@@ -285,6 +297,8 @@ def list_ami_versions(region):
 @click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
 @click.argument('version', type=str, default='branch-3.1:all')
 def list_ami_branch(region, version):
+    add_file_logger()
+
     def get_tags(ami):
         return {i['Key']: i['Value'] for i in ami.tags}
 
@@ -310,6 +324,8 @@ def list_ami_branch(region, version):
                                                          'jessie', 'stretch', 'buster']),  # Debian
               default=None, help='deb style versions')
 def list_repos(dist_type, dist_version):
+    add_file_logger()
+
     if not dist_type == 'centos' and dist_version is None:
         click.secho("when passing --dist-type=debian/ubuntu need to pass --dist-version as well", fg='red')
         sys.exit(1)
@@ -329,6 +345,8 @@ def list_repos(dist_type, dist_version):
 @click.argument('config_file', type=click.Path(exists=True))
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 def conf(config_file, backend):
+    add_file_logger()
+
     if backend:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
     os.environ['SCT_CONFIG_FILES'] = config_file
@@ -347,6 +365,8 @@ def conf(config_file, backend):
 @cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
 @click.option('-o', '--output-format', type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output")
 def conf_docs(output_format):
+    add_file_logger()
+
     config_logger = logging.getLogger('sdcm.sct_config')
     config_logger.setLevel(logging.ERROR)
     if output_format == 'markdown':
@@ -359,6 +379,8 @@ def conf_docs(output_format):
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
 def perf_regression_report(es_id, emails):
+    add_file_logger()
+
     email_list = emails.split(",")
     click.secho(message="Will send Performance Regression report to %s" % email_list, fg="green")
     LOGGER.setLevel(logging.DEBUG)
@@ -377,6 +399,8 @@ def investigate():
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
 def show_log(test_id):
+    add_file_logger()
+
     table = PrettyTable(["Date", "Log type", "Link"])
     table.align = "l"
     files = list_logs_by_test_id(test_id)
@@ -390,6 +414,8 @@ def show_log(test_id):
 @click.option("--date-time", type=str, required=False, help='Datetime of monitor-set archive is collected')
 @click.option("--kill", type=bool, required=False, help='Kill and remove containers')
 def show_monitor(test_id, date_time, kill):
+    add_file_logger()
+
     click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
     # if debug_log:
     #     LOGGER.setLevel(logging.DEBUG)
@@ -419,6 +445,7 @@ def show_monitor(test_id, date_time, kill):
 @click.argument('test-id')
 def search_builder(test_id):
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+    add_file_logger()
 
     results = get_builder_by_test_id(test_id)
     tbl = PrettyTable(['Builder Name', "Public IP", "path"])
@@ -482,6 +509,8 @@ def run_test(argv, backend, config, logdir):
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
 def cloud_usage_report(emails):
+    add_file_logger()
+
     email_list = emails.split(",")
     click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
     cloud_report(mail_to=email_list)
@@ -494,6 +523,8 @@ def cloud_usage_report(emails):
 @click.option('--backend', help='Cloud where search nodes', default='aws')
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
+    add_file_logger()
+
     from sdcm.logcollector import Collector
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if not os.environ.get('SCT_CLUSTER_BACKEND', None):
@@ -521,6 +552,8 @@ def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
 def send_email(test_id=None, test_status=None, start_time=None, email_recipients=None, logdir=None):
+    add_file_logger()
+
     from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 
     if not email_recipients:
@@ -573,6 +606,8 @@ def send_email(test_id=None, test_status=None, start_time=None, email_recipients
 @click.option('--sct_branch', default='master', type=str)
 @click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
 def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
+    add_file_logger()
+
     base_job_dir = f'{branch}'
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
