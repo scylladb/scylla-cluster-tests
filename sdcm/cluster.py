@@ -3907,11 +3907,16 @@ class BaseLoaderSet():
                     log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
-                ScyllaBenchEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
-                                 log_file_name=log_file_name, severity=Severity.CRITICAL,
-                                 errors=[errors_str])
+                if "truncate: seastar::rpc::timeout_error" in errors_str:
+                    event_type, event_severity = 'timeout', Severity.ERROR
+                else:
+                    event_type, event_severity = 'failure', Severity.CRITICAL
 
-            ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+                ScyllaBenchEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
+                                 log_file_name=log_file_name, severity=event_severity,
+                                 errors=[errors_str])
+            else:
+                ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
             if result is not None:
                 _queue[RES_QUEUE].put((node, result))
