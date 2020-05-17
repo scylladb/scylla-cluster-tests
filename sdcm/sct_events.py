@@ -623,10 +623,10 @@ class ScyllaBenchEvent(SctEvent):
 
     def __str__(self):
         if self.errors:
-            return "{0}: type={1.type} node={1.node}\n{2}".format(
+            return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd} error={2}".format(
                 super(ScyllaBenchEvent, self).__str__(), self, "\n".join(self.errors))
 
-        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
+        return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd}".format(
             super(ScyllaBenchEvent, self).__str__(), self)
 
 
