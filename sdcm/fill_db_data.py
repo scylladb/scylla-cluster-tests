@@ -897,7 +897,6 @@ class FillDatabaseData(ClusterTester):
                              AND compaction = { 'class' : 'SizeTieredCompactionStrategy',
                                                 'min_sstable_size' : 42 }
                              AND compression = { 'sstable_compression' : 'SnappyCompressor' }
-                             AND caching = 'rows_only'
                         """],
             'results': [[]],
             'min_version': '',
