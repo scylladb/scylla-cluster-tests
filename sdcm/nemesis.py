@@ -513,7 +513,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
+    def _disable_disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
         if big_sstable:
             # 100G, the big file will be saved to GCE image
@@ -2128,22 +2128,22 @@ class MajorCompactionMonkey(Nemesis):
         self.disrupt_major_compaction()
 
 
-class RefreshMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
+# class RefreshMonkey(Nemesis):
+#     disruptive = False
+#     run_with_gemini = False
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_nodetool_refresh()
 
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_nodetool_refresh()
 
-
-class RefreshBigMonkey(Nemesis):
-    disruptive = False
-    run_with_gemini = False
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_nodetool_refresh(big_sstable=True, skip_download=True)
+# class RefreshBigMonkey(Nemesis):
+#     disruptive = False
+#     run_with_gemini = False
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_nodetool_refresh(big_sstable=True, skip_download=True)
 
 
 class EnospcMonkey(Nemesis):
