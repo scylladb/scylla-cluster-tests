@@ -984,7 +984,7 @@ def tag_ami(ami_id, tags_dict, region_name):
     LOGGER.info("tagged %s with %s", ami_id, tags)
 
 
-def get_non_system_ks_cf_list(loader_node, db_node, request_timeout=300, filter_out_table_with_counter=False,
+def get_non_system_ks_cf_list(loader_node=None, db_node=None, request_timeout=300, filter_out_table_with_counter=False,
                               filter_out_mv=False):
     """Get all not system keyspace.tables pairs
 

@@ -731,6 +731,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
+        # pylint: disable=too-many-locals
         list_additional_params = get_compaction_random_additional_params()
         all_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
         non_mview_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
