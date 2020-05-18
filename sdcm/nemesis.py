@@ -925,7 +925,7 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
             active_repair_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
                                 '"Accept: application/json" "http://127.0.0.1:10000/storage_service/active_repair/"'
             result = self.target_node.remoter.run(active_repair_cmd)
-            active_repairs = re.match(r".*\[(\d)\].*", result.stdout)
+            active_repairs = re.match(r".*\[(\d)+\].*", result.stdout)
             if active_repairs:
                 self.log.debug("Found '%s' active repairs", active_repairs.group(1))
                 return True
