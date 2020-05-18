@@ -17,7 +17,7 @@ import anyconfig
 
 from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla
-from sdcm.utils.version_utils import get_branch_version
+from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
 
@@ -1327,7 +1327,13 @@ class SCTConfiguration(dict):
                         continue
                     tags = get_ami_tags(ami_id, region_name)
                     assert 'user_data_format_version' in tags.keys(), \
-                        f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting tags: {tags}"
+                        f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
+                        f"tags: {tags}"
+        # For each Scylla repo file we will check that there is at least one valid URL through which to download a
+        # version of SCYLLA, otherwise we will get an error.
+        get_branch_version_for_multiple_repositories(urls=[self.get(url) for url in [
+            'new_scylla_repo', 'scylla_repo_m', 'scylla_repo_loader', 'scylla_mgmt_repo', 'scylla_mgmt_agent_repo',
+            'scylla_mgmt_agent_repo'] if self.get(url)])
 
     def dump_config(self):
         """

@@ -1,10 +1,14 @@
 from __future__ import absolute_import
 import os
 import logging
-import unittest
 import itertools
+import unittest
 
 from sdcm.sct_config import SCTConfiguration
+
+RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
+          '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
+          '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
 
 
 class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
@@ -78,7 +82,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_06b_docker_development():
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '666.development-blah'
-        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'http://example.com/scylla.repo'
+        os.environ['SCT_SCYLLA_REPO_LOADER'] = RPM_URL
 
         conf = SCTConfiguration()
         conf.verify_configuration()
@@ -250,7 +254,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             conf.check_required_files()
         except ValueError as exc:
             self.assertEqual(str(
-                exc), "Stress command parameter \'stress_cmd\' contains profile \'/tmp/1232123123123123123.yaml\' that does not exists under data_dir/")
+                exc), "Stress command parameter \'stress_cmd\' contains profile \'/tmp/1232123123123123123.yaml\' that"
+                      " does not exists under data_dir/")
 
     def test_config_dupes(self):
         def get_dupes(c):
@@ -291,9 +296,10 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('security_group_ids'), 'sg-c5e1f7a0')
 
     def test_15_new_scylla_repo(self):
-        centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/'\
-                      '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1'\
-                      '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
+        centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
+                      '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
+                      '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla' \
+                      '.repo'
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_REPO'] = centos_repo
