@@ -158,6 +158,10 @@ def call(Map pipelineParams) {
                                         export SCT_SCYLLA_MGMT_PKG="${params.scylla_mgmt_pkg}"
                                     fi
 
+                                    if [[ ! -z "${params.aws_root_disk_name_monitor}" ]] ; then
+                                        export SCT_AWS_ROOT_DISK_NAME_MONITOR="${params.aws_root_disk_name_monitor}"
+                                    fi
+
                                     echo "start test ......."
                                     ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir /sct
                                     echo "end test ....."
