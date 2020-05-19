@@ -221,7 +221,7 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
-        backup_task = mgr_cluster.create_backup_task({'location': location_list})
+        backup_task = mgr_cluster.create_backup_task(location_list=location_list)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info('finishing test_basic_backup')
@@ -238,7 +238,7 @@ class MgmtCliTest(ClusterTester):
         self.generate_load_and_wait_for_results()
         self.log.debug(f'tables list = {tables}')
         # TODO: insert data to those tables
-        backup_task = mgr_cluster.create_backup_task({'location': location_list})
+        backup_task = mgr_cluster.create_backup_task(location_list=location_list)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=10800)
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info('finishing test_backup_multiple_ks_tables')
@@ -254,7 +254,7 @@ class MgmtCliTest(ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         try:
-            mgr_cluster.create_backup_task({'location': location_list})
+            mgr_cluster.create_backup_task(location_list=location_list)
         except ScyllaManagerError as error:
             self.log.info(f'Expected to fail - error: {error}')
         self.log.info('finishing test_backup_location_with_path')
@@ -268,9 +268,9 @@ class MgmtCliTest(ClusterTester):
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
-        rate_limit = ','.join([f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()])
-        self.log.info(f'rate limit will be {rate_limit}')
-        backup_task = mgr_cluster.create_backup_task({'location': location_list, 'rate-limit': rate_limit})
+        rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
+        self.log.info(f'rate limit will be {rate_limit_list}')
+        backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status()
         self.log.info(f'backup task finished with status {task_status}')
         # TODO: verify that the rate limit is as set in the cmd

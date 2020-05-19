@@ -343,21 +343,50 @@ class ManagerCluster(ScyllaManagerBase):
         self.client_encrypt = client_encrypt
         self.ssh_identity_file = ssh_identity_file
 
-    def create_backup_task(self, param_dict):
-        arguments = []
-        if 'rate-limit' not in param_dict:
-            param_dict['rate-limit'] = 30
-        for arg, value in param_dict.items():
-            if isinstance(value, (str, int)) and value:
-                arguments.append('--{} {}'.format(arg, str(value)))
-            if isinstance(value, bool) and value:
-                arguments.append('--{}'.format(arg))
-            if isinstance(value, list) and value:
-                arguments.append('--{} {}'.format(arg, ','.join(value)))
-        command = "backup -c {} ".format(self.id) + ' '.join(arguments)
-        res = self.sctool.run(cmd=command, parse_table_res=False)
+    def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
+                           token_ranges=None, dry_run=None, force=None, interval=None, keyspace_list=None,
+                           location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
+                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None):
+        cmd = "backup -c {}".format(self.id)
+
+        if dc_list is not None:
+            dc_names = ','.join(dc_list)
+            cmd += " --dc {} ".format(dc_names)
+        if token_ranges is not None:
+            cmd += " --token-ranges {} ".format(token_ranges)
+        if dry_run is not None:
+            cmd += " --dry-run"
+        if force is not None:
+            cmd += " --force"
+        if interval is not None:
+            cmd += " --interval {}".format(interval)
+        if keyspace_list is not None:
+            keyspaces_names = ','.join(keyspace_list)
+            cmd += " --keyspace {} ".format(keyspaces_names)
+        if location_list is not None:
+            locations_names = ','.join(location_list)
+            cmd += " --location {} ".format(locations_names)
+        if num_retries is not None:
+            cmd += " --num-retries {}".format(num_retries)
+        if rate_limit_list is not None:
+            rate_limit_string = ','.join(rate_limit_list)
+            cmd += " --rate-limit {} ".format(rate_limit_string)
+        if retention is not None:
+            cmd += " --retention {} ".format(retention)
+        if show_tables is not None:
+            cmd += " --show-tables {} ".format(show_tables)
+        if snapshot_parallel_list is not None:
+            snapshot_parallel_string = ','.join(snapshot_parallel_list)
+            cmd += " --snapshot-parallel {} ".format(snapshot_parallel_string)
+        if start_date is not None:
+            cmd += " --start-date {} ".format(start_date)
+        if upload_parallel_list is not None:
+            upload_parallel_string = ','.join(upload_parallel_list)
+            cmd += " --upload-parallel {} ".format(upload_parallel_string)
+
+        res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res.stdout:
-            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(command))
+            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(cmd))
 
         if res.stderr:
             # We are ignoring "unable to resolve host" messages as they are being show on every command, because
@@ -365,16 +394,40 @@ class ManagerCluster(ScyllaManagerBase):
             if res.stderr.count('unable to resolve host'):
                 pass
             else:
-                LOGGER.debug("Encountered an error on '{}' command response".format(command))
+                LOGGER.debug("Encountered an error on '{}' command response".format(cmd))
                 raise ScyllaManagerError(res.stderr)
 
         task_id = res.stdout.strip()
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
 
-    def create_repair_task(self, fail_fast=False):
+    def create_repair_task(self, node=None, dc_list=None, token_ranges=None,  # pylint: disable=too-many-arguments
+                           keyspace=None, with_hosts=None, interval=None, num_retries=None, fail_fast=None):
+        # the interval string:
+        # Amount of time after which a successfully completed task would be run again. Supported time units include:
+        #
+        # d - days,
+        # h - hours,
+        # m - minutes,
+        # s - seconds.
         cmd = "repair -c {}".format(self.id)
-        if fail_fast:
+        if node is not None:
+            cmd += " --host {} ".format(node.address())
+        if dc_list is not None:
+            dc_names = ','.join(dc_list)
+            cmd += " --dc {} ".format(dc_names)
+        if token_ranges is not None:
+            cmd += " --token-ranges {} ".format(token_ranges)
+        if keyspace is not None:
+            cmd += " --keyspace {} ".format(keyspace)
+        if with_hosts is not None:
+            host_addresses = ','.join([host.address() for host in with_hosts])
+            cmd += " --with-hosts {} ".format(host_addresses)
+        if interval is not None:
+            cmd += " --interval {}".format(interval)
+        if num_retries is not None:
+            cmd += " --num-retries {}".format(num_retries)
+        if fail_fast is not None:
             cmd += " --fail-fast"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res:
