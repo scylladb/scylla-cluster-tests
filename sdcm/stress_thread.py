@@ -128,10 +128,15 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                           3]  # make sure each loader is targeting on datacenter/region
             first_node = first_node[0] if first_node else self.node_list[0]
             stress_cmd += " -node {}".format(first_node.ip_address)
-
-        stress_cmd += ' -errors skip-unsupported-columns'
-
+        stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
+
+    @staticmethod
+    def _add_errors_option(stress_cmd: str, to_add: list):
+        to_add = (' '.join(to_add))
+        if ' -errors' not in stress_cmd:
+            return stress_cmd + ' -errors ' + to_add
+        return re.sub('-errors([ ]+[^-][a-zA-Z0-9-]+)+([ ]* -[a-z]+|[ ]*)', '-errors\\1 ' + to_add + '\\2', stress_cmd)
 
     def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):
         stress_cmd = self.create_stress_cmd(node, loader_idx, keyspace_idx)
