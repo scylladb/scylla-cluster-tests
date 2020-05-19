@@ -2208,7 +2208,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
-        critical = self.get_test_failing_events()
+        critical = self.get_test_results('test')
         test_status = "FAILED" if critical else "SUCCESS"
         return {"build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
