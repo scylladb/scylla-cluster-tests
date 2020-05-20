@@ -77,7 +77,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
 class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
-                 profile=None, node_list=None, round_robin=False, client_encrypt=False):
+                 profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True):
         if not node_list:
             node_list = []
         self.loader_set = loader_set
@@ -90,6 +90,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
         self.node_list = node_list
         self.round_robin = round_robin
         self.client_encrypt = client_encrypt
+        self.stop_test_on_failure = stop_test_on_failure
 
         self.executor = None
         self.results_futures = []
@@ -203,8 +204,12 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                                           log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
-                CassandraStressEvent(type='failure', node=str(node), stress_cmd=stress_cmd,
-                                     log_file_name=log_file_name, severity=Severity.CRITICAL,
+
+                event_type = 'failure' if self.stop_test_on_failure else 'error'
+                event_severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
+
+                CassandraStressEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
+                                     log_file_name=log_file_name, severity=event_severity,
                                      errors=[errors_str])
 
         CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)

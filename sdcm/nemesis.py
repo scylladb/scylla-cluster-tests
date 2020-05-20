@@ -695,7 +695,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # if keyspace doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces:
             stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema 'replication(factor=3)' -log interval=5"
-            cs_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=ks)
+            cs_thread = self.tester.run_stress_thread(
+                stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
             cs_thread.verify_results()
 
     def disrupt_truncate(self):
