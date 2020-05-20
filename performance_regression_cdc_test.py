@@ -96,6 +96,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         if use_cdclog_reader:
             self.cdclog_reader_cmd = self.params.get('stress_cdclog_reader_cmd')
             update_es = self.params.get('store_cdclog_reader_stats_in_es')
+            enable_batching = self.params.get('stress_cdc_log_reader_batching_enable')
 
         self._workload_cdc(write_cmd,
                            stress_num=2,
@@ -114,7 +115,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es)
+                           update_cdclog_stats=update_es,
+                           enable_batching=enable_batching)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -127,7 +129,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_preimage_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es)
+                           update_cdclog_stats=update_es,
+                           enable_batching=enable_batching)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -140,14 +143,15 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_postimage_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es)
+                           update_cdclog_stats=update_es,
+                           enable_batching=enable_batching)
 
         self.wait_no_compactions_running()
 
         self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
     def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None,  # pylint: disable=too-many-arguments
-                      save_stats=True, read_cdclog_cmd=None, update_cdclog_stats=False):
+                      save_stats=True, read_cdclog_cmd=None, update_cdclog_stats=False, enable_batching=True):
         cdc_stress_queue = None
 
         if save_stats:
@@ -160,9 +164,10 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         if read_cdclog_cmd:
             cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=read_cdclog_cmd,
-                                                             stress_num=2,
+                                                             stress_num=1,
                                                              keyspace_name=self.keyspace,
-                                                             base_table_name=self.table)
+                                                             base_table_name=self.table,
+                                                             enable_batching=enable_batching)
 
         results = self.get_stress_results(queue=stress_queue, store_results=True)
         if cdc_stress_queue:
