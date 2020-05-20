@@ -23,12 +23,15 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
         self.keyspace = kwargs.pop("keyspace_name")
         self.cdc_log_table = kwargs.pop("base_table_name") + CDC_LOGTABLE_SUFFIX
+        self.batching = kwargs.pop("enable_batching")
         super().__init__(*args, **kwargs)
 
     def build_stress_command(self, worker_id, worker_count):
         node_ips = ",".join([node.ip_address for node in self.node_list])
+        shards_per_node = self.node_list[0].cpu_cores if self.batching else 1
         self.stress_cmd = f"{self.stress_cmd} -keyspace {self.keyspace} -table {self.cdc_log_table} \
-                            -nodes {node_ips} -worker-id {worker_id} -worker-count {worker_count}"
+                            -nodes {node_ips} -group-size {shards_per_node} \
+                            -worker-id {worker_id} -worker-count {worker_count}"
 
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=unused-argument
         loader_node_logdir = Path(loader.logdir)

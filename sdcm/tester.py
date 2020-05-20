@@ -937,7 +937,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                    round_robin=round_robin, params=self.params).run()
 
     def run_cdclog_reader_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments
-                                 round_robin=False, stats_aggregate_cmds=True,
+                                 round_robin=False, stats_aggregate_cmds=True, enable_batching=True,
                                  keyspace_name=None, base_table_name=None):   # pylint: disable=unused-argument
         timeout = self.get_duration(duration)
 
@@ -950,6 +950,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   node_list=self.db_cluster.nodes,
                                   keyspace_name=keyspace_name,
                                   base_table_name=base_table_name,
+                                  enable_batching=enable_batching,
                                   round_robin=round_robin, params=self.params).run()
 
     def run_gemini(self, cmd, duration=None):
