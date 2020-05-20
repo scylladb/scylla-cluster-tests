@@ -406,6 +406,8 @@ def show_monitor(test_id, date_time, kill):
 @investigate.command('search-builder', help='Search builder where test run with test-id located')
 @click.argument('test-id')
 def search_builder(test_id):
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+
     results = get_builder_by_test_id(test_id)
     tbl = PrettyTable(['Builder Name', "Public IP", "path"])
     tbl.align = 'l'
@@ -481,6 +483,7 @@ def cloud_usage_report(emails):
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
     from sdcm.logcollector import Collector
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if not os.environ.get('SCT_CLUSTER_BACKEND', None):
         os.environ['SCT_CLUSTER_BACKEND'] = backend
     if config_file and not os.environ.get('SCT_CONFIG_FILES', None):
