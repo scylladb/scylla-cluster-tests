@@ -812,13 +812,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments
-                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):
+                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
+                          stop_test_on_failure=True):
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
                       stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
+            params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_cassandra_thread(**params)
         elif stress_cmd.startswith('scylla-bench'):
             return self.run_stress_thread_bench(**params)
@@ -830,7 +832,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
     def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
-                                    round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
+                                    round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,  # pylint: disable=too-many-arguments,unused-argument
+                                    stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
@@ -846,7 +849,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           node_list=self.db_cluster.nodes,
                                           round_robin=round_robin,
                                           client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
-                                          keyspace_name=keyspace_name).run()
+                                          keyspace_name=keyspace_name,
+                                          stop_test_on_failure=stop_test_on_failure).run()
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
             # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
