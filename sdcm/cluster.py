@@ -3767,6 +3767,7 @@ class BaseLoaderSet():
             # Select first seed node to send the scylla-bench cmds
             ips = node_list[0].private_ip_address
 
+            result = None
             try:
                 result = node.remoter.run(
                     cmd="/$HOME/go/bin/{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
@@ -3780,7 +3781,8 @@ class BaseLoaderSet():
 
             ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
 
-            _queue[RES_QUEUE].put((node, result))
+            if result is not None:
+                _queue[RES_QUEUE].put((node, result))
             _queue[TASK_QUEUE].task_done()
 
         if round_robin:
