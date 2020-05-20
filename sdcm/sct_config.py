@@ -922,13 +922,14 @@ class SCTConfiguration(dict):
         dict(name="store_cdclog_reader_stats_in_es", env="SCT_STORE_CDCLOG_READER_STATS_IN_ES",
              type=boolean,
              help="""Add cdclog reader stats to ES for future performance result calculating"""),
-
         dict(name="stop_test_on_stress_failure", env="SCT_STOP_TEST_ON_STRESS_FAILURE",
              type=boolean,
              help="""If set to True the test will be stopped immediately when stress command failed.
                      When set to False the test will continue to run even when there are errors in the
                      stress process"""),
-
+        dict(name="stress_cdc_log_reader_batching_enable", env="SCT_STRESS_CDC_LOG_READER_BATCHING_ENABLE",
+             type=boolean,
+             help="""retrieving data from multiple streams in one poll"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

@@ -72,7 +72,9 @@ dynamodb_primarykey_type: 'HASH'
 
 
 store_cdclog_reader_stats_in_es: false
-
 region_aware_loader: false
 
 stop_test_on_stress_failure: true
+
+stress_cdc_log_reader_batching_enable: true
+
