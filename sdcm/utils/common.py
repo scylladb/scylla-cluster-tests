@@ -58,6 +58,7 @@ from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
+DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 
 
 def deprecation(message):
@@ -453,6 +454,15 @@ def clean_cloud_resources(tags_dict):
     return True
 
 
+def docker_current_container_id() -> Optional[str]:
+    with open("/proc/1/cgroup") as cgroup:
+        for line in cgroup:
+            match = DOCKER_CGROUP_RE.search(line)
+            if match:
+                return match.group(1)
+    return None
+
+
 def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = False) -> Dict[str, docker.DockerClient]:
     log = LOGGER if verbose else Mock()
     docker_clients = {}
@@ -498,6 +508,8 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     log = LOGGER if verbose else Mock()
     filters = {}
 
+    current_container_id = docker_current_container_id()
+
     if tags_dict:
         filters["label"] = [f"{key}={value}" for key, value in tags_dict.items()]
 
@@ -507,6 +519,8 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     def get_containers(builder_name: str, docker_client: docker.DockerClient) -> None:
         log.info("%s: scan for Docker containers", builder_name)
         containers_list = docker_client.containers.list(filters=filters, sparse=True)
+        if current_container_id:
+            containers_list = [container for container in containers_list if container.id != current_container_id]
         if running:
             containers_list = [container for container in containers_list if container.status == "running"]
         else:
