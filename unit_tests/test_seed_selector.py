@@ -114,7 +114,7 @@ class TestSeedSelector(unittest.TestCase):
         self.setup_cluster(nodes_number=1)
         self.cluster.set_test_params(seeds_selector='reflector', seeds_num=1, db_type='scylla')
         sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), 'test_data', 'scylla.yaml')
-        self.assertRaisesRegex(expected_exception=RetryError,
-                               expected_regex='Waiting for seed is selected by reflector',
-                               callable_obj=self.cluster.set_seeds,
+        self.assertRaisesRegex(RetryError,
+                               r'Waiting for seed is selected by reflector',
+                               self.cluster.set_seeds,
                                wait_for_timeout=5)
