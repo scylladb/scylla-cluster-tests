@@ -43,6 +43,7 @@ import libcloud.storage.providers
 import libcloud.storage.types
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
+from packaging.version import Version
 
 
 LOGGER = logging.getLogger('utils')
@@ -303,11 +304,10 @@ def get_latest_gemini_version():
     bucket_name = 'downloads.scylladb.com'
 
     results = S3Storage(bucket_name).search_by_path(path='gemini')
-    versions = set()
-    for result_file in results:
-        versions.add(result_file.split('/')[1])
+    versions = {Version(result_file.split('/')[1]) for result_file in results}
+    latest_version = max(versions)
 
-    return str(sorted(versions)[-1])
+    return latest_version.public
 
 
 def list_logs_by_test_id(test_id):
