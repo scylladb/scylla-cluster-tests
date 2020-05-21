@@ -1752,6 +1752,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """)
         self.remoter.run('bash -cxe "%s"' % setup_script)
 
+    @retrying(n=3, sleep_time=10, allowed_exceptions=(AssertionError,), message="Retrying on getting scylla repo")
     def download_scylla_repo(self, scylla_repo):
         if not scylla_repo:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
