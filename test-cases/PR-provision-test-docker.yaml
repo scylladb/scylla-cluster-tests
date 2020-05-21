@@ -13,6 +13,6 @@ nemesis_filter_seeds: false
 
 user_prefix: 'PR-provision-docker'
 
-scylla_version: 3.3.rc1
+scylla_version: 4.0.0
 system_auth_rf: 0
 monitor_swap_size: 0

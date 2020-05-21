@@ -6,7 +6,6 @@ VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
 
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
 PY_PREREQS_FILE=requirements-python.txt
-CENTOS_PREREQS_FILE=install-prereqs.sh
 
 function docker_tag_exists() {
     echo "Contacting Docker Hub to check if Hydra image ${VERSION} already exists..."
@@ -26,9 +25,8 @@ else
     echo "Hydra image with version $VERSION not found locally. Building..."
     cd "${DOCKER_ENV_DIR}"
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
-    cp -f ${SCT_DIR}/${CENTOS_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
-    rm -f ${PY_PREREQS_FILE} ${CENTOS_PREREQS_FILE}
+    rm -f ${PY_PREREQS_FILE}
     cd -
     docker login
     echo "Tagging and pushing..."
