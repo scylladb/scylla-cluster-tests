@@ -38,7 +38,7 @@ repos:
         additional_dependencies:
             - 'requests==2.20.0'
             - 'fabric==2.4.0'
-            - 'PyYAML==3.11'
+            - 'PyYAML==5.1'
             - 'boto3==1.13.5'
             - 'boto3-stubs[s3,ec2,dynamodb,pricing]==1.13.5'
             - 'apache-libcloud==2.6.0'
@@ -52,7 +52,6 @@ repos:
             - 'click==7.0'
             - 'click-completion==0.5.0'
             - 'PTable==0.9.2'
-            - 'backports.datetime-timestamp==1.2'
             - 'pytest==4.6.4'
             - 'selenium==3.141.0'
             - 'mysql-connector-python==8.0.19'
