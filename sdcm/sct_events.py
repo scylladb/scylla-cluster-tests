@@ -919,9 +919,10 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                         if limit and len(events_bucket) >= limit:
                             events_bucket.pop(0)
                         events_bucket.append(event)
-            except Exception:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.info("failed to read %s file, due to the %s", events_file_path, str(exc))
                 if not output.get(severity.name, None):
-                    output[severity.name] = []
+                    output[severity.name] = [f"failed to read {events_file_path} file, due to the {str(exc)}"]
         return output
 
 
