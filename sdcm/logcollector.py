@@ -779,6 +779,8 @@ class LoaderLogCollector(LogCollector):
         FileLog(name='*gemini-l*.log',
                 search_locally=True),
         FileLog(name='gemini_result*.log',
+                search_locally=True),
+        FileLog(name='cdclogreader*.log',
                 search_locally=True)
     ]
 
