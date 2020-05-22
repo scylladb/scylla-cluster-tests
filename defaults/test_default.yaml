@@ -76,4 +76,3 @@ region_aware_loader: false
 stop_test_on_stress_failure: true
 
 stress_cdc_log_reader_batching_enable: true
-
