@@ -463,6 +463,13 @@ class UpgradeTest(FillDatabaseData):
                 self.insert_rows = 10
                 self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
 
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = list(range(nodes_num))
+        # shuffle it so we will upgrade the nodes in a random order
+        random.shuffle(indexes)
+
         with self.subTest('pre-test - Run stress workload before upgrade'):
             # complex workload: prepare write
             self.log.info('Starting c-s complex workload (5M) to prepare data')
@@ -472,14 +479,6 @@ class UpgradeTest(FillDatabaseData):
 
             # wait for the complex workload to finish
             self.verify_stress_thread(complex_cs_thread_pool)
-
-            # generate random order to upgrade
-            nodes_num = len(self.db_cluster.nodes)
-            # prepare an array containing the indexes
-            indexes = list(range(nodes_num))
-            # shuffle it so we will upgrade the nodes in a
-            # random order
-            random.shuffle(indexes)
 
             # prepare write workload
             self.log.info('Starting c-s prepare write workload (n=10000000)')
