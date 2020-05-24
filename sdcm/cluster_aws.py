@@ -12,6 +12,7 @@ from typing import List, Dict
 from textwrap import dedent
 from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
+from functools import cached_property
 
 import yaml
 from botocore.exceptions import WaiterError, ClientError
@@ -22,7 +23,7 @@ from sdcm import cluster
 from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.utils.common import list_instances_aws, get_ami_tags
-from sdcm.utils.decorators import retrying, cached_property
+from sdcm.utils.decorators import retrying
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
 from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS

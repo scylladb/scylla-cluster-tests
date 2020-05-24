@@ -18,12 +18,13 @@ import os
 import re
 import logging
 from typing import Optional, Union, Dict
+from functools import cached_property
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
-from sdcm.utils.decorators import cached_property
 from sdcm.utils.health_checker import check_nodes_status
+
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"

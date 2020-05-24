@@ -9,8 +9,9 @@ import time
 import zipfile
 import fnmatch
 import traceback
-import requests
+from functools import cached_property
 
+import requests
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -19,7 +20,7 @@ from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                filter_gce_instances_by_type, get_sct_root_path)
-from sdcm.utils.decorators import retrying, cached_property
+from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
