@@ -16,13 +16,13 @@ import time
 import logging
 from textwrap import dedent
 from typing import Dict
+from functools import cached_property
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 
 from sdcm import cluster
 from sdcm.sct_events import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.decorators import cached_property
 
 
 SPOT_TERMINATION_CHECK_DELAY = 1

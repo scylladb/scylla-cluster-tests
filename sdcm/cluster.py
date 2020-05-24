@@ -29,6 +29,7 @@ from collections import defaultdict
 from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
+from functools import cached_property
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
@@ -51,7 +52,7 @@ from sdcm.utils.docker_utils import ContainerManager
 
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers
-from sdcm.utils.decorators import cached_property, retrying, log_run_info
+from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version

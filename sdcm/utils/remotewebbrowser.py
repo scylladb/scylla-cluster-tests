@@ -14,6 +14,7 @@
 import time
 import logging
 from typing import Optional
+from functools import cached_property
 
 from docker import DockerClient  # pylint: disable=wrong-import-order
 from selenium.webdriver import Remote, ChromeOptions
@@ -21,7 +22,6 @@ from selenium.webdriver import Remote, ChromeOptions
 from sdcm.utils.docker_utils import ContainerManager, DOCKER_API_CALL_TIMEOUT
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.ssh_agent import SSHAgent
-from sdcm.utils.decorators import cached_property
 
 
 WEB_DRIVER_IMAGE = "selenium/standalone-chrome:latest"

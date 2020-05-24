@@ -12,8 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-
-from sdcm.utils.decorators import cached_property
+from functools import cached_property
 
 
 AUTO_SSH_IMAGE = "jnovack/autossh:latest"
