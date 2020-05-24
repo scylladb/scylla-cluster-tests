@@ -52,8 +52,8 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_repo')
 
             string(defaultValue: '',
-                   description: 'If empty - the latest manager version will be taken',  // TODO: apply
-                   name: 'new_scylla_mgmt_repo')
+                   description: 'Link to the repository of the manager that will be used as a target of the manager upgrade test',
+                   name: 'target_scylla_mgmt_repo')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -134,8 +134,8 @@ def call(Map pipelineParams) {
                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                     fi
 
-                                    if [[ ! -z "${params.new_scylla_mgmt_repo}" ]] ; then
-                                        export SCT_NEW_SCYLLA_MGMT_REPO="${params.new_scylla_mgmt_repo}"
+                                    if [[ ! -z "${params.target_scylla_mgmt_repo}" ]] ; then
+                                        export SCT_TARGET_SCYLLA_MGMT_REPO="${params.target_scylla_mgmt_repo}"
                                     fi
 
                                     if [[ ! -z "${params.ami_id_monitor}" ]] ; then
