@@ -1,8 +1,9 @@
 from logging import getLogger
+from datetime import datetime
+
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
-from sdcm.utils.fromisoformat import datetime_from_isoformat
 from sdcm.utils.pricing import AWSPricing, GCEPricing
 
 
@@ -47,7 +48,7 @@ class GCEInstance(CloudInstance):
             lifecycle=InstanceLifecycle.SPOT if is_preemptible else InstanceLifecycle.ON_DEMAND,
             instance_type=instance.size,
             owner=tags.get("RunByUser", NA) if tags else NA,
-            create_time=datetime_from_isoformat(instance.extra['creationTimestamp']),
+            create_time=datetime.fromisoformat(instance.extra['creationTimestamp']),
             keep=self.get_keep_alive_gce_instance(instance),
         )
 
