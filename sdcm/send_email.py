@@ -7,12 +7,12 @@ from typing import Optional, Sequence, Tuple
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from functools import cached_property
 
 import jinja2
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker
-from sdcm.utils.decorators import cached_property
 
 LOGGER = logging.getLogger(__name__)
 
