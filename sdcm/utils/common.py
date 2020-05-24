@@ -1088,8 +1088,10 @@ def get_free_port():
 
 
 def get_my_ip():
-    hostname = socket.gethostname()
-    ip = socket.gethostbyname(hostname)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect(("8.8.8.8", 80))
+    ip = sock.getsockname()[0]
+    sock.close()
     return ip
 
 
