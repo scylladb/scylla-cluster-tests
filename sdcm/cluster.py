@@ -3738,13 +3738,11 @@ class BaseLoaderSet():
         node.download_scylla_repo(scylla_repo_loader)
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-            node.remoter.run('sudo yum install -y screen')
         else:
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef"'
                              ' -o Dpkg::Options::="--force-confold" --force-yes'
                              ' --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
-            node.remoter.run('sudo apt-get install -y screen')
 
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
@@ -4161,10 +4159,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
-        if node.is_rhel_like():
-            node.remoter.run('sudo yum install screen -y')
-        else:
-            node.remoter.run('sudo apt-get install screen -y')
         if self.params.get("use_mgmt", default=None):
             self.install_scylla_manager(node, auth_token=self.mgmt_auth_token)
 
