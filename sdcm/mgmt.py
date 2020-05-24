@@ -186,7 +186,7 @@ class ManagerTask(ScyllaManagerBase):
     @property
     def latest_run_id(self):
         history = self.history
-        all_dates = self.sctool.get_table_complete_column(history, "start time")
+        all_dates = self.sctool.get_all_column_values_from_table(history, "start time")
         latest_run_date = self.get_max_date(all_dates)
         latest_run_id = self.sctool.get_table_value(parsed_table=history, column_name="id",
                                                     identifier=latest_run_date)
@@ -194,6 +194,9 @@ class ManagerTask(ScyllaManagerBase):
 
     @staticmethod
     def get_max_date(date_list):
+        """
+        Receives a list of date strings and returns the string of the latest date string
+        """
         time_format = "%d %b %y %H:%M:%S"
         converted_max_date = datetime.datetime(1970, 1, 3, 0, 0, 0)
         timezone = date_list[0][date_list[0].rindex(" ") + 1:]
@@ -1093,8 +1096,11 @@ class SCTool():
         return ret_val
 
     @staticmethod
-    def get_table_complete_column(parsed_table, column_name):
-
+    def get_all_column_values_from_table(parsed_table, column_name):
+        """
+        Receives a parsed table of an sctool command output and a column name that appears in the table
+        and returns a list of all of the values of said column in the table
+        """
         column_titles = [title.upper() for title in
                          parsed_table[0]]  # get all table column titles capital (for comparison)
         if column_name and column_name.upper() not in column_titles:
