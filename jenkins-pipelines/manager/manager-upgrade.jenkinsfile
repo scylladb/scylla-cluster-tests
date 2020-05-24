@@ -9,7 +9,7 @@ managerPipeline(
     backend: 'aws',
     aws_region: 'us-east-1',
 
-    new_scylla_mgmt_repo: '',
+    target_scylla_mgmt_repo: '',
     scylla_mgmt_repo: 'https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo',
     scylla_mgmt_agent_repo: 'https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo',
 

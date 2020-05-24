@@ -24,8 +24,86 @@ from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.tester import ClusterTester
 
 
+class BackupFunctionsMixIn:
+    @staticmethod
+    def download_files_from_s3(node, destination, file_list):
+        download_cmd = 'aws s3 cp {} {}'
+        for file_path in file_list:
+            node.remoter.run(download_cmd.format(file_path, destination))
+
+    def run_cmd_with_retry(self, cmd, node, retries=10):
+        for _ in range(retries):
+            try:
+                node.remoter.run(cmd)
+            except exceptions.UnexpectedExit as ex:
+                self.log.debug(f'cmd {cmd} failed with error {ex}, will retry')
+            else:
+                break
+
+    def install_awscli_dependencies(self, node, destination):
+        cmd = f'''sudo yum install -y epel-release
+                  sudo yum install -y python-pip
+                  sudo yum remove -y epel-release
+                  sudo pip install awscli
+                  sudo pip install boto3
+                  mkdir -p {destination}'''
+        self.run_cmd_with_retry(cmd=cmd, node=node)
+
+    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
+        # pylint: disable=too-many-locals
+        per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag)
+        for node in self.db_cluster.nodes:
+            self.install_awscli_dependencies(node=node, destination=self.DESTINATION)
+            node_data_path = '/var/lib/scylla/data'
+            nodetool_info = self.db_cluster.get_nodetool_info(node)
+            node_id = nodetool_info['ID']
+            for keyspace, tables in keyspace_and_table_list.items():
+                keyspace_path = os.path.join(node_data_path, keyspace)
+                for table in tables:
+                    node.remoter.run(f'mkdir -p {os.path.join(self.DESTINATION, table)}')
+                    self.download_files_from_s3(node=node, destination=os.path.join(self.DESTINATION, table, ''),
+                                                file_list=per_node_backup_file_paths[node_id][keyspace][table])
+                    file_details_lst = per_node_backup_file_paths[node_id][keyspace][table][0].split('/')
+                    table_id = file_details_lst[file_details_lst.index(table) + 1]
+                    table_upload_path = os.path.join(keyspace_path, table + '-' + table_id, 'upload')
+                    node.remoter.run(f'sudo cp {os.path.join(self.DESTINATION, table, "*")} {table_upload_path}/.')
+                    node.remoter.run(f'sudo chown scylla:scylla -Rf {table_upload_path}')
+                    node.run_nodetool(f"refresh -- {keyspace} {table}")
+
+    def restore_backup_from_backup_task(self, mgr_cluster, backup_task, keyspace_and_table_list):
+        snapshot_tag = backup_task.get_snapshot_tag()
+        self.restore_backup(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
+                            keyspace_and_table_list=keyspace_and_table_list)
+
+    # pylint: disable=too-many-arguments
+    def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
+                              truncate=True):
+        if tables_names is None:
+            tables_names = ['standard1']
+        per_keyspace_tables_dict = {keyspace_name: tables_names}
+        if truncate:
+            for table_name in tables_names:
+                self.log.info(f'running truncate on {keyspace_name}.{table_name}')
+                self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
+        self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
+                                             keyspace_and_table_list=per_keyspace_tables_dict)
+
+    def _generate_load(self):
+        self.log.info('Starting c-s write workload for 1m')
+        stress_cmd = self.params.get('stress_cmd')
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        self.log.info('Sleeping for 15s to let cassandra-stress run...')
+        time.sleep(15)
+        return stress_thread
+
+    def generate_load_and_wait_for_results(self):
+        load_thread = self._generate_load()
+        load_results = load_thread.get_results()
+        self.log.info(f'load={load_results}')
+
+
 # pylint: disable=too-many-public-methods
-class MgmtCliTest(ClusterTester):
+class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
     :avocado: enable
@@ -93,56 +171,6 @@ class MgmtCliTest(ClusterTester):
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
         self.create_table(table_name, keyspace_name=keyspace_name)
 
-    def run_cmd_with_retry(self, cmd, node, retries=10):
-        for _ in range(retries):
-            try:
-                node.remoter.run(cmd)
-            except exceptions.UnexpectedExit as ex:
-                self.log.debug(f'cmd {cmd} failed with error {ex}, will retry')
-            else:
-                break
-
-    @staticmethod
-    def download_files_from_s3(node, destination, file_list):
-        download_cmd = 'aws s3 cp {} {}'
-        for file_path in file_list:
-            node.remoter.run(download_cmd.format(file_path, destination))
-
-    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
-        # pylint: disable=too-many-locals
-        per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag)
-        for node in self.db_cluster.nodes:
-            self.install_awscli_dependencies(node=node, destination=self.DESTINATION)
-            node_data_path = '/var/lib/scylla/data'
-            nodetool_info = self.db_cluster.get_nodetool_info(node)
-            node_id = nodetool_info['ID']
-            for keyspace, tables in keyspace_and_table_list.items():
-                keyspace_path = os.path.join(node_data_path, keyspace)
-                for table in tables:
-                    node.remoter.run(f'mkdir -p {os.path.join(self.DESTINATION, table)}')
-                    self.download_files_from_s3(node=node, destination=os.path.join(self.DESTINATION, table, ''),
-                                                file_list=per_node_backup_file_paths[node_id][keyspace][table])
-                    file_details_lst = per_node_backup_file_paths[node_id][keyspace][table][0].split('/')
-                    table_id = file_details_lst[file_details_lst.index(table) + 1]
-                    table_upload_path = os.path.join(keyspace_path, table + '-' + table_id, 'upload')
-                    node.remoter.run(f'sudo cp {os.path.join(self.DESTINATION, table, "*")} {table_upload_path}/.')
-                    node.remoter.run(f'sudo chown scylla:scylla -Rf {table_upload_path}')
-                    node.run_nodetool(f"refresh -- {keyspace} {table}")
-
-    def restore_backup_from_backup_task(self, mgr_cluster, backup_task, keyspace_and_table_list):
-        snapshot_tag = backup_task.get_snapshot_tag()
-        self.restore_backup(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                            keyspace_and_table_list=keyspace_and_table_list)
-
-    def install_awscli_dependencies(self, node, destination):
-        cmd = f'''sudo yum install -y epel-release
-                  sudo yum install -y python-pip
-                  sudo yum remove -y epel-release
-                  sudo pip install awscli
-                  sudo pip install boto3
-                  mkdir -p {destination}'''
-        self.run_cmd_with_retry(cmd=cmd, node=node)
-
     def test_manager_sanity(self):
         """
         Test steps:
@@ -193,24 +221,6 @@ class MgmtCliTest(ClusterTester):
                 # can use this function to populate tables better?
                 # self.populate_data_parallel()
         return table_name
-
-    def generate_load_and_wait_for_results(self):
-        load_thread = self._generate_load()
-        load_results = load_thread.get_results()
-        self.log.info(f'load={load_results}')
-
-    # pylint: disable=too-many-arguments
-    def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
-                              truncate=True):
-        if tables_names is None:
-            tables_names = ['standard1']
-        per_keyspace_tables_dict = {keyspace_name: tables_names}
-        if truncate:
-            for table_name in tables_names:
-                self.log.info(f'running truncate on {keyspace_name}.{table_name}')
-                self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
-        self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
-                                             keyspace_and_table_list=per_keyspace_tables_dict)
 
     def test_basic_backup(self):
         self.log.info('starting test_basic_backup')
@@ -413,14 +423,6 @@ class MgmtCliTest(ClusterTester):
         manager_tool.rollback_upgrade(scylla_mgmt_repo=scylla_mgmt_repo)
         assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
         self.log.info('finishing test_manager_rollback_upgrade')
-
-    def _generate_load(self):
-        self.log.info('Starting c-s write workload for 1m')
-        stress_cmd = self.params.get('stress_cmd')
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
-        self.log.info('Sleeping for 15s to let cassandra-stress run...')
-        time.sleep(15)
-        return stress_thread
 
     def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
         self.log.info('starting test_repair_multiple_keyspace_types')
