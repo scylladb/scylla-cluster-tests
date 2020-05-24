@@ -3,7 +3,7 @@ FROM centos:7
 ADD install-prereqs.sh install-prereqs.sh
 RUN ./install-prereqs.sh docker
 RUN yum update -y \
-    && yum install -y https://centos7.iuscommunity.org/ius-release.rpm \
+    && yum install -y https://repo.ius.io/ius-release-el7.rpm \
     && yum install -y python36u python36u-libs python36u-devel python36u-pip
 
 ADD requirements-python.txt requirements-python.txt
