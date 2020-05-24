@@ -4414,6 +4414,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             configure_script = dedent("""
                         cd {0.monitor_install_path}
                         mkdir -p {0.monitoring_conf_dir}
+                        export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
                         python3 genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
                     """.format(self))
             node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
