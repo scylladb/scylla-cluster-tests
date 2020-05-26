@@ -48,7 +48,7 @@ from sdcm.utils.alternator import WriteIsolation
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
-from sdcm.utils.docker import ContainerManager
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.decorators import cached_property, retrying, log_run_info
 from sdcm.utils.get_username import get_username

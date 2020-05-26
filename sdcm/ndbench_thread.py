@@ -10,7 +10,7 @@ from sdcm.sct_events import NdbenchStressEvent, Severity
 from sdcm.utils.common import FileFollowerThread
 from sdcm.remote import FailuresWatcher
 from sdcm.utils.thread import DockerBasedStressThread
-from sdcm.utils.docker import RemoteDocker
+from sdcm.utils.docker_utils import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error
 
 LOGGER = logging.getLogger(__name__)

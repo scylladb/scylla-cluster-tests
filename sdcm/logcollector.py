@@ -25,7 +25,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
-from sdcm.utils.docker import get_docker_bridge_gateway
+from sdcm.utils.docker_utils import get_docker_bridge_gateway
 
 
 LOGGER = logging.getLogger(__name__)
