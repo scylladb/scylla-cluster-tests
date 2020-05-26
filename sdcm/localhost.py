@@ -15,7 +15,7 @@ import os
 import logging
 from typing import Optional
 
-from sdcm.utils.docker import ContainerManager
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.rsyslog import RSYSLOG_PORT, RSyslogContainerMixin, generate_rsyslog_conf_file
 
 

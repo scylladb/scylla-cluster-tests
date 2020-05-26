@@ -22,7 +22,7 @@ from typing import Optional, Union, Dict
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.docker import get_docker_bridge_gateway, Container, ContainerManager, DockerException
+from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.decorators import cached_property
 
 

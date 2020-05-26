@@ -12,7 +12,7 @@ from sdcm.sct_events import YcsbStressEvent, Severity
 from sdcm.remote import FailuresWatcher
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.thread import DockerBasedStressThread
-from sdcm.utils.docker import RemoteDocker
+from sdcm.utils.docker_utils import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress_thread import format_stress_cmd_error
 

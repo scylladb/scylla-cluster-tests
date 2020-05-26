@@ -25,7 +25,7 @@ class AutoSshContainerMixin:
 
     Requires `ssh_login_info', `name' and `logdir' properties.
 
-    See sdcm.utils.docker.ContainerManager for details.
+    See sdcm.utils.docker_utils.ContainerManager for details.
     """
 
     def auto_ssh_container_run_args(self, local_port, remote_port, ssh_mode="-R"):

@@ -21,7 +21,7 @@ import unittest
 from unittest.mock import Mock, patch, mock_open, sentinel, call
 from collections import namedtuple
 
-from sdcm.utils.docker import _Name, ContainerManager, \
+from sdcm.utils.docker_utils import _Name, ContainerManager, \
     DockerException, NotFound, ImageNotFound, NullResource, Retry, ContainerAlreadyRegistered
 
 
@@ -143,7 +143,7 @@ class TestName(unittest.TestCase):
         self.assertTrue(name)
 
 
-@patch("sdcm.utils.docker.ContainerManager.default_docker_client", DummyDockerClient())
+@patch("sdcm.utils.docker_utils.ContainerManager.default_docker_client", DummyDockerClient())
 class TestContainerManager(unittest.TestCase):
     def setUp(self) -> None:
         self.node = DummyNode()
@@ -479,7 +479,7 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("No build args"):
             self.node.c2_container_image_tag.reset_mock()
             self.node.c2_container_image_dockerfile_args = Mock(return_value={"path": "."})
-            with patch("sdcm.utils.docker.LOGGER.debug") as logger:
+            with patch("sdcm.utils.docker_utils.LOGGER.debug") as logger:
                 image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
             self.assertEqual(image, ((), dict(tag="hello-world:latest",
                                               path=".",
@@ -496,7 +496,7 @@ class TestContainerManager(unittest.TestCase):
             self.node.c2_container_image_tag.reset_mock()
             self.node.c2_container_image_dockerfile_args.reset_mock()
             self.node.c2_container_image_build_args = lambda **kw: {v: k for k, v in kw.items()}
-            with patch("sdcm.utils.docker.LOGGER.debug") as logger:
+            with patch("sdcm.utils.docker_utils.LOGGER.debug") as logger:
                 image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
             self.assertEqual(image, ((), dict(tag="hello-world:latest",
                                               path=".",
