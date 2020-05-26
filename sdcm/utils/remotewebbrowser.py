@@ -18,7 +18,7 @@ from typing import Optional
 from docker import DockerClient  # pylint: disable=wrong-import-order
 from selenium.webdriver import Remote, ChromeOptions
 
-from sdcm.utils.docker import ContainerManager
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import cached_property
