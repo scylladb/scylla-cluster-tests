@@ -29,7 +29,7 @@ def start_http_server(port, addr='', registry=prometheus_client.REGISTRY):
     """Starts an HTTP server for prometheus metrics as a daemon thread"""
     custom_metrics_handler = prometheus_client.MetricsHandler.factory(registry)
     httpd = _ThreadingSimpleServer((addr, port), custom_metrics_handler)
-    http_thread = threading.Thread(target=httpd.serve_forever)
+    http_thread = threading.Thread(target=httpd.serve_forever, name='HttpServerThread')
     http_thread.daemon = True
     http_thread.start()
     return httpd

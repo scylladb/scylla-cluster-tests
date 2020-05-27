@@ -380,6 +380,24 @@ Once you have changes in the requirements-python.txt or in Hydra Dockerfile
 - change the version in docker/env/version
 - run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub
 
+SCT test profiling
+===========================
+
+- set environment variable "SCT_ENABLE_TEST_PROFILING" to 1, or add "enable_test_profiling: true" into yaml file
+- run test
+
+After test is done there are following ways to use collected stats:
+- cat ~/latest/profile.stats/stats.txt
+- snakeviz ~/latest/profile.stats/stats.bin
+- tuna ~/latest/profile.stats/stats.bin
+- gprof2dot -f pstats ~/latest/profile.stats/stats.bin | dot -Tpng -o ~/latest/profile.stats/stats.png
+
+Another way to profile is py-spy:
+- pip install py-spy
+Run recording:
+- py-spy record -s -o ./py-spy.svg -- python3 sct.py ...
+Run 'top' mode:
+- py-spy top -s -- python3 sct.py ...
 
 Creating pipeline jobs for new branch
 =====================================
