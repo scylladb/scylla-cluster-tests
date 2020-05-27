@@ -26,6 +26,7 @@ from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_st
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
+from sdcm.utils.prepare_region import AwsRegion
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 LOGGER = setup_stdout_logger()
@@ -698,6 +699,14 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
 
     server.create_pipeline_job(
         f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-1d.jenkinsfile', 'SCT_Enterprise_Features')
+
+
+@cli.command("prepare-aws-region", help="Create and configure VPC in selected AWS region")
+@click.option("-r", "--region", required=True, type=str, help="Name of the region")
+def prepare_aws_region(region):
+    add_file_logger()
+    aws_region = AwsRegion(region_name=region)
+    aws_region.configure()
 
 
 if __name__ == '__main__':
