@@ -4114,6 +4114,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
+            sudo rm -rf {0.monitor_install_path_base}
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
             wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip

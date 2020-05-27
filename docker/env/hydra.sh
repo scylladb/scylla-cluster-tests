@@ -72,7 +72,7 @@ docker run --rm ${TTY_STDIN} --privileged \
     -l "TestId=${SCT_TEST_ID}" \
     -l "RunByUser=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")" \
     -v /var/run:/run \
-    -v "${SCT_DIR}:${WORK_DIR}" \
+    -v "${SCT_DIR}:${SCT_DIR}" \
     -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
     -v /tmp:/tmp \
     -v /var/tmp:/var/tmp \
@@ -80,8 +80,9 @@ docker run --rm ${TTY_STDIN} --privileged \
     -v /etc/passwd:/etc/passwd:ro \
     -v /etc/group:/etc/group:ro \
     -v /etc/sudoers:/etc/sudoers:ro \
+    -v /etc/sudoers.d/:/etc/sudoers.d:ro \
     -v /etc/shadow:/etc/shadow:ro \
-    -w "${WORK_DIR}" \
+    -w "${SCT_DIR}" \
     -e JOB_NAME="${JOB_NAME}" \
     -e BUILD_URL="${BUILD_URL}" \
     -e _SCT_BASE_DIR="${SCT_DIR}" \
@@ -95,4 +96,4 @@ docker run --rm ${TTY_STDIN} --privileged \
     --net=host \
     --name=${SCT_TEST_ID} \
     ${DOCKER_REPO}:${VERSION} \
-    /bin/bash -c "${TERM_SET_SIZE} eval '${CMD}'"
+    /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; ${TERM_SET_SIZE} eval '${CMD}'"
