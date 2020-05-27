@@ -27,5 +27,5 @@ gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i3.8xlarge'
-oracle_scylla_version: '3.0.11'
+oracle_scylla_version: '3.3.2'
 append_scylla_args_oracle: '--enable-cache false'
