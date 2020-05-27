@@ -17,7 +17,6 @@
 import os
 import re
 import logging
-import pathlib
 from typing import Optional, Union, Dict
 
 from sdcm import cluster
@@ -374,13 +373,6 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
     @staticmethod
     def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
         pass  # since running local, don't install anything, just the monitor
-
-    @staticmethod
-    def get_monitor_install_path_base(node):
-        base_dir = os.environ.get("_SCT_BASE_DIR", None)
-        logdir = pathlib.Path(node.logdir)
-        logdir = pathlib.Path(base_dir).joinpath(*logdir.parts[2:]) if base_dir else logdir
-        return str(logdir)
 
     def get_backtraces(self):
         pass
