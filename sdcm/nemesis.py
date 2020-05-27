@@ -1526,7 +1526,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.target_node.traffic_control(None)
 
-    def disrupt_network_reject_inter_node_communication(self):
+    # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
+    def _disrupt_network_reject_inter_node_communication(self):
         """
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
         """
@@ -2463,15 +2464,15 @@ class BlockNetworkMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_network_block()
 
-
-class RejectInterNodeNetworkMonkey(Nemesis):
-    disruptive = True
-    networking = True
-    run_with_gemini = False
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_network_reject_inter_node_communication()
+# Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
+# class RejectInterNodeNetworkMonkey(Nemesis):
+#     disruptive = True
+#     networking = True
+#     run_with_gemini = False
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         self.disrupt_network_reject_inter_node_communication()
 
 
 class RejectNodeExporterNetworkMonkey(Nemesis):
