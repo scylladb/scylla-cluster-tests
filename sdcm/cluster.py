@@ -779,7 +779,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             time.sleep(next_check_delay)
 
     def start_spot_monitoring_thread(self):
-        self._spot_monitoring_thread = threading.Thread(target=self.spot_monitoring_thread)
+        self._spot_monitoring_thread = threading.Thread(target=self.spot_monitoring_thread, name='SpotMonitoringThread')
         self._spot_monitoring_thread.daemon = True
         self._spot_monitoring_thread.start()
 
@@ -1023,12 +1023,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
 
     def start_backtrace_thread(self):
-        self._backtrace_thread = threading.Thread(target=self.backtrace_thread)
+        self._backtrace_thread = threading.Thread(target=self.backtrace_thread, name='BacktraceThread')
         self._backtrace_thread.daemon = True
         self._backtrace_thread.start()
 
     def start_db_log_reader_thread(self):
-        self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread)
+        self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread, name='LogReaderThread')
         self._db_log_reader_thread.daemon = True
         self._db_log_reader_thread.start()
 
@@ -1264,7 +1264,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         tcpdump_id = uuid.uuid4()
         if tcpdump:
             self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
-            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs,
+            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs, name='TcpDumpUploadingThread',
                                               kwargs={'tcpdump_id': tcpdump_id})
             tcpdump_thread.daemon = True
             tcpdump_thread.start()
@@ -1484,7 +1484,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return matches
 
     def start_decode_on_monitor_node_thread(self):
-        self._decoding_backtraces_thread = threading.Thread(target=self.decode_backtrace)
+        self._decoding_backtraces_thread = threading.Thread(target=self.decode_backtrace,
+                                                            name='DecodeOnMonitorNodeThread')
         self._decoding_backtraces_thread.daemon = True
         self._decoding_backtraces_thread.start()
 
@@ -2166,7 +2167,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.retrieve_scylla_manager_log()
 
     def start_scylla_manager_log_capture(self):
-        self._scylla_manager_journal_thread = threading.Thread(target=self.scylla_manager_log_thread)
+        self._scylla_manager_journal_thread = threading.Thread(target=self.scylla_manager_log_thread,
+                                                               name='ScyllaManagerJournalThread')
         self._scylla_manager_journal_thread.start()
 
     def stop_scylla_manager_log_capture(self, timeout=10):
@@ -2841,7 +2843,7 @@ def wait_for_init_wrap(method):
         start_time = time.time()
 
         for node in node_list:
-            setup_thread = threading.Thread(target=node_setup,
+            setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
                                             args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
@@ -3297,7 +3299,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=None):
         for nemesis in self.nemesis:
-            nemesis_thread = threading.Thread(target=nemesis.run,
+            nemesis_thread = threading.Thread(target=nemesis.run, name='NemesisThread',
                                               args=(interval, ))
             nemesis_thread.daemon = True
             nemesis_thread.start()
@@ -3950,7 +3952,7 @@ class BaseLoaderSet():
         LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
 
         for loader_idx, loader in enumerate(loaders):
-            setup_thread = threading.Thread(target=node_run_stress_bench,
+            setup_thread = threading.Thread(target=node_run_stress_bench, name='StressThread',
                                             args=(loader, loader_idx, stress_cmd, node_list))
             setup_thread.daemon = True
             setup_thread.start()

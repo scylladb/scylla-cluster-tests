@@ -316,6 +316,9 @@ class SCTConfiguration(dict):
         dict(name="email_subject_postfix", env="SCT_EMAIL_SUBJECT_POSTFIX", type=str,
              help="""Email subject postfix"""),
 
+        dict(name="enable_test_profiling", env="SCT_ENABLE_TEST_PROFILING", type=bool,
+             help="""Turn on sct profiling"""),
+
         # should be removed once stress commands would be refactored
         dict(name="bench_run", env="SCT_BENCH_RUN", type=boolean,
              help="""If true would kill the scylla-bench thread in the test teardown"""),

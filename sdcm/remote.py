@@ -404,7 +404,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             self._ssh_up_thread_termination.wait(5)
 
     def start_ssh_up_thread(self):
-        self._ssh_up_thread = threading.Thread(target=self.ssh_ping_thread)
+        self._ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name='SSHPingThread')
         self._ssh_up_thread.daemon = True
         self._ssh_up_thread.start()
 

@@ -10,8 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-import threading
-
 # pylint: disable=too-many-lines
 
 import logging
@@ -24,11 +22,11 @@ import warnings
 from uuid import uuid4
 from functools import wraps
 import traceback
+import threading
 import signal
 import sys
 
 import boto3.session
-
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
@@ -74,6 +72,7 @@ from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCol
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 from sdcm.utils.alternator import create_table as alternator_create_table, WriteIsolation
+from sdcm.utils.profiler import ProfilerFactory
 
 try:
     import cluster_cloud
@@ -91,6 +90,7 @@ try:
     extract_from_urllib3()
 except ImportError:
     pass
+
 
 warnings.filterwarnings(action="ignore", message="unclosed",
                         category=ResourceWarning)
@@ -243,6 +243,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Setup.set_tester_obj(self)
         self.log = logging.getLogger(__name__)
         self.logdir = Setup.logdir()
+
+        self._profile_factory = None
+        if self.params.get('enable_test_profiling'):
+            self._profile_factory = ProfilerFactory(os.path.join(self.logdir, 'profile.stats'))
+            self._profile_factory.activate()
 
         ip_ssh_connections = self.params.get(key='ip_ssh_connections')
         self.log.debug("IP used for SSH connections is '%s'",
@@ -1088,7 +1093,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 time.sleep(interval)
                 current = time.time()
 
-        thread = threading.Thread(target=run_in_thread)
+        thread = threading.Thread(target=run_in_thread, name='FullScanThread')
         thread.daemon = True
         thread.start()
 

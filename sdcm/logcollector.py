@@ -823,6 +823,8 @@ class SCTLogCollector(LogCollector):
 
     """
     log_entities = [
+        FileLog(name='profile.stats',
+                search_locally=True),
         FileLog(name='sct.log',
                 search_locally=True),
         FileLog(name='raw_events.log',
