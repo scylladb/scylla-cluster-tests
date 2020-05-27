@@ -245,6 +245,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                completed_stages['send_email'] = true
                             }
                         }
                     }
@@ -269,7 +270,6 @@ def call(Map pipelineParams) {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         runCleanupResource(params: params)
-                                        completed_stages['clean_resources'] = true
                                     }
                                 }
                             }
@@ -280,7 +280,6 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
-                                    completed_stages['send_email'] = true
                                 }
                             }
                         }
