@@ -5,9 +5,9 @@ import logging.config
 LOGGER = logging.getLogger(__name__)
 
 
-def setup_stdout_logger():
+def setup_stdout_logger(log_level=logging.INFO):
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
     root_logger.addHandler(logging.StreamHandler(sys.stdout))
     return root_logger
 

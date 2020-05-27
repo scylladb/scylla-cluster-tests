@@ -117,6 +117,14 @@ To run SCT tests locally run following::
     pyenv activate sct38
     pip install -r requirements-python.txt
 
+Preparing AWS Cloud environment
+-------------------------------
+
+To run tests in different regions SCT needs pre-configured environment.
+To configure a region: create VPC and all related environment elements (Subnet, Security Group, etc.) use::
+
+    hydra prepare-aws-region --region <region_name>
+
 Run a test
 ----------
 
