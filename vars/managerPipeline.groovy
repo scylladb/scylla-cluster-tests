@@ -52,21 +52,9 @@ def call(Map pipelineParams) {
                    description: 'email recipients of email report',
                    name: 'email_recipients')
 
-            string(defaultValue: "${pipelineParams.get('ami_id_monitor', '')}",
-                   description: 'AMI ID of monitor node',
-                   name: 'ami_id_monitor')
-
-            string(defaultValue: "${pipelineParams.get('ami_monitor_user', '')}",
-                   description: 'user for monitor node',
-                   name: 'ami_monitor_user')
-
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_repo')
-
-            string(defaultValue: "${pipelineParams.get('scylla_repo_m', '')}",
-                   description: 'backend scylla repo for manager',
-                   name: 'scylla_repo_m')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
                    description: 'Url to the scylla manager packages',
@@ -138,20 +126,8 @@ def call(Map pipelineParams) {
                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                     fi
 
-                                    if [[ ! -z "${params.ami_id_monitor}" ]] ; then
-                                        export SCT_AMI_ID_MONITOR="${params.ami_id_monitor}"
-                                    fi
-
-                                    if [[ ! -z "${params.ami_monitor_user}" ]] ; then
-                                        export SCT_AMI_MONITOR_USER="${params.ami_monitor_user}"
-                                    fi
-
                                     if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
                                         export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
-                                    fi
-
-                                    if [[ ! -z "${params.scylla_repo_m}" ]] ; then
-                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo_m}"
                                     fi
 
                                     if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then

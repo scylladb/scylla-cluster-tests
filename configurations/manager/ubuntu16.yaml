@@ -1,0 +1,4 @@
+ami_id_monitor: 'ami-092d0d014b7b31a08'  # Canonical, Ubuntu, 16.04 LTS, amd64 xenial image build on 2019-02-12
+ami_monitor_user: 'ubuntu'
+
+scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2019.1-xenial.list'
