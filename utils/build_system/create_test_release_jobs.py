@@ -30,6 +30,6 @@ class JenkinsPipelines:
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
         try:
-            self.jenkins.create_job(f'{self.base_job_dir}/{group_name}/{base_name}', xml_data)
+            self.jenkins.create_job(f'{self.base_job_dir}/{group_name}/{base_name}-test', xml_data)
         except jenkins.JenkinsException as ex:
             print(ex)
