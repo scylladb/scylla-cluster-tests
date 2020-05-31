@@ -1284,17 +1284,21 @@ def wait_ami_available(client, ami_id):
                 )
 
 
-def update_certificates():
+def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='data_dir/ssl_conf/cadb.pem',
+                        cadb_key='data_dir/ssl_conf/example/cadb.key', db_crt='data_dir/ssl_conf/db.crt'):
     """
     Update the certificate of server encryption, which might be expired.
     """
     try:
         from sdcm.remote import LocalCmdRunner
         localrunner = LocalCmdRunner()
-        localrunner.run('openssl x509 -req -in data_dir/ssl_conf/example/db.csr -CA data_dir/ssl_conf/cadb.pem -CAkey data_dir/ssl_conf/example/cadb.key -CAcreateserial -out data_dir/ssl_conf/db.crt -days 365')
-        localrunner.run('openssl x509 -enddate -noout -in data_dir/ssl_conf/db.crt')
+        localrunner.run(f'openssl x509 -req -in {db_csr} -CA {cadb_pem} -CAkey {cadb_key} -CAcreateserial '
+                        f'-out {db_crt} -days 365')
+        localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
+        new_crt = localrunner.run(f'cat {db_crt}').stdout
     except Exception as ex:
         raise Exception('Failed to update certificates by openssl: %s' % ex)
+    return new_crt
 
 
 def s3_download_dir(bucket, path, target):
