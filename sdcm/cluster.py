@@ -48,13 +48,12 @@ from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.decorators import cached_property, retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent
+    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack

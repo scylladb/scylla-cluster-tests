@@ -4,9 +4,8 @@ import threading
 import signal
 import logging
 
-from sdcm.sct_events import EVENTS_PROCESSES, Severity
+from sdcm.sct_events import EVENTS_PROCESSES, Severity, raise_event_on_failure
 from sdcm.cluster import Setup
-from sdcm.utils.thread import raise_event_on_failure
 
 LOGGER = logging.getLogger(__name__)
 
