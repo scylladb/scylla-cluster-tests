@@ -36,7 +36,8 @@ from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus, update_config_file
-from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string
+from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string, \
+    update_certificates
 from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
@@ -58,6 +59,10 @@ class NoKeyspaceFound(Exception):
 
 
 class FilesNotCorrupted(Exception):
+    pass
+
+
+class LogContentNotFound(Exception):
     pass
 
 
@@ -1914,6 +1919,45 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
+    def disrupt_hot_reloading_internode_certificate(self):
+        '''
+        https://github.com/scylladb/scylla/issues/6067
+        Scylla has the ability to hot reload SSL certificates.
+        This test will create and reload new certificates for the inter node communication.
+        '''
+        self._set_current_disruption('HotReloadInternodeCertificate')
+        if not self.cluster.params.get('server_encrypt', None):
+            raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
+
+        @retrying(allowed_exceptions=LogContentNotFound)
+        def check_ssl_reload_log(target_node, file_path, since_time):
+            msg = target_node.remoter.run(f'journalctl -u scylla-server --since="{since_time}" | '
+                                          f'grep Reload | grep {file_path}', ignore_status=True)
+            if not msg.stdout:
+                raise LogContentNotFound('Reload SSL message not found in node log')
+            return msg.stdout
+
+        ssl_files_location = '/etc/scylla/ssl_conf'
+        in_place_crt = self.target_node.remoter.run(f"cat {os.path.join(ssl_files_location, 'db.crt')}",
+                                                    ignore_status=True).stdout
+        update_certificates()
+        time_now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        for node in self.cluster.nodes:
+            node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
+        for node in self.cluster.nodes:
+            node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
+        for node in self.cluster.nodes:
+            new_crt = node.remoter.run(f"cat {os.path.join(ssl_files_location, 'db.crt')}").stdout
+            if in_place_crt == new_crt:
+                raise Exception('The CRT file was not replaced with the new one')
+            reload = check_ssl_reload_log(target_node=node, file_path=os.path.join(ssl_files_location, 'db.crt'),
+                                          since_time=time_now)
+
+            if not reload:
+                raise Exception('SSL auto Reload did not happen')
+
+        self.log.info('hot reloading internode ssl nemesis finished')
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -2017,6 +2061,14 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
         return result
 
     return wrapper
+
+
+class SslHotReloadingNemesis(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_hot_reloading_internode_certificate()
 
 
 class NoOpMonkey(Nemesis):
