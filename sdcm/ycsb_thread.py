@@ -11,10 +11,9 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import YcsbStressEvent, Severity
 from sdcm.remote import FailuresWatcher
 from sdcm.utils.common import FileFollowerThread
-from sdcm.utils.thread import DockerBasedStressThread
 from sdcm.utils.docker_utils import RemoteDocker
 from sdcm.utils.common import generate_random_string
-from sdcm.stress_thread import format_stress_cmd_error
+from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 

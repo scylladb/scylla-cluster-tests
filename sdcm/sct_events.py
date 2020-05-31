@@ -4,6 +4,8 @@ import os
 import re
 import logging
 import json
+from functools import wraps
+from traceback import format_exc
 from json import JSONEncoder
 import signal
 import time
@@ -1008,3 +1010,22 @@ def EVENT_FILTER_TIMEOUT():  # pylint: disable=invalid-name
 
 
 atexit.register(stop_events_device)
+
+
+def raise_event_on_failure(func):
+    """
+    Decorate a function that is running inside a thread,
+    when exception is raised in this function,
+    will raise an Error severity event
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        result = None
+        _test_pid = os.getpid()
+        try:
+            result = func(*args, **kwargs)
+        except Exception as ex:  # pylint: disable=broad-except
+            ThreadFailedEvent(message=str(ex), traceback=format_exc())
+
+        return result
+    return wrapper
