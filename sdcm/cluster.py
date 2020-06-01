@@ -2619,6 +2619,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             cmd = "dpkg-query --show 'scylla*'"
         return self.remoter.run(cmd).stdout.splitlines()
 
+    def get_scylla_config_param(self, config_param_name, verbose=True):
+        """
+        Get Scylla configuration parameter that not exists in the scylla.yaml
+        """
+        try:
+            request_out = self.remoter.run(
+                f'sudo curl --request GET http://localhost:10000/v2/config/{config_param_name}')
+            if "No such config entry" in request_out.stdout:
+                self.log.error(
+                    f'Failed to retreive value of {config_param_name} parameter. Error: {request_out.stdout}')
+                return None
+            if verbose:
+                self.log.debug(f'{config_param_name} parameter value: {request_out.stdout}')
+            return request_out.stdout
+        except Exception as e:  # pylint: disable=broad-except
+            self.log.error(f'Failed to retreive value of {config_param_name} parameter. Error: {e}')
+            return None
+
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes
     """
