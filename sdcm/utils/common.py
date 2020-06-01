@@ -51,6 +51,7 @@ from libcloud.compute.types import Provider
 
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
+from sdcm import wait
 
 
 LOGGER = logging.getLogger('utils')
@@ -1562,3 +1563,234 @@ def normalize_ipv6_url(ip_address):
     if ":" in ip_address:  # IPv6
         return "[%s]" % ip_address
     return ip_address
+
+
+def rows_to_list(rows):
+    return [list(row) for row in rows]
+
+
+# Copied from dtest
+class Page:  # pylint: disable=too-few-public-methods
+    data = None
+
+    def __init__(self):
+        self.data = []
+
+    def add_row(self, row):
+        self.data.append(row)
+
+
+# Copied from dtest
+class PageFetcher:
+    """
+    Requests pages, handles their receipt,
+    and provides paged data for testing.
+
+    The first page is automatically retrieved, so an initial
+    call to request_one is actually getting the *second* page!
+    """
+    pages = None
+    error = None
+    future = None
+    requested_pages = None
+    retrieved_pages = None
+    retrieved_empty_pages = None
+
+    def __init__(self, future):
+        self.pages = []
+
+        # the first page is automagically returned (eventually)
+        # so we'll count this as a request, but the retrieved count
+        # won't be incremented until it actually arrives
+        self.requested_pages = 1
+        self.retrieved_pages = 0
+        self.retrieved_empty_pages = 0
+
+        self.future = future
+        self.future.add_callbacks(
+            callback=self.handle_page,
+            errback=self.handle_error
+        )
+
+        # wait for the first page to arrive, otherwise we may call
+        # future.has_more_pages too early, since it should only be
+        # called after the first page is returned
+        self.wait(seconds=30)
+
+    def handle_page(self, rows):
+        # occasionally get a final blank page that is useless
+        if rows == []:
+            self.retrieved_empty_pages += 1
+            return
+
+        page = Page()
+        self.pages.append(page)
+
+        for row in rows:
+            page.add_row(row)
+
+        self.retrieved_pages += 1
+
+    def handle_error(self, exc):
+        self.error = exc
+        raise exc
+
+    def request_one(self):
+        """
+        Requests the next page if there is one.
+
+        If the future is exhausted, this is a no-op.
+        """
+        if self.future.has_more_pages:
+            self.future.start_fetching_next_page()
+            self.requested_pages += 1
+            self.wait()
+
+        return self
+
+    def request_all(self):
+        """
+        Requests any remaining pages.
+
+        If the future is exhausted, this is a no-op.
+        """
+        while self.future.has_more_pages:
+            self.future.start_fetching_next_page()
+            self.requested_pages += 1
+            self.wait()
+
+        return self
+
+    def wait(self, seconds=10):
+        """
+        Blocks until all *requested* pages have been returned.
+
+        Requests are made by calling request_one and/or request_all.
+
+        Raises RuntimeError if seconds is exceeded.
+        """
+        def error_message(msg):
+            return "{}. Requested: {}; retrieved: {}; empty retrieved {}".format(
+                msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages)
+
+        def missing_pages():
+            pages = self.requested_pages - (self.retrieved_pages + self.retrieved_empty_pages)
+            assert pages >= 0, error_message('Retrieved too many pages')
+            return pages
+
+        missing = missing_pages()
+        if missing <= 0:
+            return self
+        expiry = time.time() + seconds * missing
+
+        while time.time() < expiry:
+            if missing_pages() <= 0:
+                return self
+            # small wait so we don't need excess cpu to keep checking
+            time.sleep(0.1)
+
+        raise RuntimeError(error_message('Requested pages were not delivered before timeout'))
+
+    def pagecount(self):
+        """
+        Returns count of *retrieved* pages which were not empty.
+
+        Pages are retrieved by requesting them with request_one and/or request_all.
+        """
+        return len(self.pages)
+
+    def num_results(self, page_num):
+        """
+        Returns the number of results found at page_num
+        """
+        return len(self.pages[page_num - 1].data)
+
+    def num_results_all(self):
+        return [len(page.data) for page in self.pages]
+
+    def page_data(self, page_num):
+        """
+        Returns retreived data found at pagenum.
+
+        The page should have already been requested with request_one and/or request_all.
+        """
+        return self.pages[page_num - 1].data
+
+    def all_data(self):
+        """
+        Returns all retrieved data flattened into a single list (instead of separated into Page objects).
+
+        The page(s) should have already been requested with request_one and/or request_all.
+        """
+        all_pages_combined = []
+        for page in self.pages:
+            all_pages_combined.extend(page.data[:])
+
+        return all_pages_combined
+
+    @property  # make property to match python driver api
+    def has_more_pages(self):
+        """
+        Returns bool indicating if there are any pages not retrieved.
+        """
+        return self.future.has_more_pages
+
+
+def get_docker_stress_image_name(tool_name=None):
+    if not tool_name:
+        return None
+    base_path = os.path.dirname(os.path.dirname((os.path.dirname(__file__))))
+    with open(os.path.join(base_path, "docker", tool_name, "image"), "r") as image_file:
+        result = image_file.read()
+
+    return result.strip()
+
+
+def search_database_enospc(node):
+    """
+    Search system log by executing cmd inside node, use shell tool to
+    avoid return and process huge data.
+    """
+    cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
+    result = node.remoter.run(cmd, verbose=True)
+    return int(result.stdout)
+
+
+def approach_enospc(node, orig_errors):
+    # get the size of free space (default unit: KB)
+    result = node.remoter.run("df -l|grep '/var/lib/scylla'")
+    free_space_size = result.stdout.split()[3]
+
+    occupy_space_size = int(int(free_space_size) * 90 / 100)
+    occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(
+        occupy_space_size, datetime.datetime.now().strftime('%s'))
+    LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+    try:
+        node.remoter.run(occupy_space_cmd, verbose=True)
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error(str(details))
+    return search_database_enospc(node) > orig_errors
+
+
+def reach_enospc_on_node(target_node):
+    # check original ENOSPC error
+    orig_errors = search_database_enospc(target_node)
+    wait.wait_for(func=approach_enospc,
+                  timeout=300,
+                  step=5,
+                  text='Wait for new ENOSPC error occurs in database',
+                  node=target_node,
+                  orig_errors=orig_errors)
+
+
+def clean_enospc_on_node(target_node, sleep_time):
+    LOGGER.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+    time.sleep(sleep_time)
+
+    LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
+    target_node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+
+    LOGGER.debug('Sleep a while before restart scylla-server')
+    time.sleep(sleep_time / 2)
+    target_node.remoter.run('sudo systemctl restart scylla-server.service')
+    target_node.wait_db_up()
