@@ -1,5 +1,6 @@
 import logging
 from contextlib import contextmanager
+from enum import Enum
 
 import boto3
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
@@ -9,6 +10,13 @@ from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, Promet
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class WriteIsolation(Enum):
+    ALWAYS_USE_LWT = "always_use_lwt"
+    FORBID_RMW = "forbid_rmw"
+    ONLY_RMW_USES_LWT = "only_rmw_uses_lwt"
+    UNSAFE_RMW = "unsafe_rmw"
 
 
 def create_table(endpoint_url, test_params, table_name=None):
@@ -66,6 +74,7 @@ def set_table_write_isolation(table_name='usertable', isolation=None, endpoint_u
 
 
 def set_write_isolation(table: DynamoDBServiceResource.Table, isolation):
+    isolation = isolation if not isinstance(isolation, WriteIsolation) else isolation.value
     got = table.meta.client.describe_table(TableName=table.name)['Table']
     arn = got['TableArn']
     tags = [

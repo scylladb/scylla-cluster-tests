@@ -44,6 +44,7 @@ from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
+from sdcm.utils.alternator import WriteIsolation
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
@@ -1700,6 +1701,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if alternator_port:
             scylla_yml['alternator_port'] = alternator_port
+            scylla_yml['alternator_write_isolation'] = WriteIsolation.ALWAYS_USE_LWT.value
 
         if alternator_enforce_authorization:
             scylla_yml['alternator_enforce_authorization'] = True
