@@ -527,30 +527,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nodes = [self.target_node]
         self._set_current_disruption('Enospc test on {}'.format([n.name for n in nodes]))
 
-        def search_database_enospc(node):
-            """
-            Search system log by executing cmd inside node, use shell tool to
-            avoid return and process huge data.
-            """
-            cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
-            result = node.remoter.run(cmd, verbose=True)
-            return int(result.stdout)
-
-        def approach_enospc(node):
-            # get the size of free space (default unit: KB)
-            result = node.remoter.run("df -l|grep '/var/lib/scylla'")
-            free_space_size = result.stdout.split()[3]
-
-            occupy_space_size = int(int(free_space_size) * 90 / 100)
-            occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(
-                occupy_space_size, datetime.datetime.now().strftime('%s'))
-            self.log.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
-            try:
-                node.remoter.run(occupy_space_cmd, verbose=True)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error(str(details))
-            return search_database_enospc(node) > orig_errors
-
         for node in nodes:
             with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
                     DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
@@ -562,24 +538,57 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     self.log.error("Scylla doesn't use an individual storage, skip enospc test")
                     continue
 
-                # check original ENOSPC error
-                orig_errors = search_database_enospc(node)
-                wait.wait_for(func=approach_enospc,
-                              timeout=300,
-                              step=5,
-                              text='Wait for new ENOSPC error occurs in database',
-                              node=node)
+                self.reach_enospc_on_node(target_node=node, log_object=self.log)
 
-                self.log.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
-                time.sleep(sleep_time)
+                self.clean_enospc_on_node(target_node=node, log_object=self.log, sleep_time=sleep_time)
 
-                self.log.debug('Delete occupy_90percent file to release space to scylla-server')
-                node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+    @staticmethod
+    def reach_enospc_on_node(target_node, log_object):
+        def search_database_enospc(node):
+            """
+            Search system log by executing cmd inside node, use shell tool to
+            avoid return and process huge data.
+            """
+            cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
+            result = node.remoter.run(cmd, verbose=True)
+            return int(result.stdout)
 
-                self.log.debug('Sleep a while before restart scylla-server')
-                time.sleep(sleep_time / 2)
-                node.remoter.run('sudo systemctl restart scylla-server.service')
-                node.wait_db_up()
+        def approach_enospc(node, orig_errors):
+            # get the size of free space (default unit: KB)
+            result = node.remoter.run("df -l|grep '/var/lib/scylla'")
+            free_space_size = result.stdout.split()[3]
+
+            occupy_space_size = int(int(free_space_size) * 90 / 100)
+            occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(
+                occupy_space_size, datetime.datetime.now().strftime('%s'))
+            log_object.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+            try:
+                node.remoter.run(occupy_space_cmd, verbose=True)
+            except Exception as details:  # pylint: disable=broad-except
+                log_object.error(str(details))
+            return search_database_enospc(node) > orig_errors
+
+        # check original ENOSPC error
+        orig_errors = search_database_enospc(target_node)
+        wait.wait_for(func=approach_enospc,
+                      timeout=300,
+                      step=5,
+                      text='Wait for new ENOSPC error occurs in database',
+                      node=target_node,
+                      orig_errors=orig_errors)
+
+    @staticmethod
+    def clean_enospc_on_node(target_node, log_object, sleep_time):
+        log_object.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+        time.sleep(sleep_time)
+
+        log_object.debug('Delete occupy_90percent file to release space to scylla-server')
+        target_node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+
+        log_object.debug('Sleep a while before restart scylla-server')
+        time.sleep(sleep_time / 2)
+        target_node.remoter.run('sudo systemctl restart scylla-server.service')
+        target_node.wait_db_up()
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
