@@ -356,6 +356,18 @@ class BackupTask(ManagerTask):
         snapshot_tag = snapshot_line[snapshot_index].split(":")[1].strip()
         return snapshot_tag
 
+    def is_task_in_uploading_stage(self):
+        full_progress_string = self.sctool.run("task progress {} -c {}".format(self.id, self.cluster_id),
+                                               parse_table_res=False,
+                                               is_verify_errorless_result=True).stdout.lower()
+        return "upload" in full_progress_string
+
+    def wait_for_uploading_stage(self, timeout=1440, step=10):
+        text = "Waiting until backup task: {} starts to upload snapshots".format(self.id)
+        is_status_reached = wait.wait_for(func=self.is_task_in_uploading_stage, step=step,
+                                          text=text, timeout=timeout)
+        return is_status_reached
+
 
 class ManagerCluster(ScyllaManagerBase):
 
