@@ -21,6 +21,7 @@ from invoke import exceptions
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
+from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.tester import ClusterTester
 
 
@@ -160,7 +161,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for node in self.db_cluster.nodes:
             data_center = self.db_cluster.get_nodetool_info(node)['Data Center']
             dcs_names.add(data_center)
-            node.region = data_center
         return dcs_names
 
     def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):
@@ -213,6 +213,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_backup_location_with_path()
         with self.subTest('Test Backup Rate Limit'):
             self.test_backup_rate_limit()
+        with self.subTest('Test Backup end of space'):  # Preferably at the end
+            self.test_enospc_during_backup()
 
     def update_config_file(self):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
@@ -475,6 +477,45 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
         self.log.info("the sctool repair command was completed successfully")
         self.log.info('finishing test_repair_multiple_keyspace_types')
+
+    def test_enospc_during_backup(self):
+        self.log.info('starting test_enospc_during_backup')
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        hosts = self.get_cluster_hosts_ip()
+        location_list = [f's3:{self.bucket_name}']
+        selected_host = hosts[0]
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
+                                        auth_token=self.monitors.mgmt_auth_token)
+
+        target_node = self.db_cluster.nodes[1]
+
+        self.generate_load_and_wait_for_results()
+        has_enospc_been_reached = False
+        with DbEventsFilter(type='NO_SPACE_ERROR', node=target_node),\
+                DbEventsFilter(type='BACKTRACE', line='No space left on device', node=target_node), \
+                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=target_node), \
+                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=target_node):
+            try:
+                backup_task = mgr_cluster.create_backup_task(location_list=location_list)
+                backup_task.wait_for_uploading_stage()
+                backup_task.stop()
+
+                reach_enospc_on_node(target_node=target_node)
+                has_enospc_been_reached = True
+
+                backup_task.start(cmd=f"task -c {backup_task.cluster_id} start {backup_task.id} --continue=true")
+
+                backup_task.wait_and_get_final_status()
+                assert backup_task.status == TaskStatus.DONE, "The backup failed to run on a node with no free space," \
+                                                              " while it should have had the room for snapshots due " \
+                                                              "to the previous run"
+
+            finally:
+                if has_enospc_been_reached:
+                    clean_enospc_on_node(target_node=target_node, sleep_time=30)
 
     @staticmethod
     def _keyspace_value_in_progress_table(repair_task, repair_progress_table, keyspace_name):
