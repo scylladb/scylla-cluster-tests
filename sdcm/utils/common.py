@@ -56,6 +56,7 @@ from packaging.version import Version
 
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
+from sdcm import wait
 
 
 LOGGER = logging.getLogger('utils')
@@ -1840,3 +1841,53 @@ def get_docker_stress_image_name(tool_name=None):
         result = image_file.read()
 
     return result.strip()
+
+
+def search_database_enospc(node):
+    """
+    Search system log by executing cmd inside node, use shell tool to
+    avoid return and process huge data.
+    """
+    cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
+    result = node.remoter.run(cmd, verbose=True)
+    return int(result.stdout)
+
+
+def approach_enospc(node, orig_errors):
+    # get the size of free space (default unit: KB)
+    result = node.remoter.run("df -l|grep '/var/lib/scylla'")
+    free_space_size = result.stdout.split()[3]
+
+    occupy_space_size = int(int(free_space_size) * 90 / 100)
+    occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(
+        occupy_space_size, datetime.datetime.now().strftime('%s'))
+    LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+    try:
+        node.remoter.run(occupy_space_cmd, verbose=True)
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error(str(details))
+    return search_database_enospc(node) > orig_errors
+
+
+def reach_enospc_on_node(target_node):
+    # check original ENOSPC error
+    orig_errors = search_database_enospc(target_node)
+    wait.wait_for(func=approach_enospc,
+                  timeout=300,
+                  step=5,
+                  text='Wait for new ENOSPC error occurs in database',
+                  node=target_node,
+                  orig_errors=orig_errors)
+
+
+def clean_enospc_on_node(target_node, sleep_time):
+    LOGGER.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+    time.sleep(sleep_time)
+
+    LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
+    target_node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+
+    LOGGER.debug('Sleep a while before restart scylla-server')
+    time.sleep(sleep_time / 2)
+    target_node.remoter.run('sudo systemctl restart scylla-server.service')
+    target_node.wait_db_up()
