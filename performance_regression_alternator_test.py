@@ -14,7 +14,8 @@
 import contextlib
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils.alternator import create_table as alternator_create_table, set_table_write_isolation, ignore_alternator_client_errors
+from sdcm.utils.alternator import create_table as alternator_create_table, set_table_write_isolation, \
+    ignore_alternator_client_errors, WriteIsolation
 from sdcm.utils.common import normalize_ipv6_url
 from sdcm.sct_events import Severity, EventsSeverityChangerFilter, DatabaseLogEvent
 
@@ -134,14 +135,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         # run a workload without lwt as baseline
         table_params = dict(dynamodb_primarykey_type=self.params.get(
-            'dynamodb_primarykey_type'), alternator_write_isolation='forbid')
+            'dynamodb_primarykey_type'), alternator_write_isolation=WriteIsolation.FORBID_RMW)
         self.create_alternator_table(table_params)
 
         self._workload(sub_type='without-lwt', stress_cmd=base_cmd_w, stress_num=stress_multiplier, keyspace_num=1)
 
         # run a workload with lwt
         table_params = dict(dynamodb_primarykey_type=self.params.get(
-            'dynamodb_primarykey_type'), alternator_write_isolation='always')
+            'dynamodb_primarykey_type'), alternator_write_isolation=WriteIsolation.ALWAYS_USE_LWT)
         self.create_alternator_table(table_params)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_w, stress_num=stress_multiplier, keyspace_num=1)
 
@@ -163,7 +164,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         # run a prepare write workload
         self.create_cql_ks_and_table(field_number=10)
         table_params = dict(dynamodb_primarykey_type=self.params.get(
-            'dynamodb_primarykey_type'), alternator_write_isolation='forbid')
+            'dynamodb_primarykey_type'), alternator_write_isolation=WriteIsolation.FORBID_RMW)
         self.create_alternator_table(table_params)
 
         self.preload_data()
@@ -172,11 +173,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                        stress_num=stress_multiplier, keyspace_num=1, alternator=False)
 
         # run a workload without lwt as baseline
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
         self._workload(sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier, keyspace_num=1)
 
         # run a workload with lwt
-        set_table_write_isolation(isolation='always', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.ALWAYS_USE_LWT, endpoint_url=self.alternator_endpoint_url)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier, keyspace_num=1)
 
         self.check_regression_with_baseline('cql')
@@ -197,7 +198,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.create_cql_ks_and_table(field_number=10)
         table_params = dict(dynamodb_primarykey_type=self.params.get(
-            'dynamodb_primarykey_type'), alternator_write_isolation='forbid')
+            'dynamodb_primarykey_type'), alternator_write_isolation=WriteIsolation.FORBID_RMW)
         self.create_alternator_table(table_params)
 
         # run a write workload as a preparation
@@ -208,11 +209,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         # run a mixed workload
         # run a workload without lwt as baseline
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
         self._workload(sub_type='without-lwt', stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1)
 
         # run a workload with lwt
-        set_table_write_isolation(isolation='always', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.ALWAYS_USE_LWT, endpoint_url=self.alternator_endpoint_url)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1)
 
         self.check_regression_with_baseline('cql')
@@ -235,9 +236,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         """
 
         table_params = dict(dynamodb_primarykey_type=self.params.get(
-            'dynamodb_primarykey_type'), alternator_write_isolation='forbid')
+            'dynamodb_primarykey_type'), alternator_write_isolation=WriteIsolation.FORBID_RMW)
         self.create_alternator_table(table_params)
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
 
         self.create_cql_ks_and_table(field_number=10)
         self.run_fstrim_on_all_db_nodes()
@@ -256,14 +257,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             keyspace_num=1, alternator=False)
 
         # run a workload without lwt as baseline
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
         self._workload(
             test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
-        set_table_write_isolation(isolation='always', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.ALWAYS_USE_LWT, endpoint_url=self.alternator_endpoint_url)
         self._workload(
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1)
@@ -279,14 +280,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
         self._workload(
             test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + " -target 10000", stress_num=stress_multiplier,
             keyspace_num=1)
 
         self.wait_no_compactions_running(n=120)
         # run a workload with lwt
-        set_table_write_isolation(isolation='always', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.ALWAYS_USE_LWT, endpoint_url=self.alternator_endpoint_url)
         self._workload(
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000", stress_num=stress_multiplier,
             keyspace_num=1)
@@ -301,13 +302,13 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
-        set_table_write_isolation(isolation='forbid', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.FORBID_RMW, endpoint_url=self.alternator_endpoint_url)
         self._workload(test_name=self.id() + '_mixed', sub_type='without-lwt',
                        stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
-        set_table_write_isolation(isolation='always', endpoint_url=self.alternator_endpoint_url)
+        set_table_write_isolation(isolation=WriteIsolation.ALWAYS_USE_LWT, endpoint_url=self.alternator_endpoint_url)
         self._workload(test_name=self.id() + '_mixed', sub_type='with-lwt',
                        stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1)
 
