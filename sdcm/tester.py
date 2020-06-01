@@ -73,7 +73,7 @@ from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
-from sdcm.utils.alternator import create_table as alternator_create_table
+from sdcm.utils.alternator import create_table as alternator_create_table, WriteIsolation
 
 try:
     import cluster_cloud
@@ -415,7 +415,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                           self.params.get('alternator_secret_access_key')))
 
             alternator_create_table(endpoint_url, self.params)
-            params = dict(self.params, alternator_write_isolation='forbid')
+            params = dict(self.params, alternator_write_isolation=WriteIsolation.FORBID_RMW)
             alternator_create_table(endpoint_url, test_params=params, table_name='usertable_no_lwt')
 
     def get_nemesis_class(self):
