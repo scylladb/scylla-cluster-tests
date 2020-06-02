@@ -1909,7 +1909,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
-                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+                self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
             elif self.is_ubuntu18() or self.is_ubuntu16():
                 install_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
@@ -1920,7 +1920,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     add-apt-repository -y ppa:scylladb/ppa
                     apt-get update
                     apt-get install -y openjdk-8-jre-headless
-                    update-java-alternatives -s java-1.8.0-openjdk-amd64
+                    update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
@@ -1940,7 +1940,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
-                self.remoter.run('sudo update-java-alternatives -s java-1.8.0-openjdk-amd64')
+                self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
             elif self.is_debian9():
                 force = ''
                 install_debian_9_prereqs = dedent("""
@@ -3636,7 +3636,7 @@ class BaseLoaderSet():
                 add-apt-repository -y ppa:scylladb/ppa
                 apt-get update
                 apt-get install -y openjdk-8-jre-headless
-                update-java-alternatives -s java-1.8.0-openjdk-amd64
+                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
@@ -3653,7 +3653,7 @@ class BaseLoaderSet():
                 echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /' |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
                 apt-get update
                 apt-get install -y openjdk-8-jre-headless -t jessie-backports
-                update-java-alternatives -s java-1.8.0-openjdk-amd64
+                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
 
