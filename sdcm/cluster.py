@@ -1075,12 +1075,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def reboot(self, hard=True, verify_ssh=True):
         result = self.remoter.run('uptime -s')
-        pre_uptime = result.stdout
+        pre_uptime = datetime.strptime(result.stdout.strip(), '%Y-%m-%d %H:%M:%S')
 
         def uptime_changed():
             try:
                 result = self.remoter.run('uptime -s', ignore_status=True)
-                return pre_uptime != result.stdout
+                post_uptime = datetime.strptime(result.stdout.strip(), '%Y-%m-%d %H:%M:%S')
+                # In one job, I found the `uptime -s` result increased 1 second without real
+                # reboot, it might be caused by normal timedrift. So we should not treat it as
+                # reboot finish if the uptime change is very short.
+                #
+                # The uptime is the time kernel to start, so the normal time gap between two
+                # uptime should contain system start time of first reboot, and the bios reset
+                # time of second reboot. In the problem job, one complete reboot costed 3 mins
+                # and 27 seconds.
+                #
+                # The real gap time is effected many factors (instance type, system load, cloud
+                # platform load, enabled services in system, etc), so here we just expect the gap
+                # time is larger than 5 seconds.
+                #
+                # The added a time gap check will ignore short uptime change before real reboot.
+                return pre_uptime != post_uptime and (post_uptime - pre_uptime).seconds > 5
             except SSHException as ex:
                 self.log.debug("Network isn't available, reboot might already start, %s" % ex)
                 return False
