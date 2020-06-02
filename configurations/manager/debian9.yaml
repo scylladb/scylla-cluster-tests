@@ -1,4 +1,4 @@
-aws_root_disk_name_monitor: "/dev/xvda"
+aws_root_disk_name_monitor: "xvda"
 ami_id_monitor: 'ami-0cfac3931b2a799d1'  # Debian stretch image
 ami_monitor_user: 'admin'
 
