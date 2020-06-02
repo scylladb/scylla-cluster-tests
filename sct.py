@@ -5,6 +5,7 @@ import unittest
 import logging
 import glob
 import time
+import traceback
 import pytest
 import click
 import click_completion
@@ -515,21 +516,22 @@ def send_email(test_id=None, test_status=None, start_time=None, email_recipients
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
     test_results = None
-    testrun_dir = None
     if start_time is None:
         start_time = format_timestamp(time.time())
     else:
         start_time = format_timestamp(int(start_time))
-    if not test_status:
-        testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
-        if testrun_dir:
-            email_results_file = os.path.join(testrun_dir, "email_data.json")
-            test_results = read_email_data_from_file(email_results_file)
+    testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
+    if testrun_dir:
+        email_results_file = os.path.join(testrun_dir, "email_data.json")
+        test_results = read_email_data_from_file(email_results_file)
+    else:
+        LOGGER.warning("Failed to find test directory for %s", test_id)
 
     if test_results:
         reporter = test_results.get("reporter", "")
         test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
     else:
+        LOGGER.warning("Failed to read test results for %s", test_id)
         reporter = "TestAborted"
         if not test_status:
             test_status = 'FAILED'
@@ -545,6 +547,7 @@ def send_email(test_id=None, test_status=None, start_time=None, email_recipients
     try:
         reporter.send_report(test_results)
     except Exception:  # pylint: disable=broad-except
+        LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
         build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
             "build_url": os.environ.get("BUILD_URL"),
             "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
