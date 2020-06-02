@@ -7,7 +7,6 @@ import glob
 import time
 import subprocess
 import traceback
-
 import pytest
 import click
 import click_completion
