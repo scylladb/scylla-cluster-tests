@@ -216,15 +216,15 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,unused-argument
-                      preserve_perm=True, preserve_symlinks=False):  # pylint: disable=too-many-arguments,unused-argument
+                      preserve_perm=True, preserve_symlinks=False, timeout=300):  # pylint: disable=too-many-arguments,unused-argument
         if src != dst:
-            self.run(f'cp {src} {dst}')
+            self.run(f'cp {src} {dst}', timeout=timeout)
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,unused-argument
-                   preserve_symlinks=False, verbose=False):  # pylint: disable=unused-argument
+                   preserve_symlinks=False, verbose=False, timeout=300):  # pylint: disable=unused-argument
         if src != dst:
-            self.run(f'cp {src} {dst}')
+            self.run(f'cp {src} {dst}', timeout=timeout)
 
 
 LOCALRUNNER = LocalCmdRunner()
