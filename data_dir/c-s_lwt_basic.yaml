@@ -26,9 +26,9 @@ table_definition: |
 
 extra_definitions:
   - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator as select domain, lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator < 0 PRIMARY KEY(lwt_indicator, domain, published_date);
-  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_upd as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000 PRIMARY KEY(lwt_indicator, domain, published_date);
-  - create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 1000000 PRIMARY KEY(lwt_indicator, domain, published_date);
-  - create MATERIALIZED VIEW blogposts_update_two_columns_lwt_indicator_upd as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 1000000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
   - create MATERIALIZED VIEW blogposts_not_updated_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 1000000 and lwt_indicator < 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
 
 ### Column Distribution Specifications ###

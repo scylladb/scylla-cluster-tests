@@ -5526,9 +5526,14 @@
                         "selected": false,
                         "text": "ClusterHealthValidatorEvent",
                         "value": "ClusterHealthValidatorEvent"
+                      },
+                      {
+                        "selected": false,
+                        "text": "DataValidatorEvent",
+                        "value": "DataValidatorEvent"
                       }
                     ],
-                    "query": "InfoEvent, CassandraStressEvent, ScyllaBenchEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, SpotTerminationEvent, ClusterHealthValidatorEvent",
+                    "query": "InfoEvent, CassandraStressEvent, ScyllaBenchEvent, DatabaseLogEvent, DisruptionEvent, CoreDumpEvent, SpotTerminationEvent, ClusterHealthValidatorEvent, DataValidatorEvent",
                     "skipUrlSync": false,
                     "type": "custom"
                   }

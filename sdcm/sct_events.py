@@ -547,6 +547,29 @@ class ClusterHealthValidatorEvent(SctEvent):
             return super(ClusterHealthValidatorEvent, self).__str__()
 
 
+class DataValidatorEvent(SctEvent):
+    def __init__(self, type, name, status=Severity.ERROR, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
+        super(DataValidatorEvent, self).__init__()
+        self.name = name
+        self.type = type
+        self.severity = status
+        self.error = error if error else ''
+        self.message = message if message else ''
+
+        self.__dict__.update(kwargs)
+        self.publish()
+
+    def __str__(self):
+        if self.severity in (Severity.NORMAL, Severity.WARNING):
+            return "{0}: type={1.type} name={1.name} message={1.message}".format(
+                super(DataValidatorEvent, self).__str__(), self)
+        elif self.severity in (Severity.CRITICAL, Severity.ERROR):
+            return "{0}: type={1.type} name={1.name} error={1.error}".format(
+                super(DataValidatorEvent, self).__str__(), self)
+        else:
+            return super(DataValidatorEvent, self).__str__()
+
+
 class FullScanEvent(SctEvent):
     def __init__(self, type, ks_cf, db_node_ip, severity=Severity.NORMAL, message=None):   # pylint: disable=redefined-builtin,too-many-arguments
         super(FullScanEvent, self).__init__()
