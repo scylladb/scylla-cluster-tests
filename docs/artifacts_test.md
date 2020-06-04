@@ -28,6 +28,8 @@ You should use different parameters for .rpm/.deb tests and for AMI test:
 - The only required parameter for .rpm/.deb jobs is `scylla_repo`, a path to a ScyllaDB repo (e.g., `https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/master/latest/scylla.repo`)
 - For AMI job you need two parameters: `scylla_ami_id` and `region_name`
 
+To verify Scylla Manager package you need to provide `scylla_repo` and `scylla_mgmt_repo` parameters. In this case Scylla Manager will be installed during artifacts test as well as ScyllaDB.
+
 Optionally, you can override default cloud instance type by providing `instance_type` parameter.
 
 `artifacts-*.jenkinsfile` files can be used to create Jenkins projects.

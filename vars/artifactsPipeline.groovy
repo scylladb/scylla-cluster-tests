@@ -18,6 +18,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_repo')
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_repo', '')}",
+                   description: 'a Scylla Manager repo to run against (for .rpm/.deb tests, should be blank otherwise)',
+                   name: 'scylla_mgmt_repo')
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
@@ -76,6 +79,11 @@ def call(Map pipelineParams) {
                                         export SCT_REGION_NAME="${params.region_name}"
                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
                                         export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                        if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
+                                            export SCT_USE_MGMT=true
+                                            export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                            export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                        fi
                                     else
                                         echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_REPO"
                                         exit 1
