@@ -1731,10 +1731,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
         self.stop_event_analyzer()
+        self.stop_resources()
         self.get_test_failing_events()
         self.get_test_failures()
-        self.tag_ami_with_result()
-        self.stop_resources()
         self.save_email_data()
         if self.params.get('collect_logs'):
             self.collect_logs()
@@ -1745,12 +1744,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_event_device()
         self.destroy_localhost()
         self.send_email()
+        self.tag_ami_with_result()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
         framework_errors = self.get_test_results('framework')
         if framework_errors:
             framework_errors = "\n".join(framework_errors)
-            self.log.info('%s\nFRAMEWORK ERRORS:\n%s\n%s', (">" * 70), framework_errors, (">" * 70))
+            self.log.error('%s\nFRAMEWORK ERRORS:\n%s\n%s', (">" * 70), framework_errors, (">" * 70))
         self.log.info('Test ID: {}'.format(Setup.test_id()))
 
     @silence()
