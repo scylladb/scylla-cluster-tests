@@ -319,8 +319,8 @@ class UpgradeTest(FillDatabaseData):
         versions_set = set()
 
         for node in self.db_cluster.nodes:
-            if os.path.exists(node.database_log):
-                for line in open(node.database_log).readlines():
+            if os.path.exists(node.system_log):
+                for line in open(node.system_log).readlines():
                     match = sstable_format_regex.search(line)
                     if match:
                         versions_set.add(match.group(1).lower())
@@ -425,7 +425,7 @@ class UpgradeTest(FillDatabaseData):
     # @staticmethod
     def search_for_idx_token_error_after_upgrade(self, node, step):
         self.log.debug('Search for idx_token error. Step {}'.format(step))
-        idx_token_error = node.search_database_log(
+        idx_token_error = node.search_system_log(
             search_pattern='idx_token',
             start_from_beginning=True)
         if idx_token_error:
@@ -650,9 +650,9 @@ class UpgradeTest(FillDatabaseData):
             schema_load_error_num = 0
 
             for node in self.db_cluster.nodes:
-                errors = node.search_database_log(search_pattern='Failed to load schema version',
-                                                  start_from_beginning=True,
-                                                  publish_events=False)
+                errors = node.search_system_log(search_pattern='Failed to load schema version',
+                                                start_from_beginning=True,
+                                                publish_events=False)
                 schema_load_error_num += len(errors)
                 self.search_for_idx_token_error_after_upgrade(node=node,
                                                               step=step)

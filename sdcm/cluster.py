@@ -29,7 +29,6 @@ from collections import defaultdict
 from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
-import subprocess
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
@@ -54,10 +53,11 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure
+    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
+from sdcm.utils.remote_logger import get_system_logging_thread
 
 SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
                                    "Ebs": {"VolumeSize": 40,
@@ -375,8 +375,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._short_hostname = None
         self._alert_manager = None
 
-        self._database_log_errors_index = []
-        self._database_error_events = [
+        self._system_log_errors_index = []
+        self._system_error_events = [
             DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
             DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
             DatabaseLogEvent(type='BROKEN_PIPE', severity=Severity.WARNING,
@@ -471,8 +471,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self._short_hostname
 
     @property
-    def database_log(self):
-        orig_log_path = os.path.join(self.logdir, 'database.log')
+    def system_log(self):
+        orig_log_path = os.path.join(self.logdir, 'system.log')
 
         if Setup.RSYSLOG_ADDRESS:
             rsys_log_path = os.path.join(Setup.logdir(), 'hosts', self.short_hostname, 'messages.log')
@@ -481,6 +481,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return rsys_log_path
         else:
             return orig_log_path
+
+    database_log = system_log
 
     @property
     def cassandra_stress_version(self):
@@ -782,58 +784,25 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         return self._init_system
 
-    def retrieve_journal(self, since):
-        try:
-            since = '--since "{}" '.format(since) if since else ""
-            self.log.debug("Reading Scylla logs from {}".format(since[8:] if since else "the beginning"))
-            if self.init_system == 'systemd':
-                # Here we're assuming that journalctl systems are Scylla images
-                db_services_log_cmd = (f'sudo journalctl -f --no-tail --no-pager --utc {since}'
-                                       '-u scylla-ami-setup.service '
-                                       '-u scylla-image-setup.service '
-                                       '-u scylla-io-setup.service '
-                                       '-u scylla-server.service '
-                                       '-u scylla-jmx.service')
-            elif self.file_exists('/usr/bin/scylla'):
-                db_services_log_cmd = ('sudo tail -f /var/log/syslog | grep scylla')
-            else:
-                # Here we are assuming we're using a cassandra image, based
-                # on older Ubuntu
-                cassandra_log = '/var/log/cassandra/system.log'
-                wait.wait_for(self.file_exists, step=10, timeout=600, throw_exc=True, file_path=cassandra_log)
-                db_services_log_cmd = ('sudo tail -f %s' % cassandra_log)
-            self.remoter.run(db_services_log_cmd,
-                             verbose=True, ignore_status=True,
-                             log_file=self.database_log)
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error retrieving remote node DB service log: %s',
-                           details)
-
-    @raise_event_on_failure
-    def journal_thread(self):
-        read_from_timestamp = None
-        while True:
-            if self.termination_event.isSet():
-                break
-            self.wait_ssh_up(verbose=False)
-            self.retrieve_journal(since=read_from_timestamp)
-            # when rebooting a node we would like to start reading from the timestamp that we stopped receiving logs
-            read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
     def start_journal_thread(self):
-        logs_transport = self.parent_cluster.params.get("logs_transport")
-
-        if logs_transport == "rsyslog":
-            self.log.info("Using rsyslog as log transport")
-        elif logs_transport == "ssh":
-            self._journal_thread = threading.Thread(target=self.journal_thread)
-            self._journal_thread.daemon = True
+        log_transport = self.parent_cluster.params.get("logs_transport")
+        self._journal_thread = get_system_logging_thread(
+            logs_transport=log_transport,
+            node=self,
+            target_log_file=self.system_log,
+        )
+        if self._journal_thread:
+            self.log.info("Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
-        elif logs_transport == "docker":
-            self._docker_log_process = subprocess.Popen(
-                ['/bin/sh', '-c', f"docker logs -f  {self.name}  > {self.database_log} 2>&1"])
         else:
-            raise Exception("Unknown logs transport: %s" % logs_transport)
+            if log_transport == 'rsyslog':
+                self.log.info("Use no logging daemon since log transport is rsyslog")
+            else:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method='start_journal_thread',
+                    message="Got no logging daemon by unknown reason"
+                ).publish()
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting coredump backtrace")
     def _get_coredump_backtraces(self, pid):
@@ -1036,7 +1005,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         while not self.termination_event.isSet():
             self.termination_event.wait(15)
             try:
-                self.search_database_log(start_from_beginning=False, publish_events=True)
+                self.search_system_log(start_from_beginning=False, publish_events=True)
             except Exception:  # pylint: disable=broad-except
                 self.log.exception("failed to read db log")
             except (SystemExit, KeyboardInterrupt) as ex:
@@ -1118,10 +1087,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @log_run_info
     def start_task_threads(self):
+        self.start_journal_thread()
         if self.is_spot:
             self.start_spot_monitoring_thread()
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
-            self.start_journal_thread()
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
         elif 'monitor' in self.name:
@@ -1145,8 +1114,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self._alert_manager:
             self._alert_manager.stop(timeout)
         if self._journal_thread:
-            self.remoter.run(cmd='sudo pkill -f "journalctl.*scylla"', ignore_status=True)
-            self._journal_thread.join(timeout)
+            self._journal_thread.stop(timeout)
         if self._scylla_manager_journal_thread:
             self.stop_scylla_manager_log_capture(timeout)
         if self._decoding_backtraces_thread:
@@ -1394,15 +1362,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         This is for use with the from_mark parameter of watch_log_for_* methods,
         allowing to watch the log from the position when this method was called.
         """
-        if not os.path.exists(self.database_log):
+        if not os.path.exists(self.system_log):
             return 0
-        with open(self.database_log) as log_file:
+        with open(self.system_log) as log_file:
             log_file.seek(0, os.SEEK_END)
             return log_file.tell()
 
-    def search_database_log(self, search_pattern=None, start_from_beginning=False, publish_events=True, severity=Severity.ERROR):
+    def search_system_log(self, search_pattern=None, start_from_beginning=False, publish_events=True, severity=Severity.ERROR):
         """
-        Search for all known patterns listed in  `_database_error_events`
+        Search for all known patterns listed in  `_system_error_events`
 
         :param start_from_beginning: if True will search log from first line
         :param publish_events: if True will publish events
@@ -1421,12 +1389,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=severity)
             patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
         else:
-            for expression in self._database_error_events:
+            for expression in self._system_error_events:
                 patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
 
         backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
-        if not os.path.exists(self.database_log):
+        if not os.path.exists(self.system_log):
             return matches
 
         if start_from_beginning:
@@ -1436,7 +1404,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             start_search_from_byte = self.last_log_position
             last_line_no = self.last_line_no
 
-        with open(self.database_log, 'r') as db_file:
+        with open(self.system_log, 'r') as db_file:
             if start_search_from_byte:
                 db_file.seek(start_search_from_byte)
             for index, line in enumerate(db_file, start=last_line_no):
@@ -1451,12 +1419,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     if data['scylla_bt']:
                         backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
 
-                if index not in self._database_log_errors_index or start_from_beginning:
+                if index not in self._system_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in patterns:
                         match = pattern.search(line)
                         if match:
-                            self._database_log_errors_index.append(index)
+                            self._system_log_errors_index.append(index)
                             cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             matches.append((index, line))
@@ -2786,7 +2754,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def get_node_database_errors(self):
         errors = {}
         for node in self.nodes:
-            node_errors = node.search_database_log(start_from_beginning=True, publish_events=False)
+            node_errors = node.search_system_log(start_from_beginning=True, publish_events=False)
             if node_errors:
                 errors.update({node.name: node_errors})
         return errors
@@ -3313,7 +3281,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
     def stop_nemesis(self, timeout=10):
         if self.termination_event.isSet():
             return
-        self.log.info('Set termination_event')
+        self.log.info('Set _termination_event')
         self.termination_event.set()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
@@ -3429,7 +3397,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
         for node in nodes_list:
-            if not os.path.exists(node.database_log):
+            if not os.path.exists(node.system_log):
                 error_msg = "No db log from node [%s] " % node
                 raise Exception(error_msg)
         return True

@@ -1765,7 +1765,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def collect_sct_logs(self):
         s3_link = SCTLogCollector(
-            [], Setup.test_id(), os.path.join(self.logdir, "collected_logs")
+            [], Setup.test_id(), os.path.join(self.logdir, "collected_logs"), params=self.params
         ).collect_logs(self.logdir)
         if s3_link:
             self.log.info(s3_link)
@@ -2017,19 +2017,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info("Storage dir is {}".format(storage_dir))
         if self.db_cluster:
             with silence(parent=self, name="Collect and publish db cluster logs"):
-                db_log_collector = ScyllaLogCollector(self.db_cluster.nodes, Setup.test_id(), storage_dir)
+                db_log_collector = ScyllaLogCollector(
+                    self.db_cluster.nodes, Setup.test_id(), storage_dir, params=self.params)
                 s3_link = db_log_collector.collect_logs(self.logdir)
                 self.log.info(s3_link)
                 logs_dict["db_cluster_log"] = s3_link
         if self.loaders:
             with silence(parent=self, name="Collect and publish loaders cluster logs"):
-                loader_log_collector = LoaderLogCollector(self.loaders.nodes, Setup.test_id(), storage_dir)
+                loader_log_collector = LoaderLogCollector(
+                    self.loaders.nodes, Setup.test_id(), storage_dir, params=self.params)
                 s3_link = loader_log_collector.collect_logs(self.logdir)
                 self.log.info(s3_link)
                 logs_dict["loader_log"] = s3_link
         if self.monitors.nodes:
             with silence(parent=self, name="Collect and publish monitor cluster logs"):
-                monitor_log_collector = MonitorLogCollector(self.monitors.nodes, Setup.test_id(), storage_dir)
+                monitor_log_collector = MonitorLogCollector(
+                    self.monitors.nodes, Setup.test_id(), storage_dir, params=self.params)
                 s3_link = monitor_log_collector.collect_logs(self.logdir)
                 self.log.info(s3_link)
                 logs_dict["monitoring_log"] = s3_link
