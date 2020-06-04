@@ -497,7 +497,7 @@ class TesterFailure(BaseEventsTest):
         ClusterTester.get_test_failures(self)
         test_errors = ClusterTester.get_test_results(self, source='test')
         tre = TestResultEvent(test_name=self.id(), errors=test_errors)
-        assert tre.severity == Severity.CRITICAL
+        assert tre.severity == Severity.ERROR
         tre.publish(guaranteed=True)
         print(str(tre))
         assert test_errors
@@ -537,7 +537,7 @@ class TesterErrorDuringSetUp(BaseEventsTest):
         test_errors = ClusterTester.get_test_results(self, source='test')
         assert test_errors is not None
         tre = TestResultEvent(test_name=self.id(), errors=test_errors)
-        assert tre.severity == Severity.CRITICAL
+        assert tre.severity == Severity.ERROR
 
 
 class TesterMultiSubTest(unittest.TestCase):
