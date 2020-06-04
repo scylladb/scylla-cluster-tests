@@ -529,7 +529,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         def search_database_enospc(node):
             """
-            Search database log by executing cmd inside node, use shell tool to
+            Search system log by executing cmd inside node, use shell tool to
             avoid return and process huge data.
             """
             cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
@@ -1709,7 +1709,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Stop streaming task in middle and rebuild the data on the node.
         """
         def decommission_post_action():
-            decommission_done = self.target_node.search_database_log(
+            decommission_done = self.target_node.search_system_log(
                 'DECOMMISSIONING: done', start_from_beginning=True, publish_events=False, severity=Severity.WARNING)
 
             ips = []
@@ -1750,14 +1750,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         def is_streaming_started():
             stream_pattern = "range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"
-            streaming_logs = self.target_node.search_database_log(
+            streaming_logs = self.target_node.search_system_log(
                 stream_pattern, start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
             self.log.debug(streaming_logs)
             if streaming_logs:
                 self.task_used_streaming = True
 
             # In latest master, repair always won't use streaming
-            repair_logs = self.target_node.search_database_log(
+            repair_logs = self.target_node.search_system_log(
                 'repair - Repair 1 out of', start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
             self.log.debug(repair_logs)
             return len(streaming_logs) > 0 or len(repair_logs) > 0
@@ -1787,7 +1787,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node = decommission_post_action()
 
         if self.task_used_streaming:
-            err = self.target_node.search_database_log(
+            err = self.target_node.search_system_log(
                 'streaming.*err', start_from_beginning=False, severity=Severity.ERROR)
             self.log.debug(err)
         else:

@@ -34,8 +34,11 @@ LOGGER.setLevel(logging.DEBUG)
 
 class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
     # pylint: disable=too-few-public-methods,too-many-instance-attributes
+    logdir = None
 
-    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None, tags=None):  # pylint: disable=too-many-arguments
+    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None, tags=None, logdir=None):  # pylint: disable=too-many-arguments
+        if logdir:
+            self.logdir = logdir
         self._containers = {}
         self.name = name
         if ssh_login_info is None:
@@ -64,14 +67,60 @@ class BaseLogEntity():  # pylint: disable=too-few-public-methods
     S3 storage
     """
     collect_timeout = 300
+    _params = {}
 
     def __init__(self, name, command="", search_locally=False):
         self.name = name
         self.cmd = command
         self.search_locally = search_locally
 
+    def set_params(self, params):
+        self._params = params
+
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):  # pylint: disable=unused-argument,no-self-use
         raise Exception('Should be implemented in child class')
+
+
+class BaseMonitoringEntity(BaseLogEntity):
+    def get_monitoring_base_dir(self, node):
+        # Avoid cyclic dependencies
+        if hasattr(node, "parent_cluster") and node.parent_cluster:
+            return node.parent_cluster.monitor_install_path_base
+        return self.get_monitoring_stack(self._params.get('cluster_backend', None)).get_monitor_install_path_base(node)
+
+    @staticmethod
+    def get_monitoring_stack(backend):
+        if backend == 'aws':
+            from sdcm.cluster_aws import MonitorSetAWS
+            return MonitorSetAWS
+        elif backend == 'docker':
+            from sdcm.cluster_docker import MonitorSetDocker
+            return MonitorSetDocker
+        elif backend == 'gce':
+            from sdcm.cluster_gce import MonitorSetGCE
+            return MonitorSetGCE
+        elif backend == 'baremetal':
+            from sdcm.cluster_baremetal import MonitorSetPhysical
+            return MonitorSetPhysical
+        from sdcm.cluster import BaseMonitorSet
+        return BaseMonitorSet
+
+    def get_monitoring_version(self, node):
+        basedir = self.get_monitoring_base_dir(node)
+        result = node.remoter.run(
+            f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
+        name = result.stdout.strip()
+        if not name:
+            LOGGER.error("Dir with scylla monitoring stack was not found")
+            return None, None, None
+        result = node.remoter.run(
+            f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
+        try:
+            monitor_version, scylla_version = result.stdout.strip().split(':')
+        except ValueError:
+            monitor_version = None
+            scylla_version = None
+        return name, monitor_version, scylla_version
 
 
 class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
@@ -162,7 +211,7 @@ class FileLog(CommandLog):
         return os.path.join(local_dst, os.path.basename(file_path))
 
 
-class PrometheusSnapshots(BaseLogEntity):
+class PrometheusSnapshots(BaseMonitoringEntity):
     """Get Prometheus snapshot entity
 
     Specific for Prometheus Log entity which allow to
@@ -212,8 +261,7 @@ class PrometheusSnapshots(BaseLogEntity):
     def setup_monitor_data_dir(self, node):
         if self.monitoring_data_dir:
             return
-        base_dir = MonitoringStack.get_monitoring_base_dir(node)
-
+        base_dir = self.get_monitoring_base_dir(node)
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
@@ -227,7 +275,7 @@ class PrometheusSnapshots(BaseLogEntity):
         return os.path.join(local_dst, os.path.basename(remote_snapshot_archive))
 
 
-class MonitoringStack(BaseLogEntity):
+class MonitoringStack(BaseMonitoringEntity):
     """LogEntinty to collect MonitoringStack
 
     Collect monitoring stack
@@ -240,15 +288,6 @@ class MonitoringStack(BaseLogEntity):
     """
     grafana_port = 3000
     collect_timeout = 1800
-
-    @staticmethod
-    def get_monitoring_base_dir(node):
-        # Avoid cyclic dependencies
-        from sdcm.cluster import BaseMonitorSet
-        if hasattr(node, "parent_cluster") and node.parent_cluster:
-            return node.parent_cluster.monitor_install_path_base
-        else:
-            return BaseMonitorSet.get_monitor_install_path_base(node)
 
     def get_monitoring_data_stack(self, node, local_dist):
         monitor_base_dir = self.get_monitoring_base_dir(node)
@@ -273,24 +312,6 @@ class MonitoringStack(BaseLogEntity):
                                    dst=local_dist, timeout=self.collect_timeout)
         local_archive_path = os.path.join(local_dist, archive_name)
         return local_archive_path
-
-    @staticmethod
-    def get_monitoring_version(node):
-        basedir = MonitoringStack.get_monitoring_base_dir(node)
-        result = node.remoter.run(
-            f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
-        name = result.stdout.strip()
-        if not name:
-            LOGGER.error("Dir with scylla monitoring stack was not found")
-            return None, None, None
-        result = node.remoter.run(
-            f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
-        try:
-            monitor_version, scylla_version = result.stdout.strip().split(':')
-        except ValueError:
-            monitor_version = None
-            scylla_version = None
-        return name, monitor_version, scylla_version
 
     def get_grafana_annotations(self, grafana_ip):  # pylint: disable=inconsistent-return-statements
         annotations_url = "http://{grafana_ip}:{grafana_port}/api/annotations"
@@ -335,7 +356,7 @@ class MonitoringStack(BaseLogEntity):
         return local_archive
 
 
-class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
+class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-methods
     """Base Gragana log entity
 
     Base class to support various Grafana log entity
@@ -390,7 +411,7 @@ class GrafanaScreenShot(GrafanaEntity):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
+        _, _, monitoring_version = self.get_monitoring_version(node)
         if not monitoring_version:
             LOGGER.warning("Monitoring version was not found")
             return []
@@ -488,7 +509,7 @@ class GrafanaSnapshot(GrafanaEntity):
         """
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = MonitoringStack.get_monitoring_version(node)
+        _, _, monitoring_version = self.get_monitoring_version(node)
         if not monitoring_version:
             LOGGER.warning("Monitoring version was not found")
             return []
@@ -556,10 +577,14 @@ class LogCollector:
     def current_run(self):
         return LogCollector._current_run
 
-    def __init__(self, nodes, test_id, storage_dir):
+    def __init__(self, nodes, test_id, storage_dir, params):
         self.test_id = test_id
         self.nodes = nodes
         self.local_dir = self.create_local_storage_dir(storage_dir)
+        self.params = params
+        for entity in self.log_entities:
+            if self.params:
+                entity.set_params(self.params)
 
     def create_local_storage_dir(self, base_local_dir):
         local_dir = os.path.join(base_local_dir, self.current_run,
@@ -717,7 +742,7 @@ class ScyllaLogCollector(LogCollector):
         log_entities {list} -- LogEntities to collect
         cluster_log_type {str} -- cluster type name
     """
-    log_entities = [FileLog(name='database.log',
+    log_entities = [FileLog(name='system.log',
                             command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
                             search_locally=True),
                     CommandLog(name='cpu_info',
@@ -744,6 +769,9 @@ class ScyllaLogCollector(LogCollector):
 class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
     log_entities = [
+        FileLog(name='system.log',
+                command="sudo journalctl --no-tail --no-pager",
+                search_locally=True),
         FileLog(name='*cassandra-stress*.log',
                 search_locally=True),
         FileLog(name='*gemini-l*.log',
@@ -763,6 +791,9 @@ class MonitorLogCollector(LogCollector):
 
     """
     log_entities = [
+        FileLog(name='system.log',
+                command="sudo journalctl --no-tail --no-pager",
+                search_locally=True),
         CommandLog(name='aprom.log',
                    command='docker logs --details -t aprom'),
         CommandLog(name='agraf.log',
@@ -1022,7 +1053,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         for cluster_log_collector, nodes in self.cluster_log_collectors.items():
             log_collector = cluster_log_collector(nodes,
                                                   test_id=self.test_id,
-                                                  storage_dir=self.storage_dir)
+                                                  storage_dir=self.storage_dir,
+                                                  params=self.params)
             LOGGER.info("Start collect logs for cluster %s", log_collector.cluster_log_type)
             result = log_collector.collect_logs(local_search_path=local_dir_with_logs)
             results[log_collector.cluster_log_type] = result

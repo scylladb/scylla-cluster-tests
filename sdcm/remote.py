@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 from __future__ import absolute_import
+from abc import abstractmethod, ABCMeta
 
 import glob
 import logging
@@ -121,13 +122,27 @@ def _make_ssh_command(user="root", port=22, opts='', hosts_file='/dev/null',  # 
                            alive_interval, user, port)
 
 
-class CommandRunner:
-    def __init__(self, hostname, user='root', password=''):
+class CommandRunner(metaclass=ABCMeta):
+    _params = None
+
+    def __init__(self, hostname='', user='root', password=''):
         self.hostname = hostname
         self.user = user
         self.password = password
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.connection = self._create_connection()
+
+    @abstractmethod
+    def get_init_arguments(self) -> dict:
+        """
+        Return instance parameters required to rebuild instance
+        """
+
+    @abstractmethod
+    def is_up(self, timeout=None) -> bool:
+        """
+        Return instance parameters required to rebuild instance
+        """
 
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
@@ -140,12 +155,14 @@ class CommandRunner:
             watchers.append(LogWriteWatcher(log_file))
         return watchers
 
+    @abstractmethod
     def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
             verbose=True, new_session=False, log_file=None, retry=0, watchers=None):
-        raise NotImplementedError("Should be implemented in subclasses")
+        pass
 
+    @abstractmethod
     def _create_connection(self):
-        raise NotImplementedError("_create_connection should be implemented")
+        pass
 
     def _print_command_results(self, result, verbose, ignore_status):
         """When verbose=True and ignore_status=True that means nothing will be printed in any case"""
@@ -166,14 +183,24 @@ class CommandRunner:
 
 
 class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
-
     def __init__(self, password=''):
         hostname = socket.gethostname()
         user = getpass.getuser()
         super(LocalCmdRunner, self).__init__(hostname, user=user, password=password)
 
+    def get_init_arguments(self) -> dict:
+        """
+        Return instance parameters required to rebuild instance
+        """
+        return {
+            'password': self.password
+        }
+
     def _create_connection(self):
         return Connection(host=self.hostname, user=self.user)
+
+    def is_up(self, timeout=None):  # pylint: disable=no-self-use
+        return True
 
     def run(self, cmd, timeout=300, ignore_status=False,  # pylint: disable=too-many-arguments
             verbose=True, new_session=False, log_file=None, retry=1, watchers=None):
@@ -216,15 +243,15 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,unused-argument
-                      preserve_perm=True, preserve_symlinks=False):  # pylint: disable=too-many-arguments,unused-argument
+                      preserve_perm=True, preserve_symlinks=False, timeout=300):  # pylint: disable=too-many-arguments,unused-argument
         if src != dst:
-            self.run(f'cp {src} {dst}')
+            self.run(f'cp {src} {dst}', timeout=timeout)
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetriableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False,  # pylint: disable=too-many-arguments,unused-argument
-                   preserve_symlinks=False, verbose=False):  # pylint: disable=unused-argument
+                   preserve_symlinks=False, verbose=False, timeout=300):  # pylint: disable=unused-argument
         if src != dst:
-            self.run(f'cp {src} {dst}')
+            self.run(f'cp {src} {dst}', timeout=timeout)
 
 
 LOCALRUNNER = LocalCmdRunner()
@@ -232,9 +259,8 @@ LOCALRUNNER = LocalCmdRunner()
 
 class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, hostname, user="root", port=22, connect_timeout=60, password="",  # pylint: disable=too-many-arguments
+    def __init__(self, hostname='', user="root", port=22, connect_timeout=60, password="",  # pylint: disable=too-many-arguments
                  key_file=None, extra_ssh_options=""):
-
         self.key_file = key_file
         self.port = port
         self.extra_ssh_options = extra_ssh_options
@@ -253,6 +279,20 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
         self.auth_sleep_time = 30  # sleep time between failed authentication attempts
         super(RemoteCmdRunner, self).__init__(hostname, user, password)
         self.start_ssh_up_thread()
+
+    def get_init_arguments(self) -> dict:
+        """
+        Return instance parameters required to rebuild instance
+        """
+        return {
+            'hostname': self.hostname,
+            'user': self.user,
+            'port': self.port,
+            'connect_timeout': self.connect_timeout,
+            'password': self.password,
+            'key_file': self.key_file,
+            'extra_ssh_options': self.extra_ssh_options
+        }
 
     def stop(self):
         self._ssh_is_up.clear()
@@ -431,7 +471,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             # scp has no equivalent to --delete, just drop the entire dest dir
             if delete_dst and os.path.isdir(dst):
                 shutil.rmtree(dst)
-                os.mkdir(dst)
+                os.makedirs(dst)
 
             remote_source = self._make_rsync_compatible_source(src, False)
             if remote_source:

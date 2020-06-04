@@ -340,6 +340,10 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
         # because port mapping works on the gateway address too.
         return get_docker_bridge_gateway(self.remoter)
 
+    def start_journal_thread(self):
+        # Hasn't it's own system logs, since running on the host
+        pass
+
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
     def __init__(self,
