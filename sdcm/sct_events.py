@@ -279,7 +279,7 @@ class TestResultEvent(SctEvent):
         self.test_name = test_name
         self.errors = errors
         self.ok = not errors
-        self.severity = Severity.NORMAL if self.ok else Severity.CRITICAL
+        self.severity = Severity.NORMAL if self.ok else Severity.ERROR
 
     def __str__(self):
         header = dedent(f"""
