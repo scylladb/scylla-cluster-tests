@@ -429,13 +429,13 @@ class RemoteDocker:
     def kill(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
-    def send_files(self, src, dst):
-        self.node.remoter.send_files(src, src)
+    def send_files(self, src, dst, **kwargs):
+        self.node.remoter.send_files(src, src, **kwargs)
         self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}", verbose=False, ignore_status=True)
 
-    def receive_files(self, src, dst):
+    def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
         self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
-        self.node.remoter.receive_files(dst, dst)
+        self.node.remoter.receive_files(dst, dst, **kwargs)
 
 
 def running_in_docker():

@@ -51,14 +51,14 @@ class TestDecodeBactraces(unittest.TestCase):
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
-        self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
         Setup.DECODING_QUEUE = queue.Queue()
         Setup.BACKTRACE_DECODING = False
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        _ = self.node.search_database_log()
+        _ = self.node.search_system_log()
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
 
@@ -78,7 +78,7 @@ class TestDecodeBactraces(unittest.TestCase):
         Setup.DECODING_QUEUE = queue.Queue()
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        _ = self.node.search_database_log()
+        _ = self.node.search_system_log()
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
@@ -100,9 +100,9 @@ class TestDecodeBactraces(unittest.TestCase):
         Setup.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database_interlace_stall.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        _ = self.node.search_database_log()
+        _ = self.node.search_system_log()
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
@@ -123,9 +123,9 @@ class TestDecodeBactraces(unittest.TestCase):
         Setup.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database_core.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')
 
-        _ = self.node.search_database_log()
+        _ = self.node.search_system_log()
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()

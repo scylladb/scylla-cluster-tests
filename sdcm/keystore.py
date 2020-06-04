@@ -12,6 +12,7 @@ class KeyStore:
 
     def get_json(self, json_file):
         obj = self.s3.Object(KEYSTORE_S3_BUCKET, json_file)
+        # deepcode ignore replace~read~decode~json.loads: is done automatically
         return json.loads(obj.get()["Body"].read())
 
     def download_file(self, filename, dest_filename):

@@ -22,7 +22,7 @@ from unit_tests.dummy_remote import DummyRemote
 
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
-    _database_log = None
+    _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
 
@@ -43,12 +43,12 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         pass
 
     @property
-    def database_log(self):
-        return self._database_log
+    def system_log(self):
+        return self._system_log
 
-    @database_log.setter
-    def database_log(self, x):
-        self._database_log = x
+    @system_log.setter
+    def system_log(self, log):
+        self._system_log = log
 
     def set_hostname(self):
         pass
@@ -78,34 +78,34 @@ class TestBaseNode(unittest.TestCase):
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
-        self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
-    def test_search_database_log(self):
-        critical_errors = self.node.search_database_log()
+    def test_search_system_log(self):
+        critical_errors = self.node.search_system_log()
         self.assertEqual(len(critical_errors), 34)
 
         for _, line in critical_errors:
             print(line)
 
-    def test_search_database_log_teardown(self):  # pylint: disable=invalid-name
-        critical_errors = self.node.search_database_log(start_from_beginning=True, publish_events=False)
+    def test_search_system_log_teardown(self):  # pylint: disable=invalid-name
+        critical_errors = self.node.search_system_log(start_from_beginning=True, publish_events=False)
         self.assertEqual(len(critical_errors), 36)
 
         for _, line in critical_errors:
             print(line)
 
-    def test_search_database_log_specific_log(self):  # pylint: disable=invalid-name
-        errors = self.node.search_database_log(
+    def test_search_system_log_specific_log(self):  # pylint: disable=invalid-name
+        errors = self.node.search_system_log(
             search_pattern='Failed to load schema version', start_from_beginning=True, publish_events=False)
         self.assertEqual(len(errors), 2)
 
         for line_number, line in errors:
             print(line_number, line)
 
-    def test_search_database_interlace_reactor_stall(self):  # pylint: disable=invalid-name
-        self.node.database_log = os.path.join(os.path.dirname(__file__), 'test_data', 'database_interlace_stall.log')
+    def test_search_system_interlace_reactor_stall(self):  # pylint: disable=invalid-name
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        _ = self.node.search_database_log()
+        _ = self.node.search_system_log()
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
         events = []
@@ -122,11 +122,11 @@ class TestBaseNode(unittest.TestCase):
         assert event_b["type"] == "REACTOR_STALLED"
         assert event_b["line_number"] == 4
 
-    def test_search_database_suppressed_messages(self):  # pylint: disable=invalid-name
-        self.node.database_log = os.path.join(os.path.dirname(
-            __file__), 'test_data', 'database_suppressed_messages.log')
+    def test_search_system_suppressed_messages(self):  # pylint: disable=invalid-name
+        self.node.system_log = os.path.join(os.path.dirname(
+            __file__), 'test_data', 'system_suppressed_messages.log')
 
-        _ = self.node.search_database_log(start_from_beginning=True)
+        _ = self.node.search_system_log(start_from_beginning=True)
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
 

@@ -1370,7 +1370,7 @@ def download_dir_from_cloud(url):
     if url is None:
         return url
 
-    md5 = hashlib.md5()
+    md5 = hashlib.md5()  # deepcode ignore insecureHash: can't change it
     md5.update(url.encode('utf-8'))
     tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
     parsed = urlparse(url)

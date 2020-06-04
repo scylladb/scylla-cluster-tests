@@ -490,7 +490,6 @@ class OutputLogger():
 @click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
 @click.option('-l', '--logdir', help="Directory to use for logs")
 def run_test(argv, backend, config, logdir):
-
     if config:
         os.environ['SCT_CONFIG_FILES'] = str(list(config))
     if backend:
@@ -523,13 +522,17 @@ def cloud_usage_report(emails):
 @click.option('--logdir', help='Path to directory with sct results')
 @click.option('--backend', help='Cloud where search nodes', default='aws')
 @click.option('--config-file', type=str, help='config test file path')
-def collect_logs(test_id=None, logdir=None, backend='aws', config_file=None):
+def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     add_file_logger()
 
     from sdcm.logcollector import Collector
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
-    if not os.environ.get('SCT_CLUSTER_BACKEND', None):
+    if backend is None:
+        if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
+            os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+    else:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
+
     if config_file and not os.environ.get('SCT_CONFIG_FILES', None):
         os.environ['SCT_CONFIG_FILES'] = config_file
 
