@@ -73,13 +73,22 @@ class BaseEventsTest(unittest.TestCase):
             process.join()
         stop_events_device()
 
+    def get_test_results(self, source, severity=None):
+        # It is a copy of the routing from ClusterTester
+        # It has been done in such way because it is impossible to reuse ClusterTester for testing purpose
+        output = []
+        for result in getattr(self, '_results', []):
+            if result.get('source', None) != source:
+                continue
+            if severity is not None and severity != result['severity']:
+                continue
+            output.append(result['message'])
+        return output
+
     def store_test_result(  # pylint: disable=too-many-arguments
-            self,
-            source,
-            message='',
-            exception: Exception = '',
-            trace='',
-            severity=Severity.ERROR):
+            self, source, message='', exception: Exception = '', trace='', severity=Severity.ERROR):
+        # It is a copy of the routing from ClusterTester
+        # It has been done in such way because it is impossible to reuse ClusterTester for testing purpose
         if exception:
             exception = repr(exception)
             if exception[0] != '\n' and message[-1] != '\n':
@@ -98,16 +107,6 @@ class BaseEventsTest(unittest.TestCase):
             'message': message,
             'severity': severity,
         })
-
-    def get_test_results(self, source, severity=None):
-        output = []
-        for result in getattr(self, '_results', []):
-            if result.get('source', None) != source:
-                continue
-            if severity is not None and severity != result['severity']:
-                continue
-            output.append(result['message'])
-        return output
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
