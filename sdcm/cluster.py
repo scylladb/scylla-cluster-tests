@@ -4174,8 +4174,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             node.reboot(hard=False)
         else:
             node.remoter.reconnect()
-        node.remoter.run(cmd='sudo systemctl restart docker')
-        node.remoter.run(cmd='docker run hello-world', ignore_status=True)
+        node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
