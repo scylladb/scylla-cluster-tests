@@ -44,7 +44,7 @@ def runSctTest(Map params){
     fi
 
     echo "start test ......."
-    ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir /sct
+    ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
     echo "end test ....."
     """
 }
@@ -65,7 +65,7 @@ def runCollectLogs(Map params){
     export SCT_CONFIG_FILES=${test_config}
 
     echo "start collect logs ..."
-    ./docker/env/hydra.sh collect-logs --logdir /sct
+    ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
     echo "end collect logs"
     """
 }
@@ -87,7 +87,7 @@ def runSendEmail(Map params){
     set -xe
     env
     echo "Start send email ..."
-    ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir /sct --email-recipients "${email_recipients}"
+    ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
     echo "Email sent"
     """
 }
@@ -111,7 +111,7 @@ def runCleanupResource(Map params){
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
     echo "start clean resources ..."
-    ./docker/env/hydra.sh clean-resources --logdir /sct
+    ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
     echo "end clean resources"
     """
 }
@@ -244,8 +244,10 @@ def call(Map pipelineParams) {
                     catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
-                                runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
-                                completed_stages['send_email'] = true
+                                dir('scylla-cluster-tests') {
+                                    runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    completed_stages['send_email'] = true
+                                }
                             }
                         }
                     }
@@ -279,7 +281,9 @@ def call(Map pipelineParams) {
                         catchError {
                             script {
                                 wrap([$class: 'BuildUser']) {
-                                    runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    dir('scylla-cluster-tests') {
+                                        runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    }
                                 }
                             }
                         }
