@@ -119,7 +119,7 @@ def call(Map pipelineParams) {
                                                 export SCT_INSTANCE_PROVISION="${params.instance_provision}"
 
                                                 echo "start test ......."
-                                                ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir /sct
+                                                ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
                                                 echo "end test ....."
                                             """
                                         }
@@ -128,7 +128,7 @@ def call(Map pipelineParams) {
                                                 export SCT_CONFIG_FILES=${params.test_config}
 
                                                 echo "start collect logs ..."
-                                                ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir /sct
+                                                ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
                                                 echo "end collect logs"
                                             """
                                         }
@@ -138,7 +138,7 @@ def call(Map pipelineParams) {
                                                 export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
 
                                                 echo "start clean resources ..."
-                                                ./docker/env/hydra.sh clean-resources --logdir /sct
+                                                ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
                                                 echo "end clean resources"
                                             """
                                         }
@@ -146,7 +146,7 @@ def call(Map pipelineParams) {
                                             def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                             sctScript """
                                                 echo "Start send email ..."
-                                                ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "${email_recipients}"
+                                                ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
                                                 echo "Email sent"
                                             """
                                         }
