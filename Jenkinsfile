@@ -28,7 +28,7 @@ def runSctProvisionTest(String backend){
     export BUILD_USER_ID="\${CHANGE_AUTHOR}"
     $distro_cmd
     echo "start test ......."
-    ./docker/env/hydra.sh run-test longevity_test.LongevityTest.test_custom_time --backend $backend --logdir /sct
+    ./docker/env/hydra.sh run-test longevity_test.LongevityTest.test_custom_time --backend $backend --logdir "`pwd`"
     echo "end test ....."
     """
 }
@@ -49,7 +49,7 @@ def runCollectLogs(String backend){
     export SCT_CONFIG_FILES="${sct_config_files}"
 
     echo "start collect logs ..."
-    ./docker/env/hydra.sh collect-logs --backend ${backend} --logdir /sct
+    ./docker/env/hydra.sh collect-logs --backend ${backend} --logdir "`pwd`"
     echo "end collect logs"
     """
 }
@@ -63,7 +63,7 @@ def runSendEmail(){
     export LAST_COMMIT=`git rev-parse HEAD`
     export RECIPIENTS=`git show -s --format='%ae' \$LAST_COMMIT`,`git show -s --format='%ce' \$LAST_COMMIT`
     echo "Start send email ..."
-    ./docker/env/hydra.sh send-email --logdir /sct --email-recipients "\${RECIPIENTS}"
+    ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "\${RECIPIENTS}"
     echo "Email sent"
     """
 }
@@ -80,7 +80,7 @@ def runCleanupResource(String backend){
     export SCT_REGION_NAME="eu-west-1"
 
     echo "start clean resources ..."
-    ./docker/env/hydra.sh clean-resources --logdir /sct
+    ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
     echo "end clean resources"
     """
 }
@@ -118,10 +118,10 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh './docker/env/hydra.sh bash -c "cd /sct; pre-commit run -a"'
+                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run -a"'
                         // also check the commit-messge for the rules we want
                         sh 'git show -s --format=%B  > commit-msg'
-                        sh './docker/env/hydra.sh bash -c "cd /sct; pre-commit run --hook-stage commit-msg --commit-msg-filename commit-msg"'
+                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run --hook-stage commit-msg --commit-msg-filename commit-msg"'
                         pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
                     } catch(Exception ex) {
                         pullRequestSetResult('failure', 'jenkins/precommit', 'Precommit failed')
