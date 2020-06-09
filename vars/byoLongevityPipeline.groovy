@@ -105,6 +105,8 @@ def call() {
                                     set -xe
                                     env
 
+                                    rm -fv ./latest
+
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_CONFIG_FILES=${test_config}

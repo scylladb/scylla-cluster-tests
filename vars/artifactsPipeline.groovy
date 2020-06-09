@@ -75,6 +75,8 @@ def call(Map pipelineParams) {
                                         }
                                         stage("Run SCT Test (${instance_type})") {
                                             sctScript """
+                                                rm -fv ./latest
+
                                                 export SCT_COLLECT_LOGS=false
                                                 export SCT_CONFIG_FILES=${params.test_config}
 
