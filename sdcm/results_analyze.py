@@ -98,9 +98,9 @@ class PerformanceQueryFilter(QueryFilter):
             filter_query = ""
             if job_name[0] and job_name[0] in job_item['job_folder']:
                 base_job_name = job_name[1]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}\/* OR'.format(job_name[0],
-                                                                                      base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}\/*) '.format(base_job_name)
+                filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_name[0],
+                                                                                    base_job_name)
+                filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
             return filter_query
 
         def get_query_filter_by_job_prefix(job_item):
@@ -109,9 +109,9 @@ class PerformanceQueryFilter(QueryFilter):
                 if not job_name[0].startswith(job_prefix):
                     continue
                 base_job_name = job_name[0]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}\/* OR'.format(job_item['job_folder'],
-                                                                                      base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}\/*) '.format(base_job_name)
+                filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_item['job_folder'],
+                                                                                    base_job_name)
+                filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
                 break
             return filter_query
 
