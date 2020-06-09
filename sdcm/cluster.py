@@ -1836,8 +1836,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.parent_cluster.params.get("scylla_mgmt_agent_repo",
                                                self.parent_cluster.params.get("scylla_mgmt_repo", None)))
             package_name = 'scylla-manager-agent'
+        package_mgr = "yum" if self.distro.is_rhel_like else "apt-get"
         install_and_config_agent_command = dedent(r"""
-            yum install -y {}
+            {} install -y {}
             sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
@@ -1845,7 +1846,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             systemctl restart scylla-manager-agent
             systemctl enable scylla-manager-agent
-        """.format(package_name, auth_token, manager_prometheus_port))
+        """.format(package_mgr, package_name, auth_token, manager_prometheus_port))
         self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
         version = self.remoter.run('scylla-manager-agent --version').stdout
         self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
