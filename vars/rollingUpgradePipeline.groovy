@@ -66,6 +66,9 @@ def call(Map pipelineParams) {
                                                         #!/bin/bash
                                                         set -xe
                                                         env
+
+                                                        rm -fv ./latest
+
                                                         export SCT_CLUSTER_BACKEND=gce
 
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
