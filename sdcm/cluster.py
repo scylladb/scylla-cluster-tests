@@ -1949,6 +1949,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get update
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
                     curl https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
                     apt-get install software-properties-common -y
