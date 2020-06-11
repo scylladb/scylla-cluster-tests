@@ -5,7 +5,7 @@ from multiprocessing import Process, Event
 from datetime import datetime
 from sdcm import wait
 from sdcm.sct_events import raise_event_on_failure
-from sdcm.remote import RemoteCmdRunner
+from sdcm.remote import RemoteCmdRunnerBase
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -67,7 +67,7 @@ class SSHLoggerBase(LoggerBase):
 
     @raise_event_on_failure
     def _journal_thread(self):
-        self._remoter = RemoteCmdRunner(**self._remoter_params)
+        self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
         read_from_timestamp = None
         while not self._termination_event.is_set():
             self._wait_ssh_up(verbose=False)

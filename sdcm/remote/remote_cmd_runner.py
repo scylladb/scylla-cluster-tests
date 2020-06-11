@@ -1,0 +1,156 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+from typing import Optional, List
+import os
+import time
+import threading
+
+from fabric import Connection, Config
+from paramiko import SSHException, RSAKey
+from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
+from invoke.runners import Result
+from invoke.watchers import StreamWatcher
+from invoke.exceptions import UnexpectedExit, Failure
+
+from sdcm.utils.decorators import retrying
+
+from .base import RetryableNetworkException, SSHConnectTimeoutError
+from .remote_base import RemoteCmdRunnerBase
+
+
+class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):  # pylint: disable=too-many-instance-attributes
+    ssh_config: Config = None
+    ssh_is_up: threading.Event = None
+    ssh_up_thread: Optional[threading.Thread] = None
+    ssh_up_thread_termination: threading.Event = None
+    exception_unexpected = UnexpectedExit
+    exception_failure = Failure
+    exception_retryable = (
+        NoValidConnectionsError, SSHException, EOFError, AuthenticationException, ConnectionResetError,
+        ConnectionAbortedError, ConnectionError, ConnectionRefusedError
+    )
+
+    def _prepare(self):
+        self.ssh_is_up = threading.Event()
+        self.ssh_up_thread_termination = threading.Event()
+        self.ssh_config = Config(overrides={
+            'load_ssh_config': False,
+            'UserKnownHostsFile': self.known_hosts_file,
+            'ServerAliveInterval': 300,
+            'StrictHostKeyChecking': 'no'})
+        self.start_ssh_up_thread()
+        super()._prepare()
+
+    def _ssh_ping(self) -> bool:
+        try:
+            # creating new connection each time in order not to interfere the main connection to decrease probability
+            # of the EOF bug https://github.com/paramiko/paramiko/issues/1584
+            with self._create_connection() as connection:
+                result = connection.run("true", timeout=30, warn=False, encoding='utf-8', hide=True)
+                return result.ok
+        except AuthenticationException as auth_exception:
+            # in order not to overwhelm SSH server with connection attempts that can cause further connection drops
+            # we will slow down our tries. We need this due to "MaxStartups 10:30:100" that is default for sshd
+            self.log.debug("%s: sleeping %s seconds before next retry", auth_exception, self.auth_sleep_time)
+            self.ssh_up_thread_termination.wait(self.auth_sleep_time)
+            return False
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.debug(details)
+            return False
+
+    def ssh_ping_thread(self):
+        while not self.ssh_up_thread_termination.isSet():
+            result = self._ssh_ping()
+            if result:
+                self.ssh_is_up.set()
+            else:
+                self.ssh_is_up.clear()
+            self.ssh_up_thread_termination.wait(5)
+
+    def start_ssh_up_thread(self):
+        self.ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name='SSHPingThread')
+        self.ssh_up_thread.daemon = True
+        self.ssh_up_thread.start()
+
+    def stop_ssh_up_thread(self):
+        self.ssh_up_thread_termination.set()
+        if self.ssh_up_thread:
+            self.ssh_up_thread.join(5)
+            self.ssh_up_thread = None
+
+    def is_up(self, timeout: float = 30) -> bool:
+        return self.ssh_is_up.wait(float(timeout))
+
+    def stop(self):
+        if self.ssh_is_up:
+            self.ssh_is_up.clear()
+        self.stop_ssh_up_thread()
+        super().stop()
+
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
+    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+            ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None) -> Result:
+
+        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
+
+        @retrying(n=retry)
+        def _run():
+            if not self.is_up(timeout=self.connect_timeout):
+                raise SSHConnectTimeoutError(
+                    'Unable to run "%s": failed connecting to "%s" during %ss' %
+                    (cmd, self.hostname, self.connect_timeout)
+                )
+            try:
+                if verbose:
+                    self.log.debug('Running command "%s"...', cmd)
+                start_time = time.perf_counter()
+                command_kwargs = dict(
+                    command=cmd, warn=ignore_status,
+                    encoding='utf-8', hide=True,
+                    watchers=watchers, timeout=timeout,
+                    in_stream=False
+                )
+                if new_session:
+                    with self._create_connection() as connection:
+                        result = connection.run(**command_kwargs)
+                else:
+                    result = self.connection.run(**command_kwargs)
+                result.duration = time.perf_counter() - start_time
+                result.exit_status = result.exited
+                return result
+            except self.exception_retryable as ex:
+                self.log.error(ex)
+                self.ssh_is_up.clear()
+                if self._is_error_retryable(str(ex)):
+                    raise RetryableNetworkException(str(ex), original=ex)
+                raise
+            except Exception as details:  # pylint: disable=broad-except
+                if hasattr(details, "result"):
+                    self._print_command_results(details.result, verbose, ignore_status)  # pylint: disable=no-member
+                raise
+
+        result = _run()
+        self._print_command_results(result, verbose, ignore_status)
+        return result
+
+    def _create_connection(self) -> Connection:
+        return Connection(
+            host=self.hostname,
+            user=self.user,
+            port=self.port,
+            config=self.ssh_config,
+            connect_timeout=self.connect_timeout,
+            connect_kwargs={
+                'pkey': RSAKey(filename=os.path.expanduser(self.key_file))} if self.key_file else None)

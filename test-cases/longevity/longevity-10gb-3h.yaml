@@ -10,6 +10,7 @@ instance_type_db: 'i3.4xlarge'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
+ssh_transport: 'libssh2'
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424

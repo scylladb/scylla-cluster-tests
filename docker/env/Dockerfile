@@ -13,7 +13,7 @@ RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debia
 # Download, build and install Python packages.
 FROM apt_base as python_packages
 ENV PIP_NO_CACHE_DIR=1
-RUN apt-get install -y --no-install-recommends build-essential
+RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev
 ADD requirements-python.txt .
 RUN mkdir /build && \
     pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
