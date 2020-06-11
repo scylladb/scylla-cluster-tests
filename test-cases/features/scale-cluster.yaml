@@ -14,6 +14,8 @@ cluster_target_size: 5
 instance_type_db: 'i3.large'
 
 user_prefix: 'cluster-scale-test'
+ssh_transport: 'libssh2'
+experimental: false
 
 nemesis_interval: 5
 nemesis_class_name: 'ChaosMonkey'

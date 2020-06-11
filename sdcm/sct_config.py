@@ -323,7 +323,8 @@ class SCTConfiguration(dict):
 
         dict(name="enable_test_profiling", env="SCT_ENABLE_TEST_PROFILING", type=bool,
              help="""Turn on sct profiling"""),
-
+        dict(name="ssh_transport", env="SSH_TRANSPORT", type=str,
+             help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'"""),
         # should be removed once stress commands would be refactored
         dict(name="bench_run", env="SCT_BENCH_RUN", type=boolean,
              help="""If true would kill the scylla-bench thread in the test teardown"""),

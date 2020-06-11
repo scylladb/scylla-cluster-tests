@@ -72,6 +72,8 @@ from sdcm.send_email import build_reporter, read_email_data_from_file, get_runni
     save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
+from sdcm.remote import RemoteCmdRunnerBase
+
 
 try:
     import cluster_cloud
@@ -245,6 +247,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Setup.set_test_name(self.id())
         Setup.set_tester_obj(self)
         self._init_logging()
+        RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
 
         self._profile_factory = None
         if self.params.get('enable_test_profiling'):

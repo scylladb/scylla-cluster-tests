@@ -29,3 +29,5 @@ selenium==3.141.0
 mysql-connector-python==8.0.19
 docker==4.2.0
 python-jenkins==1.4.0
+ssh2-python==0.18.0.post1
+parameterized==0.7.4

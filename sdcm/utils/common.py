@@ -1509,7 +1509,7 @@ def list_builders(running=False):
 
 
 def get_builder_by_test_id(test_id):
-    from sdcm.remote import RemoteCmdRunner
+    from sdcm.remote import RemoteCmdRunnerBase
 
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
@@ -1517,9 +1517,8 @@ def get_builder_by_test_id(test_id):
     builders = list_builders()
 
     def search_test_id_on_builder(builder):
-        remoter = RemoteCmdRunner(builder['public_ip'],
-                                  user=builder["user"],
-                                  key_file=builder["key_file"])
+        remoter = RemoteCmdRunnerBase.create_remoter(
+            builder['public_ip'], user=builder["user"], key_file=builder["key_file"])
 
         LOGGER.info('Search on %s', builder['name'])
         result = remoter.run("find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder,
